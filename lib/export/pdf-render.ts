@@ -66,8 +66,16 @@ export async function renderPdf(html: string): Promise<Buffer> {
   try {
     const page = await browser.newPage();
     await page.setContent(html, { waitUntil: "load", timeout: 30000 });
-    // 모든 이미지 로딩 완료까지 대기 (Supabase 공개 URL fetch)
+    // 한글 폰트를 명시적으로 로드한 뒤, 폰트/이미지 로딩 완료까지 대기
     await page.evaluate(async () => {
+      const d = document as any;
+      try {
+        await d.fonts.load("400 16px Pretendard");
+        await d.fonts.load("700 16px Pretendard");
+      } catch {}
+      try {
+        await d.fonts.ready;
+      } catch {}
       const imgs = Array.from(document.images);
       await Promise.all(
         imgs.map((img) =>

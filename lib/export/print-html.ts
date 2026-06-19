@@ -3,6 +3,8 @@
 // 다중 차량은 차량마다 페이지 분할(차량당 1페이지)한다.
 // 화면 인쇄 페이지(app/print)와 서버 PDF 라우트(api/export/pdf)가 동일 마크업을 공유.
 
+import { PRETENDARD_WOFF2_BASE64 } from "./pretendard-font";
+
 export interface PrintSlot {
   label: string;
   url: string | null;
@@ -11,6 +13,7 @@ export interface PrintSection {
   title: string;
   slots: PrintSlot[];
 }
+
 export interface PrintData {
   plate: string;
   installDate: string;
@@ -22,10 +25,18 @@ export interface PrintData {
 }
 
 export const PRINT_CSS = `
+  /* 한글 폰트를 base64 데이터 URI로 임베드 (네트워크 불필요, Vercel 서버리스에서도 한글 렌더 보장) */
+  @font-face {
+    font-family: 'Pretendard';
+    src: url('data:font/woff2;base64,${PRETENDARD_WOFF2_BASE64}') format('woff2');
+    font-weight: 400 700;
+    font-style: normal;
+    font-display: block;
+  }
   @page { size: A4 portrait; margin: 8mm; }
   * { box-sizing: border-box; }
   html, body { margin: 0; padding: 0; }
-  body { font-family: 'Malgun Gothic','맑은 고딕','Noto Sans KR',sans-serif; color:#000; }
+  body { font-family: 'Pretendard','Malgun Gothic','맑은 고딕','Noto Sans KR',sans-serif; color:#000; }
   /* 첫 페이지 제외하고 각 차량 앞에서 페이지 분할 (마지막 뒤 빈 페이지 방지) */
   .page { width: 194mm; margin: 0 auto; page-break-before: always; break-before: page; }
   .page:first-child { page-break-before: avoid; break-before: avoid; }
