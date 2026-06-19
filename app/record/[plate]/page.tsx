@@ -1,0 +1,42 @@
+import Link from "next/link";
+import { createServiceClient } from "@/lib/supabase/server";
+import type { RecordBundle } from "@/lib/types";
+import RecordEditor from "@/components/RecordEditor";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+export default async function RecordPage({
+  params,
+}: {
+  params: { plate: string };
+}) {
+  const plate = decodeURIComponent(params.plate).trim();
+  const supabase = createServiceClient();
+
+  const [vehicleRes, recordRes, photosRes] = await Promise.all([
+    supabase.from("vehicles").select("plate, operator, route").eq("plate", plate).maybeSingle(),
+    supabase.from("records").select("*").eq("plate", plate).maybeSingle(),
+    supabase.from("photos").select("*").eq("plate", plate).order("sort_order"),
+  ]);
+
+  if (!vehicleRes.data) {
+    return (
+      <main className="mx-auto max-w-md px-4 pt-16 text-center">
+        <p className="text-lg font-medium">차량을 찾을 수 없습니다.</p>
+        <p className="mt-2 text-sm text-gray-500">{plate}</p>
+        <Link href="/" className="mt-6 inline-block text-blue-600 underline">
+          ← 처음으로
+        </Link>
+      </main>
+    );
+  }
+
+  const bundle: RecordBundle = {
+    vehicle: vehicleRes.data,
+    record: (recordRes.data as RecordBundle["record"]) ?? null,
+    photos: (photosRes.data as RecordBundle["photos"]) ?? [],
+  };
+
+  return <RecordEditor plate={plate} initial={bundle} />;
+}

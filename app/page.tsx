@@ -1,0 +1,18 @@
+import PlateSearch from "@/components/PlateSearch";
+
+export default function HomePage() {
+  return (
+    <main className="mx-auto flex min-h-screen max-w-md flex-col px-4 pt-10">
+      <header className="mb-8 text-center">
+        <h1 className="text-2xl font-bold text-blue-700">B820 설치 사진첩</h1>
+        <p className="mt-2 text-sm text-gray-500">
+          차량번호를 입력해 사진첩을 작성하세요
+        </p>
+      </header>
+      <PlateSearch />
+      <p className="mt-6 text-center text-xs text-gray-400">
+        예) 인천70바4005
+      </p>
+    </main>
+  );
+}

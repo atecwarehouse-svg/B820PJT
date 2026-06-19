@@ -1,0 +1,27 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+html,
+body {
+  -webkit-text-size-adjust: 100%;
+  background: #f3f4f6;
+}
+
+/* iOS 입력 확대 방지: 입력 폰트 16px 이상 유지 */
+input,
+select,
+textarea {
+  font-size: 16px;
+}
+
+/* 인쇄(PDF) 시 화면 전용 요소 숨김 */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+}

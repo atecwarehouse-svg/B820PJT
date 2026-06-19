@@ -1,0 +1,37 @@
+# dependencies
+/node_modules
+/.pnp
+.pnp.js
+
+# next.js
+/.next/
+/out/
+
+# production
+/build
+
+# misc
+.DS_Store
+*.pem
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# env
+.env
+.env*.local
+
+# vercel
+.vercel
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+
+# 원본 소스 데이터 (저장소에 올리지 않음 - 개인정보/대용량)
+차량리스트.csv
+차량리스트.xlsx
+B800 설치 사진첩(시범설치).xlsx
+~$*.xlsx

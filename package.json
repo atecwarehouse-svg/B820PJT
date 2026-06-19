@@ -1,0 +1,35 @@
+{
+  "name": "b820-photo-album",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "import:vehicles": "tsx scripts/import-vehicles.ts"
+  },
+  "dependencies": {
+    "@sparticuz/chromium": "^149.0.0",
+    "@supabase/supabase-js": "^2.45.4",
+    "browser-image-compression": "^2.0.2",
+    "exceljs": "^4.4.0",
+    "next": "14.2.35",
+    "puppeteer-core": "^25.1.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.16.11",
+    "@types/react": "^18.3.11",
+    "@types/react-dom": "^18.3.0",
+    "autoprefixer": "^10.4.20",
+    "csv-parse": "^5.5.6",
+    "dotenv": "^16.4.5",
+    "iconv-lite": "^0.6.3",
+    "postcss": "^8.4.47",
+    "tailwindcss": "^3.4.13",
+    "tsx": "^4.19.1",
+    "typescript": "^5.6.3"
+  }
+}

@@ -1,0 +1,258 @@
+"use client";
+
+import { useCallback, useMemo, useRef, useState } from "react";
+import Link from "next/link";
+import type { RecordBundle } from "@/lib/types";
+import {
+  AFTER_SLOTS,
+  buildBeforeSlots,
+  makeCustomSlotKey,
+  type CustomSlot,
+} from "@/lib/slots";
+import { publicPhotoUrl } from "@/lib/photo-url";
+import PhotoSlot from "@/components/PhotoSlot";
+import ExportButtons from "@/components/ExportButtons";
+
+interface Props {
+  plate: string;
+  initial: RecordBundle;
+}
+
+function todayStr(): string {
+  const d = new Date();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${d.getFullYear()}-${mm}-${dd}`;
+}
+
+export default function RecordEditor({ plate, initial }: Props) {
+  const vehicle = initial.vehicle!;
+  const installDate = initial.record?.install_date ?? todayStr();
+
+  const [year, setYear] = useState(initial.record?.year ?? "");
+  const [model, setModel] = useState(initial.record?.model ?? "");
+  const [customSlots, setCustomSlots] = useState<CustomSlot[]>(
+    initial.record?.custom_slots ?? [],
+  );
+
+  // slotKey -> 미리보기 URL
+  const [urls, setUrls] = useState<Record<string, string>>(() => {
+    const m: Record<string, string> = {};
+    for (const p of initial.photos) {
+      m[p.slot_key] = `${publicPhotoUrl(p.storage_path)}?t=${p.updated_at ?? ""}`;
+    }
+    return m;
+  });
+
+  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">(
+    "idle",
+  );
+  const seqRef = useRef<number>(
+    customSlots.reduce((max, c) => {
+      const m = /before_custom_(\d+)/.exec(c.slot_key);
+      return m ? Math.max(max, Number(m[1])) : max;
+    }, 0),
+  );
+
+  const beforeSlots = useMemo(() => buildBeforeSlots(customSlots), [customSlots]);
+
+  const saveRecord = useCallback(
+    async (overrides?: Partial<{ year: string; model: string; custom_slots: CustomSlot[] }>) => {
+      setSaveState("saving");
+      try {
+        const res = await fetch("/api/records", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            plate,
+            year: overrides?.year ?? year,
+            model: overrides?.model ?? model,
+            custom_slots: overrides?.custom_slots ?? customSlots,
+          }),
+        });
+        if (!res.ok) throw new Error();
+        setSaveState("saved");
+        setTimeout(() => setSaveState("idle"), 1500);
+      } catch {
+        setSaveState("error");
+      }
+    },
+    [plate, year, model, customSlots],
+  );
+
+  function addCustomSlot() {
+    const label = prompt("추가할 항목(칸) 이름을 입력하세요");
+    if (!label || !label.trim()) return;
+    seqRef.current += 1;
+    const next: CustomSlot = {
+      slot_key: makeCustomSlotKey(seqRef.current),
+      label: label.trim(),
+      sort_order: customSlots.length,
+    };
+    const updated = [...customSlots, next];
+    setCustomSlots(updated);
+    saveRecord({ custom_slots: updated });
+  }
+
+  async function removeCustomSlot(slotKey: string) {
+    if (!confirm("이 항목(칸)을 삭제할까요? 사진도 함께 삭제됩니다.")) return;
+    // 사진 먼저 삭제
+    await fetch(
+      `/api/photos?plate=${encodeURIComponent(plate)}&slot_key=${encodeURIComponent(slotKey)}`,
+      { method: "DELETE" },
+    ).catch(() => {});
+    const updated = customSlots.filter((c) => c.slot_key !== slotKey);
+    setCustomSlots(updated);
+    setUrls((u) => {
+      const n = { ...u };
+      delete n[slotKey];
+      return n;
+    });
+    saveRecord({ custom_slots: updated });
+  }
+
+  const handleUploaded = useCallback((slotKey: string, url: string) => {
+    setUrls((u) => ({ ...u, [slotKey]: url }));
+  }, []);
+  const handleDeleted = useCallback((slotKey: string) => {
+    setUrls((u) => {
+      const n = { ...u };
+      delete n[slotKey];
+      return n;
+    });
+  }, []);
+
+  return (
+    <main className="mx-auto max-w-3xl px-3 pb-24 pt-4">
+      {/* 상단 바 */}
+      <div className="mb-3 flex items-center justify-between">
+        <Link href="/" className="text-sm text-blue-600">
+          ← 차량 변경
+        </Link>
+        <span className="text-xs text-gray-400">
+          {saveState === "saving" && "저장 중…"}
+          {saveState === "saved" && "저장됨 ✓"}
+          {saveState === "error" && <span className="text-red-500">저장 실패</span>}
+        </span>
+      </div>
+
+      {/* 헤더 정보 */}
+      <section className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+        <h1 className="mb-3 text-center text-lg font-bold text-blue-700">
+          B820 설치 사진
+        </h1>
+        <div className="grid grid-cols-2 gap-x-3 gap-y-2 text-sm">
+          <Field label="설치일자" value={installDate} />
+          <Field label="차량NO" value={plate} />
+          <Field label="운수사" value={vehicle.operator} />
+          <Field label="노선" value={vehicle.route} />
+          <EditField
+            label="연식"
+            value={year}
+            placeholder="예: 2021"
+            onChange={setYear}
+            onBlur={() => saveRecord()}
+          />
+          <EditField
+            label="차종"
+            value={model}
+            placeholder="예: 일렉시티"
+            onChange={setModel}
+            onBlur={() => saveRecord()}
+          />
+        </div>
+      </section>
+
+      {/* 설치 전 */}
+      <SectionHeader title="설치 전" />
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+        {beforeSlots.map((slot, i) => (
+          <PhotoSlot
+            key={slot.slotKey}
+            plate={plate}
+            slot={slot}
+            sortOrder={i}
+            initialUrl={urls[slot.slotKey] ?? null}
+            onUploaded={handleUploaded}
+            onDeleted={handleDeleted}
+            onRemoveSlot={removeCustomSlot}
+          />
+        ))}
+        <button
+          onClick={addCustomSlot}
+          className="flex aspect-[3/2] min-h-[120px] flex-col items-center justify-center rounded-lg border-2 border-dashed border-blue-300 text-blue-500 active:bg-blue-50"
+        >
+          <span className="text-2xl">+</span>
+          <span className="text-xs">항목 추가</span>
+        </button>
+      </div>
+
+      {/* 설치 후 */}
+      <SectionHeader title="설치 후" />
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+        {AFTER_SLOTS.map((slot, i) => (
+          <PhotoSlot
+            key={slot.slotKey}
+            plate={plate}
+            slot={slot}
+            sortOrder={i}
+            initialUrl={urls[slot.slotKey] ?? null}
+            onUploaded={handleUploaded}
+            onDeleted={handleDeleted}
+          />
+        ))}
+      </div>
+
+      {/* 다운로드 */}
+      <div className="fixed inset-x-0 bottom-0 border-t border-gray-200 bg-white/95 p-3 backdrop-blur no-print">
+        <div className="mx-auto max-w-3xl">
+          <ExportButtons plate={plate} />
+        </div>
+      </div>
+    </main>
+  );
+}
+
+function Field({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex flex-col">
+      <span className="text-xs text-gray-400">{label}</span>
+      <span className="font-medium">{value}</span>
+    </div>
+  );
+}
+
+function EditField({
+  label,
+  value,
+  placeholder,
+  onChange,
+  onBlur,
+}: {
+  label: string;
+  value: string;
+  placeholder?: string;
+  onChange: (v: string) => void;
+  onBlur: () => void;
+}) {
+  return (
+    <label className="flex flex-col">
+      <span className="text-xs text-gray-400">{label}</span>
+      <input
+        value={value}
+        placeholder={placeholder}
+        onChange={(e) => onChange(e.target.value)}
+        onBlur={onBlur}
+        className="rounded border border-gray-300 px-2 py-1 outline-none focus:border-blue-500"
+      />
+    </label>
+  );
+}
+
+function SectionHeader({ title }: { title: string }) {
+  return (
+    <h2 className="mb-2 mt-5 rounded-md bg-gray-700 px-3 py-1.5 text-sm font-semibold text-white">
+      {title}
+    </h2>
+  );
+}
