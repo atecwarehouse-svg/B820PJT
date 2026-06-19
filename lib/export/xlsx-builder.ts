@@ -14,6 +14,8 @@ import {
   cellRef,
   COL_FIRST,
   COL_LAST,
+  SLOTS_PER_ROW,
+  IMAGE_ROWS,
   type FullLayout,
 } from "@/lib/export/layout-spec";
 
@@ -113,6 +115,17 @@ function writeVehicleBlock(
         });
       }
     }
+
+    // 마지막 줄이 3칸을 다 못 채우면, 남는 빈 칸을 하나로 병합해 깔끔하게(제목 폭에 맞춤)
+    const n = section.slots.length;
+    const inLastRow = n % SLOTS_PER_ROW;
+    if (n > 0 && inLastRow !== 0) {
+      const lastLabelRow = section.slots[n - 1].labelRow;
+      const firstEmptyCol = COL_FIRST + inLastRow * 2;
+      ws.mergeCells(
+        `${cellRef(lastLabelRow, firstEmptyCol)}:${cellRef(lastLabelRow + IMAGE_ROWS, COL_LAST)}`,
+      );
+    }
   }
 
   applyBorders(ws, layout.title.row, layout.lastRow);
@@ -130,6 +143,7 @@ export async function buildWorkbookMulti(
 ): Promise<ExcelJS.Workbook> {
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet("사진첩", {
+    views: [{ showGridLines: false }], // 기본 격자선 숨김 (빈 칸 깔끔하게)
     pageSetup: {
       paperSize: 9,
       orientation: "portrait",
