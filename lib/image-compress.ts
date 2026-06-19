@@ -6,11 +6,12 @@ import imageCompression from "browser-image-compression";
 export async function compressImage(file: File): Promise<File> {
   try {
     const compressed = await imageCompression(file, {
-      maxSizeMB: 0.8,
-      maxWidthOrHeight: 1600,
+      // 고압축: 용량 절감 우선 (장비 식별 가능 수준 유지)
+      maxSizeMB: 0.35,
+      maxWidthOrHeight: 1024,
       useWebWorker: true,
       fileType: "image/jpeg",
-      initialQuality: 0.8,
+      initialQuality: 0.6,
     });
     // 항상 .jpg 이름으로 정규화
     return new File([compressed], "photo.jpg", { type: "image/jpeg" });
