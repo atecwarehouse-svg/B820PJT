@@ -19,6 +19,7 @@ Next.js(App Router) · Supabase(Postgres + Storage) · ExcelJS · browser-image-
 1. [supabase.com](https://supabase.com) 에서 새 프로젝트 생성
 2. **SQL Editor** 에 `supabase/schema.sql` 전체를 붙여넣고 실행
    - 테이블(vehicles/records/photos) + RLS + `photos` Storage 버킷이 생성됩니다
+   - 이미 운영 중인 프로젝트라면, **저장 목록 기능을 위해** `supabase/migration_saved.sql` 도 1회 실행하세요 (`records.saved_at` 컬럼 추가)
 3. **Settings → API** 에서 아래 값 복사
    - `Project URL` → `NEXT_PUBLIC_SUPABASE_URL`
    - `anon public` 키 → `NEXT_PUBLIC_SUPABASE_ANON_KEY`
@@ -73,12 +74,15 @@ npm run dev
 2. 헤더에 운수사·노선·설치일자(오늘)·차량NO 자동 표시, **연식·차종 입력**
 3. 각 칸에서 **촬영** 또는 **앨범** 선택 → 자동 압축 후 업로드 (재촬영 시 덮어쓰기)
 4. 설치 전 **`+ 항목 추가`** 로 칸 추가 가능
-5. 하단 **엑셀(.xlsx) 다운로드** / **PDF 다운로드**
+5. 하단 **저장** → 저장 목록에 등록
+6. **저장 목록**(홈의 `📋 저장 목록` 또는 `/list`)에서 차량을 **체크박스로 선택** →
+   **PDF 다운로드** 또는 **엑셀 다운로드**
 
-> **PDF는 버튼 한 번에 서버에서 생성되어 바로 다운로드**됩니다 (headless Chromium).
-> - 로컬 개발: 설치된 **Chrome**(없으면 Edge)을 자동 사용합니다.
-> - Vercel: `@sparticuz/chromium` 번들을 사용합니다.
-> - 서버 생성 실패 시, 인쇄 대화상자(`/print`)로 저장하는 폴백이 자동 제공됩니다.
+> **다운로드 형식**
+> - **PDF**: 차량당 1페이지씩 묶인 PDF **한 파일** (headless Chromium 서버 생성)
+> - **엑셀**: **한 시트**에 차량별로 이어지며, 차량마다 **페이지 분할**(인쇄 시 차량당 1장)
+> - 차량 한 대 = 목록 + 설치 전 + 설치 후가 **A4 한 장**에 모두 들어갑니다
+> - PDF는 로컬에선 Chrome/Edge, Vercel에선 `@sparticuz/chromium` 사용
 
 ---
 

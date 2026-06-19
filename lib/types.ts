@@ -26,6 +26,7 @@ export interface RecordRow {
   year: string | null;
   model: string | null;
   custom_slots: CustomSlot[];
+  saved_at?: string | null;
   updated_at?: string;
 }
 

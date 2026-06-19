@@ -1,17 +1,17 @@
-// 인쇄/PDF용 레코드 로더 — 차량/레코드/사진을 읽어 PrintData로 변환.
+// 엑셀 생성용 BuildInput 로더 — 차량/레코드/사진(버퍼 다운로드)을 모은다.
+// 단일/일괄 엑셀 export 라우트가 공유.
 
-import { createServiceClient } from "@/lib/supabase/server";
+import { createServiceClient, PHOTOS_BUCKET } from "@/lib/supabase/server";
 import { AFTER_SLOTS, buildBeforeSlots, type CustomSlot } from "@/lib/slots";
-import { publicPhotoUrl } from "@/lib/photo-url";
 import type { PhotoRow, RecordRow } from "@/lib/types";
-import type { PrintData } from "@/lib/export/print-html";
+import type { BuildInput, SlotImage } from "@/lib/export/xlsx-builder";
 
 function todayStr() {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-export async function loadPrintData(plate: string): Promise<PrintData | null> {
+export async function loadBuildInput(plate: string): Promise<BuildInput | null> {
   const supabase = createServiceClient();
   const [vehicleRes, recordRes, photosRes] = await Promise.all([
     supabase.from("vehicles").select("plate, operator, route").eq("plate", plate).maybeSingle(),
@@ -24,16 +24,20 @@ export async function loadPrintData(plate: string): Promise<PrintData | null> {
   const record = recordRes.data as RecordRow | null;
   const photos = (photosRes.data as PhotoRow[]) ?? [];
 
-  const urlBySlot = new Map<string, string>();
-  for (const p of photos) {
-    urlBySlot.set(p.slot_key, `${publicPhotoUrl(p.storage_path)}?t=${p.updated_at ?? ""}`);
-  }
-
   const customSlots: CustomSlot[] = record?.custom_slots ?? [];
   const beforeSlots = buildBeforeSlots(customSlots);
 
-  const toSlots = (slots: typeof beforeSlots) =>
-    slots.map((s) => ({ label: s.label, url: urlBySlot.get(s.slotKey) ?? null }));
+  const images = new Map<string, SlotImage>();
+  await Promise.all(
+    photos.map(async (p) => {
+      const { data, error } = await supabase.storage
+        .from(PHOTOS_BUCKET)
+        .download(p.storage_path);
+      if (error || !data) return;
+      const buf = Buffer.from(await data.arrayBuffer());
+      images.set(p.slot_key, { buffer: buf, ext: "jpeg" });
+    }),
+  );
 
   return {
     plate,
@@ -42,15 +46,8 @@ export async function loadPrintData(plate: string): Promise<PrintData | null> {
     route: record?.route ?? vehicle.route,
     year: record?.year ?? "",
     model: record?.model ?? "",
-    sections: [
-      { title: "설치 전", slots: toSlots(beforeSlots) },
-      { title: "설치 후", slots: toSlots(AFTER_SLOTS) },
-    ],
+    beforeSlots,
+    afterSlots: AFTER_SLOTS,
+    images,
   };
-}
-
-// 여러 차량을 한번에 (입력 plate 순서 유지, 없는 차량은 제외)
-export async function loadManyPrintData(plates: string[]): Promise<PrintData[]> {
-  const results = await Promise.all(plates.map((p) => loadPrintData(p.trim())));
-  return results.filter((d): d is PrintData => d !== null);
 }

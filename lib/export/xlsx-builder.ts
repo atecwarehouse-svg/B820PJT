@@ -1,5 +1,6 @@
 // ExcelJS로 원본 양식을 코드 생성 (layout-spec 기반).
 // 동적 추가 슬롯이 있어도 그리드 공식으로 행이 자동 확장된다.
+// 다중 차량은 한 시트에 차량별 블록으로 쌓고, 차량마다 페이지 분할(인쇄 시 차량당 1장).
 
 import ExcelJS from "exceljs";
 import type { SlotDef } from "@/lib/slots";
@@ -7,15 +8,13 @@ import {
   COL_WIDTH,
   LABEL_ROW_HEIGHT,
   TITLE_TEXT,
-  ROW_DATE,
-  ROW_OPERATOR,
-  ROW_YEAR,
+  DEFAULT_BASE_ROW,
   computeLayout,
   rangeRef,
   cellRef,
   COL_FIRST,
   COL_LAST,
-  IMAGE_ROWS,
+  type FullLayout,
 } from "@/lib/export/layout-spec";
 
 export interface SlotImage {
@@ -40,19 +39,25 @@ const THIN = { style: "thin" as const, color: { argb: "FF000000" } };
 const FULL_BORDER = { top: THIN, left: THIN, bottom: THIN, right: THIN };
 const CENTER = { vertical: "middle" as const, horizontal: "center" as const, wrapText: true };
 
-export async function buildWorkbook(input: BuildInput): Promise<ExcelJS.Workbook> {
-  const wb = new ExcelJS.Workbook();
-  const ws = wb.addWorksheet("사진첩", {
-    pageSetup: { paperSize: 9, orientation: "portrait", fitToPage: true, fitToWidth: 1, fitToHeight: 0 },
-  });
-
-  const layout = computeLayout(input.beforeSlots, input.afterSlots);
-
-  // 열 폭
+function setColumns(ws: ExcelJS.Worksheet) {
   ws.getColumn(1).width = 3.5;
   for (let c = COL_FIRST; c <= COL_LAST; c++) ws.getColumn(c).width = COL_WIDTH;
   ws.getColumn(8).width = 3.625;
   ws.getColumn(9).width = 3.625;
+}
+
+// 한 차량 블록을 baseRow부터 작성하고 마지막 행 번호를 반환.
+function writeVehicleBlock(
+  wb: ExcelJS.Workbook,
+  ws: ExcelJS.Worksheet,
+  input: BuildInput,
+  baseRow: number,
+): number {
+  const layout: FullLayout = computeLayout(
+    input.beforeSlots,
+    input.afterSlots,
+    baseRow,
+  );
 
   // 제목
   ws.mergeCells(rangeRef(layout.title.range));
@@ -64,18 +69,15 @@ export async function buildWorkbook(input: BuildInput): Promise<ExcelJS.Workbook
 
   // 헤더 정보 행 (라벨 + 값)
   const headerPairs: Array<[number, string, string, string, string]> = [
-    // [row, leftLabel, leftValue, rightLabel, rightValue]
-    [ROW_DATE, "설치일자", input.installDate, "차량NO", input.plate],
-    [ROW_OPERATOR, "운수사", input.operator, "노선", input.route],
-    [ROW_YEAR, "연식", input.year, "차종", input.model],
+    [layout.header.dateRow, "설치일자", input.installDate, "차량NO", input.plate],
+    [layout.header.operatorRow, "운수사", input.operator, "노선", input.route],
+    [layout.header.yearRow, "연식", input.year, "차종", input.model],
   ];
   for (const [row, lLabel, lVal, rLabel, rVal] of headerPairs) {
     ws.getRow(row).height = LABEL_ROW_HEIGHT;
-    // 좌: B=라벨, C:D=값
     setLabel(ws, row, COL_FIRST, lLabel);
     ws.mergeCells(`${cellRef(row, COL_FIRST + 1)}:${cellRef(row, COL_FIRST + 2)}`);
     setValue(ws, row, COL_FIRST + 1, lVal);
-    // 우: E=라벨, F:G=값
     setLabel(ws, row, COL_FIRST + 3, rLabel);
     ws.mergeCells(`${cellRef(row, COL_FIRST + 4)}:${cellRef(row, COL_FIRST + 5)}`);
     setValue(ws, row, COL_FIRST + 4, rVal);
@@ -83,7 +85,6 @@ export async function buildWorkbook(input: BuildInput): Promise<ExcelJS.Workbook
 
   // 섹션 (설치 전 / 설치 후)
   for (const section of [layout.before, layout.after]) {
-    // 섹션 헤더
     ws.getRow(section.headerRow).height = LABEL_ROW_HEIGHT;
     ws.mergeCells(`${cellRef(section.headerRow, COL_FIRST)}:${cellRef(section.headerRow, COL_LAST)}`);
     const sh = ws.getCell(cellRef(section.headerRow, COL_FIRST));
@@ -93,20 +94,15 @@ export async function buildWorkbook(input: BuildInput): Promise<ExcelJS.Workbook
     sh.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFD9D9D9" } };
 
     for (const sl of section.slots) {
-      // 라벨 행 높이
       ws.getRow(sl.labelRow).height = LABEL_ROW_HEIGHT;
-      // 라벨 병합 + 값
       ws.mergeCells(rangeRef(sl.labelCell));
       setLabel(ws, sl.labelCell.top, sl.labelCell.left, sl.slot.label);
 
-      // 이미지 셀 병합
       ws.mergeCells(rangeRef(sl.imageCell));
-      // 이미지 블록 행 높이
       for (let r = sl.imageCell.top; r <= sl.imageCell.bottom; r++) {
         ws.getRow(r).height = IMAGE_ROW_HEIGHT;
       }
 
-      // 이미지 삽입
       const img = input.images.get(sl.slot.slotKey);
       if (img) {
         const imgId = wb.addImage({ buffer: img.buffer as any, extension: img.ext });
@@ -119,8 +115,40 @@ export async function buildWorkbook(input: BuildInput): Promise<ExcelJS.Workbook
     }
   }
 
-  // 전체 테두리 (B2 ~ G lastRow)
   applyBorders(ws, layout.title.row, layout.lastRow);
+  return layout.lastRow;
+}
+
+// 단일 차량
+export async function buildWorkbook(input: BuildInput): Promise<ExcelJS.Workbook> {
+  return buildWorkbookMulti([input]);
+}
+
+// 다중 차량 — 한 시트에 차량별 블록을 쌓고 차량마다 페이지 분할.
+export async function buildWorkbookMulti(
+  inputs: BuildInput[],
+): Promise<ExcelJS.Workbook> {
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet("사진첩", {
+    pageSetup: {
+      paperSize: 9,
+      orientation: "portrait",
+      fitToPage: true,
+      fitToWidth: 1,
+      fitToHeight: 0, // 세로는 수동 페이지 분할 사용
+    },
+  });
+  setColumns(ws);
+
+  let base = DEFAULT_BASE_ROW;
+  inputs.forEach((input, i) => {
+    if (i > 0) {
+      // 직전 차량 마지막 행 다음에서 새 페이지 시작
+      ws.getRow(base - 1).addPageBreak();
+    }
+    const lastRow = writeVehicleBlock(wb, ws, input, base);
+    base = lastRow + 1;
+  });
 
   return wb;
 }
@@ -147,6 +175,3 @@ function applyBorders(ws: ExcelJS.Worksheet, topRow: number, bottomRow: number) 
     }
   }
 }
-
-// IMAGE_ROWS는 layout-spec과 동기화 확인용 (사용처에서 import)
-export { IMAGE_ROWS };

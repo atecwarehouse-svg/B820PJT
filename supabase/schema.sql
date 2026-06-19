@@ -23,8 +23,11 @@ create table if not exists records (
   year         text,                                -- 연식 (수동 입력)
   model        text,                                -- 차종 (수동 입력)
   custom_slots jsonb not null default '[]'::jsonb,  -- 동적 추가 항목 [{slot_key,label,sort_order}]
+  saved_at     timestamptz,                         -- '저장' 버튼으로 목록 등록된 시각 (null=미저장)
   updated_at   timestamptz not null default now()
 );
+
+create index if not exists records_saved_at_idx on records (saved_at desc);
 
 -- ----- 사진 -----
 create table if not exists photos (

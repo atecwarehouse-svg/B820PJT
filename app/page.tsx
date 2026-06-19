@@ -1,3 +1,4 @@
+import Link from "next/link";
 import PlateSearch from "@/components/PlateSearch";
 
 export default function HomePage() {
@@ -10,9 +11,13 @@ export default function HomePage() {
         </p>
       </header>
       <PlateSearch />
-      <p className="mt-6 text-center text-xs text-gray-400">
-        예) 인천70바4005
-      </p>
+      <p className="mt-6 text-center text-xs text-gray-400">예) 인천70바4005</p>
+      <Link
+        href="/list"
+        className="mt-8 rounded-xl border border-gray-300 bg-white px-4 py-3 text-center text-sm font-medium text-gray-700 shadow-sm active:bg-gray-100"
+      >
+        📋 저장 목록 / 다운로드
+      </Link>
     </main>
   );
 }

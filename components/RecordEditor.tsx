@@ -2,6 +2,7 @@
 
 import { useCallback, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import type { RecordBundle } from "@/lib/types";
 import {
   AFTER_SLOTS,
@@ -11,7 +12,6 @@ import {
 } from "@/lib/slots";
 import { publicPhotoUrl } from "@/lib/photo-url";
 import PhotoSlot from "@/components/PhotoSlot";
-import ExportButtons from "@/components/ExportButtons";
 
 interface Props {
   plate: string;
@@ -54,10 +54,18 @@ export default function RecordEditor({ plate, initial }: Props) {
     }, 0),
   );
 
+  const router = useRouter();
   const beforeSlots = useMemo(() => buildBeforeSlots(customSlots), [customSlots]);
 
   const saveRecord = useCallback(
-    async (overrides?: Partial<{ year: string; model: string; custom_slots: CustomSlot[] }>) => {
+    async (
+      overrides?: Partial<{
+        year: string;
+        model: string;
+        custom_slots: CustomSlot[];
+        saved: boolean;
+      }>,
+    ) => {
       setSaveState("saving");
       try {
         const res = await fetch("/api/records", {
@@ -68,17 +76,33 @@ export default function RecordEditor({ plate, initial }: Props) {
             year: overrides?.year ?? year,
             model: overrides?.model ?? model,
             custom_slots: overrides?.custom_slots ?? customSlots,
+            saved: overrides?.saved ?? false,
           }),
         });
         if (!res.ok) throw new Error();
         setSaveState("saved");
         setTimeout(() => setSaveState("idle"), 1500);
+        return true;
       } catch {
         setSaveState("error");
+        return false;
       }
     },
     [plate, year, model, customSlots],
   );
+
+  const [submitting, setSubmitting] = useState(false);
+  async function handleSave() {
+    setSubmitting(true);
+    const ok = await saveRecord({ saved: true });
+    setSubmitting(false);
+    if (ok) {
+      alert("저장되었습니다. 목록에서 다운로드할 수 있습니다.");
+      router.push("/list");
+    } else {
+      alert("저장에 실패했습니다. 다시 시도해주세요.");
+    }
+  }
 
   function addCustomSlot() {
     const label = prompt("추가할 항목(칸) 이름을 입력하세요");
@@ -203,10 +227,22 @@ export default function RecordEditor({ plate, initial }: Props) {
         ))}
       </div>
 
-      {/* 다운로드 */}
+      {/* 저장 */}
       <div className="fixed inset-x-0 bottom-0 border-t border-gray-200 bg-white/95 p-3 backdrop-blur no-print">
-        <div className="mx-auto max-w-3xl">
-          <ExportButtons plate={plate} />
+        <div className="mx-auto flex max-w-3xl items-center gap-2">
+          <Link
+            href="/list"
+            className="rounded-lg border border-gray-300 px-4 py-3 text-sm font-medium text-gray-600 active:bg-gray-100"
+          >
+            목록
+          </Link>
+          <button
+            onClick={handleSave}
+            disabled={submitting}
+            className="flex-1 rounded-lg bg-blue-600 px-4 py-3 text-sm font-semibold text-white active:bg-blue-700 disabled:opacity-50"
+          >
+            {submitting ? "저장 중…" : "저장"}
+          </button>
         </div>
       </div>
     </main>

@@ -10,6 +10,7 @@ interface UpsertBody {
   year?: string | null;
   model?: string | null;
   custom_slots?: CustomSlot[];
+  saved?: boolean; // true면 '저장'(목록 등록) 처리 → saved_at = now()
 }
 
 // POST /api/records  → 레코드 upsert (연식/차종/커스텀 슬롯 저장)
@@ -55,6 +56,9 @@ export async function POST(req: NextRequest) {
   };
   if (existing?.install_date) {
     payload.install_date = existing.install_date;
+  }
+  if (body.saved) {
+    payload.saved_at = new Date().toISOString();
   }
 
   const { data, error } = await supabase

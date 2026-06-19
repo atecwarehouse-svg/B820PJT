@@ -1,5 +1,7 @@
 // 인쇄/PDF 공용 HTML 생성기.
-// 화면 인쇄 페이지(app/print)와 서버 PDF 라우트(api/export/pdf)가 동일 마크업을 공유한다.
+// 차량당 A4 1페이지(목록 + 설치 전 + 설치 후)에 모두 담고,
+// 다중 차량은 차량마다 페이지 분할(차량당 1페이지)한다.
+// 화면 인쇄 페이지(app/print)와 서버 PDF 라우트(api/export/pdf)가 동일 마크업을 공유.
 
 export interface PrintSlot {
   label: string;
@@ -20,23 +22,26 @@ export interface PrintData {
 }
 
 export const PRINT_CSS = `
-  @page { size: A4 portrait; margin: 10mm; }
+  @page { size: A4 portrait; margin: 8mm; }
   * { box-sizing: border-box; }
   html, body { margin: 0; padding: 0; }
-  .print-root { width: 190mm; margin: 0 auto; font-family: 'Malgun Gothic','맑은 고딕','Noto Sans KR',sans-serif; color:#000; }
-  .doc-title { text-align:center; font-size:18px; font-weight:700; margin:4px 0 8px; }
-  table.info { width:100%; border-collapse:collapse; margin-bottom:8px; }
-  table.info th, table.info td { border:1px solid #000; padding:4px 6px; font-size:12px; }
-  table.info th { background:#f2f2f2; width:14%; text-align:center; white-space:nowrap; }
-  table.info td { width:36%; text-align:center; }
-  .section-head { background:#d9d9d9; border:1px solid #000; font-weight:700; font-size:13px; padding:3px 6px; margin-top:6px; }
+  body { font-family: 'Malgun Gothic','맑은 고딕','Noto Sans KR',sans-serif; color:#000; }
+  /* 첫 페이지 제외하고 각 차량 앞에서 페이지 분할 (마지막 뒤 빈 페이지 방지) */
+  .page { width: 194mm; margin: 0 auto; page-break-before: always; break-before: page; }
+  .page:first-child { page-break-before: avoid; break-before: avoid; }
+  .doc-title { text-align:center; font-size:16px; font-weight:700; margin:2px 0 6px; }
+  table.info { width:100%; border-collapse:collapse; margin-bottom:6px; }
+  table.info th, table.info td { border:1px solid #000; padding:3px 5px; font-size:11px; }
+  table.info th { background:#f2f2f2; width:13%; text-align:center; white-space:nowrap; }
+  table.info td { width:37%; text-align:center; }
+  .section-head { background:#d9d9d9; border:1px solid #000; font-weight:700; font-size:12px; padding:2px 6px; margin-top:4px; }
   .grid { display:grid; grid-template-columns:1fr 1fr 1fr; }
   .cell { border:1px solid #000; border-top:none; }
   .cell:nth-child(3n+2), .cell:nth-child(3n) { border-left:none; }
-  .cell-label { text-align:center; font-size:11px; font-weight:700; background:#f2f2f2; border-bottom:1px solid #000; padding:2px; }
-  .cell-photo { aspect-ratio: 3 / 2; display:flex; align-items:center; justify-content:center; overflow:hidden; }
+  .cell-label { text-align:center; font-size:10px; font-weight:700; background:#f2f2f2; border-bottom:1px solid #000; padding:1px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .cell-photo { height:33mm; display:flex; align-items:center; justify-content:center; overflow:hidden; }
   .cell-photo img { width:100%; height:100%; object-fit:cover; }
-  .cell-photo .empty { color:#999; font-size:11px; }
+  .cell-photo .empty { color:#999; font-size:10px; }
   .grid, .cell { break-inside: avoid; }
 `;
 
@@ -48,7 +53,8 @@ function esc(s: string): string {
     .replace(/"/g, "&quot;");
 }
 
-export function buildPrintBodyHtml(data: PrintData): string {
+// 차량 한 대의 내부 마크업(페이지 래퍼 제외)
+function bodyInner(data: PrintData): string {
   const info = `
     <h1 class="doc-title">B820 설치 사진</h1>
     <table class="info"><tbody>
@@ -76,11 +82,25 @@ export function buildPrintBodyHtml(data: PrintData): string {
     })
     .join("");
 
-  return `<div class="print-root">${info}${sections}</div>`;
+  return info + sections;
+}
+
+// 차량 한 대 = 페이지 1개 래퍼
+export function buildPrintBodyHtml(data: PrintData): string {
+  return `<div class="page">${bodyInner(data)}</div>`;
+}
+
+// 다중 차량 — 각 차량을 한 페이지씩
+export function buildMultiBodyHtml(items: PrintData[]): string {
+  return items.map((d) => `<div class="page">${bodyInner(d)}</div>`).join("");
+}
+
+export function buildMultiDocument(items: PrintData[]): string {
+  return `<!doctype html><html lang="ko"><head><meta charset="utf-8" />
+  <style>${PRINT_CSS}</style></head>
+  <body>${buildMultiBodyHtml(items)}</body></html>`;
 }
 
 export function buildPrintDocument(data: PrintData): string {
-  return `<!doctype html><html lang="ko"><head><meta charset="utf-8" />
-  <style>${PRINT_CSS}</style></head>
-  <body>${buildPrintBodyHtml(data)}</body></html>`;
+  return buildMultiDocument([data]);
 }
