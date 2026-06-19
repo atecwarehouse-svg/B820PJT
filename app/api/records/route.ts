@@ -7,6 +7,8 @@ export const dynamic = "force-dynamic";
 
 interface UpsertBody {
   plate: string;
+  operator?: string | null; // 운수사 (수정 가능)
+  route?: string | null; // 노선 (수정 가능)
   year?: string | null;
   model?: string | null;
   custom_slots?: CustomSlot[];
@@ -47,8 +49,9 @@ export async function POST(req: NextRequest) {
 
   const payload: Record<string, unknown> = {
     plate,
-    operator: vehicle.operator,
-    route: vehicle.route,
+    // 수정값이 오면 그대로, 없으면 차량 마스터값으로
+    operator: body.operator ?? vehicle.operator,
+    route: body.route ?? vehicle.route,
     year: body.year ?? null,
     model: body.model ?? null,
     custom_slots: body.custom_slots ?? [],

@@ -29,11 +29,16 @@ export default function RecordEditor({ plate, initial }: Props) {
   const vehicle = initial.vehicle!;
   const installDate = initial.record?.install_date ?? todayStr();
 
+  const [operator, setOperator] = useState(
+    initial.record?.operator ?? vehicle.operator,
+  );
+  const [route, setRoute] = useState(initial.record?.route ?? vehicle.route);
   const [year, setYear] = useState(initial.record?.year ?? "");
   const [model, setModel] = useState(initial.record?.model ?? "");
   const [customSlots, setCustomSlots] = useState<CustomSlot[]>(
     initial.record?.custom_slots ?? [],
   );
+  const [editInfo, setEditInfo] = useState(false); // 운수사/노선 수정 모드
 
   // slotKey -> 미리보기 URL
   const [urls, setUrls] = useState<Record<string, string>>(() => {
@@ -60,6 +65,8 @@ export default function RecordEditor({ plate, initial }: Props) {
   const saveRecord = useCallback(
     async (
       overrides?: Partial<{
+        operator: string;
+        route: string;
         year: string;
         model: string;
         custom_slots: CustomSlot[];
@@ -73,6 +80,8 @@ export default function RecordEditor({ plate, initial }: Props) {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             plate,
+            operator: overrides?.operator ?? operator,
+            route: overrides?.route ?? route,
             year: overrides?.year ?? year,
             model: overrides?.model ?? model,
             custom_slots: overrides?.custom_slots ?? customSlots,
@@ -88,8 +97,16 @@ export default function RecordEditor({ plate, initial }: Props) {
         return false;
       }
     },
-    [plate, year, model, customSlots],
+    [plate, operator, route, year, model, customSlots],
   );
+
+  function toggleEditInfo() {
+    if (editInfo) {
+      // 완료 → 저장
+      saveRecord();
+    }
+    setEditInfo((v) => !v);
+  }
 
   const [submitting, setSubmitting] = useState(false);
   async function handleSave() {
@@ -162,14 +179,47 @@ export default function RecordEditor({ plate, initial }: Props) {
 
       {/* 헤더 정보 */}
       <section className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+        {/* 타이틀 위 수정 버튼 */}
+        <div className="mb-1 flex justify-end">
+          <button
+            onClick={toggleEditInfo}
+            className={`rounded-md px-3 py-1 text-xs font-medium ${
+              editInfo
+                ? "bg-blue-600 text-white active:bg-blue-700"
+                : "border border-gray-300 text-gray-600 active:bg-gray-100"
+            }`}
+          >
+            {editInfo ? "완료" : "수정"}
+          </button>
+        </div>
         <h1 className="mb-3 text-center text-lg font-bold text-blue-700">
           B820 설치 사진
         </h1>
         <div className="grid grid-cols-2 gap-x-3 gap-y-2 text-sm">
           <Field label="설치일자" value={installDate} />
           <Field label="차량NO" value={plate} />
-          <Field label="운수사" value={vehicle.operator} />
-          <Field label="노선" value={vehicle.route} />
+          {editInfo ? (
+            <EditField
+              label="운수사"
+              value={operator}
+              placeholder="운수사"
+              onChange={setOperator}
+              onBlur={() => saveRecord()}
+            />
+          ) : (
+            <Field label="운수사" value={operator} />
+          )}
+          {editInfo ? (
+            <EditField
+              label="노선"
+              value={route}
+              placeholder="노선"
+              onChange={setRoute}
+              onBlur={() => saveRecord()}
+            />
+          ) : (
+            <Field label="노선" value={route} />
+          )}
           <EditField
             label="연식"
             value={year}
