@@ -15,6 +15,7 @@ import JSZip from "jszip";
 
 const VEHICLE_SHEET = "xl/worksheets/sheet4.xml"; // 차량리스트
 const SCHEDULE_SHEET = "xl/worksheets/sheet3.xml"; // 전개일정
+const PROGRESS_SHEET = "xl/worksheets/sheet2.xml"; // 인천버스 B800단말기 설치 진행현황
 const WORKBOOK = "xl/workbook.xml";
 
 // 증차 추가 행에 재사용할 셀 스타일(차량리스트 데이터 행과 동일)
@@ -81,6 +82,7 @@ interface FillResult {
 export async function fillProgressXlsx(
   templateBuffer: Buffer,
   completed: Map<string, CompletedInfo>,
+  asOfSerial?: number, // 진행현황 시트 기준일(A10:C10) — 다운로드 시점 업무일
 ): Promise<FillResult> {
   const zip = await JSZip.loadAsync(templateBuffer);
 
@@ -186,6 +188,19 @@ export async function fillProgressXlsx(
       },
     );
     zip.file(SCHEDULE_SHEET, schedXml);
+  }
+
+  // 3-c) 진행현황 시트 기준일(A10:C10 병합셀) → 다운로드 시점 업무일로 갱신
+  if (typeof asOfSerial === "number" && isFinite(asOfSerial)) {
+    const pFile = zip.file(PROGRESS_SHEET);
+    if (pFile) {
+      let pXml = await pFile.async("string");
+      pXml = pXml.replace(
+        /(<c r="A10"[^>]*>)<v>[\d.]+<\/v>(<\/c>)/,
+        (_m, pre: string, post: string) => `${pre}<v>${asOfSerial}</v>${post}`,
+      );
+      zip.file(PROGRESS_SHEET, pXml);
+    }
   }
 
   // 4) workbook.xml: 열 때 전 시트 재계산

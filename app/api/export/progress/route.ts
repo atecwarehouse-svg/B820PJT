@@ -67,7 +67,9 @@ export async function GET() {
   }
   const template = Buffer.from(await file.arrayBuffer());
 
-  const { buffer, filled, added } = await fillProgressXlsx(template, completed);
+  // 진행현황 기준일(A10) = 다운로드 시점 업무일
+  const asOfSerial = workDateExcelSerial(new Date());
+  const { buffer, filled, added } = await fillProgressXlsx(template, completed, asOfSerial);
   console.log(
     `[export/progress] 완료 ${completed.size}대 → 기존 ${filled}대 채움, 증차 ${added}대 추가`,
   );
