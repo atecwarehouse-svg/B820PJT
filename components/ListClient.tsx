@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
+import { DEFAULT_PHOTO_COUNT as TARGET } from "@/lib/slots";
 
 export interface ListItem {
   plate: string;
@@ -16,8 +17,30 @@ export interface ListItem {
 export default function ListClient({ items }: { items: ListItem[] }) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState<null | "pdf" | "xlsx">(null);
+  const [query, setQuery] = useState("");
+  const [incompleteOnly, setIncompleteOnly] = useState(false);
 
-  const allChecked = selected.size === items.length && items.length > 0;
+  // 검색(차량번호·운수사·노선) + 미완료 필터
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return items.filter((it) => {
+      if (incompleteOnly && it.photoCount >= TARGET) return false;
+      if (!q) return true;
+      return (
+        it.plate.toLowerCase().includes(q) ||
+        it.operator.toLowerCase().includes(q) ||
+        it.route.toLowerCase().includes(q)
+      );
+    });
+  }, [items, query, incompleteOnly]);
+
+  const incompleteCount = useMemo(
+    () => items.filter((it) => it.photoCount < TARGET).length,
+    [items],
+  );
+
+  const allChecked =
+    filtered.length > 0 && filtered.every((it) => selected.has(it.plate));
   const selectedPlates = useMemo(() => [...selected], [selected]);
 
   function toggle(plate: string) {
@@ -29,7 +52,12 @@ export default function ListClient({ items }: { items: ListItem[] }) {
     });
   }
   function toggleAll() {
-    setSelected(allChecked ? new Set() : new Set(items.map((i) => i.plate)));
+    setSelected((s) => {
+      const n = new Set(s);
+      if (allChecked) filtered.forEach((it) => n.delete(it.plate));
+      else filtered.forEach((it) => n.add(it.plate));
+      return n;
+    });
   }
 
   async function download(kind: "pdf" | "xlsx") {
@@ -69,33 +97,84 @@ export default function ListClient({ items }: { items: ListItem[] }) {
 
   return (
     <div>
-      <label className="mb-2 flex items-center gap-2 text-sm">
-        <input type="checkbox" checked={allChecked} onChange={toggleAll} className="h-4 w-4" />
-        전체 선택 ({selected.size}/{items.length})
-      </label>
-
-      <ul className="divide-y divide-gray-100 overflow-hidden rounded-xl border border-gray-200 bg-white">
-        {items.map((it) => (
-          <li key={it.plate} className="flex items-center gap-3 px-3 py-2.5">
+      {/* 검색 + 미완료 필터 */}
+      <div className="mb-3 space-y-2">
+        <input
+          type="search"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="차량번호 · 운수사 · 노선 검색"
+          className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:border-blue-500 focus:outline-none"
+        />
+        <div className="flex items-center justify-between text-xs">
+          <label className="flex items-center gap-1.5 text-gray-600">
             <input
               type="checkbox"
-              checked={selected.has(it.plate)}
-              onChange={() => toggle(it.plate)}
-              className="h-4 w-4 shrink-0"
+              checked={incompleteOnly}
+              onChange={(e) => setIncompleteOnly(e.target.checked)}
+              className="h-4 w-4"
             />
-            <Link href={`/record/${encodeURIComponent(it.plate)}`} className="min-w-0 flex-1">
-              <div className="flex items-center justify-between">
-                <span className="font-medium">{it.plate}</span>
-                <span className="text-xs text-gray-400">{it.photoCount}장</span>
-              </div>
-              <div className="truncate text-xs text-gray-500">
-                {it.operator} · {it.route} · {it.installDate}
-                {it.year || it.model ? ` · ${it.year} ${it.model}` : ""}
-              </div>
-            </Link>
-          </li>
-        ))}
-      </ul>
+            미완료만 보기
+          </label>
+          <span className="text-gray-400">
+            {incompleteCount > 0 ? (
+              <span className="font-medium text-rose-600">미완료 {incompleteCount}대</span>
+            ) : (
+              <span className="text-green-600">전체 완료</span>
+            )}
+            {" · "}
+            {filtered.length}/{items.length}대
+          </span>
+        </div>
+      </div>
+
+      <label className="mb-2 flex items-center gap-2 text-sm">
+        <input type="checkbox" checked={allChecked} onChange={toggleAll} className="h-4 w-4" />
+        전체 선택 (선택 {selected.size}개)
+      </label>
+
+      {filtered.length === 0 ? (
+        <p className="mt-12 text-center text-sm text-gray-400">검색 결과가 없습니다.</p>
+      ) : (
+        <ul className="divide-y divide-gray-100 overflow-hidden rounded-xl border border-gray-200 bg-white">
+          {filtered.map((it) => {
+            const done = it.photoCount >= TARGET;
+            return (
+              <li key={it.plate} className="flex items-center gap-3 px-3 py-2.5">
+                <input
+                  type="checkbox"
+                  checked={selected.has(it.plate)}
+                  onChange={() => toggle(it.plate)}
+                  className="h-4 w-4 shrink-0"
+                />
+                <Link href={`/record/${encodeURIComponent(it.plate)}`} className="min-w-0 flex-1">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-medium">{it.plate}</span>
+                    <span className="flex shrink-0 items-center gap-1.5">
+                      <span className={`text-xs tabular-nums ${done ? "text-gray-400" : "text-rose-600"}`}>
+                        {String(it.photoCount).padStart(2, "0")}장/{TARGET}장
+                      </span>
+                      {done ? (
+                        <span className="rounded bg-green-100 px-1.5 py-0.5 text-[10px] font-semibold text-green-700">
+                          완료
+                        </span>
+                      ) : (
+                        <span className="rounded bg-rose-100 px-1.5 py-0.5 text-[10px] font-semibold text-rose-700">
+                          미완료
+                        </span>
+                      )}
+                    </span>
+                  </div>
+                  <div className="truncate text-xs text-gray-500">
+                    {it.operator} · {it.route} · {it.installDate}
+                    {it.year || it.model ? ` · ${it.year} ${it.model}` : ""}
+                  </div>
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+      )}
 
       {/* 하단 고정 다운로드 바 */}
       <div className="fixed inset-x-0 bottom-0 border-t border-gray-200 bg-white/95 p-3 backdrop-blur">

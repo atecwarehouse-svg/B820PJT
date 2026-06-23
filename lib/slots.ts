@@ -31,6 +31,10 @@ export const AFTER_SLOTS: SlotDef[] = [
   { slotKey: "after_alight2", label: "하차2 단말기", section: "after" },
 ];
 
+// 기본 촬영 장수 = 설치 전(6) + 설치 후(7) = 13장.
+// 완료 판정/대시보드/목록 표시의 단일 기준값.
+export const DEFAULT_PHOTO_COUNT = BEFORE_SLOTS.length + AFTER_SLOTS.length;
+
 export interface CustomSlot {
   slot_key: string;
   label: string;
