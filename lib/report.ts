@@ -53,8 +53,8 @@ export function buildReport(input: ReportInput): DailyReport {
     typeof input.plannedOverride === "number" && isFinite(input.plannedOverride)
       ? input.plannedOverride
       : input.scheduleDays.find((s) => s.date === date)?.planned ?? 0;
-  const dailyPct = dailyPlanned ? Math.round((dailyDone / dailyPlanned) * 100) : 0;
-  const cumPct = input.cumPlanned ? Math.round((input.cumDone / input.cumPlanned) * 100) : 0;
+  const dailyPct = dailyPlanned ? (dailyDone / dailyPlanned) * 100 : 0;
+  const cumPct = input.cumPlanned ? (input.cumDone / input.cumPlanned) * 100 : 0;
 
   return {
     date,
@@ -88,7 +88,7 @@ export function formatReportText(r: DailyReport, notes: string): string {
   const lines: string[] = [];
   lines.push("[B820 단말기 설치 프로젝트]");
   lines.push(`설치 완료 (${r.label}, ${r.dow})`);
-  lines.push(`설치 수량 (실적/계획): ${r.dailyDone}대 / ${r.dailyPlanned}대 ${r.dailyPct}%`);
+  lines.push(`설치 수량 (실적/계획): ${r.dailyDone}대 / ${r.dailyPlanned}대 ${r.dailyPct.toFixed(1)}%`);
   lines.push("");
   if (r.groups.length === 0) {
     lines.push("- (완료 없음)");
@@ -101,7 +101,7 @@ export function formatReportText(r: DailyReport, notes: string): string {
   lines.push("○ 특이사항");
   lines.push(...noteLines(notes));
   lines.push(HR);
-  lines.push(`누적 설치 (실적/계획): ${r.cumDone}대 / ${r.cumPlanned}대 ${r.cumPct}%`);
+  lines.push(`누적 설치 (실적/계획): ${r.cumDone}대 / ${r.cumPlanned}대 ${r.cumPct.toFixed(1)}%`);
   return lines.join("\n");
 }
 
@@ -122,13 +122,13 @@ export function formatReportHtml(r: DailyReport, notes: string): string {
     <div style="font-size:18px;font-weight:700;margin-top:2px">설치 완료 (${r.label}, ${r.dow})</div>
   </div>
   <div style="padding:16px 18px">
-    <div style="font-size:15px;margin-bottom:10px">설치 수량 (실적/계획): <b>${r.dailyDone}대</b> / ${r.dailyPlanned}대 <span style="color:#1d4ed8;font-weight:700">${r.dailyPct}%</span></div>
+    <div style="font-size:15px;margin-bottom:10px">설치 수량 (실적/계획): <b>${r.dailyDone}대</b> / ${r.dailyPlanned}대 <span style="color:#1d4ed8;font-weight:700">${r.dailyPct.toFixed(1)}%</span></div>
     <ul style="margin:0 0 12px;padding-left:18px;line-height:1.7;color:#374151">${rows}</ul>
     <div style="border-top:1px dashed #d1d5db;margin:12px 0"></div>
     <div style="font-weight:600;margin-bottom:4px">○ 특이사항</div>
     <ul style="margin:0 0 12px;padding-left:18px;line-height:1.7;color:#374151">${notesHtml}</ul>
     <div style="border-top:1px dashed #d1d5db;margin:12px 0"></div>
-    <div style="font-size:14px;color:#111827">누적 설치 (실적/계획): <b>${r.cumDone}대</b> / ${r.cumPlanned}대 <span style="color:#16a34a;font-weight:700">${r.cumPct}%</span></div>
+    <div style="font-size:14px;color:#111827">누적 설치 (실적/계획): <b>${r.cumDone}대</b> / ${r.cumPlanned}대 <span style="color:#16a34a;font-weight:700">${r.cumPct.toFixed(1)}%</span></div>
   </div>
 </div>`;
 }
