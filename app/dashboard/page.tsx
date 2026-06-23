@@ -108,6 +108,21 @@ export default async function DashboardPage() {
         <StatCard label="미시작" value={s.notStarted} tone="gray" />
       </div>
 
+      {/* ===== 설치 일정 ===== */}
+      <h2 className="mb-2 mt-6 text-sm font-semibold text-gray-700">
+        설치 일정
+        <span className="ml-1 font-normal text-gray-400">(예정일 기준 계획 대비 실적)</span>
+      </h2>
+      <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+        {sch === null ? (
+          <p className="py-8 text-center text-sm text-gray-400">
+            설치 일정 데이터가 없습니다. (예정일 임포트 필요)
+          </p>
+        ) : (
+          <ScheduleChart stats={sch} />
+        )}
+      </section>
+
       {/* 운수사별 진행 현황 */}
       <h2 className="mb-2 mt-6 text-sm font-semibold text-gray-700">
         운수사별 진행 현황
@@ -232,20 +247,6 @@ export default async function DashboardPage() {
         </>
       )}
 
-      {/* ===== 설치 일정 ===== */}
-      <h2 className="mb-2 mt-8 text-sm font-semibold text-gray-700">
-        설치 일정
-        <span className="ml-1 font-normal text-gray-400">(예정일 기준 계획 대비 실적)</span>
-      </h2>
-      <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-        {sch === null ? (
-          <p className="py-8 text-center text-sm text-gray-400">
-            설치 일정 데이터가 없습니다. (예정일 임포트 필요)
-          </p>
-        ) : (
-          <ScheduleChart stats={sch} />
-        )}
-      </section>
     </main>
   );
 }
