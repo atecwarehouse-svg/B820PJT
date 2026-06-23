@@ -80,12 +80,17 @@ export async function POST(req: NextRequest) {
 
   const arrayBuffer = await file.arrayBuffer();
 
+  // 파일명: 설치전/후_차량번호_칸라벨.jpg (라벨 없으면 슬롯키)
+  const sectionKo = section === "before" ? "설치전" : "설치후";
+  const safeLabel = (label || slotKey).replace(/[\\/]/g, "-").trim();
+  const fileName = `${sectionKo}_${plate}_${safeLabel}.jpg`;
+
   let fileId: string;
   try {
     fileId = await uploadPhoto({
       plate,
       operator,
-      slotKey,
+      fileName,
       body: Buffer.from(arrayBuffer),
       contentType: "image/jpeg",
       existingId: existing?.storage_path,

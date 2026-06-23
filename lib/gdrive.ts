@@ -68,12 +68,12 @@ async function ensureFolder(d: Drive, name: string, parentId: string): Promise<s
 export async function uploadPhoto(opts: {
   plate: string;
   operator: string;
-  slotKey: string;
+  fileName: string; // 저장 파일명 (확장자 포함). 예: 설치전_인천70바1273_GPS안테나.jpg
   body: Buffer;
   contentType?: string;
   existingId?: string;
 }): Promise<string> {
-  const { plate, operator, slotKey, body, contentType = "image/jpeg", existingId } = opts;
+  const { plate, operator, fileName, body, contentType = "image/jpeg", existingId } = opts;
   const d = drive();
   const media = { mimeType: contentType, body: Readable.from(body) };
 
@@ -81,7 +81,7 @@ export async function uploadPhoto(opts: {
   const operatorFolder = await ensureFolder(d, operator || "미지정", rootFolderId());
   const plateFolder = await ensureFolder(d, plate, operatorFolder);
   const res = await d.files.create({
-    requestBody: { name: `${slotKey}.jpg`, parents: [plateFolder] },
+    requestBody: { name: fileName, parents: [plateFolder] },
     media,
     fields: "id",
   });
