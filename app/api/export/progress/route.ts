@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
-import { fillProgressXlsx } from "@/lib/export/fill-progress-xlsx";
+import { fillProgressXlsx, type CompletedInfo } from "@/lib/export/fill-progress-xlsx";
+import { fetchAll } from "@/lib/supabase/paginate";
 import { workDateExcelSerial } from "@/lib/work-day";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-const PAGE = 1000;
 // 양식 템플릿(차량리스트 전체 = 개인정보)은 공개 저장소가 아닌 Supabase 비공개 버킷에 보관.
 // scripts/upload-template.ts 로 1회 업로드. (버킷/경로는 env로 덮어쓸 수 있음)
 const TEMPLATE_BUCKET = process.env.TEMPLATE_BUCKET ?? "templates";
@@ -19,23 +19,39 @@ const TEMPLATE_OBJECT = process.env.TEMPLATE_OBJECT ?? "progress-template.xlsx";
 export async function GET() {
   const supabase = createServiceClient();
 
-  // 완료분만 — saved_at 있는 레코드 전수 (1000행 페이지네이션)
-  const completed = new Map<string, number>();
-  for (let from = 0; ; from += PAGE) {
-    const { data, error } = await supabase
-      .from("records")
-      .select("plate, saved_at")
-      .not("saved_at", "is", null)
-      .range(from, from + PAGE - 1);
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
-    }
-    for (const r of data ?? []) {
-      if (r.plate && r.saved_at) {
-        completed.set(r.plate, workDateExcelSerial(r.saved_at));
-      }
-    }
-    if (!data || data.length < PAGE) break;
+  // 완료(saved_at 있음) 레코드 + 차량 운수사/노선(증차 append·매칭용) 전수 조회
+  let recs: { plate: string; saved_at: string }[];
+  let vrows: { plate: string; operator: string | null; route: string | null }[];
+  try {
+    [recs, vrows] = await Promise.all([
+      fetchAll((from, to) =>
+        supabase
+          .from("records")
+          .select("plate, saved_at")
+          .not("saved_at", "is", null)
+          .range(from, to),
+      ),
+      fetchAll((from, to) =>
+        supabase.from("vehicles").select("plate, operator, route").range(from, to),
+      ),
+    ]);
+  } catch (e) {
+    return NextResponse.json(
+      { error: e instanceof Error ? e.message : "조회 실패" },
+      { status: 500 },
+    );
+  }
+
+  const vmap = new Map(vrows.map((v) => [v.plate, v]));
+  const completed = new Map<string, CompletedInfo>();
+  for (const r of recs) {
+    if (!r.plate || !r.saved_at) continue;
+    const v = vmap.get(r.plate);
+    completed.set(r.plate, {
+      serial: workDateExcelSerial(r.saved_at),
+      operator: (v?.operator ?? "").trim(),
+      route: (v?.route ?? "").trim(),
+    });
   }
 
   // Supabase 비공개 버킷에서 양식 템플릿 내려받기
@@ -51,11 +67,10 @@ export async function GET() {
   }
   const template = Buffer.from(await file.arrayBuffer());
 
-  const { buffer, filled, missing } = await fillProgressXlsx(template, completed);
-  if (missing > 0) {
-    console.warn(`[export/progress] 양식 차량리스트에 없는 완료 차량 ${missing}대 무시됨`);
-  }
-  console.log(`[export/progress] 완료 ${completed.size}대 중 ${filled}대 채움`);
+  const { buffer, filled, added } = await fillProgressXlsx(template, completed);
+  console.log(
+    `[export/progress] 완료 ${completed.size}대 → 기존 ${filled}대 채움, 증차 ${added}대 추가`,
+  );
 
   // 파일명: 인천버스_설치_전개현황_YYMMDD.xlsx (KST 오늘)
   const today = new Intl.DateTimeFormat("en-CA", {

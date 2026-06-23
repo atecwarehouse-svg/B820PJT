@@ -1,16 +1,25 @@
 // 진행현황 양식(.xlsx) 외과적 채움 — ExcelJS로 다시 쓰지 않고 zip 안의
-// "차량리스트" 시트(sheet4.xml) G/H 셀만 직접 수정한다.
-// → 피벗(Sheet1/Sheet11)·차트·다른 시트의 함수가 100% 그대로 보존된다.
+// 시트 XML을 직접 수정한다. → 피벗(Sheet1/Sheet11)·차트·다른 시트의 함수가 100% 보존된다.
 //
-// 동작 원리: 양식의 집계 시트(진행현황/전개일정)는 전부 COUNTIFS로
-// 차량리스트 G("완료")·H(완료일)만 보고 자동 계산된다. 따라서 G/H만 채우고
-// workbook의 fullCalcOnLoad를 켜면 Excel이 열릴 때 전 시트를 재계산한다.
+// 동작 원리: 집계 시트(진행현황/전개일정)는 전부 COUNTIFS로 차량리스트 G("완료")·H(완료일)만
+// 보고 자동 계산된다. 따라서 G/H만 채우고 workbook의 fullCalcOnLoad를 켜면 Excel이 열릴 때
+// 전 시트를 재계산한다.
+//
+// 증차(마스터 차량리스트에 없는 완료 차량)는:
+//   ① 차량리스트 시트에 행을 추가(운수사·노선·차량번호·완료·완료일)하고,
+//   ② 전개일정의 해당 영업소(운수사+노선) 대상수량(C열)을 증차 수만큼 올린다.
+// → 전개일정의 MIN(대상수량, 완료수)에 가려지지 않고 진행현황 숫자에 정확히 반영된다.
+//   (진행현황 시트의 대상대수/완료수량은 전개일정을 참조하므로 자동 연동.)
 
 import JSZip from "jszip";
 
-const SHEET_PATH = "xl/worksheets/sheet4.xml"; // "차량리스트" (sheetId 4, 확인됨)
+const VEHICLE_SHEET = "xl/worksheets/sheet4.xml"; // 차량리스트
+const SCHEDULE_SHEET = "xl/worksheets/sheet3.xml"; // 전개일정
+const WORKBOOK = "xl/workbook.xml";
 
-// XML 텍스트 언이스케이프 (sharedStrings <t> 복원용)
+// 증차 추가 행에 재사용할 셀 스타일(차량리스트 데이터 행과 동일)
+const STYLE = { op: "121", route: "88", plate: "122", done: "123", date: "124" };
+
 function unescapeXml(s: string): string {
   return s
     .replace(/&lt;/g, "<")
@@ -20,73 +29,85 @@ function unescapeXml(s: string): string {
     .replace(/&amp;/g, "&");
 }
 
-// sharedStrings.xml → 문자열 배열. 각 <si>는 여러 <t>(리치텍스트 run) 가능 → 이어붙임.
+function escapeXml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+// sharedStrings.xml → 문자열 배열 (각 <si>의 <t>들을 이어붙임)
 function parseSharedStrings(xml: string): string[] {
   const out: string[] = [];
   for (const si of xml.matchAll(/<si>([\s\S]*?)<\/si>/g)) {
     let text = "";
-    for (const t of si[1].matchAll(/<t[^>]*>([\s\S]*?)<\/t>/g)) {
-      text += unescapeXml(t[1]);
-    }
+    for (const t of si[1].matchAll(/<t[^>]*>([\s\S]*?)<\/t>/g)) text += unescapeXml(t[1]);
     out.push(text);
   }
   return out;
 }
 
+// <c> 셀의 표시값 복원 (공유문자열/인라인/숫자)
+function cellValue(attrs: string, inner: string, shared: string[]): string {
+  if (/t="s"/.test(attrs)) {
+    const v = inner.match(/<v>(\d+)<\/v>/);
+    return v ? shared[Number(v[1])] ?? "" : "";
+  }
+  if (/t="(inlineStr|str)"/.test(attrs)) {
+    const t = inner.match(/<t[^>]*>([\s\S]*?)<\/t>/);
+    return t ? unescapeXml(t[1]) : "";
+  }
+  const v = inner.match(/<v>([\s\S]*?)<\/v>/);
+  return v ? v[1] : "";
+}
+
+export interface CompletedInfo {
+  serial: number; // 완료일 Excel 직렬값
+  operator: string; // 증차 append/매칭용 운수사
+  route: string; // 증차 append/매칭용 노선
+}
+
 interface FillResult {
   buffer: Buffer;
-  filled: number; // 실제로 G/H가 채워진 차량 수
-  missing: number; // 완료맵에 있으나 차량리스트에서 행/셀을 못 찾은 수
+  filled: number; // 차량리스트 기존 행에 G/H 채운 수
+  added: number; // 증차로 새 행 추가한 수
 }
 
 /**
- * 템플릿 버퍼 + 완료맵(plate → 완료일 Excel 직렬값)을 받아
- * 차량리스트 G="완료", H=완료일 직렬값을 채운 새 xlsx 버퍼를 반환.
+ * 템플릿 버퍼 + 완료맵(plate → {직렬값,운수사,노선})을 받아 채운 새 xlsx 버퍼를 반환.
+ * - 차량리스트에 있는 차량: G="완료", H=완료일.
+ * - 없는 차량(증차): 행 추가 + 전개일정 대상수량 보정.
  */
 export async function fillProgressXlsx(
   templateBuffer: Buffer,
-  completed: Map<string, number>,
+  completed: Map<string, CompletedInfo>,
 ): Promise<FillResult> {
   const zip = await JSZip.loadAsync(templateBuffer);
 
-  const sheetFile = zip.file(SHEET_PATH);
+  const vFile = zip.file(VEHICLE_SHEET);
+  const sFile = zip.file(SCHEDULE_SHEET);
   const ssFile = zip.file("xl/sharedStrings.xml");
-  const wbFile = zip.file("xl/workbook.xml");
-  if (!sheetFile || !ssFile || !wbFile) {
+  const wbFile = zip.file(WORKBOOK);
+  if (!vFile || !ssFile || !wbFile) {
     throw new Error("양식 구조가 예상과 다릅니다 (sheet4/sharedStrings/workbook 누락).");
   }
 
   const shared = parseSharedStrings(await ssFile.async("string"));
-  let sheetXml = await sheetFile.async("string");
+  let sheetXml = await vFile.async("string");
 
-  // 1) F 셀(차량번호)을 훑어 완료 대상 행 → 직렬값 맵 구성
+  // 1) F 셀(차량번호) 스캔 → 차량리스트에 있는 완료 차량의 행 → 직렬값
   const rowSerial = new Map<number, number>();
   const matchedPlates = new Set<string>();
-  // <c r="F123" ...> 형태. t="s"면 공유문자열, 아니면 인라인 <t> 또는 <v>
   for (const m of sheetXml.matchAll(/<c r="F(\d+)"([^>]*)>([\s\S]*?)<\/c>/g)) {
     const row = Number(m[1]);
-    const attrs = m[2];
-    const inner = m[3];
-    let plate = "";
-    if (/t="s"/.test(attrs)) {
-      const vi = inner.match(/<v>(\d+)<\/v>/);
-      if (vi) plate = shared[Number(vi[1])] ?? "";
-    } else if (/t="(inlineStr|str)"/.test(attrs)) {
-      const ti = inner.match(/<t[^>]*>([\s\S]*?)<\/t>/);
-      if (ti) plate = unescapeXml(ti[1]);
-    } else {
-      const vi = inner.match(/<v>([\s\S]*?)<\/v>/);
-      if (vi) plate = vi[1];
-    }
-    plate = plate.trim();
+    const plate = cellValue(m[2], m[3], shared).trim();
     if (plate && completed.has(plate)) {
-      rowSerial.set(row, completed.get(plate)!);
+      rowSerial.set(row, completed.get(plate)!.serial);
       matchedPlates.add(plate);
     }
   }
 
-  // 2) 대상 행의 G/H 셀을 단일 패스로 교체 (빈 셀 <c .../> 또는 내용 있는 셀 모두 처리)
-  let filled = 0;
+  // 2) 기존 행 G/H 채움
   const seenG = new Set<number>();
   sheetXml = sheetXml.replace(
     /<c r="([GH])(\d+)"([^>]*?)(?:\/>|>[\s\S]*?<\/c>)/g,
@@ -99,13 +120,75 @@ export async function fillProgressXlsx(
         seenG.add(row);
         return `<c r="G${row}"${s} t="inlineStr"><is><t>완료</t></is></c>`;
       }
-      // col === "H": 날짜 직렬값(숫자). 기존 스타일(날짜 표시) 유지.
       return `<c r="H${row}"${s}><v>${rowSerial.get(row)}</v></c>`;
     },
   );
-  filled = seenG.size;
+  const filled = seenG.size;
 
-  // 3) workbook.xml: 열 때 전 시트 재계산하도록 fullCalcOnLoad="1"
+  // 3) 증차 = 완료맵에 있으나 차량리스트에 없는 차량
+  const added: { plate: string; serial: number; operator: string; route: string }[] = [];
+  const bumpByGroup = new Map<string, { operator: string; route: string; count: number }>();
+  for (const [plate, info] of completed) {
+    if (matchedPlates.has(plate)) continue;
+    added.push({ plate, serial: info.serial, operator: info.operator, route: info.route });
+    const key = `${info.operator}|||${info.route}`;
+    const g = bumpByGroup.get(key) ?? { operator: info.operator, route: info.route, count: 0 };
+    g.count++;
+    bumpByGroup.set(key, g);
+  }
+
+  // 3-a) 차량리스트에 증차 행 추가
+  if (added.length > 0) {
+    let maxRow = 0;
+    for (const m of sheetXml.matchAll(/<row r="(\d+)"/g)) maxRow = Math.max(maxRow, Number(m[1]));
+    let rowsXml = "";
+    let rn = maxRow;
+    for (const a of added) {
+      rn++;
+      rowsXml +=
+        `<row r="${rn}" spans="1:37">` +
+        `<c r="B${rn}" s="${STYLE.op}" t="inlineStr"><is><t>${escapeXml(a.operator)}</t></is></c>` +
+        `<c r="C${rn}" s="${STYLE.route}" t="inlineStr"><is><t>${escapeXml(a.route)}</t></is></c>` +
+        `<c r="F${rn}" s="${STYLE.plate}" t="inlineStr"><is><t>${escapeXml(a.plate)}</t></is></c>` +
+        `<c r="G${rn}" s="${STYLE.done}" t="inlineStr"><is><t>완료</t></is></c>` +
+        `<c r="H${rn}" s="${STYLE.date}"><v>${a.serial}</v></c>` +
+        `</row>`;
+    }
+    sheetXml = sheetXml.replace("</sheetData>", rowsXml + "</sheetData>");
+    sheetXml = sheetXml.replace(
+      /<dimension ref="([A-Z]+)1:([A-Z]+)\d+"\/>/,
+      (_m, a: string, b: string) => `<dimension ref="${a}1:${b}${rn}"/>`,
+    );
+  }
+
+  zip.file(VEHICLE_SHEET, sheetXml);
+
+  // 3-b) 전개일정 대상수량(C열) 보정 — 증차 영업소만큼 올림
+  if (bumpByGroup.size > 0 && sFile) {
+    let schedXml = await sFile.async("string");
+    schedXml = schedXml.replace(
+      /<row r="(\d+)"[^>]*>([\s\S]*?)<\/row>/g,
+      (whole, _rn: string, inner: string) => {
+        const aCell = inner.match(/<c r="A\d+"([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/);
+        const bCell = inner.match(/<c r="B\d+"([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/);
+        if (!aCell || !bCell) return whole;
+        const op = cellValue(aCell[1], aCell[2] ?? "", shared).trim();
+        const rt = cellValue(bCell[1], bCell[2] ?? "", shared).trim();
+        const g = bumpByGroup.get(`${op}|||${rt}`);
+        if (!g) return whole;
+        // C열 대상수량 숫자에 증차 수 더하기
+        const newInner = inner.replace(
+          /(<c r="C\d+"[^>]*>)<v>(\d+(?:\.\d+)?)<\/v>(<\/c>)/,
+          (_cm, pre: string, num: string, post: string) =>
+            `${pre}<v>${Number(num) + g.count}</v>${post}`,
+        );
+        return whole.replace(inner, newInner);
+      },
+    );
+    zip.file(SCHEDULE_SHEET, schedXml);
+  }
+
+  // 4) workbook.xml: 열 때 전 시트 재계산
   let wbXml = await wbFile.async("string");
   if (/<calcPr\b/.test(wbXml)) {
     wbXml = wbXml.replace(/<calcPr\b([^>]*?)\/>/, (m, a: string) =>
@@ -116,14 +199,8 @@ export async function fillProgressXlsx(
   } else {
     wbXml = wbXml.replace(/<\/workbook>/, '<calcPr fullCalcOnLoad="1"/></workbook>');
   }
+  zip.file(WORKBOOK, wbXml);
 
-  zip.file(SHEET_PATH, sheetXml);
-  zip.file("xl/workbook.xml", wbXml);
-
-  const buffer = await zip.generateAsync({
-    type: "nodebuffer",
-    compression: "DEFLATE",
-  });
-
-  return { buffer, filled, missing: completed.size - matchedPlates.size };
+  const buffer = await zip.generateAsync({ type: "nodebuffer", compression: "DEFLATE" });
+  return { buffer, filled, added: added.length };
 }
