@@ -28,7 +28,7 @@ function StatCard({
 
 export default async function DashboardPage() {
   const s = await loadStats();
-  const pct = s.totalVehicles ? Math.round((s.complete / s.totalVehicles) * 100) : 0;
+  const pct = s.totalVehicles ? (s.complete / s.totalVehicles) * 100 : 0;
 
   return (
     <main className="mx-auto max-w-3xl px-3 pb-16 pt-4">
@@ -55,7 +55,7 @@ export default async function DashboardPage() {
               </span>
             </p>
           </div>
-          <span className="text-2xl font-bold text-blue-700 tabular-nums">{pct}%</span>
+          <span className="text-2xl font-bold text-blue-700 tabular-nums">{pct.toFixed(1)}%</span>
         </div>
         <div className="mt-3 h-3 w-full overflow-hidden rounded-full bg-gray-100">
           <div className="h-full rounded-full bg-blue-600 transition-all" style={{ width: `${pct}%` }} />
@@ -80,14 +80,14 @@ export default async function DashboardPage() {
       ) : (
         <ul className="divide-y divide-gray-100 overflow-hidden rounded-xl border border-gray-200 bg-white">
           {s.byOperator.map((o) => {
-            const opct = o.total ? Math.round((o.complete / o.total) * 100) : 0;
+            const opct = o.total ? (o.complete / o.total) * 100 : 0;
             const allDone = o.complete === o.total;
             return (
               <li key={o.operator} className="px-3 py-2.5">
                 <div className="flex items-center justify-between text-sm">
                   <span className="font-medium">{o.operator}</span>
                   <span className="tabular-nums text-gray-500">
-                    {o.complete}/{o.total}대 · {opct}%
+                    {o.complete}/{o.total}대 · {opct.toFixed(1)}%
                   </span>
                 </div>
                 <div className="mt-1.5 h-2 w-full overflow-hidden rounded-full bg-gray-100">
