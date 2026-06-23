@@ -5,6 +5,7 @@ import type { InstallProgress, ScheduleStats } from "@/lib/stats";
 import ProgressDownloadButton from "@/components/ProgressDownloadButton";
 import ScheduleChart from "@/components/ScheduleChart";
 import InstallDateSearch from "@/components/InstallDateSearch";
+import DailyReportCard from "@/components/DailyReportCard";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -217,6 +218,16 @@ export default async function DashboardPage() {
           <div className="mt-5">
             <InstallDateSearch completedList={ip.completedList} today={ip.today} />
           </div>
+
+          {/* 금일 완료 리포트 (메일 발송) */}
+          <h3 className="mb-2 mt-6 text-xs font-semibold text-gray-600">금일 완료 리포트 (메일)</h3>
+          <DailyReportCard
+            completedList={ip.completedList}
+            scheduleDays={sch?.days ?? []}
+            cumDone={ip.complete}
+            cumPlanned={sch?.totalPlanned ?? 0}
+            today={ip.today}
+          />
         </>
       )}
 
