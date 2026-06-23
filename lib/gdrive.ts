@@ -62,22 +62,20 @@ async function ensureFolder(d: Drive, name: string, parentId: string): Promise<s
   return created.data.id;
 }
 
-// 업로드. 경로: 루트(GDRIVE_FOLDER_ID) / 운수사 / 차량번호 / {slotKey}.jpg
-// 사진 수정(existingId가 있는 경우): 새 파일을 먼저 업로드한 뒤 기존 파일을 삭제한다
-// (업로드 실패 시 기존 사진이 사라지지 않도록 '생성 후 삭제' 순서). 새 Drive 파일 ID를 반환.
+// 업로드. 경로: 루트(GDRIVE_FOLDER_ID) / 운수사 / 차량번호 / {fileName}
+// 항상 '새 파일'을 만들고 그 Drive 파일 ID를 반환한다. (기존 파일 삭제는 호출부가
+// DB 저장 성공을 확인한 뒤 deletePhoto로 수행 — 부분 실패로 인한 깨짐/고아 방지)
 export async function uploadPhoto(opts: {
   plate: string;
   operator: string;
   fileName: string; // 저장 파일명 (확장자 포함). 예: 설치전_인천70바1273_GPS안테나.jpg
   body: Buffer;
   contentType?: string;
-  existingId?: string;
 }): Promise<string> {
-  const { plate, operator, fileName, body, contentType = "image/jpeg", existingId } = opts;
+  const { plate, operator, fileName, body, contentType = "image/jpeg" } = opts;
   const d = drive();
   const media = { mimeType: contentType, body: Readable.from(body) };
 
-  // 1) 새 파일 업로드
   const operatorFolder = await ensureFolder(d, operator || "미지정", rootFolderId());
   const plateFolder = await ensureFolder(d, plate, operatorFolder);
   const res = await d.files.create({
@@ -87,12 +85,6 @@ export async function uploadPhoto(opts: {
   });
   const newId = res.data.id;
   if (!newId) throw new Error("Google Drive 업로드 실패: 파일 ID 없음");
-
-  // 2) 수정인 경우: 기존 파일 삭제 (베스트 에포트 — 실패해도 새 업로드는 유지)
-  if (existingId && existingId !== newId) {
-    await d.files.delete({ fileId: existingId }).catch(() => {});
-  }
-
   return newId;
 }
 

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { createServiceClient } from "@/lib/supabase/server";
+import { fetchAll } from "@/lib/supabase/paginate";
 import type { RecordRow } from "@/lib/types";
 import ListClient, { type ListItem } from "@/components/ListClient";
 
@@ -9,18 +10,23 @@ export const dynamic = "force-dynamic";
 export default async function ListPage() {
   const supabase = createServiceClient();
 
-  const [recordsRes, photosRes] = await Promise.all([
-    supabase
-      .from("records")
-      .select("*")
-      .not("saved_at", "is", null)
-      .order("saved_at", { ascending: false }),
-    supabase.from("photos").select("plate"),
+  // 1,000행 제한 회피 — 저장 레코드/사진을 전수 조회
+  const [records, photoRows] = await Promise.all([
+    fetchAll<RecordRow>((from, to) =>
+      supabase
+        .from("records")
+        .select("*")
+        .not("saved_at", "is", null)
+        .order("saved_at", { ascending: false })
+        .range(from, to),
+    ),
+    fetchAll<{ plate: string }>((from, to) =>
+      supabase.from("photos").select("plate").range(from, to),
+    ),
   ]);
 
-  const records = (recordsRes.data as RecordRow[]) ?? [];
   const photoCount = new Map<string, number>();
-  for (const p of (photosRes.data as { plate: string }[]) ?? []) {
+  for (const p of photoRows) {
     photoCount.set(p.plate, (photoCount.get(p.plate) ?? 0) + 1);
   }
 

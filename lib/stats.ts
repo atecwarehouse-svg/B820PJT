@@ -2,6 +2,7 @@
 // 메타데이터는 Supabase. Supabase REST는 요청당 1000행 제한이 있어 페이지네이션으로 전수 조회.
 
 import { createServiceClient } from "@/lib/supabase/server";
+import { fetchAll } from "@/lib/supabase/paginate";
 import { DEFAULT_PHOTO_COUNT } from "@/lib/slots";
 
 export interface OperatorProgress {
@@ -20,35 +21,23 @@ export interface DashboardStats {
   byOperator: OperatorProgress[];
 }
 
-const PAGE = 1000;
-
 export async function loadStats(): Promise<DashboardStats> {
   const supabase = createServiceClient();
 
-  // 전체 차량(운수사 포함) — 1000행씩 끝까지
-  const vehicles: { plate: string; operator: string | null }[] = [];
-  for (let from = 0; ; from += PAGE) {
-    const { data, error } = await supabase
-      .from("vehicles")
-      .select("plate, operator")
-      .range(from, from + PAGE - 1);
-    if (error) throw new Error(error.message);
-    vehicles.push(...(data ?? []));
-    if (!data || data.length < PAGE) break;
-  }
+  // 1,000행 제한 회피 — 전체 차량/사진 전수 조회
+  const [vehicles, photoRows] = await Promise.all([
+    fetchAll<{ plate: string; operator: string | null }>((from, to) =>
+      supabase.from("vehicles").select("plate, operator").range(from, to),
+    ),
+    fetchAll<{ plate: string }>((from, to) =>
+      supabase.from("photos").select("plate").range(from, to),
+    ),
+  ]);
 
-  // 사진 plate별 장수 집계 — 1000행씩 끝까지
+  // 사진 plate별 장수 집계
   const photoCount = new Map<string, number>();
-  for (let from = 0; ; from += PAGE) {
-    const { data, error } = await supabase
-      .from("photos")
-      .select("plate")
-      .range(from, from + PAGE - 1);
-    if (error) throw new Error(error.message);
-    for (const p of data ?? []) {
-      photoCount.set(p.plate, (photoCount.get(p.plate) ?? 0) + 1);
-    }
-    if (!data || data.length < PAGE) break;
+  for (const p of photoRows) {
+    photoCount.set(p.plate, (photoCount.get(p.plate) ?? 0) + 1);
   }
 
   const target = DEFAULT_PHOTO_COUNT;

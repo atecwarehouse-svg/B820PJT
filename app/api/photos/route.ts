@@ -85,6 +85,7 @@ export async function POST(req: NextRequest) {
   const safeLabel = (label || slotKey).replace(/[\\/]/g, "-").trim();
   const fileName = `${sectionKo}_${plate}_${safeLabel}.jpg`;
 
+  // 1) 새 Drive 파일 생성 (기존 파일은 아직 건드리지 않음)
   let fileId: string;
   try {
     fileId = await uploadPhoto({
@@ -93,7 +94,6 @@ export async function POST(req: NextRequest) {
       fileName,
       body: Buffer.from(arrayBuffer),
       contentType: "image/jpeg",
-      existingId: existing?.storage_path,
     });
   } catch (e) {
     return NextResponse.json(
@@ -102,6 +102,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // 2) DB 저장 (새 파일 ID 기록)
   const { error: dbErr, data } = await supabase
     .from("photos")
     .upsert(
@@ -119,8 +120,16 @@ export async function POST(req: NextRequest) {
     )
     .select("*")
     .single();
+
+  // 2-a) DB 실패 → 방금 올린 새 파일 롤백(고아 방지). 기존 사진/DB는 그대로 유지됨.
   if (dbErr) {
+    await deletePhoto(fileId).catch(() => {});
     return NextResponse.json({ error: dbErr.message }, { status: 500 });
+  }
+
+  // 3) DB 커밋 성공 후에야 옛 파일 삭제 (수정인 경우, best-effort)
+  if (existing?.storage_path && existing.storage_path !== fileId) {
+    await deletePhoto(existing.storage_path).catch(() => {});
   }
 
   return NextResponse.json({
