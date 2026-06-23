@@ -7,6 +7,7 @@ import ScheduleChart from "@/components/ScheduleChart";
 import InstallDateSearch from "@/components/InstallDateSearch";
 import DailyReportModal from "@/components/DailyReportModal";
 import KpiCards from "@/components/KpiCards";
+import TeamsShareButton from "@/components/TeamsShareButton";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -80,12 +81,21 @@ export default async function DashboardPage() {
       </div>
 
       {/* ===== 설치 진행현황 (완료 = '저장' 기준) — 최상단 + 버튼 ===== */}
-      <div className="mb-2 flex items-center justify-between">
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-sm font-semibold text-gray-700">
           설치 진행현황
           <span className="ml-1 font-normal text-gray-400">(완료 = ‘저장’ 기준)</span>
         </h2>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {ip && (
+            <TeamsShareButton
+              today={ip.today}
+              todayPlanned={sch?.days.find((d) => d.date === ip.today)?.planned ?? 0}
+              complete={s.complete}
+              inProgress={inProgressCount}
+              remain={remainCount}
+            />
+          )}
           {ip && (
             <DailyReportModal
               completedList={ip.completedList}
