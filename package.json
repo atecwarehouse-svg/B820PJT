@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "next lint",
     "import:vehicles": "tsx scripts/import-vehicles.ts",
+    "import:vehicles:xlsx": "tsx scripts/import-vehicles-xlsx.ts",
     "gdrive:setup": "tsx scripts/gdrive-setup.ts"
   },
   "dependencies": {
