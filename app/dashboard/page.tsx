@@ -5,7 +5,7 @@ import type { InstallProgress, ScheduleStats } from "@/lib/stats";
 import ProgressDownloadButton from "@/components/ProgressDownloadButton";
 import ScheduleChart from "@/components/ScheduleChart";
 import InstallDateSearch from "@/components/InstallDateSearch";
-import DailyReportCard from "@/components/DailyReportCard";
+import DailyReportModal from "@/components/DailyReportModal";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -149,7 +149,18 @@ export default async function DashboardPage() {
           설치 진행현황
           <span className="ml-1 font-normal text-gray-400">(완료 = ‘저장’ 기준)</span>
         </h2>
-        <ProgressDownloadButton />
+        <div className="flex items-center gap-2">
+          {ip && (
+            <DailyReportModal
+              completedList={ip.completedList}
+              scheduleDays={sch?.days ?? []}
+              cumDone={ip.complete}
+              cumPlanned={sch?.totalPlanned ?? 0}
+              today={ip.today}
+            />
+          )}
+          <ProgressDownloadButton />
+        </div>
       </div>
 
       {ip === null ? (
@@ -218,16 +229,6 @@ export default async function DashboardPage() {
           <div className="mt-5">
             <InstallDateSearch completedList={ip.completedList} today={ip.today} />
           </div>
-
-          {/* 금일 완료 리포트 (메일 발송) */}
-          <h3 className="mb-2 mt-6 text-xs font-semibold text-gray-600">금일 완료 리포트 (메일)</h3>
-          <DailyReportCard
-            completedList={ip.completedList}
-            scheduleDays={sch?.days ?? []}
-            cumDone={ip.complete}
-            cumPlanned={sch?.totalPlanned ?? 0}
-            today={ip.today}
-          />
         </>
       )}
 

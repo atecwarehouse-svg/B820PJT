@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { CompletedVehicle, ScheduleDay } from "@/lib/stats";
 import { buildReport, formatReportText } from "@/lib/report";
 
@@ -11,23 +11,31 @@ export default function DailyReportCard({
   cumDone,
   cumPlanned,
   today,
+  onSent,
 }: {
   completedList: CompletedVehicle[];
   scheduleDays: ScheduleDay[];
   cumDone: number;
   cumPlanned: number;
   today: string;
+  onSent?: (recipients: string[]) => void; // 발송 성공 시 부모가 완료 팝업 표시
 }) {
   const [date, setDate] = useState(today);
   const [planned, setPlanned] = useState(""); // 금일 계획 수량 직접 입력
   const [notes, setNotes] = useState("");
   const [to, setTo] = useState("");
   const [sending, setSending] = useState(false);
+  const [sent, setSent] = useState(false); // 이중발송 방지
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
   // 입력값(숫자) 있으면 override, 없으면 null → 예정일 기준 자동 계산
   const plannedOverride =
     planned.trim() !== "" && !isNaN(Number(planned)) ? Number(planned) : null;
+
+  // 내용을 바꾸면 다시 발송 가능
+  useEffect(() => {
+    setSent(false);
+  }, [date, notes, to, planned]);
 
   const report = useMemo(
     () => buildReport({ date, completedList, scheduleDays, cumDone, cumPlanned, plannedOverride }),
@@ -36,6 +44,8 @@ export default function DailyReportCard({
   const text = useMemo(() => formatReportText(report, notes), [report, notes]);
 
   async function send() {
+    if (sending || sent) return; // 이중발송 방지
+    if (!window.confirm("이 내용으로 메일을 발송할까요?")) return;
     setSending(true);
     setMsg(null);
     try {
@@ -46,7 +56,8 @@ export default function DailyReportCard({
       });
       const j = await res.json();
       if (!res.ok) throw new Error(j.error ?? "발송 실패");
-      setMsg({ ok: true, text: `발송 완료 → ${(j.to ?? []).join(", ")}` });
+      setSent(true);
+      onSent?.(j.to ?? []);
     } catch (e) {
       setMsg({ ok: false, text: e instanceof Error ? e.message : "발송 실패" });
     } finally {
@@ -128,10 +139,10 @@ export default function DailyReportCard({
         </button>
         <button
           onClick={send}
-          disabled={sending}
+          disabled={sending || sent}
           className="flex-1 rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
         >
-          {sending ? "발송 중…" : "메일 발송"}
+          {sending ? "발송 중…" : sent ? "발송됨 ✓" : "메일 발송"}
         </button>
       </div>
       {msg && (
