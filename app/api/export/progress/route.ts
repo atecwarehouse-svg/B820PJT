@@ -1,6 +1,4 @@
 import { NextResponse } from "next/server";
-import { readFileSync } from "node:fs";
-import path from "node:path";
 import { createServiceClient } from "@/lib/supabase/server";
 import { fillProgressXlsx, excelSerialFromKST } from "@/lib/export/fill-progress-xlsx";
 
@@ -9,10 +7,10 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 const PAGE = 1000;
-const TEMPLATE_PATH = path.join(
-  process.cwd(),
-  "lib/export/templates/진행현황_template.xlsx",
-);
+// 양식 템플릿(차량리스트 전체 = 개인정보)은 공개 저장소가 아닌 Supabase 비공개 버킷에 보관.
+// scripts/upload-template.ts 로 1회 업로드. (버킷/경로는 env로 덮어쓸 수 있음)
+const TEMPLATE_BUCKET = process.env.TEMPLATE_BUCKET ?? "templates";
+const TEMPLATE_OBJECT = process.env.TEMPLATE_OBJECT ?? "progress-template.xlsx";
 
 // GET /api/export/progress
 // 완료(저장)된 차량의 plate/saved_at을 읽어 양식 차량리스트 G/H만 채운 xlsx 다운로드.
@@ -39,15 +37,18 @@ export async function GET() {
     if (!data || data.length < PAGE) break;
   }
 
-  let template: Buffer;
-  try {
-    template = readFileSync(TEMPLATE_PATH);
-  } catch {
+  // Supabase 비공개 버킷에서 양식 템플릿 내려받기
+  const { data: file, error: dlError } = await supabase.storage
+    .from(TEMPLATE_BUCKET)
+    .download(TEMPLATE_OBJECT);
+  if (dlError || !file) {
+    console.error("[export/progress] 템플릿 다운로드 실패:", dlError?.message);
     return NextResponse.json(
-      { error: "양식 템플릿 파일을 찾을 수 없습니다." },
+      { error: "양식 템플릿을 불러올 수 없습니다. (Storage 업로드 필요)" },
       { status: 500 },
     );
   }
+  const template = Buffer.from(await file.arrayBuffer());
 
   const { buffer, filled, missing } = await fillProgressXlsx(template, completed);
   if (missing > 0) {

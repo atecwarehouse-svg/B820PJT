@@ -35,3 +35,5 @@ next-env.d.ts
 차량리스트.xlsx
 B800 설치 사진첩(시범설치).xlsx
 ~$*.xlsx
+# 진행현황 양식 템플릿 (차량리스트 전체 포함 - 개인정보). Supabase Storage 비공개 버킷에 보관.
+lib/export/templates/*.xlsx

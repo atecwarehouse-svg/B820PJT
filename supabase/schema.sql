@@ -5,10 +5,16 @@
 
 -- ----- 차량 마스터 (CSV에서 적재) -----
 create table if not exists vehicles (
-  plate     text primary key,        -- 차량번호 (예: 인천70바4005)
-  operator  text not null,           -- 운수사
-  route     text not null            -- 노선
+  plate        text primary key,     -- 차량번호 (예: 인천70바4005)
+  operator     text not null,        -- 운수사
+  route        text not null,        -- 노선
+  planned_date date,                 -- 설치 예정일 (차량리스트 I열, 일정 시각화용)
+  is_pilot     boolean not null default false  -- 시범설치 여부
 );
+
+-- 기존 DB 대비 컬럼 보강 (이미 vehicles가 있는 경우)
+alter table vehicles add column if not exists planned_date date;
+alter table vehicles add column if not exists is_pilot boolean not null default false;
 
 -- 차량번호 앞부분 검색(autocomplete)용 인덱스
 create index if not exists vehicles_plate_prefix

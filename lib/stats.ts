@@ -97,3 +97,157 @@ export async function loadStats(): Promise<DashboardStats> {
   // 집계 뷰 우선, 없으면 전수 스캔으로 폴백
   return (await loadFromView(supabase, target)) ?? (await loadByScan(supabase, target));
 }
+
+// ============================================================
+// 설치 진행현황 (완료 = '저장' 기준) · 설치 일정
+// 완료 = records.saved_at 있음. 완료일 = saved_at(KST 날짜).
+// ============================================================
+
+// ISO/Date → 한국시간(Asia/Seoul) "YYYY-MM-DD"
+function kstDate(value: string | Date): string {
+  const d = typeof value === "string" ? new Date(value) : value;
+  // en-CA 로케일은 YYYY-MM-DD 형식
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Seoul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(d);
+}
+
+// 완료(저장)된 plate → saved_at(ISO) 맵
+async function fetchCompletedMap(supabase: SB): Promise<Map<string, string>> {
+  const rows = await fetchAll<{ plate: string; saved_at: string }>((from, to) =>
+    supabase
+      .from("records")
+      .select("plate, saved_at")
+      .not("saved_at", "is", null)
+      .range(from, to),
+  );
+  const map = new Map<string, string>();
+  for (const r of rows) if (r.plate && r.saved_at) map.set(r.plate, r.saved_at);
+  return map;
+}
+
+export interface InstallGroup {
+  operator: string;
+  route: string;
+  total: number;
+  complete: number; // saved_at 있음
+  todayComplete: number; // saved_at 날짜 == 오늘(KST)
+}
+
+export interface InstallProgress {
+  totalVehicles: number;
+  complete: number;
+  notComplete: number;
+  todayComplete: number;
+  groups: InstallGroup[];
+}
+
+export async function loadInstallProgress(): Promise<InstallProgress> {
+  const supabase = createServiceClient();
+  const [vehicles, completed] = await Promise.all([
+    fetchAll<{ plate: string; operator: string | null; route: string | null }>((from, to) =>
+      supabase.from("vehicles").select("plate, operator, route").range(from, to),
+    ),
+    fetchCompletedMap(supabase),
+  ]);
+
+  const today = kstDate(new Date());
+  let complete = 0;
+  let todayComplete = 0;
+  const byGroup = new Map<string, InstallGroup>();
+
+  for (const v of vehicles) {
+    const op = v.operator?.trim() || "미지정";
+    const rt = v.route?.trim() || "";
+    const key = `${op}|||${rt}`;
+    const g =
+      byGroup.get(key) ?? { operator: op, route: rt, total: 0, complete: 0, todayComplete: 0 };
+    g.total++;
+    const savedAt = completed.get(v.plate);
+    if (savedAt) {
+      complete++;
+      g.complete++;
+      if (kstDate(savedAt) === today) {
+        todayComplete++;
+        g.todayComplete++;
+      }
+    }
+    byGroup.set(key, g);
+  }
+
+  // 작업 시작된(완료 ≥1) 영업소만, 미완료 많은 순
+  const groups = [...byGroup.values()]
+    .filter((g) => g.complete > 0)
+    .sort((a, b) => b.total - b.complete - (a.total - a.complete));
+
+  return {
+    totalVehicles: vehicles.length,
+    complete,
+    notComplete: vehicles.length - complete,
+    todayComplete,
+    groups,
+  };
+}
+
+export interface ScheduleDay {
+  date: string; // YYYY-MM-DD (설치 예정일)
+  planned: number; // 그 날 예정 대수
+  pilot: number; // 그 중 시범설치 대수
+  done: number; // 그 중 완료(저장)된 대수
+}
+
+export interface ScheduleStats {
+  days: ScheduleDay[];
+  cumPlanned: number[]; // days 순서의 누적 계획
+  cumDone: number[]; // days 순서의 누적 실적
+  totalPlanned: number;
+  totalDone: number;
+  pilotTotal: number;
+  pilotDone: number;
+}
+
+export async function loadScheduleStats(): Promise<ScheduleStats> {
+  const supabase = createServiceClient();
+  const [vehicles, completed] = await Promise.all([
+    fetchAll<{ plate: string; planned_date: string | null; is_pilot: boolean | null }>((from, to) =>
+      supabase.from("vehicles").select("plate, planned_date, is_pilot").range(from, to),
+    ),
+    fetchCompletedMap(supabase),
+  ]);
+
+  const byDate = new Map<string, ScheduleDay>();
+  let pilotTotal = 0;
+  let pilotDone = 0;
+
+  for (const v of vehicles) {
+    if (!v.planned_date) continue; // 예정일 없는 차량은 일정 집계 제외
+    const date = v.planned_date.slice(0, 10);
+    const d = byDate.get(date) ?? { date, planned: 0, pilot: 0, done: 0 };
+    d.planned++;
+    const isDone = completed.has(v.plate);
+    if (v.is_pilot) {
+      d.pilot++;
+      pilotTotal++;
+      if (isDone) pilotDone++;
+    }
+    if (isDone) d.done++;
+    byDate.set(date, d);
+  }
+
+  const days = [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date));
+  const cumPlanned: number[] = [];
+  const cumDone: number[] = [];
+  let cp = 0;
+  let cd = 0;
+  for (const d of days) {
+    cp += d.planned;
+    cd += d.done;
+    cumPlanned.push(cp);
+    cumDone.push(cd);
+  }
+
+  return { days, cumPlanned, cumDone, totalPlanned: cp, totalDone: cd, pilotTotal, pilotDone };
+}
