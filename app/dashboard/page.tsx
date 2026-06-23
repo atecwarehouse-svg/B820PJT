@@ -63,6 +63,9 @@ export default async function DashboardPage() {
     getInProgress(),
   ]);
   const ipPct = ip && ip.totalVehicles ? (ip.complete / ip.totalVehicles) * 100 : 0;
+  // 진행중 = 사진 업로드됐으나 13장 미만 차량(스캔 목록 기준 — 팝업과 정확히 일치)
+  const inProgressCount = inProgressList.length;
+  const remainCount = Math.max(0, s.totalVehicles - s.complete - inProgressCount);
 
   return (
     <main className="mx-auto max-w-3xl px-3 pb-16 pt-4">
@@ -90,7 +93,7 @@ export default async function DashboardPage() {
               cumDone={ip.complete}
               cumPlanned={sch?.totalPlanned ?? 0}
               today={ip.today}
-              inProgress={s.inProgress}
+              inProgress={inProgressCount}
             />
           )}
           <ProgressDownloadButton />
@@ -128,8 +131,8 @@ export default async function DashboardPage() {
       {/* ===== KPI 카드 (사진 기준 · 진행중 클릭 시 상세) ===== */}
       <KpiCards
         complete={s.complete}
-        inProgress={s.inProgress}
-        notStarted={s.notStarted}
+        inProgress={inProgressCount}
+        notStarted={remainCount}
         target={s.target}
         inProgressList={inProgressList}
       />
