@@ -1,11 +1,12 @@
 import Link from "next/link";
 import { unstable_cache } from "next/cache";
-import { loadStats, loadInstallProgress, loadScheduleStats } from "@/lib/stats";
-import type { InstallProgress, ScheduleStats } from "@/lib/stats";
+import { loadStats, loadInstallProgress, loadScheduleStats, loadInProgressList } from "@/lib/stats";
+import type { InstallProgress, ScheduleStats, InProgressVehicle } from "@/lib/stats";
 import ProgressDownloadButton from "@/components/ProgressDownloadButton";
 import ScheduleChart from "@/components/ScheduleChart";
 import InstallDateSearch from "@/components/InstallDateSearch";
 import DailyReportModal from "@/components/DailyReportModal";
+import KpiCards from "@/components/KpiCards";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -41,31 +42,26 @@ const getSchedule = unstable_cache(
   { revalidate: 60 },
 );
 
-function StatCard({
-  label,
-  value,
-  tone,
-}: {
-  label: string;
-  value: number;
-  tone: "green" | "amber" | "gray";
-}) {
-  const toneClass = {
-    green: "bg-green-50 text-green-700",
-    amber: "bg-amber-50 text-amber-700",
-    gray: "bg-gray-50 text-gray-600",
-  }[tone];
-  return (
-    <div className={`rounded-xl p-3 text-center ${toneClass}`}>
-      <p className="text-2xl font-bold tabular-nums">{value.toLocaleString()}</p>
-      <p className="mt-0.5 text-xs">{label}</p>
-    </div>
-  );
-}
+// 진행중(사진 미완료) 차량 목록 — KPI 진행중 팝업용.
+const getInProgress = unstable_cache(
+  async (): Promise<InProgressVehicle[]> => {
+    try {
+      return await loadInProgressList();
+    } catch {
+      return [];
+    }
+  },
+  ["dashboard-inprogress"],
+  { revalidate: 60 },
+);
 
 export default async function DashboardPage() {
-  const [s, ip, sch] = await Promise.all([getStats(), getInstall(), getSchedule()]);
-  const pct = s.totalVehicles ? (s.complete / s.totalVehicles) * 100 : 0;
+  const [s, ip, sch, inProgressList] = await Promise.all([
+    getStats(),
+    getInstall(),
+    getSchedule(),
+    getInProgress(),
+  ]);
   const ipPct = ip && ip.totalVehicles ? (ip.complete / ip.totalVehicles) * 100 : 0;
 
   return (
@@ -80,33 +76,63 @@ export default async function DashboardPage() {
         </Link>
       </div>
 
-      {/* 전체 진행률 */}
-      <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-        <div className="flex items-end justify-between">
-          <div>
-            <p className="text-sm text-gray-500">전체 차량 완료율</p>
-            <p className="mt-1 text-3xl font-bold text-blue-700 tabular-nums">
-              {s.complete.toLocaleString()}
-              <span className="text-lg font-medium text-gray-400">
-                {" "}
-                / {s.totalVehicles.toLocaleString()}대
-              </span>
-            </p>
-          </div>
-          <span className="text-2xl font-bold text-blue-700 tabular-nums">{pct.toFixed(1)}%</span>
+      {/* ===== 설치 진행현황 (완료 = '저장' 기준) — 최상단 + 버튼 ===== */}
+      <div className="mb-2 flex items-center justify-between">
+        <h2 className="text-sm font-semibold text-gray-700">
+          설치 진행현황
+          <span className="ml-1 font-normal text-gray-400">(완료 = ‘저장’ 기준)</span>
+        </h2>
+        <div className="flex items-center gap-2">
+          {ip && (
+            <DailyReportModal
+              completedList={ip.completedList}
+              scheduleDays={sch?.days ?? []}
+              cumDone={ip.complete}
+              cumPlanned={sch?.totalPlanned ?? 0}
+              today={ip.today}
+              inProgress={s.inProgress}
+            />
+          )}
+          <ProgressDownloadButton />
         </div>
-        <div className="mt-3 h-3 w-full overflow-hidden rounded-full bg-gray-100">
-          <div className="h-full rounded-full bg-blue-600 transition-all" style={{ width: `${pct}%` }} />
-        </div>
-        <p className="mt-1 text-right text-[11px] text-gray-400">1대당 {s.target}장 기준</p>
-      </section>
-
-      {/* 상태 카드 */}
-      <div className="mt-3 grid grid-cols-3 gap-2">
-        <StatCard label="완료" value={s.complete} tone="green" />
-        <StatCard label="진행중" value={s.inProgress} tone="amber" />
-        <StatCard label="미시작" value={s.notStarted} tone="gray" />
       </div>
+
+      {ip === null ? (
+        <p className="rounded-xl border border-gray-200 bg-white py-8 text-center text-sm text-gray-400">
+          진행현황을 불러오지 못했습니다.
+        </p>
+      ) : (
+        <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+          <div className="flex items-end justify-between">
+            <div>
+              <p className="text-sm text-gray-500">설치 완료(저장)</p>
+              <p className="mt-1 text-3xl font-bold text-green-700 tabular-nums">
+                {ip.complete.toLocaleString()}
+                <span className="text-lg font-medium text-gray-400">
+                  {" "}
+                  / {ip.totalVehicles.toLocaleString()}대
+                </span>
+              </p>
+            </div>
+            <span className="text-2xl font-bold text-green-700 tabular-nums">{ipPct.toFixed(1)}%</span>
+          </div>
+          <div className="mt-3 h-3 w-full overflow-hidden rounded-full bg-gray-100">
+            <div className="h-full rounded-full bg-green-600 transition-all" style={{ width: `${ipPct}%` }} />
+          </div>
+          <p className="mt-1 text-right text-[11px] text-gray-400">
+            미완료 {ip.notComplete.toLocaleString()}대 · 오늘 완료 {ip.todayComplete.toLocaleString()}대
+          </p>
+        </section>
+      )}
+
+      {/* ===== KPI 카드 (사진 기준 · 진행중 클릭 시 상세) ===== */}
+      <KpiCards
+        complete={s.complete}
+        inProgress={s.inProgress}
+        notStarted={s.notStarted}
+        target={s.target}
+        inProgressList={inProgressList}
+      />
 
       {/* ===== 설치 일정 ===== */}
       <h2 className="mb-2 mt-6 text-sm font-semibold text-gray-700">
@@ -123,7 +149,7 @@ export default async function DashboardPage() {
         )}
       </section>
 
-      {/* 운수사별 진행 현황 */}
+      {/* ===== 운수사별 진행 현황 (사진 기준) ===== */}
       <h2 className="mb-2 mt-6 text-sm font-semibold text-gray-700">
         운수사별 진행 현황
         <span className="ml-1 font-normal text-gray-400">(작업 시작된 운수사)</span>
@@ -158,56 +184,20 @@ export default async function DashboardPage() {
         </ul>
       )}
 
-      {/* ===== 설치 진행현황 (완료 = '저장' 기준) ===== */}
-      <div className="mb-2 mt-8 flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-gray-700">
-          설치 진행현황
-          <span className="ml-1 font-normal text-gray-400">(완료 = ‘저장’ 기준)</span>
-        </h2>
-        <div className="flex items-center gap-2">
-          {ip && (
-            <DailyReportModal
-              completedList={ip.completedList}
-              scheduleDays={sch?.days ?? []}
-              cumDone={ip.complete}
-              cumPlanned={sch?.totalPlanned ?? 0}
-              today={ip.today}
-              inProgress={s.inProgress}
-            />
-          )}
-          <ProgressDownloadButton />
+      {/* ===== 날짜별 완료 검색 ===== */}
+      {ip && (
+        <div className="mt-6">
+          <InstallDateSearch completedList={ip.completedList} today={ip.today} />
         </div>
-      </div>
+      )}
 
-      {ip === null ? (
-        <p className="rounded-xl border border-gray-200 bg-white py-8 text-center text-sm text-gray-400">
-          진행현황을 불러오지 못했습니다.
-        </p>
-      ) : (
+      {/* ===== 영업소별 (운수사·노선) — 최하단 ===== */}
+      {ip && (
         <>
-          <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-            <div className="flex items-end justify-between">
-              <div>
-                <p className="text-sm text-gray-500">설치 완료(저장)</p>
-                <p className="mt-1 text-3xl font-bold text-green-700 tabular-nums">
-                  {ip.complete.toLocaleString()}
-                  <span className="text-lg font-medium text-gray-400">
-                    {" "}
-                    / {ip.totalVehicles.toLocaleString()}대
-                  </span>
-                </p>
-              </div>
-              <span className="text-2xl font-bold text-green-700 tabular-nums">{ipPct.toFixed(1)}%</span>
-            </div>
-            <div className="mt-3 h-3 w-full overflow-hidden rounded-full bg-gray-100">
-              <div className="h-full rounded-full bg-green-600 transition-all" style={{ width: `${ipPct}%` }} />
-            </div>
-            <p className="mt-1 text-right text-[11px] text-gray-400">
-              미완료 {ip.notComplete.toLocaleString()}대 · 오늘 완료 {ip.todayComplete.toLocaleString()}대
-            </p>
-          </section>
-
-          <h3 className="mb-2 mt-5 text-xs font-semibold text-gray-600">영업소별 (운수사·노선)</h3>
+          <h2 className="mb-2 mt-8 text-sm font-semibold text-gray-700">
+            영업소별
+            <span className="ml-1 font-normal text-gray-400">(운수사·노선 / 저장 기준)</span>
+          </h2>
           {ip.groups.length === 0 ? (
             <p className="py-6 text-center text-sm text-gray-400">아직 저장 완료된 차량이 없습니다.</p>
           ) : (
@@ -240,14 +230,8 @@ export default async function DashboardPage() {
               })}
             </ul>
           )}
-
-          {/* 날짜별 완료 검색 */}
-          <div className="mt-5">
-            <InstallDateSearch completedList={ip.completedList} today={ip.today} />
-          </div>
         </>
       )}
-
     </main>
   );
 }

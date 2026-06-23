@@ -99,6 +99,52 @@ export async function loadStats(): Promise<DashboardStats> {
   return (await loadFromView(supabase, target)) ?? (await loadByScan(supabase, target));
 }
 
+// 진행중(사진 1~12장) 차량 목록 — KPI '진행중' 클릭 시 상세용.
+export interface InProgressVehicle {
+  plate: string;
+  operator: string;
+  route: string;
+  photoCount: number;
+}
+
+export async function loadInProgressList(): Promise<InProgressVehicle[]> {
+  const supabase = createServiceClient();
+  const target = DEFAULT_PHOTO_COUNT;
+
+  // 사진 있는 plate별 장수 (사진 있는 차량만 후보 → 가벼움)
+  const photoRows = await fetchAll<{ plate: string }>((from, to) =>
+    supabase.from("photos").select("plate").range(from, to),
+  );
+  const count = new Map<string, number>();
+  for (const p of photoRows) count.set(p.plate, (count.get(p.plate) ?? 0) + 1);
+  const candidates = [...count.entries()].filter(([, c]) => c >= 1 && c < target);
+  if (candidates.length === 0) return [];
+
+  // 후보 차량의 운수사/노선 조회 (chunk로 in)
+  const meta = new Map<string, { operator: string; route: string }>();
+  const plates = candidates.map(([p]) => p);
+  const CH = 200;
+  for (let i = 0; i < plates.length; i += CH) {
+    const { data, error } = await supabase
+      .from("vehicles")
+      .select("plate, operator, route")
+      .in("plate", plates.slice(i, i + CH));
+    if (error) throw new Error(error.message);
+    for (const v of data ?? []) {
+      meta.set(v.plate, { operator: v.operator ?? "", route: v.route ?? "" });
+    }
+  }
+
+  return candidates
+    .map(([plate, c]) => ({
+      plate,
+      operator: meta.get(plate)?.operator ?? "",
+      route: meta.get(plate)?.route ?? "",
+      photoCount: c,
+    }))
+    .sort((a, b) => b.photoCount - a.photoCount); // 완료 임박 순
+}
+
 // ============================================================
 // 설치 진행현황 (완료 = '저장' 기준) · 설치 일정
 // 완료 = records.saved_at 있음. 완료일 = saved_at(KST 날짜).
