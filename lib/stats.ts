@@ -99,7 +99,7 @@ export async function loadStats(): Promise<DashboardStats> {
   return (await loadFromView(supabase, target)) ?? (await loadByScan(supabase, target));
 }
 
-// 진행중(사진 1~12장) 차량 목록 — KPI '진행중' 클릭 시 상세용.
+// 진행중 = 시작했으나(기록 있음) 사진 13장 미만인 차량. 사진 0장(촬영 중 이탈)도 포함.
 export interface InProgressVehicle {
   plate: string;
   operator: string;
@@ -111,24 +111,32 @@ export async function loadInProgressList(): Promise<InProgressVehicle[]> {
   const supabase = createServiceClient();
   const target = DEFAULT_PHOTO_COUNT;
 
-  // 사진 있는 plate별 장수 (사진 있는 차량만 후보 → 가벼움)
-  const photoRows = await fetchAll<{ plate: string }>((from, to) =>
-    supabase.from("photos").select("plate").range(from, to),
-  );
+  // 시작된 차량 = records 존재(차량번호 입력·사진·필드 등으로 기록 생성). + plate별 사진 장수.
+  const [recRows, photoRows] = await Promise.all([
+    fetchAll<{ plate: string }>((from, to) =>
+      supabase.from("records").select("plate").range(from, to),
+    ),
+    fetchAll<{ plate: string }>((from, to) =>
+      supabase.from("photos").select("plate").range(from, to),
+    ),
+  ]);
   const count = new Map<string, number>();
   for (const p of photoRows) count.set(p.plate, (count.get(p.plate) ?? 0) + 1);
-  const candidates = [...count.entries()].filter(([, c]) => c >= 1 && c < target);
+
+  // 시작됐으나 13장 미만 = 진행중 (사진 0장으로 중단된 차량 포함)
+  const candidates = recRows
+    .map((r) => r.plate)
+    .filter((plate) => (count.get(plate) ?? 0) < target);
   if (candidates.length === 0) return [];
 
   // 후보 차량의 운수사/노선 조회 (chunk로 in)
   const meta = new Map<string, { operator: string; route: string }>();
-  const plates = candidates.map(([p]) => p);
   const CH = 200;
-  for (let i = 0; i < plates.length; i += CH) {
+  for (let i = 0; i < candidates.length; i += CH) {
     const { data, error } = await supabase
       .from("vehicles")
       .select("plate, operator, route")
-      .in("plate", plates.slice(i, i + CH));
+      .in("plate", candidates.slice(i, i + CH));
     if (error) throw new Error(error.message);
     for (const v of data ?? []) {
       meta.set(v.plate, { operator: v.operator ?? "", route: v.route ?? "" });
@@ -136,11 +144,11 @@ export async function loadInProgressList(): Promise<InProgressVehicle[]> {
   }
 
   return candidates
-    .map(([plate, c]) => ({
+    .map((plate) => ({
       plate,
       operator: meta.get(plate)?.operator ?? "",
       route: meta.get(plate)?.route ?? "",
-      photoCount: c,
+      photoCount: count.get(plate) ?? 0,
     }))
     .sort((a, b) => b.photoCount - a.photoCount); // 완료 임박 순
 }

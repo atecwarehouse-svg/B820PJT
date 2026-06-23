@@ -64,7 +64,7 @@ export default async function DashboardPage() {
     getInProgress(),
   ]);
   const ipPct = ip && ip.totalVehicles ? (ip.complete / ip.totalVehicles) * 100 : 0;
-  // 진행중 = 사진 업로드됐으나 13장 미만 차량(스캔 목록 기준 — 팝업과 정확히 일치)
+  // 진행중 = 시작(기록 있음)했으나 13장 미만 차량(사진 0장 중단 포함 · 팝업 목록과 일치)
   const inProgressCount = inProgressList.length;
   const remainCount = Math.max(0, s.totalVehicles - s.complete - inProgressCount);
 

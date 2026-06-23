@@ -60,7 +60,7 @@ export default function KpiCards({
           >
             <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
               <h2 className="text-sm font-bold text-amber-700">
-                진행중 차량 <span className="text-gray-400">(사진 미완료 · {inProgressList.length}대)</span>
+                진행중 차량 <span className="text-gray-400">(시작·미완료 · {inProgressList.length}대)</span>
               </h2>
               <button
                 onClick={() => setOpen(false)}
