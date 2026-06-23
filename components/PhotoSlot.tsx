@@ -11,6 +11,7 @@ interface Props {
   initialUrl?: string | null;
   onUploaded: (slotKey: string, url: string) => void;
   onDeleted: (slotKey: string) => void;
+  onError?: (msg: string) => void; // 실패 시 부모(토스트)로 알림
   onRemoveSlot?: (slotKey: string) => void; // 커스텀 슬롯 칸 자체 삭제
 }
 
@@ -21,6 +22,7 @@ export default function PhotoSlot({
   initialUrl,
   onUploaded,
   onDeleted,
+  onError,
   onRemoveSlot,
 }: Props) {
   const [url, setUrl] = useState<string | null>(initialUrl ?? null);
@@ -49,7 +51,9 @@ export default function PhotoSlot({
       setUrl(json.url);
       onUploaded(slot.slotKey, json.url);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "업로드 실패");
+      const msg = e instanceof Error ? e.message : "업로드 실패";
+      setError(msg);
+      onError?.(msg);
     } finally {
       setBusy(false);
     }
@@ -67,7 +71,9 @@ export default function PhotoSlot({
       setUrl(null);
       onDeleted(slot.slotKey);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "삭제 실패");
+      const msg = e instanceof Error ? e.message : "삭제 실패";
+      setError(msg);
+      onError?.(msg);
     } finally {
       setBusy(false);
     }

@@ -52,6 +52,24 @@ export default function RecordEditor({ plate, initial }: Props) {
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">(
     "idle",
   );
+
+  // 완료/실패 확인용 토스트 팝업 (2초 후 자동 사라짐)
+  const [toast, setToast] = useState<
+    { id: number; msg: string; type: "success" | "error" } | null
+  >(null);
+  const toastSeq = useRef(0);
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const showToast = useCallback(
+    (msg: string, type: "success" | "error" = "success") => {
+      const id = ++toastSeq.current;
+      setToast({ id, msg, type });
+      if (toastTimer.current) clearTimeout(toastTimer.current);
+      toastTimer.current = setTimeout(() => {
+        setToast((t) => (t && t.id === id ? null : t));
+      }, 2000);
+    },
+    [],
+  );
   const seqRef = useRef<number>(
     customSlots.reduce((max, c) => {
       const m = /before_custom_(\d+)/.exec(c.slot_key);
@@ -91,13 +109,16 @@ export default function RecordEditor({ plate, initial }: Props) {
         if (!res.ok) throw new Error();
         setSaveState("saved");
         setTimeout(() => setSaveState("idle"), 1500);
+        // 최종 '저장'(saved=true)은 별도 안내가 있으므로 토스트 생략
+        if (!overrides?.saved) showToast("저장되었습니다");
         return true;
       } catch {
         setSaveState("error");
+        showToast("저장에 실패했습니다", "error");
         return false;
       }
     },
-    [plate, operator, route, year, model, customSlots],
+    [plate, operator, route, year, model, customSlots, showToast],
   );
 
   function toggleEditInfo() {
@@ -152,19 +173,45 @@ export default function RecordEditor({ plate, initial }: Props) {
     saveRecord({ custom_slots: updated });
   }
 
-  const handleUploaded = useCallback((slotKey: string, url: string) => {
-    setUrls((u) => ({ ...u, [slotKey]: url }));
-  }, []);
-  const handleDeleted = useCallback((slotKey: string) => {
-    setUrls((u) => {
-      const n = { ...u };
-      delete n[slotKey];
-      return n;
-    });
-  }, []);
+  const handleUploaded = useCallback(
+    (slotKey: string, url: string) => {
+      setUrls((u) => ({ ...u, [slotKey]: url }));
+      showToast("사진이 저장되었습니다");
+    },
+    [showToast],
+  );
+  const handleDeleted = useCallback(
+    (slotKey: string) => {
+      setUrls((u) => {
+        const n = { ...u };
+        delete n[slotKey];
+        return n;
+      });
+      showToast("사진이 삭제되었습니다");
+    },
+    [showToast],
+  );
+  const handleSlotError = useCallback(
+    (msg: string) => showToast(msg, "error"),
+    [showToast],
+  );
 
   return (
     <main className="mx-auto max-w-3xl px-3 pb-24 pt-4">
+      {/* 완료/실패 토스트 팝업 */}
+      {toast && (
+        <div className="pointer-events-none fixed inset-x-0 bottom-24 z-50 flex justify-center px-4 no-print">
+          <div
+            className={`rounded-full px-5 py-2.5 text-sm font-semibold text-white shadow-lg ${
+              toast.type === "success" ? "bg-green-600" : "bg-red-600"
+            }`}
+          >
+            {toast.type === "success" ? "✓ " : "⚠ "}
+            {toast.msg}
+          </div>
+        </div>
+      )}
+
       {/* 상단 바 */}
       <div className="mb-3 flex items-center justify-between">
         <Link href="/" className="text-sm text-blue-600">
@@ -249,6 +296,7 @@ export default function RecordEditor({ plate, initial }: Props) {
             initialUrl={urls[slot.slotKey] ?? null}
             onUploaded={handleUploaded}
             onDeleted={handleDeleted}
+            onError={handleSlotError}
             onRemoveSlot={removeCustomSlot}
           />
         ))}
@@ -273,6 +321,7 @@ export default function RecordEditor({ plate, initial }: Props) {
             initialUrl={urls[slot.slotKey] ?? null}
             onUploaded={handleUploaded}
             onDeleted={handleDeleted}
+            onError={handleSlotError}
           />
         ))}
       </div>
