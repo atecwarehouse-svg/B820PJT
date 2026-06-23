@@ -34,3 +34,12 @@ export function workDateExcelSerial(value: string | Date): number {
   const { y, m, d } = shiftedKstYmd(value);
   return Math.round((Date.UTC(y, m - 1, d) - EXCEL_EPOCH_UTC) / DAY_MS);
 }
+
+const DOW = ["일", "월", "화", "수", "목", "금", "토"];
+/** "YYYY-MM-DD" → "M/D (요일)" 라벨. */
+export function weekdayLabel(date: string): string {
+  const [y, m, d] = date.split("-").map(Number);
+  if (!y || !m || !d) return "";
+  const dow = DOW[new Date(Date.UTC(y, m - 1, d)).getUTCDay()] ?? "";
+  return `${m}/${d} (${dow})`;
+}

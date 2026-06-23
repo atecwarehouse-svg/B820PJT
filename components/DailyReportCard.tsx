@@ -34,6 +34,12 @@ export default function DailyReportCard({
   const plannedOverride =
     planned.trim() !== "" && !isNaN(Number(planned)) ? Number(planned) : null;
 
+  // 날짜가 바뀌면 그 날짜의 예정 수량으로 계획 입력칸 자동 채움(이후 수정 가능)
+  useEffect(() => {
+    const sd = scheduleDays.find((d) => d.date === date)?.planned ?? 0;
+    setPlanned(String(sd));
+  }, [date, scheduleDays]);
+
   // 내용을 바꾸면 다시 발송 가능
   useEffect(() => {
     setSent(false);
