@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
-import { fillProgressXlsx, excelSerialFromKST } from "@/lib/export/fill-progress-xlsx";
+import { fillProgressXlsx } from "@/lib/export/fill-progress-xlsx";
+import { workDateExcelSerial } from "@/lib/work-day";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -31,7 +32,7 @@ export async function GET() {
     }
     for (const r of data ?? []) {
       if (r.plate && r.saved_at) {
-        completed.set(r.plate, excelSerialFromKST(r.saved_at));
+        completed.set(r.plate, workDateExcelSerial(r.saved_at));
       }
     }
     if (!data || data.length < PAGE) break;

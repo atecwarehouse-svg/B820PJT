@@ -9,8 +9,6 @@
 import JSZip from "jszip";
 
 const SHEET_PATH = "xl/worksheets/sheet4.xml"; // "차량리스트" (sheetId 4, 확인됨)
-const EXCEL_EPOCH_UTC = Date.UTC(1899, 11, 30); // Excel 1900 날짜 시스템 기준일
-const DAY_MS = 86400000;
 
 // XML 텍스트 언이스케이프 (sharedStrings <t> 복원용)
 function unescapeXml(s: string): string {
@@ -33,21 +31,6 @@ function parseSharedStrings(xml: string): string[] {
     out.push(text);
   }
   return out;
-}
-
-/** ISO timestamp(또는 Date)를 한국시간(Asia/Seoul) 달력 날짜의 Excel 직렬값으로 변환. */
-export function excelSerialFromKST(value: string | Date): number {
-  const d = typeof value === "string" ? new Date(value) : value;
-  // Asia/Seoul 기준 연/월/일 추출 (DST 없음, 항상 UTC+9)
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Asia/Seoul",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(d);
-  const get = (t: string) => Number(parts.find((p) => p.type === t)?.value);
-  const utcMidnight = Date.UTC(get("year"), get("month") - 1, get("day"));
-  return Math.round((utcMidnight - EXCEL_EPOCH_UTC) / DAY_MS);
 }
 
 interface FillResult {

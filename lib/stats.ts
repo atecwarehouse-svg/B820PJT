@@ -3,6 +3,7 @@
 
 import { createServiceClient } from "@/lib/supabase/server";
 import { fetchAll } from "@/lib/supabase/paginate";
+import { workDateString } from "@/lib/work-day";
 import { DEFAULT_PHOTO_COUNT } from "@/lib/slots";
 
 export interface OperatorProgress {
@@ -103,18 +104,6 @@ export async function loadStats(): Promise<DashboardStats> {
 // 완료 = records.saved_at 있음. 완료일 = saved_at(KST 날짜).
 // ============================================================
 
-// ISO/Date → 한국시간(Asia/Seoul) "YYYY-MM-DD"
-function kstDate(value: string | Date): string {
-  const d = typeof value === "string" ? new Date(value) : value;
-  // en-CA 로케일은 YYYY-MM-DD 형식
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Asia/Seoul",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(d);
-}
-
 // 완료(저장)된 plate → saved_at(ISO) 맵
 async function fetchCompletedMap(supabase: SB): Promise<Map<string, string>> {
   const rows = await fetchAll<{ plate: string; saved_at: string }>((from, to) =>
@@ -154,7 +143,7 @@ export async function loadInstallProgress(): Promise<InstallProgress> {
     fetchCompletedMap(supabase),
   ]);
 
-  const today = kstDate(new Date());
+  const today = workDateString(new Date()); // 현재 업무일(20:00~익일 07:00 기준)
   let complete = 0;
   let todayComplete = 0;
   const byGroup = new Map<string, InstallGroup>();
@@ -170,7 +159,7 @@ export async function loadInstallProgress(): Promise<InstallProgress> {
     if (savedAt) {
       complete++;
       g.complete++;
-      if (kstDate(savedAt) === today) {
+      if (workDateString(savedAt) === today) {
         todayComplete++;
         g.todayComplete++;
       }
