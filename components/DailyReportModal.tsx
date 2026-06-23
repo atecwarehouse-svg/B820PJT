@@ -11,6 +11,7 @@ export default function DailyReportModal(props: {
   cumDone: number;
   cumPlanned: number;
   today: string;
+  inProgress?: number;
 }) {
   const [open, setOpen] = useState(false);
   const [sentTo, setSentTo] = useState<string[] | null>(null); // 발송 완료 팝업

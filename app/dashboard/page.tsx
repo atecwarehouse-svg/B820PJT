@@ -172,6 +172,7 @@ export default async function DashboardPage() {
               cumDone={ip.complete}
               cumPlanned={sch?.totalPlanned ?? 0}
               today={ip.today}
+              inProgress={s.inProgress}
             />
           )}
           <ProgressDownloadButton />

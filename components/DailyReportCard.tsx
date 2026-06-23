@@ -11,6 +11,7 @@ export default function DailyReportCard({
   cumDone,
   cumPlanned,
   today,
+  inProgress = 0,
   onSent,
 }: {
   completedList: CompletedVehicle[];
@@ -18,6 +19,7 @@ export default function DailyReportCard({
   cumDone: number;
   cumPlanned: number;
   today: string;
+  inProgress?: number; // 진행중(미완료) 차량 수 — 발송 전 경고용
   onSent?: (recipients: string[]) => void; // 발송 성공 시 부모가 완료 팝업 표시
 }) {
   const [date, setDate] = useState(today);
@@ -45,7 +47,8 @@ export default function DailyReportCard({
 
   async function send() {
     if (sending || sent) return; // 이중발송 방지
-    if (!window.confirm("이 내용으로 메일을 발송할까요?")) return;
+    const warn = inProgress > 0 ? `⚠️ 미완료(진행중) 차량이 ${inProgress}대 있습니다.\n\n` : "";
+    if (!window.confirm(`${warn}이 내용으로 메일을 발송할까요?`)) return;
     setSending(true);
     setMsg(null);
     try {
@@ -129,6 +132,12 @@ export default function DailyReportCard({
         placeholder="name@example.com, name2@example.com"
         className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
       />
+
+      {inProgress > 0 && (
+        <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs font-medium text-amber-700">
+          ⚠️ 미완료(진행중) 차량이 {inProgress}대 있습니다. 발송 전 확인하세요.
+        </p>
+      )}
 
       <div className="mt-3 flex gap-2">
         <button
