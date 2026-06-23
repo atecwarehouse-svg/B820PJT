@@ -52,7 +52,7 @@ export default function InstallDateSearch({
         </span>
       </div>
       <p className="mt-1 text-[11px] text-gray-400">
-        작업 교대(20:00~익일 07:00) 기준 — 새벽 완료는 전날로 집계됩니다.
+        작업 시간(20:00~익일 07:00) 기준 — 새벽 완료는 전날로 집계됩니다.
       </p>
 
       {!date ? (
