@@ -19,14 +19,19 @@ export default function DailyReportCard({
   today: string;
 }) {
   const [date, setDate] = useState(today);
+  const [planned, setPlanned] = useState(""); // 금일 계획 수량 직접 입력
   const [notes, setNotes] = useState("");
   const [to, setTo] = useState("");
   const [sending, setSending] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
+  // 입력값(숫자) 있으면 override, 없으면 null → 예정일 기준 자동 계산
+  const plannedOverride =
+    planned.trim() !== "" && !isNaN(Number(planned)) ? Number(planned) : null;
+
   const report = useMemo(
-    () => buildReport({ date, completedList, scheduleDays, cumDone, cumPlanned }),
-    [date, completedList, scheduleDays, cumDone, cumPlanned],
+    () => buildReport({ date, completedList, scheduleDays, cumDone, cumPlanned, plannedOverride }),
+    [date, completedList, scheduleDays, cumDone, cumPlanned, plannedOverride],
   );
   const text = useMemo(() => formatReportText(report, notes), [report, notes]);
 
@@ -37,7 +42,7 @@ export default function DailyReportCard({
       const res = await fetch("/api/report/send", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ date, notes, to }),
+        body: JSON.stringify({ date, notes, to, planned: plannedOverride }),
       });
       const j = await res.json();
       if (!res.ok) throw new Error(j.error ?? "발송 실패");
@@ -74,6 +79,19 @@ export default function DailyReportCard({
         >
           오늘
         </button>
+        <div className="flex items-center gap-1">
+          <span className="text-xs text-gray-500">계획</span>
+          <input
+            type="number"
+            inputMode="numeric"
+            min={0}
+            value={planned}
+            onChange={(e) => setPlanned(e.target.value)}
+            placeholder="수량"
+            className="w-20 rounded-lg border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
+          />
+          <span className="text-xs text-gray-500">대</span>
+        </div>
       </div>
 
       {/* 카드 미리보기 */}

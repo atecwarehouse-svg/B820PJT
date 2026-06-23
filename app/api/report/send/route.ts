@@ -11,6 +11,7 @@ interface SendBody {
   date?: string; // 업무일 YYYY-MM-DD
   notes?: string;
   to?: string; // 받는사람 (쉼표/세미콜론 구분). 없으면 env 기본값
+  planned?: number | null; // 금일 계획 수량 직접 입력값
 }
 
 function parseRecipients(raw: string | undefined): string[] {
@@ -52,6 +53,7 @@ export async function POST(req: NextRequest) {
       scheduleDays: sch.days,
       cumDone: ip.complete,
       cumPlanned: sch.totalPlanned,
+      plannedOverride: typeof body.planned === "number" ? body.planned : null,
     });
   } catch (e) {
     return NextResponse.json(
@@ -63,7 +65,7 @@ export async function POST(req: NextRequest) {
   const notes = body.notes ?? "";
   const text = formatReportText(report, notes);
   const html = formatReportHtml(report, notes);
-  const subject = `[B800] 설치 완료 보고 (${report.label}, ${report.dow}) — ${report.dailyDone}대`;
+  const subject = `[B820] 설치 완료 보고 (${report.label}, ${report.dow}) — ${report.dailyDone}대`;
 
   try {
     const transporter = nodemailer.createTransport({

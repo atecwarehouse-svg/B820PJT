@@ -7,6 +7,7 @@ export interface ReportInput {
   scheduleDays: { date: string; planned: number }[];
   cumDone: number; // 누적 완료
   cumPlanned: number; // 누적 계획(전체 대상)
+  plannedOverride?: number | null; // 금일 계획 수량 직접 입력값(있으면 우선)
 }
 
 export interface ReportGroup {
@@ -47,7 +48,11 @@ export function buildReport(input: ReportInput): DailyReport {
   const groups = [...gmap.values()].sort((a, b) => b.count - a.count);
 
   const dailyDone = dayItems.length;
-  const dailyPlanned = input.scheduleDays.find((s) => s.date === date)?.planned ?? 0;
+  // 직접 입력한 계획 수량이 있으면 우선, 없으면 예정일 기준 자동 계산
+  const dailyPlanned =
+    typeof input.plannedOverride === "number" && isFinite(input.plannedOverride)
+      ? input.plannedOverride
+      : input.scheduleDays.find((s) => s.date === date)?.planned ?? 0;
   const dailyPct = dailyPlanned ? Math.round((dailyDone / dailyPlanned) * 100) : 0;
   const cumPct = input.cumPlanned ? Math.round((input.cumDone / input.cumPlanned) * 100) : 0;
 
@@ -81,7 +86,7 @@ const HR = "━━━━━━━━━━━━━━━";
 // 메일/복사용 평문 카드
 export function formatReportText(r: DailyReport, notes: string): string {
   const lines: string[] = [];
-  lines.push("[B800 단말기 설치 프로젝트]");
+  lines.push("[B820 단말기 설치 프로젝트]");
   lines.push(`설치 완료 (${r.label}, ${r.dow})`);
   lines.push(`설치 수량 (실적/계획): ${r.dailyDone}대 / ${r.dailyPlanned}대 ${r.dailyPct}%`);
   lines.push("");
@@ -113,7 +118,7 @@ export function formatReportHtml(r: DailyReport, notes: string): string {
   const notesHtml = noteLines(notes).map((l) => `<li>${esc(l.replace(/^-\s*/, ""))}</li>`).join("");
   return `<div style="max-width:480px;margin:0 auto;border:1px solid #e5e7eb;border-radius:14px;overflow:hidden;font-family:'Apple SD Gothic Neo',Malgun Gothic,sans-serif">
   <div style="background:#1d4ed8;color:#fff;padding:14px 18px">
-    <div style="font-size:13px;opacity:.85">[B800 단말기 설치 프로젝트]</div>
+    <div style="font-size:13px;opacity:.85">[B820 단말기 설치 프로젝트]</div>
     <div style="font-size:18px;font-weight:700;margin-top:2px">설치 완료 (${r.label}, ${r.dow})</div>
   </div>
   <div style="padding:16px 18px">
