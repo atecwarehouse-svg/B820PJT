@@ -43,7 +43,7 @@ export default function KpiCards({
 
         <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4 text-center">
           <p className="text-3xl font-bold tabular-nums text-gray-600">{notStarted.toLocaleString()}</p>
-          <p className="mt-1 text-xs font-medium text-gray-600">미시작</p>
+          <p className="mt-1 text-xs font-medium text-gray-600">설치대상(잔여)</p>
         </div>
       </div>
       <p className="mt-1 text-right text-[11px] text-gray-400">사진 {target}장 기준</p>
