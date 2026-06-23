@@ -20,5 +20,3 @@ export function createServiceClient() {
     },
   });
 }
-
-export const PHOTOS_BUCKET = "photos";

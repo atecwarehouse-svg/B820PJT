@@ -36,7 +36,7 @@ create table if not exists photos (
   section      text not null check (section in ('before','after')),
   slot_key     text not null,
   label        text not null,
-  storage_path text not null,        -- Storage 내 경로
+  storage_path text not null,        -- Google Drive 파일 ID
   sort_order   int  not null,
   is_custom    boolean not null default false,
   updated_at   timestamptz not null default now(),
@@ -70,11 +70,8 @@ create policy "photos_anon_select" on photos
   for select using (true);
 
 -- ============================================================
--- Storage 버킷
--- 아래는 참고용. 대시보드 Storage에서 'photos' 버킷을 Public 으로 생성해도 됩니다.
+-- 사진 파일 저장소
+-- 사진 파일은 Supabase Storage가 아닌 Cloudflare R2에 저장합니다.
+-- (이 DB에는 사진 메타데이터(photos 테이블)만 보관)
+-- R2 설정은 .env / README 참고.
 -- ============================================================
-insert into storage.buckets (id, name, public)
-values ('photos', 'photos', true)
-on conflict (id) do nothing;
-
--- public 버킷이라 읽기는 공개. 업로드/삭제는 서버 service_role로만 수행.

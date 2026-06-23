@@ -1,8 +1,8 @@
 // 인쇄/PDF용 레코드 로더 — 차량/레코드/사진을 읽어 PrintData로 변환.
 
 import { createServiceClient } from "@/lib/supabase/server";
+import { downloadPhoto } from "@/lib/gdrive";
 import { AFTER_SLOTS, buildBeforeSlots, type CustomSlot } from "@/lib/slots";
-import { publicPhotoUrl } from "@/lib/photo-url";
 import type { PhotoRow, RecordRow } from "@/lib/types";
 import type { PrintData } from "@/lib/export/print-html";
 
@@ -24,10 +24,19 @@ export async function loadPrintData(plate: string): Promise<PrintData | null> {
   const record = recordRes.data as RecordRow | null;
   const photos = (photosRes.data as PhotoRow[]) ?? [];
 
+  // PDF는 puppeteer가 origin 없이(setContent) 렌더링하므로 상대 URL이 안 먹는다.
+  // 사진을 직접 내려받아 base64 data URI로 박아 넣는다(인쇄 페이지에서도 동일하게 동작).
   const urlBySlot = new Map<string, string>();
-  for (const p of photos) {
-    urlBySlot.set(p.slot_key, `${publicPhotoUrl(p.storage_path)}?t=${p.updated_at ?? ""}`);
-  }
+  await Promise.all(
+    photos.map(async (p) => {
+      try {
+        const buf = await downloadPhoto(p.storage_path);
+        urlBySlot.set(p.slot_key, `data:image/jpeg;base64,${buf.toString("base64")}`);
+      } catch {
+        // 누락 사진은 건너뜀
+      }
+    }),
+  );
 
   const customSlots: CustomSlot[] = record?.custom_slots ?? [];
   const beforeSlots = buildBeforeSlots(customSlots);

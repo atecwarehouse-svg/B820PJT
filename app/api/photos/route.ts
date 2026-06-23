@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createServiceClient, PHOTOS_BUCKET } from "@/lib/supabase/server";
-import { storageKey } from "@/lib/storage-path";
+import { createServiceClient } from "@/lib/supabase/server";
+import { uploadPhoto, deletePhoto } from "@/lib/gdrive";
+import { publicPhotoUrl } from "@/lib/photo-url";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -61,17 +62,39 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const storagePath = storageKey(plate, section, slotKey);
+  // 폴더 구조(운수사/차량번호)를 위해 운수사명을 가져온다.
+  const { data: rec } = await supabase
+    .from("records")
+    .select("operator")
+    .eq("plate", plate)
+    .maybeSingle();
+  const operator = (rec?.operator as string) ?? "";
+
+  // 같은 칸을 다시 찍으면 기존 Drive 파일 내용을 갱신(파일 ID 유지).
+  const { data: existing } = await supabase
+    .from("photos")
+    .select("storage_path")
+    .eq("plate", plate)
+    .eq("slot_key", slotKey)
+    .maybeSingle();
+
   const arrayBuffer = await file.arrayBuffer();
 
-  const { error: upErr } = await supabase.storage
-    .from(PHOTOS_BUCKET)
-    .upload(storagePath, arrayBuffer, {
+  let fileId: string;
+  try {
+    fileId = await uploadPhoto({
+      plate,
+      operator,
+      slotKey,
+      body: Buffer.from(arrayBuffer),
       contentType: "image/jpeg",
-      upsert: true,
+      existingId: existing?.storage_path,
     });
-  if (upErr) {
-    return NextResponse.json({ error: upErr.message }, { status: 500 });
+  } catch (e) {
+    return NextResponse.json(
+      { error: e instanceof Error ? e.message : "Google Drive 업로드 실패" },
+      { status: 500 },
+    );
   }
 
   const { error: dbErr, data } = await supabase
@@ -82,7 +105,7 @@ export async function POST(req: NextRequest) {
         section,
         slot_key: slotKey,
         label,
-        storage_path: storagePath,
+        storage_path: fileId, // Drive 파일 ID 저장
         sort_order: sortOrder,
         is_custom: isCustom,
         updated_at: new Date().toISOString(),
@@ -95,8 +118,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: dbErr.message }, { status: 500 });
   }
 
-  const { data: pub } = supabase.storage.from(PHOTOS_BUCKET).getPublicUrl(storagePath);
-  return NextResponse.json({ photo: data, url: `${pub.publicUrl}?t=${Date.now()}` });
+  return NextResponse.json({
+    photo: data,
+    url: `${publicPhotoUrl(fileId)}?t=${Date.now()}`,
+  });
 }
 
 // DELETE /api/photos?plate=...&slot_key=...
@@ -116,7 +141,7 @@ export async function DELETE(req: NextRequest) {
     .maybeSingle();
 
   if (photo?.storage_path) {
-    await supabase.storage.from(PHOTOS_BUCKET).remove([photo.storage_path]);
+    await deletePhoto(photo.storage_path).catch(() => {});
   }
   await supabase.from("photos").delete().eq("plate", plate).eq("slot_key", slotKey);
 
