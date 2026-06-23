@@ -2,10 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import nodemailer from "nodemailer";
 import { loadInstallProgress, loadScheduleStats } from "@/lib/stats";
 import { buildReport, formatReportText, formatReportHtml } from "@/lib/report";
+import { buildProgressXlsx } from "@/lib/export/build-progress-xlsx";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-export const maxDuration = 30;
+export const maxDuration = 60;
 
 interface SendBody {
   date?: string; // 업무일 YYYY-MM-DD
@@ -67,6 +68,15 @@ export async function POST(req: NextRequest) {
   const html = formatReportHtml(report, notes);
   const subject = `[B820] 설치 완료 보고 (${report.label}, ${report.dow}) — ${report.dailyDone}대`;
 
+  // 진행현황 엑셀 첨부 (실패해도 메일은 발송)
+  const attachments: { filename: string; content: Buffer }[] = [];
+  try {
+    const xlsx = await buildProgressXlsx();
+    attachments.push({ filename: xlsx.filename, content: xlsx.buffer });
+  } catch (e) {
+    console.warn("[report/send] 엑셀 첨부 생성 실패(첨부 없이 발송):", e instanceof Error ? e.message : e);
+  }
+
   try {
     const transporter = nodemailer.createTransport({
       host: "smtp.gmail.com",
@@ -80,6 +90,7 @@ export async function POST(req: NextRequest) {
       subject,
       text,
       html,
+      attachments,
     });
   } catch (e) {
     return NextResponse.json(
@@ -88,5 +99,5 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  return NextResponse.json({ ok: true, to: recipients, subject });
+  return NextResponse.json({ ok: true, to: recipients, subject, attached: attachments.length > 0 });
 }
