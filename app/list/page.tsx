@@ -10,8 +10,8 @@ export const dynamic = "force-dynamic";
 export default async function ListPage() {
   const supabase = createServiceClient();
 
-  // 1,000행 제한 회피 — 저장 레코드/사진을 전수 조회
-  const [records, photoRows] = await Promise.all([
+  // 1,000행 제한 회피 — 저장 레코드/사진을 전수 조회. 운수사 목록은 집계뷰에서.
+  const [records, photoRows, opRes] = await Promise.all([
     fetchAll<RecordRow>((from, to) =>
       supabase
         .from("records")
@@ -23,6 +23,10 @@ export default async function ListPage() {
     fetchAll<{ plate: string }>((from, to) =>
       supabase.from("photos").select("plate").range(from, to),
     ),
+    supabase
+      .from("operator_progress")
+      .select("operator, complete, in_progress")
+      .range(0, 9999),
   ]);
 
   const photoCount = new Map<string, number>();
@@ -40,6 +44,12 @@ export default async function ListPage() {
     photoCount: photoCount.get(r.plate) ?? 0,
   }));
 
+  // 작업 시작된(사진 있는) 운수사만 — 운수사별 저장 드롭다운용
+  const operators = ((opRes.data ?? []) as { operator: string; complete: number; in_progress: number }[])
+    .filter((o) => (o.complete ?? 0) + (o.in_progress ?? 0) > 0)
+    .map((o) => o.operator)
+    .sort((a, b) => a.localeCompare(b, "ko"));
+
   return (
     <main className="mx-auto max-w-3xl px-3 pb-28 pt-4">
       <div className="mb-3 flex items-center justify-between">
@@ -50,15 +60,7 @@ export default async function ListPage() {
         <span className="text-xs text-gray-400">{items.length}대</span>
       </div>
 
-      {items.length === 0 ? (
-        <p className="mt-16 text-center text-sm text-gray-400">
-          저장된 사진첩이 없습니다.
-          <br />
-          차량을 선택해 사진을 올린 뒤 “저장”을 누르세요.
-        </p>
-      ) : (
-        <ListClient items={items} />
-      )}
+      <ListClient items={items} operators={operators} />
     </main>
   );
 }

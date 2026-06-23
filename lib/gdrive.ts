@@ -107,13 +107,14 @@ async function ensureNamedFolder(d: Drive, name: string): Promise<string> {
   return created.data.id;
 }
 
-// 내보내기 파일(엑셀/PDF)을 지정 이름 폴더(예: "인천B820 PDF")에 업로드. {id, link} 반환.
+// 내보내기 파일(엑셀/PDF)을 지정 이름 폴더(예: "인천B820 PDF")에 업로드.
+// {id, link(파일), folderLink(폴더)} 반환.
 export async function uploadExport(
   folderName: string,
   fileName: string,
   body: Buffer,
   mimeType: string,
-): Promise<{ id: string; link: string }> {
+): Promise<{ id: string; link: string; folderLink: string }> {
   const d = drive();
   const folderId = await ensureNamedFolder(d, folderName);
   const res = await d.files.create({
@@ -122,7 +123,11 @@ export async function uploadExport(
     fields: "id, webViewLink",
   });
   if (!res.data.id) throw new Error("내보내기 파일 업로드 실패: 파일 ID 없음");
-  return { id: res.data.id, link: res.data.webViewLink ?? "" };
+  return {
+    id: res.data.id,
+    link: res.data.webViewLink ?? "",
+    folderLink: `https://drive.google.com/drive/folders/${folderId}`,
+  };
 }
 
 export async function downloadPhoto(fileId: string): Promise<Buffer> {
