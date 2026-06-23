@@ -4,6 +4,7 @@ import { loadStats, loadInstallProgress, loadScheduleStats } from "@/lib/stats";
 import type { InstallProgress, ScheduleStats } from "@/lib/stats";
 import ProgressDownloadButton from "@/components/ProgressDownloadButton";
 import ScheduleChart from "@/components/ScheduleChart";
+import InstallDateSearch from "@/components/InstallDateSearch";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -211,6 +212,11 @@ export default async function DashboardPage() {
               })}
             </ul>
           )}
+
+          {/* 날짜별 완료 검색 */}
+          <div className="mt-5">
+            <InstallDateSearch completedList={ip.completedList} today={ip.today} />
+          </div>
         </>
       )}
 

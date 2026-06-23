@@ -10,6 +10,7 @@ export interface ListItem {
   operator: string;
   route: string;
   installDate: string;
+  savedDate: string; // 완료 업무일 (20:00~익일 07:00 기준)
   year: string;
   model: string;
   photoCount: number;
@@ -37,20 +38,23 @@ export default function ListClient({
   const [query, setQuery] = useState("");
   const [incompleteOnly, setIncompleteOnly] = useState(false);
   const [operator, setOperator] = useState("");
+  const [dateFilter, setDateFilter] = useState(""); // 완료 업무일 필터
 
-  // 검색(차량번호·운수사·노선) + 미완료 필터
+  // 검색(차량번호·운수사·노선·완료일) + 미완료/날짜 필터
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return items.filter((it) => {
       if (incompleteOnly && it.photoCount >= TARGET) return false;
+      if (dateFilter && it.savedDate !== dateFilter) return false;
       if (!q) return true;
       return (
         it.plate.toLowerCase().includes(q) ||
         it.operator.toLowerCase().includes(q) ||
-        it.route.toLowerCase().includes(q)
+        it.route.toLowerCase().includes(q) ||
+        it.savedDate.includes(q)
       );
     });
-  }, [items, query, incompleteOnly]);
+  }, [items, query, incompleteOnly, dateFilter]);
 
   const incompleteCount = useMemo(
     () => items.filter((it) => it.photoCount < TARGET).length,
@@ -222,9 +226,27 @@ export default function ListClient({
               type="search"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="차량번호 · 운수사 · 노선 검색"
+              placeholder="차량번호 · 운수사 · 노선 · 완료일 검색"
               className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:border-blue-500 focus:outline-none"
             />
+            {/* 완료일(업무일) 검색 */}
+            <div className="flex items-center gap-2">
+              <span className="shrink-0 text-xs text-gray-500">완료일</span>
+              <input
+                type="date"
+                value={dateFilter}
+                onChange={(e) => setDateFilter(e.target.value)}
+                className="min-w-0 flex-1 rounded-lg border border-gray-300 px-2 py-2 text-sm focus:border-blue-500 focus:outline-none"
+              />
+              {dateFilter && (
+                <button
+                  onClick={() => setDateFilter("")}
+                  className="shrink-0 rounded-lg bg-gray-100 px-2.5 py-2 text-xs font-medium text-gray-600 hover:bg-gray-200"
+                >
+                  해제
+                </button>
+              )}
+            </div>
             <div className="flex items-center justify-between text-xs">
               <label className="flex items-center gap-1.5 text-gray-600">
                 <input
@@ -285,7 +307,8 @@ export default function ListClient({
                         </span>
                       </div>
                       <div className="truncate text-xs text-gray-500">
-                        {it.operator} · {it.route} · {it.installDate}
+                        {it.operator} · {it.route}
+                        {it.savedDate ? ` · 완료 ${it.savedDate}` : ""}
                         {it.year || it.model ? ` · ${it.year} ${it.model}` : ""}
                       </div>
                     </Link>

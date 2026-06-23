@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { createServiceClient } from "@/lib/supabase/server";
 import { fetchAll } from "@/lib/supabase/paginate";
+import { workDateString } from "@/lib/work-day";
 import type { RecordRow } from "@/lib/types";
 import ListClient, { type ListItem } from "@/components/ListClient";
 
@@ -39,6 +40,7 @@ export default async function ListPage() {
     operator: r.operator ?? "",
     route: r.route ?? "",
     installDate: r.install_date,
+    savedDate: r.saved_at ? workDateString(r.saved_at) : "", // 완료 업무일
     year: r.year ?? "",
     model: r.model ?? "",
     photoCount: photoCount.get(r.plate) ?? 0,

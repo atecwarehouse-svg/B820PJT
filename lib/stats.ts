@@ -126,12 +126,21 @@ export interface InstallGroup {
   todayComplete: number; // saved_at 날짜 == 오늘(KST)
 }
 
+export interface CompletedVehicle {
+  plate: string;
+  operator: string;
+  route: string;
+  workDate: string; // 완료 업무일 (YYYY-MM-DD, 20:00~익일 07:00 기준)
+}
+
 export interface InstallProgress {
   totalVehicles: number;
   complete: number;
   notComplete: number;
   todayComplete: number;
+  today: string; // 현재 업무일
   groups: InstallGroup[];
+  completedList: CompletedVehicle[]; // 날짜별 검색용 (완료 차량만)
 }
 
 export async function loadInstallProgress(): Promise<InstallProgress> {
@@ -147,6 +156,7 @@ export async function loadInstallProgress(): Promise<InstallProgress> {
   let complete = 0;
   let todayComplete = 0;
   const byGroup = new Map<string, InstallGroup>();
+  const completedList: CompletedVehicle[] = [];
 
   for (const v of vehicles) {
     const op = v.operator?.trim() || "미지정";
@@ -159,7 +169,9 @@ export async function loadInstallProgress(): Promise<InstallProgress> {
     if (savedAt) {
       complete++;
       g.complete++;
-      if (workDateString(savedAt) === today) {
+      const wd = workDateString(savedAt);
+      completedList.push({ plate: v.plate, operator: op, route: rt, workDate: wd });
+      if (wd === today) {
         todayComplete++;
         g.todayComplete++;
       }
@@ -172,12 +184,17 @@ export async function loadInstallProgress(): Promise<InstallProgress> {
     .filter((g) => g.complete > 0)
     .sort((a, b) => b.total - b.complete - (a.total - a.complete));
 
+  // 완료 차량은 업무일 최신순으로
+  completedList.sort((a, b) => b.workDate.localeCompare(a.workDate));
+
   return {
     totalVehicles: vehicles.length,
     complete,
     notComplete: vehicles.length - complete,
     todayComplete,
+    today,
     groups,
+    completedList,
   };
 }
 
