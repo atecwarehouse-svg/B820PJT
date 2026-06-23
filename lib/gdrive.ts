@@ -88,6 +88,43 @@ export async function uploadPhoto(opts: {
   return newId;
 }
 
+// 이름으로 폴더 find-or-create (My Drive 루트, 앱 소유). drive.file라 앱이 만든 폴더만 검색됨.
+async function ensureNamedFolder(d: Drive, name: string): Promise<string> {
+  const safe = name.replace(/['\\]/g, "\\$&");
+  const res = await d.files.list({
+    q: `mimeType='${FOLDER_MIME}' and name='${safe}' and trashed=false`,
+    fields: "files(id)",
+    spaces: "drive",
+    pageSize: 1,
+  });
+  const found = res.data.files?.[0]?.id;
+  if (found) return found;
+  const created = await d.files.create({
+    requestBody: { name, mimeType: FOLDER_MIME },
+    fields: "id",
+  });
+  if (!created.data.id) throw new Error(`폴더 생성 실패: ${name}`);
+  return created.data.id;
+}
+
+// 내보내기 파일(엑셀/PDF)을 지정 이름 폴더(예: "인천B820 PDF")에 업로드. {id, link} 반환.
+export async function uploadExport(
+  folderName: string,
+  fileName: string,
+  body: Buffer,
+  mimeType: string,
+): Promise<{ id: string; link: string }> {
+  const d = drive();
+  const folderId = await ensureNamedFolder(d, folderName);
+  const res = await d.files.create({
+    requestBody: { name: fileName, parents: [folderId] },
+    media: { mimeType, body: Readable.from(body) },
+    fields: "id, webViewLink",
+  });
+  if (!res.data.id) throw new Error("내보내기 파일 업로드 실패: 파일 ID 없음");
+  return { id: res.data.id, link: res.data.webViewLink ?? "" };
+}
+
 export async function downloadPhoto(fileId: string): Promise<Buffer> {
   const res = await drive().files.get(
     { fileId, alt: "media" },

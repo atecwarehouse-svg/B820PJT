@@ -1,13 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { loadBuildInput } from "@/lib/export/load-xlsx-input";
 import { buildWorkbookMulti, type BuildInput } from "@/lib/export/xlsx-builder";
+import { uploadExport } from "@/lib/gdrive";
+import { kstStamp } from "@/lib/export/filename";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
+const XLSX_FOLDER = "인천B820 엑셀";
+const XLSX_MIME =
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+
 // POST /api/export/xlsx  body: { plates: string[] }
-// 선택한 차량들을 한 시트에 차량별 블록으로 쌓고 차량마다 페이지 분할한 엑셀 1파일.
+// 선택 차량을 묶은 엑셀 1파일 → 드라이브 "인천B820 엑셀" 폴더에 업로드.
 export async function POST(req: NextRequest) {
   const { plates } = (await req.json()) as { plates?: string[] };
   if (!plates || plates.length === 0) {
@@ -22,16 +28,16 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "유효한 차량이 없습니다." }, { status: 404 });
   }
 
-  const wb = await buildWorkbookMulti(inputs);
-  const arrayBuffer = await wb.xlsx.writeBuffer();
-  const filename = encodeURIComponent(`B820_설치사진첩_${inputs.length}대.xlsx`);
-
-  return new NextResponse(arrayBuffer as ArrayBuffer, {
-    status: 200,
-    headers: {
-      "Content-Type":
-        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      "Content-Disposition": `attachment; filename*=UTF-8''${filename}`,
-    },
-  });
+  try {
+    const wb = await buildWorkbookMulti(inputs);
+    const buf = Buffer.from(await wb.xlsx.writeBuffer());
+    const fileName = `B820_설치사진첩_${inputs.length}대_${kstStamp()}.xlsx`;
+    const { link } = await uploadExport(XLSX_FOLDER, fileName, buf, XLSX_MIME);
+    return NextResponse.json({ ok: true, folder: XLSX_FOLDER, name: fileName, link, count: inputs.length });
+  } catch (e) {
+    return NextResponse.json(
+      { error: e instanceof Error ? e.message : "엑셀 생성 실패" },
+      { status: 500 },
+    );
+  }
 }

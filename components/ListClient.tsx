@@ -72,24 +72,15 @@ export default function ListClient({ items }: { items: ListItem[] }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ plates: selectedPlates }),
       });
-      if (!res.ok) {
-        const j = await res.json().catch(() => ({}));
-        throw new Error(j.error ?? "다운로드 실패");
-      }
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download =
-        kind === "pdf"
-          ? `B820_설치사진첩_${selectedPlates.length}대.pdf`
-          : `B820_설치사진첩_${selectedPlates.length}대.xlsx`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(j.error ?? "생성 실패");
+      // 드라이브 폴더에 저장됨 → 안내 + (원하면) 바로 열기
+      const open = confirm(
+        `드라이브 '${j.folder}' 폴더에 저장되었습니다.\n${j.name}\n\n지금 드라이브에서 열어볼까요?`,
+      );
+      if (open && j.link) window.open(j.link, "_blank");
     } catch (e) {
-      alert(e instanceof Error ? e.message : "다운로드 실패");
+      alert(e instanceof Error ? e.message : "생성 실패");
     } finally {
       setBusy(null);
     }
@@ -184,14 +175,14 @@ export default function ListClient({ items }: { items: ListItem[] }) {
             disabled={busy !== null}
             className="rounded-lg bg-rose-600 px-4 py-3 text-sm font-semibold text-white active:bg-rose-700 disabled:opacity-50"
           >
-            {busy === "pdf" ? "PDF 생성 중…" : `PDF 다운로드${selected.size ? ` (${selected.size})` : ""}`}
+            {busy === "pdf" ? "PDF 저장 중…" : `PDF 저장${selected.size ? ` (${selected.size})` : ""}`}
           </button>
           <button
             onClick={() => download("xlsx")}
             disabled={busy !== null}
             className="rounded-lg bg-green-600 px-4 py-3 text-sm font-semibold text-white active:bg-green-700 disabled:opacity-50"
           >
-            {busy === "xlsx" ? "엑셀 생성 중…" : `엑셀 다운로드${selected.size ? ` (${selected.size})` : ""}`}
+            {busy === "xlsx" ? "엑셀 저장 중…" : `엑셀 저장${selected.size ? ` (${selected.size})` : ""}`}
           </button>
         </div>
       </div>

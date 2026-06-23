@@ -1,8 +1,14 @@
 import Link from "next/link";
+import { unstable_cache } from "next/cache";
 import { loadStats } from "@/lib/stats";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+// 집계 결과를 60초 캐시 — 실시간일 필요 없어 매 접속마다 재계산하지 않음
+const getStats = unstable_cache(() => loadStats(), ["dashboard-stats"], {
+  revalidate: 60,
+});
 
 function StatCard({
   label,
@@ -27,7 +33,7 @@ function StatCard({
 }
 
 export default async function DashboardPage() {
-  const s = await loadStats();
+  const s = await getStats();
   const pct = s.totalVehicles ? (s.complete / s.totalVehicles) * 100 : 0;
 
   return (
