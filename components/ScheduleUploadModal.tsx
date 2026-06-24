@@ -11,7 +11,9 @@ interface ChangeGroup {
 }
 
 interface UploadResult {
-  updated: number;
+  applied: boolean;
+  updated?: number; // 적용 시에만
+  total: number;
   withDate: number;
   pilot: number;
   skipped: number;
@@ -28,21 +30,23 @@ function fmtDate(d: string | null): string {
 }
 
 // '설치일정 변경 업로드' 버튼 → 팝업(모달).
-// 수정한 진행현황 xlsx를 올리면 차량리스트의 설치 예정일/시범설치를 DB에 반영.
+// 1) 파일 선택 → 변경 내역 미리보기(DB 미변경) → 2) '변경 반영' 확인 시 실제 반영.
 export default function ScheduleUploadModal() {
   const [open, setOpen] = useState(false);
+  const [step, setStep] = useState<"select" | "preview" | "done">("select");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<UploadResult | null>(null);
-  const [fileName, setFileName] = useState<string | null>(null);
+  const [file, setFile] = useState<File | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
 
   function reset() {
+    setStep("select");
     setBusy(false);
     setError(null);
     setResult(null);
-    setFileName(null);
+    setFile(null);
     if (fileRef.current) fileRef.current.value = "";
   }
 
@@ -51,23 +55,80 @@ export default function ScheduleUploadModal() {
     reset();
   }
 
-  async function handleFile(file: File) {
+  // 1단계: 파일 선택 → 미리보기(apply 없이)
+  async function handlePreview(f: File) {
     setBusy(true);
     setError(null);
-    setResult(null);
     try {
       const form = new FormData();
-      form.append("file", file);
+      form.append("file", f);
       const res = await fetch("/api/import/schedule", { method: "POST", body: form });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "업로드 실패");
+      setFile(f);
       setResult(json as UploadResult);
-      router.refresh(); // 대시보드 일정/계획수량 갱신
+      setStep("preview");
     } catch (e) {
       setError(e instanceof Error ? e.message : "업로드 실패");
     } finally {
       setBusy(false);
     }
+  }
+
+  // 2단계: 확인 → 실제 반영(apply=true)
+  async function handleApply() {
+    if (!file) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      form.append("apply", "true");
+      const res = await fetch("/api/import/schedule", { method: "POST", body: form });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "반영 실패");
+      setResult(json as UploadResult);
+      setStep("done");
+      router.refresh(); // 대시보드 일정/계획수량 갱신
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "반영 실패");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // 변경 내역 목록 (preview·done 공용)
+  function ChangeList() {
+    if (!result) return null;
+    return result.changedCount > 0 ? (
+      <div className="mt-3 max-h-60 overflow-y-auto rounded-lg border border-gray-100">
+        <p className="border-b border-gray-100 bg-gray-50 px-3 py-1.5 text-[11px] font-semibold text-gray-500">
+          일정 변경 내역
+        </p>
+        <ul className="divide-y divide-gray-50">
+          {result.changes.map((c, i) => (
+            <li
+              key={i}
+              className="flex items-center justify-between gap-2 px-3 py-2 text-xs"
+            >
+              <span className="min-w-0 truncate font-medium text-gray-700">
+                {c.operator}
+                <span className="ml-1 font-normal text-gray-400">{c.count}대</span>
+              </span>
+              <span className="shrink-0 tabular-nums text-gray-500">
+                {fmtDate(c.from)}
+                <span className="mx-1 text-blue-500">→</span>
+                <b className="text-blue-700">{fmtDate(c.to)}</b>
+              </span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    ) : (
+      <p className="mt-3 rounded-lg bg-gray-50 py-3 text-center text-xs text-gray-400">
+        변경된 일정이 없습니다.
+      </p>
+    );
   }
 
   return (
@@ -90,7 +151,13 @@ export default function ScheduleUploadModal() {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
-              <h2 className="text-sm font-bold text-blue-700">설치일정 변경 업로드</h2>
+              <h2 className="text-sm font-bold text-blue-700">
+                {step === "preview"
+                  ? "변경 내용 확인"
+                  : step === "done"
+                    ? "반영 완료"
+                    : "설치일정 변경 업로드"}
+              </h2>
               <button
                 onClick={close}
                 className="rounded-lg px-2 py-1 text-sm text-gray-400 hover:bg-gray-100 hover:text-gray-600"
@@ -101,61 +168,8 @@ export default function ScheduleUploadModal() {
             </div>
 
             <div className="p-4">
-              {result ? (
-                // 완료 화면
-                <div>
-                  <div className="text-center">
-                    <div className="text-3xl">✅</div>
-                    <p className="mt-2 text-base font-bold text-gray-800">반영 완료</p>
-                    <p className="mt-1 text-xs text-gray-500">
-                      차량 {result.updated.toLocaleString()}대 반영 · 일정 변경{" "}
-                      <b className="text-blue-700">{result.changedCount.toLocaleString()}대</b>
-                      {result.added > 0 && <> · 신규 {result.added.toLocaleString()}대</>}
-                    </p>
-                  </div>
-
-                  {/* 변경 내역: 운수사 N대 · 기존 → 변경 */}
-                  {result.changedCount > 0 ? (
-                    <div className="mt-3 max-h-60 overflow-y-auto rounded-lg border border-gray-100">
-                      <p className="border-b border-gray-100 bg-gray-50 px-3 py-1.5 text-[11px] font-semibold text-gray-500">
-                        일정 변경 내역
-                      </p>
-                      <ul className="divide-y divide-gray-50">
-                        {result.changes.map((c, i) => (
-                          <li
-                            key={i}
-                            className="flex items-center justify-between gap-2 px-3 py-2 text-xs"
-                          >
-                            <span className="min-w-0 truncate font-medium text-gray-700">
-                              {c.operator}
-                              <span className="ml-1 font-normal text-gray-400">
-                                {c.count}대
-                              </span>
-                            </span>
-                            <span className="shrink-0 tabular-nums text-gray-500">
-                              {fmtDate(c.from)}
-                              <span className="mx-1 text-blue-500">→</span>
-                              <b className="text-blue-700">{fmtDate(c.to)}</b>
-                            </span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  ) : (
-                    <p className="mt-3 rounded-lg bg-gray-50 py-3 text-center text-xs text-gray-400">
-                      변경된 일정이 없습니다.
-                    </p>
-                  )}
-
-                  <button
-                    onClick={close}
-                    className="mt-4 w-full rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700"
-                  >
-                    확인
-                  </button>
-                </div>
-              ) : (
-                // 업로드 화면
+              {step === "select" && (
+                // 1단계: 파일 선택
                 <>
                   <div className="rounded-lg bg-blue-50 px-3 py-2.5 text-xs leading-relaxed text-gray-600">
                     <p className="font-semibold text-blue-700">수정 방법</p>
@@ -177,13 +191,8 @@ export default function ScheduleUploadModal() {
                   >
                     <span className="text-2xl">⬆️</span>
                     <span className="text-sm font-medium">
-                      {busy ? "반영 중…" : "엑셀 파일 선택"}
+                      {busy ? "분석 중…" : "엑셀 파일 선택"}
                     </span>
-                    {fileName && !busy && (
-                      <span className="max-w-full truncate text-[11px] text-gray-400">
-                        {fileName}
-                      </span>
-                    )}
                   </button>
 
                   {error && <p className="mt-3 text-xs text-red-500">{error}</p>}
@@ -195,13 +204,69 @@ export default function ScheduleUploadModal() {
                     className="hidden"
                     onChange={(e) => {
                       const f = e.target.files?.[0];
-                      if (f) {
-                        setFileName(f.name);
-                        handleFile(f);
-                      }
+                      if (f) handlePreview(f);
                     }}
                   />
                 </>
+              )}
+
+              {step === "preview" && result && (
+                // 2단계: 변경 내용 확인 → 반영 여부 결정
+                <>
+                  <p className="text-xs text-gray-500">
+                    아래 내용으로 일정을 변경합니다. 확인 후 <b>변경 반영</b>을 눌러주세요.
+                  </p>
+                  <p className="mt-1 text-xs text-gray-500">
+                    총 {result.total.toLocaleString()}대 · 일정 변경{" "}
+                    <b className="text-blue-700">{result.changedCount.toLocaleString()}대</b>
+                    {result.added > 0 && <> · 신규 {result.added.toLocaleString()}대</>}
+                  </p>
+
+                  <ChangeList />
+
+                  {error && <p className="mt-3 text-xs text-red-500">{error}</p>}
+
+                  <div className="mt-4 flex gap-2">
+                    <button
+                      onClick={reset}
+                      disabled={busy}
+                      className="flex-1 rounded-lg border border-gray-300 px-4 py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-100 disabled:opacity-50"
+                    >
+                      다시 선택
+                    </button>
+                    <button
+                      onClick={handleApply}
+                      disabled={busy}
+                      className="flex-1 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+                    >
+                      {busy ? "반영 중…" : "변경 반영"}
+                    </button>
+                  </div>
+                </>
+              )}
+
+              {step === "done" && result && (
+                // 3단계: 반영 완료
+                <div>
+                  <div className="text-center">
+                    <div className="text-3xl">✅</div>
+                    <p className="mt-2 text-base font-bold text-gray-800">반영 완료</p>
+                    <p className="mt-1 text-xs text-gray-500">
+                      차량 {(result.updated ?? result.total).toLocaleString()}대 반영 · 일정 변경{" "}
+                      <b className="text-blue-700">{result.changedCount.toLocaleString()}대</b>
+                      {result.added > 0 && <> · 신규 {result.added.toLocaleString()}대</>}
+                    </p>
+                  </div>
+
+                  <ChangeList />
+
+                  <button
+                    onClick={close}
+                    className="mt-4 w-full rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700"
+                  >
+                    확인
+                  </button>
+                </div>
               )}
             </div>
           </div>

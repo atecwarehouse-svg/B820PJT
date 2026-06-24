@@ -15,12 +15,14 @@ interface ChangeGroup {
   count: number;
 }
 
-// POST /api/import/schedule  (multipart/form-data: file=수정한 진행현황 xlsx)
-//   차량리스트 시트의 설치 예정일(I열)·시범설치를 vehicles에 반영(upsert).
+// POST /api/import/schedule  (multipart/form-data: file=수정한 진행현황 xlsx, apply=true|false)
+//   apply!=="true" → 미리보기: 파싱+변경내역만 계산(DB 미변경).
+//   apply==="true" → 차량리스트 설치 예정일(I열)·시범설치를 vehicles에 반영(upsert).
 //   plate 기준 upsert로 planned_date/operator/route/is_pilot만 갱신(삭제·is_added 보존).
 export async function POST(req: NextRequest) {
   const form = await req.formData();
   const file = form.get("file") as File | null;
+  const apply = form.get("apply") === "true";
   if (!file) {
     return NextResponse.json({ error: "파일이 없습니다." }, { status: 400 });
   }
@@ -84,7 +86,23 @@ export async function POST(req: NextRequest) {
     (a, b) => b.count - a.count || a.operator.localeCompare(b.operator),
   );
 
-  // 3) 실제 반영(upsert).
+  const withDate = parsed.rows.filter((r) => r.planned_date).length;
+  const summary = {
+    total: parsed.rows.length, // 양식의 차량 수(반영 대상)
+    withDate,
+    pilot: parsed.pilotCount,
+    skipped: parsed.skipped,
+    added,
+    changedCount,
+    changes,
+  };
+
+  // 미리보기(apply=false): DB 변경 없이 변경내역만 반환.
+  if (!apply) {
+    return NextResponse.json({ applied: false, ...summary });
+  }
+
+  // 적용(apply=true): 실제 반영(upsert).
   let done = 0;
   for (let i = 0; i < parsed.rows.length; i += CHUNK) {
     const chunk = parsed.rows.slice(i, i + CHUNK);
@@ -95,14 +113,5 @@ export async function POST(req: NextRequest) {
     done += chunk.length;
   }
 
-  const withDate = parsed.rows.filter((r) => r.planned_date).length;
-  return NextResponse.json({
-    updated: done,
-    withDate,
-    pilot: parsed.pilotCount,
-    skipped: parsed.skipped,
-    added,
-    changedCount,
-    changes,
-  });
+  return NextResponse.json({ applied: true, updated: done, ...summary });
 }
