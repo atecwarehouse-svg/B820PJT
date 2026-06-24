@@ -64,13 +64,17 @@ async function loadFromView(supabase: SB, target: number): Promise<DashboardStat
 }
 
 // 폴백: 차량/사진 전수 조회 후 앱에서 집계 (뷰가 아직 없을 때).
+// '단말기 없음'(records.na_slots) 칸은 사진 1장으로 간주해 합산.
 async function loadByScan(supabase: SB, target: number): Promise<DashboardStats> {
-  const [vehicles, photoRows] = await Promise.all([
+  const [vehicles, photoRows, naRows] = await Promise.all([
     fetchAll<{ plate: string; operator: string | null }>((from, to) =>
       supabase.from("vehicles").select("plate, operator").range(from, to),
     ),
     fetchAll<{ plate: string }>((from, to) =>
       supabase.from("photos").select("plate").range(from, to),
+    ),
+    fetchAll<{ plate: string; na_slots: string[] | null }>((from, to) =>
+      supabase.from("records").select("plate, na_slots").range(from, to),
     ),
   ]);
 
@@ -78,10 +82,14 @@ async function loadByScan(supabase: SB, target: number): Promise<DashboardStats>
   for (const p of photoRows) {
     photoCount.set(p.plate, (photoCount.get(p.plate) ?? 0) + 1);
   }
+  const naCount = new Map<string, number>();
+  for (const r of naRows) {
+    naCount.set(r.plate, Array.isArray(r.na_slots) ? r.na_slots.length : 0);
+  }
 
   const byOp = new Map<string, OperatorProgress>();
   for (const v of vehicles) {
-    const c = photoCount.get(v.plate) ?? 0;
+    const c = (photoCount.get(v.plate) ?? 0) + (naCount.get(v.plate) ?? 0);
     const op = v.operator?.trim() || "미지정";
     const rec = byOp.get(op) ?? { operator: op, total: 0, complete: 0, inProgress: 0 };
     rec.total++;
@@ -112,19 +120,25 @@ export async function loadInProgressList(): Promise<InProgressVehicle[]> {
   const supabase = createServiceClient();
   const target = DEFAULT_PHOTO_COUNT;
 
-  // 시작된 차량 = records 존재(차량번호 입력·사진·필드 등으로 기록 생성). + plate별 사진 장수.
+  // 시작된 차량 = records 존재. + plate별 사진 장수. '단말기 없음'은 사진 1장으로 간주.
   const [recRows, photoRows] = await Promise.all([
-    fetchAll<{ plate: string }>((from, to) =>
-      supabase.from("records").select("plate").range(from, to),
+    fetchAll<{ plate: string; na_slots: string[] | null }>((from, to) =>
+      supabase.from("records").select("plate, na_slots").range(from, to),
     ),
     fetchAll<{ plate: string }>((from, to) =>
       supabase.from("photos").select("plate").range(from, to),
     ),
   ]);
+  const photoCnt = new Map<string, number>();
+  for (const p of photoRows) photoCnt.set(p.plate, (photoCnt.get(p.plate) ?? 0) + 1);
+  // 충족 칸수 = 사진수 + 단말기없음 칸수
   const count = new Map<string, number>();
-  for (const p of photoRows) count.set(p.plate, (count.get(p.plate) ?? 0) + 1);
+  for (const r of recRows) {
+    const na = Array.isArray(r.na_slots) ? r.na_slots.length : 0;
+    count.set(r.plate, (photoCnt.get(r.plate) ?? 0) + na);
+  }
 
-  // 사진 1장 이상 & 13장 미만 = 진행중 (사진 0장은 제외 → 미설치로 집계)
+  // 충족 1칸 이상 & 13칸 미만 = 진행중 (0칸은 제외 → 미설치로 집계)
   const candidates = recRows
     .map((r) => r.plate)
     .filter((plate) => {

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
 import type { CustomSlot } from "@/lib/slots";
+import { notifyInstallProgress, originFromRequest } from "@/lib/install-status";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -12,6 +13,7 @@ interface UpsertBody {
   year?: string | null;
   model?: string | null;
   custom_slots?: CustomSlot[];
+  na_slots?: string[]; // 단말기 없음 표시 슬롯키
   saved?: boolean; // true면 '저장'(목록 등록) 처리 → saved_at = now()
 }
 
@@ -57,6 +59,9 @@ export async function POST(req: NextRequest) {
     custom_slots: body.custom_slots ?? [],
     updated_at: new Date().toISOString(),
   };
+  if (body.na_slots !== undefined) {
+    payload.na_slots = body.na_slots;
+  }
   if (existing?.install_date) {
     payload.install_date = existing.install_date;
   }
@@ -71,5 +76,13 @@ export async function POST(req: NextRequest) {
     .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  // 단말기 없음 체크 등으로 칸이 모두 충족되면 팀즈 시작/완료 알림 (중복방지 내장, best-effort)
+  await notifyInstallProgress({
+    supabase,
+    plate,
+    origin: originFromRequest(req) || req.nextUrl.origin,
+  }).catch(() => {});
+
   return NextResponse.json({ record: data });
 }

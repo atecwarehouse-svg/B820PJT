@@ -13,6 +13,9 @@ interface Props {
   onDeleted: (slotKey: string) => void;
   onError?: (msg: string) => void; // 실패 시 부모(토스트)로 알림
   onRemoveSlot?: (slotKey: string) => void; // 커스텀 슬롯 칸 자체 삭제
+  allowNoTerminal?: boolean; // '단말기 없음' 체크 허용(하차 칸 등)
+  noTerminal?: boolean; // 단말기 없음 상태
+  onToggleNoTerminal?: (slotKey: string, value: boolean) => void;
 }
 
 export default function PhotoSlot({
@@ -24,6 +27,9 @@ export default function PhotoSlot({
   onDeleted,
   onError,
   onRemoveSlot,
+  allowNoTerminal,
+  noTerminal,
+  onToggleNoTerminal,
 }: Props) {
   const [url, setUrl] = useState<string | null>(initialUrl ?? null);
   const [busy, setBusy] = useState(false);
@@ -98,7 +104,11 @@ export default function PhotoSlot({
 
       {/* 3:2 비율 사진 영역 */}
       <div className="relative aspect-[3/2] w-full overflow-hidden rounded bg-gray-100">
-        {url ? (
+        {noTerminal ? (
+          <div className="flex h-full w-full items-center justify-center text-xs font-medium text-gray-500">
+            단말기 없음
+          </div>
+        ) : url ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={url} alt={slot.label} className="h-full w-full object-cover" />
         ) : (
@@ -115,31 +125,48 @@ export default function PhotoSlot({
 
       {error && <p className="mt-1 text-xs text-red-500">{error}</p>}
 
-      <div className="mt-2 grid grid-cols-2 gap-1.5">
-        <button
-          onClick={() => cameraRef.current?.click()}
-          disabled={busy}
-          className="rounded bg-blue-600 px-2 py-1.5 text-xs font-medium text-white active:bg-blue-700 disabled:opacity-50"
-        >
-          촬영
-        </button>
-        <button
-          onClick={() => galleryRef.current?.click()}
-          disabled={busy}
-          className="rounded bg-gray-100 px-2 py-1.5 text-xs font-medium text-gray-700 active:bg-gray-200 disabled:opacity-50"
-        >
-          앨범
-        </button>
-      </div>
+      {/* 단말기 없음 체크 (하차 등) */}
+      {allowNoTerminal && (
+        <label className="mt-1.5 flex items-center gap-1.5 text-xs text-gray-600">
+          <input
+            type="checkbox"
+            checked={!!noTerminal}
+            onChange={(e) => onToggleNoTerminal?.(slot.slotKey, e.target.checked)}
+            className="h-3.5 w-3.5"
+          />
+          단말기 없음
+        </label>
+      )}
 
-      {url && (
-        <button
-          onClick={handleDelete}
-          disabled={busy}
-          className="mt-1.5 w-full rounded px-2 py-1 text-xs text-red-500 active:bg-red-50 disabled:opacity-50"
-        >
-          사진 삭제
-        </button>
+      {!noTerminal && (
+        <>
+          <div className="mt-2 grid grid-cols-2 gap-1.5">
+            <button
+              onClick={() => cameraRef.current?.click()}
+              disabled={busy}
+              className="rounded bg-blue-600 px-2 py-1.5 text-xs font-medium text-white active:bg-blue-700 disabled:opacity-50"
+            >
+              촬영
+            </button>
+            <button
+              onClick={() => galleryRef.current?.click()}
+              disabled={busy}
+              className="rounded bg-gray-100 px-2 py-1.5 text-xs font-medium text-gray-700 active:bg-gray-200 disabled:opacity-50"
+            >
+              앨범
+            </button>
+          </div>
+
+          {url && (
+            <button
+              onClick={handleDelete}
+              disabled={busy}
+              className="mt-1.5 w-full rounded px-2 py-1 text-xs text-red-500 active:bg-red-50 disabled:opacity-50"
+            >
+              사진 삭제
+            </button>
+          )}
+        </>
       )}
 
       {/* 촬영(후면 카메라) */}

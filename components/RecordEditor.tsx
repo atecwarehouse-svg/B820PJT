@@ -39,6 +39,8 @@ export default function RecordEditor({ plate, initial }: Props) {
   const [customSlots, setCustomSlots] = useState<CustomSlot[]>(
     initial.record?.custom_slots ?? [],
   );
+  // 단말기 없음으로 표시한 슬롯키(하차 등) — 사진 없이도 충족 처리
+  const [naSlots, setNaSlots] = useState<string[]>(initial.record?.na_slots ?? []);
   const [editInfo, setEditInfo] = useState(false); // 운수사/노선 수정 모드
 
   // slotKey -> 미리보기 URL
@@ -89,6 +91,7 @@ export default function RecordEditor({ plate, initial }: Props) {
         year: string;
         model: string;
         custom_slots: CustomSlot[];
+        na_slots: string[];
         saved: boolean;
       }>,
     ) => {
@@ -104,6 +107,7 @@ export default function RecordEditor({ plate, initial }: Props) {
             year: overrides?.year ?? year,
             model: overrides?.model ?? model,
             custom_slots: overrides?.custom_slots ?? customSlots,
+            na_slots: overrides?.na_slots ?? naSlots,
             saved: overrides?.saved ?? false,
           }),
         });
@@ -119,8 +123,17 @@ export default function RecordEditor({ plate, initial }: Props) {
         return false;
       }
     },
-    [plate, operator, route, year, model, customSlots, showToast],
+    [plate, operator, route, year, model, customSlots, naSlots, showToast],
   );
+
+  // '단말기 없음' 토글 → 상태 갱신 후 저장(서버가 시작/완료 판정·팀즈 알림)
+  function toggleNoTerminal(slotKey: string, value: boolean) {
+    const next = value
+      ? Array.from(new Set([...naSlots, slotKey]))
+      : naSlots.filter((k) => k !== slotKey);
+    setNaSlots(next);
+    saveRecord({ na_slots: next });
+  }
 
   function toggleEditInfo() {
     if (editInfo) {
@@ -299,6 +312,9 @@ export default function RecordEditor({ plate, initial }: Props) {
             onDeleted={handleDeleted}
             onError={handleSlotError}
             onRemoveSlot={removeCustomSlot}
+            allowNoTerminal={slot.slotKey.includes("alight")}
+            noTerminal={naSlots.includes(slot.slotKey)}
+            onToggleNoTerminal={toggleNoTerminal}
           />
         ))}
         <button
@@ -323,6 +339,9 @@ export default function RecordEditor({ plate, initial }: Props) {
             onUploaded={handleUploaded}
             onDeleted={handleDeleted}
             onError={handleSlotError}
+            allowNoTerminal={slot.slotKey.includes("alight")}
+            noTerminal={naSlots.includes(slot.slotKey)}
+            onToggleNoTerminal={toggleNoTerminal}
           />
         ))}
       </div>
