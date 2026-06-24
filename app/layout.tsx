@@ -15,6 +15,7 @@ export const viewport: Viewport = {
   maximumScale: 1,
   userScalable: false,
   themeColor: "#1d4ed8",
+  viewportFit: "cover", // 전체화면 앱 모드에서 노치/홈 인디케이터 영역까지 대응
 };
 
 export default function RootLayout({
