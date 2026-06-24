@@ -33,8 +33,9 @@ export default function RecordEditor({ plate, initial }: Props) {
     initial.record?.operator ?? vehicle.operator,
   );
   const [route, setRoute] = useState(initial.record?.route ?? vehicle.route);
-  const [year, setYear] = useState(initial.record?.year ?? "");
-  const [model, setModel] = useState(initial.record?.model ?? "");
+  // 연식·차종: 저장된 레코드값 우선, 없으면 차량 마스터(차량리스트 J/L열) 기본값. 수정 가능.
+  const [year, setYear] = useState(initial.record?.year ?? vehicle.year ?? "");
+  const [model, setModel] = useState(initial.record?.model ?? vehicle.model ?? "");
   const [customSlots, setCustomSlots] = useState<CustomSlot[]>(
     initial.record?.custom_slots ?? [],
   );

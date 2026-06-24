@@ -10,13 +10,17 @@ create table if not exists vehicles (
   route        text not null,        -- 노선
   planned_date date,                 -- 설치 예정일 (차량리스트 I열, 일정 시각화용)
   is_pilot     boolean not null default false, -- 시범설치 여부
-  is_added     boolean not null default false  -- 증차(마스터에 없던 차량을 앱에서 추가)
+  is_added     boolean not null default false, -- 증차(마스터에 없던 차량을 앱에서 추가)
+  year         text,                 -- 연식 마스터 (차량리스트 J열, 입력 기본값)
+  model        text                  -- 모델명 마스터 (차량리스트 L열, 입력 기본값)
 );
 
 -- 기존 DB 대비 컬럼 보강 (이미 vehicles가 있는 경우)
 alter table vehicles add column if not exists planned_date date;
 alter table vehicles add column if not exists is_pilot boolean not null default false;
 alter table vehicles add column if not exists is_added boolean not null default false;
+alter table vehicles add column if not exists year text;
+alter table vehicles add column if not exists model text;
 
 -- 차량번호 앞부분 검색(autocomplete)용 인덱스
 create index if not exists vehicles_plate_prefix

@@ -15,7 +15,7 @@ export default async function RecordPage({
   const supabase = createServiceClient();
 
   const [vehicleRes, recordRes, photosRes] = await Promise.all([
-    supabase.from("vehicles").select("plate, operator, route").eq("plate", plate).maybeSingle(),
+    supabase.from("vehicles").select("plate, operator, route, year, model").eq("plate", plate).maybeSingle(),
     supabase.from("records").select("*").eq("plate", plate).maybeSingle(),
     supabase.from("photos").select("*").eq("plate", plate).order("sort_order"),
   ]);

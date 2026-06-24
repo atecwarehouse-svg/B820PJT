@@ -1,7 +1,8 @@
 /**
  * 진행현황 양식(xlsx)에서 차량별 설치 예정일(planned_date) + 시범설치(is_pilot)를 파싱.
  *
- *   - 차량리스트 시트: F=차량번호, B=운수사, C=노선, I=설치 예정일(planned_date)
+ *   - 차량리스트 시트: F=차량번호, B=운수사, C=노선, I=설치 예정일(planned_date),
+ *     J=연식(year), L=모델명(model)
  *   - 진행현황 시트: 비고열(I~N)에 "시범설치"인 영업소(B=운수사, C=노선) → is_pilot=true
  *
  * scripts/import-schedule.ts(파일 경로 임포트)와 /api/import/schedule(웹 업로드)가
@@ -20,6 +21,8 @@ export interface ScheduleRow {
   route: string;
   planned_date: string | null;
   is_pilot: boolean;
+  year: string | null; // 연식 (차량리스트 J열)
+  model: string | null; // 모델명 (차량리스트 L열)
 }
 
 export interface ParseResult {
@@ -99,9 +102,11 @@ async function parseWorkbook(wb: ExcelJS.Workbook): Promise<ParseResult> {
       continue; // vehicles.operator/route 는 not null
     }
     const planned_date = toDate(row.getCell("I").value);
+    const year = txt(row.getCell("J").value) || null;
+    const model = txt(row.getCell("L").value) || null;
     const is_pilot = pilotKeys.has(pilotKey(operator, route));
     if (is_pilot) pilotCount++;
-    map.set(plate, { plate, operator, route, planned_date, is_pilot });
+    map.set(plate, { plate, operator, route, planned_date, is_pilot, year, model });
   }
 
   return { rows: [...map.values()], pilotCount, skipped };

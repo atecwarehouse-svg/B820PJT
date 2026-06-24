@@ -4,6 +4,8 @@ export interface Vehicle {
   plate: string;
   operator: string;
   route: string;
+  year?: string | null; // 연식 마스터 (차량리스트 J열) — 기본값용
+  model?: string | null; // 모델명 마스터 (차량리스트 L열) — 기본값용
 }
 
 export interface PhotoRow {
