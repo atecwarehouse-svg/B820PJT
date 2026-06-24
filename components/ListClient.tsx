@@ -35,6 +35,8 @@ export default function ListClient({
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState<null | "pdf" | "xlsx">(null);
   const [progress, setProgress] = useState("");
+  // 저장 완료 안내(드라이브 링크). 모바일 팝업 차단을 피해 화면에 직접 링크를 띄운다.
+  const [result, setResult] = useState<{ text: string; url: string } | null>(null);
   const [query, setQuery] = useState("");
   const [incompleteOnly, setIncompleteOnly] = useState(false);
   const [operator, setOperator] = useState("");
@@ -117,13 +119,11 @@ export default function ListClient({
     if (!first) return;
     const multi = results.length > 1;
     const head = label ? `${label} ${count ?? ""}대 — ` : "";
-    const msg = multi
-      ? `${head}드라이브 '${first.folder}' 폴더에 ${results.length}개 파일로 저장되었습니다.\n\n폴더를 열어볼까요?`
-      : `드라이브 '${first.folder}' 폴더에 저장되었습니다.\n${first.name}\n\n지금 열어볼까요?`;
-    if (confirm(msg)) {
-      const url = multi ? first.folderLink : first.link;
-      if (url) window.open(url, "_blank");
-    }
+    const text = multi
+      ? `${head}드라이브 '${first.folder}' 폴더에 ${results.length}개 파일로 저장되었습니다.`
+      : `드라이브 '${first.folder}' 폴더에 저장되었습니다. (${first.name})`;
+    const url = (multi ? first.folderLink : first.link) ?? "";
+    setResult({ text, url });
   }
 
   async function downloadSelected(kind: "pdf" | "xlsx") {
@@ -318,6 +318,34 @@ export default function ListClient({
             </ul>
           )}
         </>
+      )}
+
+      {/* 저장 완료 안내 — 팝업 대신 직접 탭하는 링크(모바일 팝업 차단 회피) */}
+      {result && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-6">
+          <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-xl">
+            <p className="text-sm text-gray-700">{result.text}</p>
+            <div className="mt-4 flex flex-col gap-2">
+              {result.url && (
+                <a
+                  href={result.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={() => setResult(null)}
+                  className="rounded-lg bg-blue-600 px-4 py-3 text-center text-sm font-semibold text-white active:bg-blue-700"
+                >
+                  드라이브에서 열기
+                </a>
+              )}
+              <button
+                onClick={() => setResult(null)}
+                className="rounded-lg bg-gray-100 px-4 py-2.5 text-sm font-medium text-gray-600 active:bg-gray-200"
+              >
+                닫기
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* 진행 상태 표시 */}
