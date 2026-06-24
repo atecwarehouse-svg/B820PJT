@@ -57,6 +57,15 @@ create table if not exists photos (
 
 create index if not exists photos_plate_idx on photos (plate);
 
+-- ----- 기준(양식) 사진 — 슬롯별 올바른 예시 1장 (Gemini 비교용) -----
+create table if not exists reference_photos (
+  slot_key     text primary key,   -- 슬롯 키 (lib/slots.ts)
+  section      text,               -- before | after
+  label        text,               -- 칸 라벨
+  storage_path text not null,      -- Google Drive 파일 ID
+  updated_at   timestamptz not null default now()
+);
+
 -- ============================================================
 -- RLS (Row Level Security)
 -- 인증이 없으므로: 클라이언트(anon)는 vehicles SELECT만 가능.
