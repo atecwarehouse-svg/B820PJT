@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
 import type { CustomSlot } from "@/lib/slots";
+import { sendCompletionCard } from "@/lib/teams";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -40,10 +41,10 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // 기존 레코드의 install_date 보존 (없으면 today 기본값)
+  // 기존 레코드의 install_date 보존 + 이미 완료(saved_at)됐는지 확인(중복 카드 방지)
   const { data: existing } = await supabase
     .from("records")
-    .select("install_date")
+    .select("install_date, saved_at")
     .eq("plate", plate)
     .maybeSingle();
 
@@ -71,5 +72,20 @@ export async function POST(req: NextRequest) {
     .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  // 처음 완료(저장)되는 순간에만 팀즈 완료 채팅방으로 카드 발송 (재저장 시 중복 발송 안 함).
+  // 실패해도 저장 자체는 성공으로 처리(best-effort).
+  if (body.saved && !existing?.saved_at) {
+    try {
+      await sendCompletionCard({
+        operator: (data.operator as string) ?? vehicle.operator ?? "",
+        plate,
+        route: (data.route as string) ?? vehicle.route ?? "",
+      });
+    } catch {
+      // 완료 카드 발송 실패는 무시 (저장은 유지)
+    }
+  }
+
   return NextResponse.json({ record: data });
 }
