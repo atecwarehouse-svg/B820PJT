@@ -3,6 +3,7 @@ import { unstable_cache } from "next/cache";
 import { loadStats, loadInstallProgress, loadScheduleStats, loadInProgressList } from "@/lib/stats";
 import type { InstallProgress, ScheduleStats, InProgressVehicle } from "@/lib/stats";
 import ProgressDownloadButton from "@/components/ProgressDownloadButton";
+import ScheduleUploadModal from "@/components/ScheduleUploadModal";
 import ScheduleChart from "@/components/ScheduleChart";
 import InstallDateSearch from "@/components/InstallDateSearch";
 import DailyReportModal from "@/components/DailyReportModal";
@@ -148,10 +149,13 @@ export default async function DashboardPage() {
       />
 
       {/* ===== 설치 일정 ===== */}
-      <h2 className="mb-2 mt-6 text-sm font-semibold text-gray-700">
-        설치 일정
-        <span className="ml-1 font-normal text-gray-400">(예정일 기준 계획 대비 실적)</span>
-      </h2>
+      <div className="mb-2 mt-6 flex flex-wrap items-center justify-between gap-2">
+        <h2 className="text-sm font-semibold text-gray-700">
+          설치 일정
+          <span className="ml-1 font-normal text-gray-400">(예정일 기준 계획 대비 실적)</span>
+        </h2>
+        <ScheduleUploadModal />
+      </div>
       <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
         {sch === null ? (
           <p className="py-8 text-center text-sm text-gray-400">
