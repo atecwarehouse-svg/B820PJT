@@ -6,6 +6,14 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const CHUNK = 500;
+const PAGE = 1000;
+
+interface ChangeGroup {
+  operator: string;
+  from: string | null; // 기존 예정일 (YYYY-MM-DD) | null=미정
+  to: string | null; // 변경 예정일
+  count: number;
+}
 
 // POST /api/import/schedule  (multipart/form-data: file=수정한 진행현황 xlsx)
 //   차량리스트 시트의 설치 예정일(I열)·시범설치를 vehicles에 반영(upsert).
@@ -36,6 +44,47 @@ export async function POST(req: NextRequest) {
   }
 
   const supabase = createServiceClient();
+
+  // 1) 변경 비교용으로 반영 전 현재 예정일을 먼저 읽어둔다 (plate→예정일).
+  const before = new Map<string, string | null>();
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await supabase
+      .from("vehicles")
+      .select("plate, planned_date")
+      .range(from, from + PAGE - 1);
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+    if (!data || data.length === 0) break;
+    for (const v of data) {
+      before.set(v.plate, v.planned_date ? String(v.planned_date).slice(0, 10) : null);
+    }
+    if (data.length < PAGE) break;
+  }
+
+  // 2) 변경 내역 집계: 예정일이 바뀐 차량을 운수사·(기존→변경) 날짜로 묶는다.
+  const groupMap = new Map<string, ChangeGroup>();
+  let added = 0; // 기존에 없던 신규 차량
+  let changedCount = 0;
+  for (const r of parsed.rows) {
+    if (!before.has(r.plate)) {
+      added++;
+      continue;
+    }
+    const from = before.get(r.plate) ?? null;
+    const to = r.planned_date;
+    if (from === to) continue; // 변경 없음
+    changedCount++;
+    const key = `${r.operator}|${from}|${to}`;
+    const g = groupMap.get(key) ?? { operator: r.operator, from, to, count: 0 };
+    g.count++;
+    groupMap.set(key, g);
+  }
+  const changes = [...groupMap.values()].sort(
+    (a, b) => b.count - a.count || a.operator.localeCompare(b.operator),
+  );
+
+  // 3) 실제 반영(upsert).
   let done = 0;
   for (let i = 0; i < parsed.rows.length; i += CHUNK) {
     const chunk = parsed.rows.slice(i, i + CHUNK);
@@ -52,5 +101,8 @@ export async function POST(req: NextRequest) {
     withDate,
     pilot: parsed.pilotCount,
     skipped: parsed.skipped,
+    added,
+    changedCount,
+    changes,
   });
 }

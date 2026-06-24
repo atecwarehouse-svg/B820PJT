@@ -3,11 +3,28 @@
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
+interface ChangeGroup {
+  operator: string;
+  from: string | null;
+  to: string | null;
+  count: number;
+}
+
 interface UploadResult {
   updated: number;
   withDate: number;
   pilot: number;
   skipped: number;
+  added: number;
+  changedCount: number;
+  changes: ChangeGroup[];
+}
+
+// "2026-07-10" → "7/10", null → "미정"
+function fmtDate(d: string | null): string {
+  if (!d) return "미정";
+  const [, m, day] = d.split("-");
+  return `${Number(m)}/${Number(day)}`;
 }
 
 // '설치일정 변경 업로드' 버튼 → 팝업(모달).
@@ -86,17 +103,50 @@ export default function ScheduleUploadModal() {
             <div className="p-4">
               {result ? (
                 // 완료 화면
-                <div className="text-center">
-                  <div className="text-3xl">✅</div>
-                  <p className="mt-2 text-base font-bold text-gray-800">반영 완료</p>
-                  <p className="mt-1 text-xs text-gray-500">
-                    차량 {result.updated.toLocaleString()}대 반영 · 예정일 있음{" "}
-                    {result.withDate.toLocaleString()}대
-                    {result.pilot > 0 && <> · 시범설치 {result.pilot.toLocaleString()}대</>}
-                    {result.skipped > 0 && (
-                      <> · 빈칸 제외 {result.skipped.toLocaleString()}행</>
-                    )}
-                  </p>
+                <div>
+                  <div className="text-center">
+                    <div className="text-3xl">✅</div>
+                    <p className="mt-2 text-base font-bold text-gray-800">반영 완료</p>
+                    <p className="mt-1 text-xs text-gray-500">
+                      차량 {result.updated.toLocaleString()}대 반영 · 일정 변경{" "}
+                      <b className="text-blue-700">{result.changedCount.toLocaleString()}대</b>
+                      {result.added > 0 && <> · 신규 {result.added.toLocaleString()}대</>}
+                    </p>
+                  </div>
+
+                  {/* 변경 내역: 운수사 N대 · 기존 → 변경 */}
+                  {result.changedCount > 0 ? (
+                    <div className="mt-3 max-h-60 overflow-y-auto rounded-lg border border-gray-100">
+                      <p className="border-b border-gray-100 bg-gray-50 px-3 py-1.5 text-[11px] font-semibold text-gray-500">
+                        일정 변경 내역
+                      </p>
+                      <ul className="divide-y divide-gray-50">
+                        {result.changes.map((c, i) => (
+                          <li
+                            key={i}
+                            className="flex items-center justify-between gap-2 px-3 py-2 text-xs"
+                          >
+                            <span className="min-w-0 truncate font-medium text-gray-700">
+                              {c.operator}
+                              <span className="ml-1 font-normal text-gray-400">
+                                {c.count}대
+                              </span>
+                            </span>
+                            <span className="shrink-0 tabular-nums text-gray-500">
+                              {fmtDate(c.from)}
+                              <span className="mx-1 text-blue-500">→</span>
+                              <b className="text-blue-700">{fmtDate(c.to)}</b>
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : (
+                    <p className="mt-3 rounded-lg bg-gray-50 py-3 text-center text-xs text-gray-400">
+                      변경된 일정이 없습니다.
+                    </p>
+                  )}
+
                   <button
                     onClick={close}
                     className="mt-4 w-full rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700"
