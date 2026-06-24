@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
-import { uploadPhoto, deletePhoto, downloadPhoto } from "@/lib/gdrive";
+import { uploadPhoto, deletePhoto } from "@/lib/gdrive";
 import { publicPhotoUrl } from "@/lib/photo-url";
-import { checkPhotoRotation, comparePhotoToReference } from "@/lib/gemini";
+import { checkPhotoRotation } from "@/lib/gemini";
 import { notifyInstallProgress, originFromRequest } from "@/lib/install-status";
 
 export const runtime = "nodejs";
@@ -91,27 +91,6 @@ export async function POST(req: NextRequest) {
       { error: "사진이 회전되어 있습니다. 똑바로 다시 촬영해주세요." },
       { status: 422 },
     );
-  }
-
-  // 0-b) 기준사진 비교 (있을 때만): 칸의 기준사진과 다른 대상이면 차단
-  const { data: ref } = await supabase
-    .from("reference_photos")
-    .select("storage_path")
-    .eq("slot_key", slotKey)
-    .maybeSingle();
-  if (ref?.storage_path) {
-    try {
-      const refBuf = await downloadPhoto(ref.storage_path);
-      const cmp = await comparePhotoToReference(buffer, refBuf, label);
-      if (!cmp.match) {
-        return NextResponse.json(
-          { error: "기준 사진과 다른 사진 같습니다. 올바른 칸·대상인지 확인 후 다시 촬영해주세요." },
-          { status: 422 },
-        );
-      }
-    } catch {
-      // 기준사진 다운로드 실패 등은 통과(fail-open)
-    }
   }
 
   // 파일명: 설치전/후_차량번호_칸라벨.jpg (라벨 없으면 슬롯키)
