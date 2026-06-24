@@ -64,14 +64,17 @@ export async function sendProgressCard(d: ProgressCardData): Promise<void> {
 
 // 설치 완료(차량 1대 '저장') 시 별도 채팅방으로 보내는 카드.
 // 웹후크: TEAMS_COMPLETE_WEBHOOK_URL (진행현황 카드와 다른 채팅방). 미설정 시 조용히 건너뜀.
+// photos: 공개 HTTPS 절대 URL(앱 /api/photo/...) — Teams가 직접 받아 렌더링(데이터URI 미지원).
 export async function sendCompletionCard(d: {
   operator: string;
   plate: string;
   route?: string;
+  photos?: { url: string; label: string }[];
 }): Promise<void> {
   const url = process.env.TEAMS_COMPLETE_WEBHOOK_URL;
   if (!url) return; // 웹후크 미설정 → 발송 생략
 
+  const photos = d.photos ?? [];
   const card = {
     type: "message",
     attachments: [
@@ -105,6 +108,26 @@ export async function sendCompletionCard(d: {
                     isSubtle: true,
                     spacing: "None",
                     wrap: true,
+                  },
+                ]
+              : []),
+            ...(photos.length
+              ? [
+                  {
+                    type: "TextBlock",
+                    text: `사진 ${photos.length}장`,
+                    isSubtle: true,
+                    spacing: "Small",
+                    wrap: true,
+                  },
+                  {
+                    type: "ImageSet",
+                    imageSize: "medium",
+                    images: photos.map((p) => ({
+                      type: "Image",
+                      url: p.url,
+                      altText: p.label,
+                    })),
                   },
                 ]
               : []),

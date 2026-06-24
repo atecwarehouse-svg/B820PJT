@@ -77,10 +77,32 @@ export async function POST(req: NextRequest) {
   // 실패해도 저장 자체는 성공으로 처리(best-effort).
   if (body.saved && !existing?.saved_at) {
     try {
+      // 앱 공개 주소(Teams가 사진을 받아갈 절대 URL용) — 요청 헤더에서 추출
+      const host = req.headers.get("x-forwarded-host") ?? req.headers.get("host");
+      const proto = req.headers.get("x-forwarded-proto") ?? "https";
+      const origin = host ? `${proto}://${host}` : req.nextUrl.origin;
+
+      // 이 차량 사진을 설치전→설치후, 순서대로 정렬해 절대 URL 구성
+      const { data: photoRows } = await supabase
+        .from("photos")
+        .select("storage_path, label, section, sort_order")
+        .eq("plate", plate);
+      const photos = (photoRows ?? [])
+        .sort((a, b) => {
+          if (a.section !== b.section) return a.section === "before" ? -1 : 1;
+          return (a.sort_order ?? 0) - (b.sort_order ?? 0);
+        })
+        .filter((p) => p.storage_path)
+        .map((p) => ({
+          url: `${origin}/api/photo/${encodeURIComponent(p.storage_path)}`,
+          label: (p.label as string) ?? "",
+        }));
+
       await sendCompletionCard({
         operator: (data.operator as string) ?? vehicle.operator ?? "",
         plate,
         route: (data.route as string) ?? vehicle.route ?? "",
+        photos,
       });
     } catch {
       // 완료 카드 발송 실패는 무시 (저장은 유지)
