@@ -3,6 +3,8 @@ import { createServiceClient } from "@/lib/supabase/server";
 import { uploadPhoto, deletePhoto, downloadPhoto } from "@/lib/gdrive";
 import { publicPhotoUrl } from "@/lib/photo-url";
 import { checkPhotoRotation, comparePhotoToReference } from "@/lib/gemini";
+import { sendStartCard, sendCompletionCard } from "@/lib/teams";
+import { BEFORE_SLOTS, DEFAULT_PHOTO_COUNT } from "@/lib/slots";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -63,13 +65,14 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // 폴더 구조(운수사/차량번호)를 위해 운수사명을 가져온다.
+  // 폴더 구조(운수사/차량번호) + 팀즈 카드용 운수사/노선을 가져온다.
   const { data: rec } = await supabase
     .from("records")
-    .select("operator")
+    .select("operator, route")
     .eq("plate", plate)
     .maybeSingle();
   const operator = (rec?.operator as string) ?? "";
+  const route = (rec?.route as string) ?? "";
 
   // 같은 칸을 다시 찍으면 기존 Drive 파일 내용을 갱신(파일 ID 유지).
   const { data: existing } = await supabase
@@ -163,6 +166,52 @@ export async function POST(req: NextRequest) {
   // 3) DB 커밋 성공 후에야 옛 파일 삭제 (수정인 경우, best-effort)
   if (existing?.storage_path && existing.storage_path !== fileId) {
     await deletePhoto(existing.storage_path).catch(() => {});
+  }
+
+  // 4) 팀즈 알림 — '새 사진'(재촬영 아님)이 임계값을 넘기는 순간에만 발송.
+  //    설치전 6장 완료 → '설치 시작', 전체 13장 완료 → '설치 완료'(사진 첨부).
+  //    best-effort: 발송 실패해도 업로드는 성공으로 처리.
+  if (!existing) {
+    try {
+      const beforeTarget = BEFORE_SLOTS.length; // 6
+      const [{ count: totalCount }, { count: beforeCount }] = await Promise.all([
+        supabase.from("photos").select("plate", { count: "exact", head: true }).eq("plate", plate),
+        supabase
+          .from("photos")
+          .select("plate", { count: "exact", head: true })
+          .eq("plate", plate)
+          .eq("section", "before"),
+      ]);
+
+      // 설치 시작: 설치전 사진이 막 6장이 된 경우
+      if (section === "before" && beforeCount === beforeTarget) {
+        await sendStartCard({ operator, plate, route });
+      }
+
+      // 설치 완료: 전체 사진이 막 13장이 된 경우 → 사진 첨부
+      if (totalCount === DEFAULT_PHOTO_COUNT) {
+        const host = req.headers.get("x-forwarded-host") ?? req.headers.get("host");
+        const proto = req.headers.get("x-forwarded-proto") ?? "https";
+        const origin = host ? `${proto}://${host}` : req.nextUrl.origin;
+        const { data: photoRows } = await supabase
+          .from("photos")
+          .select("storage_path, label, section, sort_order")
+          .eq("plate", plate);
+        const photos = (photoRows ?? [])
+          .sort((a, b) => {
+            if (a.section !== b.section) return a.section === "before" ? -1 : 1;
+            return (a.sort_order ?? 0) - (b.sort_order ?? 0);
+          })
+          .filter((p) => p.storage_path)
+          .map((p) => ({
+            url: `${origin}/api/photo/${encodeURIComponent(p.storage_path)}`,
+            label: (p.label as string) ?? "",
+          }));
+        await sendCompletionCard({ operator, plate, route, photos });
+      }
+    } catch {
+      // 알림 실패는 무시 (업로드 유지)
+    }
   }
 
   return NextResponse.json({
