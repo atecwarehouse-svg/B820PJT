@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { revalidateTag } from "next/cache";
 import { createServiceClient } from "@/lib/supabase/server";
 import { deletePhoto } from "@/lib/gdrive";
 import { isAdmin } from "@/lib/admin-auth";
@@ -47,6 +48,9 @@ export async function DELETE(req: NextRequest) {
     await supabase.from("vehicles").delete().eq("plate", plate);
     removedVehicle = true;
   }
+
+  // 대시보드 집계 캐시 즉시 무효화 (진행중/설치대상에 삭제 차량이 남지 않도록)
+  revalidateTag("dashboard");
 
   return NextResponse.json({ ok: true, deletedPhotos, removedVehicle });
 }

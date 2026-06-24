@@ -13,9 +13,11 @@ import TeamsShareButton from "@/components/TeamsShareButton";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// 집계 결과를 60초 캐시 — 실시간일 필요 없어 매 접속마다 재계산하지 않음
+// 집계 결과를 60초 캐시 — 실시간일 필요 없어 매 접속마다 재계산하지 않음.
+// tags:["dashboard"] → 관리자 삭제 등에서 revalidateTag로 즉시 갱신 가능.
 const getStats = unstable_cache(() => loadStats(), ["dashboard-stats"], {
   revalidate: 60,
+  tags: ["dashboard"],
 });
 
 // 설치 진행현황(저장 기준). 실패해도 페이지 전체가 죽지 않게 null 폴백.
@@ -28,7 +30,7 @@ const getInstall = unstable_cache(
     }
   },
   ["dashboard-install"],
-  { revalidate: 60 },
+  { revalidate: 60, tags: ["dashboard"] },
 );
 
 // 설치 일정 — vehicles.planned_date/is_pilot 컬럼 필요(마이그레이션·임포트 전이면 null).
@@ -41,7 +43,7 @@ const getSchedule = unstable_cache(
     }
   },
   ["dashboard-schedule"],
-  { revalidate: 60 },
+  { revalidate: 60, tags: ["dashboard"] },
 );
 
 // 진행중(사진 미완료) 차량 목록 — KPI 진행중 팝업용.
@@ -54,7 +56,7 @@ const getInProgress = unstable_cache(
     }
   },
   ["dashboard-inprogress"],
-  { revalidate: 60 },
+  { revalidate: 60, tags: ["dashboard"] },
 );
 
 export default async function DashboardPage() {

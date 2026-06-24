@@ -99,7 +99,8 @@ export async function loadStats(): Promise<DashboardStats> {
   return (await loadFromView(supabase, target)) ?? (await loadByScan(supabase, target));
 }
 
-// 진행중 = 시작했으나(기록 있음) 사진 13장 미만인 차량. 사진 0장(촬영 중 이탈)도 포함.
+// 진행중 = 사진을 1장 이상 올렸고 아직 13장 미만인 차량.
+// (사진 0장은 진행중 아님 → 미설치로 집계. 삭제된 차량도 자연히 미설치가 됨)
 export interface InProgressVehicle {
   plate: string;
   operator: string;
@@ -123,10 +124,13 @@ export async function loadInProgressList(): Promise<InProgressVehicle[]> {
   const count = new Map<string, number>();
   for (const p of photoRows) count.set(p.plate, (count.get(p.plate) ?? 0) + 1);
 
-  // 시작됐으나 13장 미만 = 진행중 (사진 0장으로 중단된 차량 포함)
+  // 사진 1장 이상 & 13장 미만 = 진행중 (사진 0장은 제외 → 미설치로 집계)
   const candidates = recRows
     .map((r) => r.plate)
-    .filter((plate) => (count.get(plate) ?? 0) < target);
+    .filter((plate) => {
+      const c = count.get(plate) ?? 0;
+      return c >= 1 && c < target;
+    });
   if (candidates.length === 0) return [];
 
   // 후보 차량의 운수사/노선 조회 (chunk로 in)
