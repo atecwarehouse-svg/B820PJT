@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
 import { uploadPhoto, deletePhoto } from "@/lib/gdrive";
 import { publicPhotoUrl } from "@/lib/photo-url";
+import { checkPhotoRotation } from "@/lib/gemini";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -79,6 +80,15 @@ export async function POST(req: NextRequest) {
     .maybeSingle();
 
   const arrayBuffer = await file.arrayBuffer();
+
+  // 0) 회전 검사 (Gemini): 돌아간 사진이면 Drive/DB 저장 전에 차단
+  const rot = await checkPhotoRotation(Buffer.from(arrayBuffer));
+  if (rot.rotated) {
+    return NextResponse.json(
+      { error: "사진이 회전되어 있습니다. 똑바로 다시 촬영해주세요." },
+      { status: 422 },
+    );
+  }
 
   // 파일명: 설치전/후_차량번호_칸라벨.jpg (라벨 없으면 슬롯키)
   const sectionKo = section === "before" ? "설치전" : "설치후";
