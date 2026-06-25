@@ -9,6 +9,7 @@ import InstallDateSearch from "@/components/InstallDateSearch";
 import DailyReportModal from "@/components/DailyReportModal";
 import KpiCards from "@/components/KpiCards";
 import TeamsShareButton from "@/components/TeamsShareButton";
+import RefreshButton from "@/components/RefreshButton";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -66,6 +67,14 @@ export default async function DashboardPage() {
     getSchedule(),
     getInProgress(),
   ]);
+  // 렌더 시각(KST) — 새로고침할 때마다 갱신되어 데이터 최신 여부를 바로 알 수 있다.
+  const updatedAt = new Intl.DateTimeFormat("ko-KR", {
+    timeZone: "Asia/Seoul",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  }).format(new Date());
   const ipPct = ip && ip.totalVehicles ? (ip.complete / ip.totalVehicles) * 100 : 0;
   // 진행중 = 시작(기록 있음)했으나 13장 미만 차량(사진 0장 중단 포함 · 팝업 목록과 일치)
   const inProgressCount = inProgressList.length;
@@ -81,6 +90,12 @@ export default async function DashboardPage() {
         <Link href="/list" className="text-sm text-blue-600">
           저장 목록 →
         </Link>
+      </div>
+
+      {/* 새로고침 + 갱신 시각 — 홈 화면 앱에는 브라우저 새로고침이 없어 입력 반영 확인용 */}
+      <div className="mb-4 flex items-center justify-center gap-2">
+        <RefreshButton />
+        <span className="text-xs text-gray-400">갱신 {updatedAt}</span>
       </div>
 
       {/* ===== 설치 진행현황 (완료 = '저장' 기준) — 최상단 + 버튼 ===== */}
