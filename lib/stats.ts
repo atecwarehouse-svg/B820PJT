@@ -202,7 +202,7 @@ export interface CompletedVehicle {
   plate: string;
   operator: string;
   route: string;
-  workDate: string; // 완료 업무일 (YYYY-MM-DD, 20:00~익일 07:00 기준)
+  workDate: string; // 완료 업무일 (YYYY-MM-DD, 20:00~익일 12:00 기준)
 }
 
 export interface InstallProgress {
@@ -224,7 +224,7 @@ export async function loadInstallProgress(): Promise<InstallProgress> {
     fetchCompletedMap(supabase),
   ]);
 
-  const today = workDateString(new Date()); // 현재 업무일(20:00~익일 07:00 기준)
+  const today = workDateString(new Date()); // 현재 업무일(20:00~익일 12:00 기준)
   let complete = 0;
   let todayComplete = 0;
   const byGroup = new Map<string, InstallGroup>();

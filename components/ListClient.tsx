@@ -10,7 +10,7 @@ export interface ListItem {
   operator: string;
   route: string;
   installDate: string;
-  savedDate: string; // 완료 업무일 (20:00~익일 07:00 기준)
+  savedDate: string; // 완료 업무일 (20:00~익일 12:00 기준)
   year: string;
   model: string;
   photoCount: number;

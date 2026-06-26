@@ -83,6 +83,7 @@ export async function fillProgressXlsx(
   templateBuffer: Buffer,
   completed: Map<string, CompletedInfo>,
   asOfSerial?: number, // 진행현황 시트 기준일(A10:C10) — 다운로드 시점 업무일
+  plannedQty?: number, // 진행현황 시트 계획수량(A6:B6 병합) — 다운로드 전 입력값
 ): Promise<FillResult> {
   const zip = await JSZip.loadAsync(templateBuffer);
 
@@ -190,15 +191,27 @@ export async function fillProgressXlsx(
     zip.file(SCHEDULE_SHEET, schedXml);
   }
 
-  // 3-c) 진행현황 시트 기준일(A10:C10 병합셀) → 다운로드 시점 업무일로 갱신
-  if (typeof asOfSerial === "number" && isFinite(asOfSerial)) {
+  // 3-c) 진행현황 시트 기준일(A10:C10 병합셀)·계획수량(A6:B6 병합셀) 갱신
+  //  - A10: 다운로드 시점 업무일
+  //  - A6: 다운로드 전 입력한 계획수량 (D6 달성률 = C6/A6 가 자동 연동)
+  const needAsOf = typeof asOfSerial === "number" && isFinite(asOfSerial);
+  const needPlan = typeof plannedQty === "number" && isFinite(plannedQty);
+  if (needAsOf || needPlan) {
     const pFile = zip.file(PROGRESS_SHEET);
     if (pFile) {
       let pXml = await pFile.async("string");
-      pXml = pXml.replace(
-        /(<c r="A10"[^>]*>)<v>[\d.]+<\/v>(<\/c>)/,
-        (_m, pre: string, post: string) => `${pre}<v>${asOfSerial}</v>${post}`,
-      );
+      if (needAsOf) {
+        pXml = pXml.replace(
+          /(<c r="A10"[^>]*>)<v>[\d.]+<\/v>(<\/c>)/,
+          (_m, pre: string, post: string) => `${pre}<v>${asOfSerial}</v>${post}`,
+        );
+      }
+      if (needPlan) {
+        pXml = pXml.replace(
+          /(<c r="A6"[^>]*>)<v>[\d.]+<\/v>(<\/c>)/,
+          (_m, pre: string, post: string) => `${pre}<v>${plannedQty}</v>${post}`,
+        );
+      }
       zip.file(PROGRESS_SHEET, pXml);
     }
   }

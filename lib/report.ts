@@ -1,5 +1,5 @@
 // 금일 설치 완료 리포트(카드) 생성 — 화면 미리보기와 메일 발송이 공유하는 순수 로직.
-// 완료 = 저장(saved_at), 날짜는 업무일(20:00~익일 07:00) 기준.
+// 완료 = 저장(saved_at), 날짜는 업무일(20:00~익일 12:00) 기준.
 
 export interface ReportInput {
   date: string; // 업무일 YYYY-MM-DD

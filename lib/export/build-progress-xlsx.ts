@@ -9,7 +9,7 @@ import { workDateExcelSerial } from "@/lib/work-day";
 const TEMPLATE_BUCKET = process.env.TEMPLATE_BUCKET ?? "templates";
 const TEMPLATE_OBJECT = process.env.TEMPLATE_OBJECT ?? "progress-template.xlsx";
 
-export async function buildProgressXlsx(): Promise<{
+export async function buildProgressXlsx(plannedQty?: number): Promise<{
   buffer: Buffer;
   filename: string;
   filled: number;
@@ -54,7 +54,12 @@ export async function buildProgressXlsx(): Promise<{
 
   // 진행현황 기준일(A10) = 생성 시점 업무일
   const asOfSerial = workDateExcelSerial(new Date());
-  const { buffer, filled, added } = await fillProgressXlsx(template, completed, asOfSerial);
+  const { buffer, filled, added } = await fillProgressXlsx(
+    template,
+    completed,
+    asOfSerial,
+    plannedQty,
+  );
 
   const today = new Intl.DateTimeFormat("en-CA", {
     timeZone: "Asia/Seoul",

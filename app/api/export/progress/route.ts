@@ -5,13 +5,18 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-// GET /api/export/progress
+// GET /api/export/progress?plan=<계획수량>
 // 완료(저장)된 차량을 양식 차량리스트에 채운 xlsx 다운로드.
-export async function GET() {
+// plan(계획수량)이 있으면 진행현황 시트 A6(계획수량)에 채워 내려준다.
+export async function GET(req: Request) {
+  const planRaw = new URL(req.url).searchParams.get("plan");
+  const plan = planRaw != null && planRaw.trim() !== "" ? Number(planRaw) : undefined;
+  const plannedQty = plan != null && Number.isFinite(plan) && plan >= 0 ? plan : undefined;
+
   let buffer: Buffer;
   let filename: string;
   try {
-    const r = await buildProgressXlsx();
+    const r = await buildProgressXlsx(plannedQty);
     buffer = r.buffer;
     filename = r.filename;
     console.log(`[export/progress] 기존 ${r.filled}대 채움, 증차 ${r.added}대 추가`);

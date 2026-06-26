@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import type { CompletedVehicle } from "@/lib/stats";
 
-// 진행현황 — 업무일(20:00~익일 07:00)로 완료 차량을 날짜 검색.
+// 진행현황 — 업무일(20:00~익일 12:00)로 완료 차량을 날짜 검색.
 export default function InstallDateSearch({
   completedList,
   today,
@@ -52,7 +52,7 @@ export default function InstallDateSearch({
         </span>
       </div>
       <p className="mt-1 text-[11px] text-gray-400">
-        작업 시간(20:00~익일 07:00) 기준 — 새벽 완료는 전날로 집계됩니다.
+        작업 시간(20:00~익일 12:00) 기준 — 익일 낮 12시 이전 완료는 전날로 집계됩니다.
       </p>
 
       {!date ? (

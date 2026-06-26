@@ -19,7 +19,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
-  const workDay = workDateString(new Date()); // 현재 업무일(02:00이면 전날)
+  const workDay = workDateString(new Date()); // 현재 업무일(익일 12:00 이전이면 전날)
 
   if (workDay < START_DATE) {
     return NextResponse.json({ skipped: true, reason: `설치 시작(${START_DATE}) 이전`, workDay });

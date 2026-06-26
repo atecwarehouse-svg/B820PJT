@@ -2,6 +2,7 @@ import Link from "next/link";
 import { unstable_cache } from "next/cache";
 import { loadStats, loadInstallProgress, loadScheduleStats, loadInProgressList } from "@/lib/stats";
 import type { InstallProgress, ScheduleStats, InProgressVehicle } from "@/lib/stats";
+import { workDateString } from "@/lib/work-day";
 import ProgressDownloadButton from "@/components/ProgressDownloadButton";
 import ScheduleUploadModal from "@/components/ScheduleUploadModal";
 import ScheduleChart from "@/components/ScheduleChart";
@@ -80,6 +81,13 @@ export default async function DashboardPage() {
   const inProgressCount = inProgressList.length;
   const remainCount = Math.max(0, s.totalVehicles - s.complete - inProgressCount);
 
+  // 진행현황 다운로드 기본 계획수량 = 설치일정상 '오늘(업무일)까지' 누적 계획 대수.
+  // 예정일(planned_date)에서 계산되므로 일정 업로드로 날짜가 바뀌면 자동 갱신된다.
+  const today = ip?.today ?? workDateString(new Date());
+  const defaultPlan = sch
+    ? sch.days.reduce((sum, d) => (d.date <= today ? sum + d.planned : sum), 0)
+    : 0;
+
   return (
     <main className="mx-auto max-w-3xl px-3 pb-16 pt-4">
       <div className="mb-4 flex items-center justify-between">
@@ -124,7 +132,7 @@ export default async function DashboardPage() {
               inProgress={inProgressCount}
             />
           )}
-          <ProgressDownloadButton />
+          <ProgressDownloadButton defaultPlan={defaultPlan} />
         </div>
       </div>
 
