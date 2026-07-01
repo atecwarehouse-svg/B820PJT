@@ -29,6 +29,7 @@ export default function SafetyManager({ sessions }: { sessions: PledgeSessionRow
 
   const [creating, setCreating] = useState(false);
   const [endingId, setEndingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [createdLink, setCreatedLink] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -95,6 +96,28 @@ export default function SafetyManager({ sessions }: { sessions: PledgeSessionRow
       alert(e instanceof Error ? e.message : "설치 종료 실패");
     } finally {
       setEndingId(null);
+    }
+  }
+
+  async function deleteSession(s: PledgeSessionRow) {
+    const password = window.prompt(
+      `서약서를 삭제하려면 관리자 비밀번호를 입력하세요.\n(${s.operator || "운수사 미지정"} · ${s.install_date} · 서명 ${s.signer_count}명 — 되돌릴 수 없음)`,
+    );
+    if (password == null || password === "") return; // 취소
+    setDeletingId(s.id);
+    try {
+      const res = await fetch("/api/safety/session", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sessionId: s.id, password }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "삭제 실패");
+      router.refresh();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "삭제 실패");
+    } finally {
+      setDeletingId(null);
     }
   }
 
@@ -227,6 +250,13 @@ export default function SafetyManager({ sessions }: { sessions: PledgeSessionRow
                       {endingId === s.id ? "종료 중…" : "설치 종료"}
                     </button>
                   )}
+                  <button
+                    onClick={() => deleteSession(s)}
+                    disabled={deletingId === s.id}
+                    className="shrink-0 rounded-lg border border-red-300 px-3 py-1.5 text-xs font-medium text-red-600 active:bg-red-50 disabled:opacity-50"
+                  >
+                    {deletingId === s.id ? "삭제 중…" : "삭제"}
+                  </button>
                 </div>
               </li>
             ))}

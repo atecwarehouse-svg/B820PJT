@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
+import { adminPassword } from "@/lib/admin-auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -47,4 +48,30 @@ export async function POST(req: NextRequest) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ id: data.id });
+}
+
+// DELETE /api/safety/session  body: { sessionId, password }
+// 관리자 비밀번호가 맞아야 세션(및 서명 전체, FK cascade)을 삭제한다.
+export async function DELETE(req: NextRequest) {
+  const { sessionId, password } = (await req.json().catch(() => ({}))) as {
+    sessionId?: string;
+    password?: string;
+  };
+  if (!password || password !== adminPassword()) {
+    return NextResponse.json(
+      { error: "관리자 비밀번호가 올바르지 않습니다." },
+      { status: 401 },
+    );
+  }
+  const id = (sessionId ?? "").trim();
+  if (!id) {
+    return NextResponse.json({ error: "세션 정보가 없습니다." }, { status: 400 });
+  }
+
+  const supabase = createServiceClient();
+  // pledge_signatures 는 session_id on delete cascade 라 함께 삭제됨.
+  const { error } = await supabase.from("pledge_sessions").delete().eq("id", id);
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  return NextResponse.json({ ok: true });
 }
