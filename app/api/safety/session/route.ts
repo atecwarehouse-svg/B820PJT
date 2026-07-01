@@ -8,6 +8,7 @@ export const dynamic = "force-dynamic";
 
 interface CreateBody {
   manager_name?: string;
+  manager_sig?: string; // 안전관리자 서명 PNG data URL
   operator?: string;
   location?: string;
   install_date?: string; // YYYY-MM-DD
@@ -27,11 +28,19 @@ export async function POST(req: NextRequest) {
       { status: 400 },
     );
   }
+  const managerSig = body.manager_sig ?? "";
+  if (!managerSig.startsWith("data:image/")) {
+    return NextResponse.json(
+      { error: "안전관리자 서명을 입력하세요." },
+      { status: 400 },
+    );
+  }
 
   const supabase = createServiceClient();
 
   const payload: Record<string, unknown> = {
     manager_name: manager,
+    manager_sig: managerSig,
     operator: body.operator?.trim() || null,
     location: body.location?.trim() || null,
     quantity: body.quantity?.trim() || null,

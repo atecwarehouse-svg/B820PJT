@@ -8,6 +8,7 @@ import { PRETENDARD_WOFF2_BASE64 } from "./pretendard-font";
 
 export interface PledgeSessionData {
   manager_name: string;
+  manager_sig: string | null; // 안전관리자 서명 PNG data URL
   operator: string | null;
   location: string | null;
   install_date: string;
@@ -61,6 +62,7 @@ const CSS = `
   table.info th, table.info td { border:1px solid #000; padding:5px 8px; font-size:12px; }
   table.info th { background:#f2f2f2; width:24%; text-align:center; white-space:nowrap; }
   table.info td { text-align:left; }
+  .mgr-sig { height:12mm; max-width:45mm; object-fit:contain; vertical-align:middle; }
   .edu-head { font-size:13px; font-weight:700; margin:10px 0 6px; }
   ol.edu { margin:0; padding-left:20px; }
   ol.edu li { font-size:11.5px; line-height:1.7; margin-bottom:3px; }
@@ -92,7 +94,11 @@ function page1(s: PledgeSessionData): string {
       <tr><th>수      량</th><td>${esc(s.quantity)}</td><th>일      자</th><td>${esc(s.install_date)}</td></tr>
       <tr><th>운  수  사</th><td>${esc(s.operator)}</td><th>장      소</th><td>${esc(s.location)}</td></tr>
       <tr><th>안전관리 담당자</th><td colspan="3">${esc(s.manager_name)}</td></tr>
-      <tr><th>회 사 명</th><td>${esc(INSTALLER_COMPANY)}</td><th>이 름 / 서 명</th><td>${esc(s.manager_name)}</td></tr>
+      <tr><th>회 사 명</th><td>${esc(INSTALLER_COMPANY)}</td><th>이 름 / 서 명</th><td>${esc(s.manager_name)} ${
+        s.manager_sig
+          ? `<img class="mgr-sig" src="${esc(s.manager_sig)}" alt="서명" />`
+          : ""
+      }</td></tr>
     </tbody></table>`;
 
   const edu = `

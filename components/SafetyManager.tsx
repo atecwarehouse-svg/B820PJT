@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { downloadUrl } from "@/lib/download";
+import SignaturePad, { type SignaturePadHandle } from "./SignaturePad";
 
 export interface PledgeSessionRow {
   id: string;
@@ -18,6 +19,7 @@ export interface PledgeSessionRow {
 // 안전관리자용 화면: 세션(공유 링크) 생성 + 기존 세션 목록/다운로드.
 export default function SafetyManager({ sessions }: { sessions: PledgeSessionRow[] }) {
   const router = useRouter();
+  const sigRef = useRef<SignaturePadHandle>(null);
   const today = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
   const [manager, setManager] = useState("");
@@ -39,6 +41,11 @@ export default function SafetyManager({ sessions }: { sessions: PledgeSessionRow
       setError("안전관리자 이름을 입력하세요.");
       return;
     }
+    const managerSig = sigRef.current?.getDataUrl();
+    if (!managerSig) {
+      setError("안전관리자 서명을 입력하세요.");
+      return;
+    }
     setCreating(true);
     setError(null);
     try {
@@ -47,6 +54,7 @@ export default function SafetyManager({ sessions }: { sessions: PledgeSessionRow
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           manager_name: manager,
+          manager_sig: managerSig,
           operator,
           location,
           install_date: installDate,
@@ -59,6 +67,7 @@ export default function SafetyManager({ sessions }: { sessions: PledgeSessionRow
       const link = `${window.location.origin}/safety/${json.id}`;
       setCreatedLink(link);
       setCopied(false);
+      sigRef.current?.clear();
       router.refresh(); // 목록 갱신
     } catch (e) {
       setError(e instanceof Error ? e.message : "생성 실패");
@@ -163,6 +172,15 @@ export default function SafetyManager({ sessions }: { sessions: PledgeSessionRow
         <p className="mt-2 text-[11px] text-gray-400">
           ※ 종료시간은 아래 목록에서 <b>설치 종료</b>를 누를 때 자동 기록되며, 그때부터 작업자가 설치 후 서명을 할 수 있습니다.
         </p>
+
+        <div className="mt-3">
+          <span className="text-[11px] font-medium text-gray-500">
+            안전관리자 서명 <span className="text-red-500">*</span>
+          </span>
+          <div className="mt-1">
+            <SignaturePad ref={sigRef} height={140} />
+          </div>
+        </div>
 
         {error && <p className="mt-2 text-xs text-red-600">{error}</p>}
 

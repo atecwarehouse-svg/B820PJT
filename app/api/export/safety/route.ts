@@ -26,7 +26,7 @@ export async function GET(req: Request) {
   const { data: session, error: sErr } = await supabase
     .from("pledge_sessions")
     .select(
-      "manager_name, operator, location, install_date, work_content, quantity, start_time, end_time, drive_file_id",
+      "manager_name, manager_sig, operator, location, install_date, work_content, quantity, start_time, end_time, drive_file_id",
     )
     .eq("id", sessionId)
     .maybeSingle();

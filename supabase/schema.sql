@@ -76,6 +76,7 @@ create table if not exists reference_photos (
 create table if not exists pledge_sessions (
   id            uuid primary key default gen_random_uuid(),
   manager_name  text not null,                 -- 안전관리 담당자 이름
+  manager_sig   text,                          -- 안전관리자 서명 PNG data URL (생성 시 필수)
   operator      text,                          -- 운수사명
   location      text,                          -- 장소
   install_date  date not null default current_date,
@@ -90,6 +91,7 @@ create table if not exists pledge_sessions (
 
 alter table pledge_sessions add column if not exists ended_at timestamptz;
 alter table pledge_sessions add column if not exists drive_file_id text;
+alter table pledge_sessions add column if not exists manager_sig text;
 
 create index if not exists pledge_sessions_created_idx on pledge_sessions (created_at desc);
 
