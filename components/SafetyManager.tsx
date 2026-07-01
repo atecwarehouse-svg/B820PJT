@@ -79,15 +79,16 @@ export default function SafetyManager({ sessions }: { sessions: PledgeSessionRow
   }
 
   async function endInstall(id: string) {
-    if (!window.confirm("설치를 종료할까요?\n종료 후부터 작업자가 '설치 후' 서명을 할 수 있습니다.")) {
-      return;
-    }
+    const password = window.prompt(
+      "설치를 종료하려면 관리자 비밀번호를 입력하세요.\n종료 후부터 작업자가 '설치 후' 서명을 할 수 있습니다.",
+    );
+    if (password == null || password === "") return; // 취소
     setEndingId(id);
     try {
       const res = await fetch("/api/safety/session/end", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sessionId: id }),
+        body: JSON.stringify({ sessionId: id, password }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "설치 종료 실패");

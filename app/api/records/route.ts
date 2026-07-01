@@ -12,6 +12,7 @@ interface UpsertBody {
   route?: string | null; // 노선 (수정 가능)
   year?: string | null;
   model?: string | null;
+  team?: string | null; // 설치 팀명
   custom_slots?: CustomSlot[];
   na_slots?: string[]; // 단말기 없음 표시 슬롯키
   saved?: boolean; // true면 '저장'(목록 등록) 처리 → saved_at = now()
@@ -24,6 +25,12 @@ export async function POST(req: NextRequest) {
   const plate = (body.plate ?? "").trim();
   if (!plate) {
     return NextResponse.json({ error: "차량번호가 필요합니다." }, { status: 400 });
+  }
+
+  // 최종 '저장'(목록 등록) 시 팀명 필수
+  const team = (body.team ?? "").trim();
+  if (body.saved && !team) {
+    return NextResponse.json({ error: "팀명을 입력해야 저장할 수 있습니다." }, { status: 400 });
   }
 
   const supabase = createServiceClient();
@@ -59,6 +66,9 @@ export async function POST(req: NextRequest) {
     custom_slots: body.custom_slots ?? [],
     updated_at: new Date().toISOString(),
   };
+  if (body.team !== undefined) {
+    payload.team = team || null;
+  }
   if (body.na_slots !== undefined) {
     payload.na_slots = body.na_slots;
   }

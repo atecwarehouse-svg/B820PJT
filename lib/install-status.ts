@@ -20,7 +20,7 @@ export async function notifyInstallProgress(opts: {
 
   const { data: rec } = await supabase
     .from("records")
-    .select("operator, route, na_slots, start_notified_at, complete_notified_at")
+    .select("operator, route, team, na_slots, start_notified_at, complete_notified_at")
     .eq("plate", plate)
     .maybeSingle();
   if (!rec) return;
@@ -38,11 +38,12 @@ export async function notifyInstallProgress(opts: {
 
   const operator = (rec.operator as string) ?? "";
   const route = (rec.route as string) ?? "";
+  const team = (rec.team as string) ?? "";
 
   // 설치 시작 — 설치전 6칸 충족 & 아직 미발송
   if (started && !rec.start_notified_at) {
     try {
-      await sendStartCard({ operator, plate, route });
+      await sendStartCard({ operator, plate, route, team });
     } catch {
       /* best-effort */
     }
@@ -65,7 +66,7 @@ export async function notifyInstallProgress(opts: {
         label: (p.label as string) ?? "",
       }));
     try {
-      await sendCompletionCard({ operator, plate, route, photos });
+      await sendCompletionCard({ operator, plate, route, team, photos });
     } catch {
       /* best-effort */
     }

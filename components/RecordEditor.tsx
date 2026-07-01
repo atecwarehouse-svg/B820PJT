@@ -36,6 +36,7 @@ export default function RecordEditor({ plate, initial }: Props) {
   // 연식·차종: 저장된 레코드값 우선, 없으면 차량 마스터(차량리스트 J/L열) 기본값. 수정 가능.
   const [year, setYear] = useState(initial.record?.year ?? vehicle.year ?? "");
   const [model, setModel] = useState(initial.record?.model ?? vehicle.model ?? "");
+  const [team, setTeam] = useState(initial.record?.team ?? "");
   const [customSlots, setCustomSlots] = useState<CustomSlot[]>(
     initial.record?.custom_slots ?? [],
   );
@@ -90,6 +91,7 @@ export default function RecordEditor({ plate, initial }: Props) {
         route: string;
         year: string;
         model: string;
+        team: string;
         custom_slots: CustomSlot[];
         na_slots: string[];
         saved: boolean;
@@ -106,6 +108,7 @@ export default function RecordEditor({ plate, initial }: Props) {
             route: overrides?.route ?? route,
             year: overrides?.year ?? year,
             model: overrides?.model ?? model,
+            team: overrides?.team ?? team,
             custom_slots: overrides?.custom_slots ?? customSlots,
             na_slots: overrides?.na_slots ?? naSlots,
             saved: overrides?.saved ?? false,
@@ -123,7 +126,7 @@ export default function RecordEditor({ plate, initial }: Props) {
         return false;
       }
     },
-    [plate, operator, route, year, model, customSlots, naSlots, showToast],
+    [plate, operator, route, year, model, team, customSlots, naSlots, showToast],
   );
 
   // '단말기 없음' 토글 → 상태 갱신 후 저장(서버가 시작/완료 판정·팀즈 알림)
@@ -145,6 +148,10 @@ export default function RecordEditor({ plate, initial }: Props) {
 
   const [submitting, setSubmitting] = useState(false);
   async function handleSave() {
+    if (!team.trim()) {
+      showToast("팀명을 입력해야 저장할 수 있습니다", "error");
+      return;
+    }
     setSubmitting(true);
     const ok = await saveRecord({ saved: true });
     setSubmitting(false);
@@ -295,6 +302,25 @@ export default function RecordEditor({ plate, initial }: Props) {
             onChange={setModel}
             onBlur={() => saveRecord()}
           />
+          <label className="col-span-2 flex flex-col">
+            <span className="text-xs text-gray-400">
+              팀명 <span className="text-red-500">*</span>
+            </span>
+            <input
+              value={team}
+              placeholder="설치 팀명 (필수)"
+              onChange={(e) => setTeam(e.target.value)}
+              onBlur={() => saveRecord()}
+              className={`rounded border px-2 py-1 outline-none focus:border-blue-500 ${
+                team.trim() ? "border-gray-300" : "border-red-300 bg-red-50"
+              }`}
+            />
+            {!team.trim() && (
+              <span className="mt-0.5 text-[11px] text-red-500">
+                팀명을 입력해야 저장할 수 있습니다.
+              </span>
+            )}
+          </label>
         </div>
       </section>
 

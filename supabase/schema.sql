@@ -34,6 +34,7 @@ create table if not exists records (
   route        text,                                -- 노선 스냅샷
   year         text,                                -- 연식 (수동 입력)
   model        text,                                -- 차종 (수동 입력)
+  team         text,                                -- 설치 팀명 (저장 시 필수 입력)
   custom_slots jsonb not null default '[]'::jsonb,  -- 동적 추가 항목 [{slot_key,label,sort_order}]
   na_slots     jsonb not null default '[]'::jsonb,  -- 단말기 없음 표시 슬롯키 목록(하차 등) → 사진없이 충족
   start_notified_at    timestamptz,                 -- 팀즈 '설치 시작' 발송 시각(중복방지)
@@ -41,6 +42,8 @@ create table if not exists records (
   saved_at     timestamptz,                         -- '저장' 버튼으로 목록 등록된 시각 (null=미저장)
   updated_at   timestamptz not null default now()
 );
+
+alter table records add column if not exists team text;
 
 create index if not exists records_saved_at_idx on records (saved_at desc);
 

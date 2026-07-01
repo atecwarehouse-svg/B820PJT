@@ -27,6 +27,7 @@ export interface RecordRow {
   route: string | null;
   year: string | null;
   model: string | null;
+  team?: string | null; // 설치 팀명 (저장 시 필수)
   custom_slots: CustomSlot[];
   na_slots?: string[]; // 단말기 없음으로 표시한 슬롯키 (사진없이 충족 처리)
   saved_at?: string | null;

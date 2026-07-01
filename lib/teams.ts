@@ -67,6 +67,7 @@ export async function sendStartCard(d: {
   operator: string;
   plate: string;
   route?: string;
+  team?: string;
 }): Promise<void> {
   const url = process.env.TEAMS_COMPLETE_WEBHOOK_URL;
   if (!url) return;
@@ -96,6 +97,18 @@ export async function sendStartCard(d: {
               spacing: "None",
               wrap: true,
             },
+            ...(d.team
+              ? [
+                  {
+                    type: "TextBlock",
+                    text: `설치팀 ${d.team}`,
+                    weight: "Bolder",
+                    color: "Accent",
+                    spacing: "None",
+                    wrap: true,
+                  },
+                ]
+              : []),
             ...(d.route
               ? [
                   {
@@ -131,6 +144,7 @@ export async function sendCompletionCard(d: {
   operator: string;
   plate: string;
   route?: string;
+  team?: string;
   photos?: { url: string; label: string }[];
 }): Promise<void> {
   const url = process.env.TEAMS_COMPLETE_WEBHOOK_URL;
@@ -162,6 +176,18 @@ export async function sendCompletionCard(d: {
               spacing: "None",
               wrap: true,
             },
+            ...(d.team
+              ? [
+                  {
+                    type: "TextBlock",
+                    text: `설치팀 ${d.team}`,
+                    weight: "Bolder",
+                    color: "Accent",
+                    spacing: "None",
+                    wrap: true,
+                  },
+                ]
+              : []),
             ...(d.route
               ? [
                   {

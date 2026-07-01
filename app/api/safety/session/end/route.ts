@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
+import { adminPassword } from "@/lib/admin-auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -15,7 +16,16 @@ function kstHm(): string {
 // 안전관리자가 '설치 종료'를 누르면 종료 시각을 기록한다.
 // → 이 시점 이후부터 작업자의 '설치 후' 서명이 열린다.
 export async function POST(req: NextRequest) {
-  const { sessionId } = (await req.json()) as { sessionId?: string };
+  const { sessionId, password } = (await req.json().catch(() => ({}))) as {
+    sessionId?: string;
+    password?: string;
+  };
+  if (!password || password !== adminPassword()) {
+    return NextResponse.json(
+      { error: "관리자 비밀번호가 올바르지 않습니다." },
+      { status: 401 },
+    );
+  }
   const id = (sessionId ?? "").trim();
   if (!id) {
     return NextResponse.json({ error: "세션 정보가 없습니다." }, { status: 400 });
