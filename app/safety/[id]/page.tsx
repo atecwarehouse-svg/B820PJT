@@ -17,7 +17,7 @@ export default async function SafetySignPage({
 
   const { data: session } = await supabase
     .from("pledge_sessions")
-    .select("id, manager_name, operator, location, install_date")
+    .select("id, manager_name, operator, location, install_date, ended_at")
     .eq("id", params.id)
     .maybeSingle();
 
@@ -57,7 +57,7 @@ export default async function SafetySignPage({
       <h1 className="mb-4 text-center text-lg font-bold text-blue-700">
         안전관리 서약서 서명
       </h1>
-      <SafetySign session={info} signers={signers} />
+      <SafetySign session={info} signers={signers} ended={Boolean(session.ended_at)} />
     </main>
   );
 }

@@ -63,7 +63,22 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ id: data.id });
   }
 
-  // phase === "after"
+  // phase === "after" — 안전관리자가 '설치 종료'를 눌러야만 열림
+  const { data: sess } = await supabase
+    .from("pledge_sessions")
+    .select("ended_at")
+    .eq("id", sessionId)
+    .maybeSingle();
+  if (!sess) {
+    return NextResponse.json({ error: "세션을 찾을 수 없습니다." }, { status: 404 });
+  }
+  if (!sess.ended_at) {
+    return NextResponse.json(
+      { error: "아직 설치가 종료되지 않았습니다. 안전관리자의 '설치 종료' 후 서명할 수 있습니다." },
+      { status: 409 },
+    );
+  }
+
   const sigId = body.signatureId;
   if (typeof sigId !== "number") {
     return NextResponse.json(

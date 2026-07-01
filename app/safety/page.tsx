@@ -10,7 +10,7 @@ export default async function SafetyPage() {
 
   const { data: sessions } = await supabase
     .from("pledge_sessions")
-    .select("id, manager_name, operator, location, install_date")
+    .select("id, manager_name, operator, location, install_date, end_time, ended_at")
     .order("created_at", { ascending: false });
 
   // 세션별 서명자 수 집계 (저용량이라 전체 조회 후 JS 집계)
@@ -30,6 +30,8 @@ export default async function SafetyPage() {
     location: (s.location as string | null) ?? null,
     install_date: s.install_date as string,
     signer_count: counts.get(s.id as string) ?? 0,
+    ended: Boolean(s.ended_at),
+    end_time: (s.end_time as string | null) ?? null,
   }));
 
   return (

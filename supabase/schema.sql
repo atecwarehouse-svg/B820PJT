@@ -78,10 +78,13 @@ create table if not exists pledge_sessions (
   install_date  date not null default current_date,
   work_content  text not null default '인천버스 교통카드단말기 구축사업 시범설치',
   quantity      text,                          -- 수량(예: 00대) — 선택
-  start_time    text,                          -- 설치시간 — 선택
-  end_time      text,                          -- 종료시간 — 선택
+  start_time    text,                          -- 설치 시작시간 — 선택
+  end_time      text,                          -- 설치 종료시간 — '설치 종료' 시 자동 기록
+  ended_at      timestamptz,                   -- 안전관리자가 '설치 종료' 누른 시각(null=진행중). 설치 후 서명 개방 조건
   created_at    timestamptz not null default now()
 );
+
+alter table pledge_sessions add column if not exists ended_at timestamptz;
 
 create index if not exists pledge_sessions_created_idx on pledge_sessions (created_at desc);
 

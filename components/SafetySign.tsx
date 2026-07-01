@@ -26,9 +26,11 @@ type Phase = "before" | "after";
 export default function SafetySign({
   session,
   signers,
+  ended,
 }: {
   session: PledgeSessionInfo;
   signers: SignerRow[];
+  ended: boolean;
 }) {
   const router = useRouter();
   const padRef = useRef<SignaturePadHandle>(null);
@@ -121,13 +123,20 @@ export default function SafetySign({
         </button>
         <button
           onClick={() => switchPhase("after")}
-          className={`rounded-xl px-4 py-2.5 text-sm font-semibold ${
+          disabled={!ended}
+          className={`rounded-xl px-4 py-2.5 text-sm font-semibold disabled:opacity-40 ${
             phase === "after" ? "bg-blue-600 text-white" : "border border-gray-300 bg-white text-gray-600"
           }`}
         >
-          설치 후 서명
+          설치 후 서명{!ended ? " 🔒" : ""}
         </button>
       </div>
+
+      {!ended && (
+        <p className="rounded-lg bg-amber-50 px-3 py-2 text-center text-[11px] text-amber-700">
+          설치 후 서명은 안전관리자가 <b>설치 종료</b>한 뒤에 열립니다.
+        </p>
+      )}
 
       <section className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
         {phase === "before" ? (

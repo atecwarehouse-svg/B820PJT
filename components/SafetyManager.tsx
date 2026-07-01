@@ -11,6 +11,8 @@ export interface PledgeSessionRow {
   location: string | null;
   install_date: string;
   signer_count: number;
+  ended: boolean;
+  end_time: string | null;
 }
 
 // 안전관리자용 화면: 세션(공유 링크) 생성 + 기존 세션 목록/다운로드.
@@ -24,9 +26,9 @@ export default function SafetyManager({ sessions }: { sessions: PledgeSessionRow
   const [installDate, setInstallDate] = useState(today);
   const [quantity, setQuantity] = useState("");
   const [startTime, setStartTime] = useState("");
-  const [endTime, setEndTime] = useState("");
 
   const [creating, setCreating] = useState(false);
+  const [endingId, setEndingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [createdLink, setCreatedLink] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -49,7 +51,6 @@ export default function SafetyManager({ sessions }: { sessions: PledgeSessionRow
           install_date: installDate,
           quantity,
           start_time: startTime,
-          end_time: endTime,
         }),
       });
       const json = await res.json();
@@ -73,6 +74,27 @@ export default function SafetyManager({ sessions }: { sessions: PledgeSessionRow
     } catch {
       // 클립보드 실패 시 프롬프트로 대체
       window.prompt("링크를 복사하세요", link);
+    }
+  }
+
+  async function endInstall(id: string) {
+    if (!window.confirm("설치를 종료할까요?\n종료 후부터 작업자가 '설치 후' 서명을 할 수 있습니다.")) {
+      return;
+    }
+    setEndingId(id);
+    try {
+      const res = await fetch("/api/safety/session/end", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sessionId: id }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "설치 종료 실패");
+      router.refresh();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "설치 종료 실패");
+    } finally {
+      setEndingId(null);
     }
   }
 
@@ -110,14 +132,13 @@ export default function SafetyManager({ sessions }: { sessions: PledgeSessionRow
             <input value={quantity} onChange={(e) => setQuantity(e.target.value)} className={inputCls} placeholder="예: 10대" />
           </label>
           <label className="block">
-            <span className="text-[11px] font-medium text-gray-500">설치시간</span>
+            <span className="text-[11px] font-medium text-gray-500">설치 시작시간</span>
             <input value={startTime} onChange={(e) => setStartTime(e.target.value)} className={inputCls} placeholder="예: 09:00" />
           </label>
-          <label className="block">
-            <span className="text-[11px] font-medium text-gray-500">종료시간</span>
-            <input value={endTime} onChange={(e) => setEndTime(e.target.value)} className={inputCls} placeholder="예: 18:00" />
-          </label>
         </div>
+        <p className="mt-2 text-[11px] text-gray-400">
+          ※ 종료시간은 아래 목록에서 <b>설치 종료</b>를 누를 때 자동 기록되며, 그때부터 작업자가 설치 후 서명을 할 수 있습니다.
+        </p>
 
         {error && <p className="mt-2 text-xs text-red-600">{error}</p>}
 
@@ -168,6 +189,15 @@ export default function SafetyManager({ sessions }: { sessions: PledgeSessionRow
                   <div className="min-w-0">
                     <p className="truncate text-sm font-semibold text-gray-800">
                       {s.operator || "운수사 미지정"} · {s.install_date}
+                      {s.ended ? (
+                        <span className="ml-1 rounded bg-gray-200 px-1.5 py-0.5 text-[10px] font-medium text-gray-600 align-middle">
+                          종료 {s.end_time ?? ""}
+                        </span>
+                      ) : (
+                        <span className="ml-1 rounded bg-green-100 px-1.5 py-0.5 text-[10px] font-medium text-green-700 align-middle">
+                          진행중
+                        </span>
+                      )}
                     </p>
                     <p className="mt-0.5 text-[11px] text-gray-500">
                       담당: {s.manager_name} · 서명 {s.signer_count}명
@@ -181,12 +211,23 @@ export default function SafetyManager({ sessions }: { sessions: PledgeSessionRow
                     PDF
                   </button>
                 </div>
-                <button
-                  onClick={() => copyLink(`${window.location.origin}/safety/${s.id}`)}
-                  className="mt-2 w-full rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-600 active:bg-gray-100"
-                >
-                  서명 링크 복사
-                </button>
+                <div className="mt-2 flex gap-2">
+                  <button
+                    onClick={() => copyLink(`${window.location.origin}/safety/${s.id}`)}
+                    className="flex-1 rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-600 active:bg-gray-100"
+                  >
+                    서명 링크 복사
+                  </button>
+                  {!s.ended && (
+                    <button
+                      onClick={() => endInstall(s.id)}
+                      disabled={endingId === s.id}
+                      className="flex-1 rounded-lg bg-orange-500 px-3 py-1.5 text-xs font-semibold text-white active:bg-orange-600 disabled:opacity-50"
+                    >
+                      {endingId === s.id ? "종료 중…" : "설치 종료"}
+                    </button>
+                  )}
+                </div>
               </li>
             ))}
           </ul>
