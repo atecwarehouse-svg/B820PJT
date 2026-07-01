@@ -25,6 +25,12 @@ export default function HomePage() {
         📋 저장 목록 / 다운로드
       </Link>
       <Link
+        href="/safety"
+        className="mt-2 rounded-xl border border-gray-300 bg-white px-4 py-3 text-center text-sm font-medium text-gray-700 shadow-sm active:bg-gray-100"
+      >
+        🖊️ 안전관리 서약서
+      </Link>
+      <Link
         href="/admin"
         className="mt-2 rounded-xl border border-gray-300 bg-white px-4 py-3 text-center text-sm font-medium text-gray-700 shadow-sm active:bg-gray-100"
       >
