@@ -5,17 +5,18 @@
 -- 효과: 대시보드가 사진 수만 행을 앱으로 가져오지 않고,
 --       운수사별 집계(수십 줄)만 DB에서 받아 빠르게 동작합니다.
 --
--- ⚠️ 완료 기준 = 13칸 (앱 lib/slots.ts 의 DEFAULT_PHOTO_COUNT 와 동일).
+-- ⚠️ 완료 기준 = 14칸 (앱 lib/slots.ts 의 DEFAULT_PHOTO_COUNT 와 동일).
+--    설치 전 7(차량번호·GPS·운전자 조작기·통합단말기·승차·하차1·하차2) + 설치 후 7.
 --    '단말기 없음'(records.na_slots) 칸은 사진 1장으로 간주해 합산.
---    기본 칸 수를 바꾸면 아래 13도 함께 수정하세요.
+--    기본 칸 수를 바꾸면 아래 14/13도 함께 수정하세요.
 -- ============================================================
 
 create or replace view operator_progress as
 select
   v.operator,
   count(*)::int                                                                   as total,
-  count(*) filter (where coalesce(pc.cnt,0) + coalesce(na.cnt,0) >= 13)::int      as complete,
-  count(*) filter (where coalesce(pc.cnt,0) + coalesce(na.cnt,0) between 1 and 12)::int as in_progress
+  count(*) filter (where coalesce(pc.cnt,0) + coalesce(na.cnt,0) >= 14)::int      as complete,
+  count(*) filter (where coalesce(pc.cnt,0) + coalesce(na.cnt,0) between 1 and 13)::int as in_progress
 from vehicles v
 left join (
   select plate, count(*) as cnt

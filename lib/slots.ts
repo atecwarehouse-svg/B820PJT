@@ -10,10 +10,11 @@ export interface SlotDef {
   isCustom?: boolean;
 }
 
-// 설치 전 (6개, 사용자가 항목 추가 가능)
+// 설치 전 (7개, 사용자가 항목 추가 가능)
 export const BEFORE_SLOTS: SlotDef[] = [
   { slotKey: "before_plate", label: "차량번호", section: "before" },
   { slotKey: "before_gps", label: "GPS안테나", section: "before" },
+  { slotKey: "before_operator", label: "운전자 조작기", section: "before" },
   { slotKey: "before_terminal", label: "운전석 통합단말기 사진", section: "before" },
   { slotKey: "before_board", label: "승차단말기", section: "before" },
   { slotKey: "before_alight1", label: "하차1 단말기", section: "before" },
@@ -31,7 +32,7 @@ export const AFTER_SLOTS: SlotDef[] = [
   { slotKey: "after_alight2", label: "하차2 단말기", section: "after" },
 ];
 
-// 기본 촬영 장수 = 설치 전(6) + 설치 후(7) = 13장.
+// 기본 촬영 장수 = 설치 전(7) + 설치 후(7) = 14장.
 // 완료 판정/대시보드/목록 표시의 단일 기준값.
 export const DEFAULT_PHOTO_COUNT = BEFORE_SLOTS.length + AFTER_SLOTS.length;
 
