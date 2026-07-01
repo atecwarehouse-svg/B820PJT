@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
 import { adminPassword } from "@/lib/admin-auth";
+import { deletePhoto } from "@/lib/gdrive";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -69,6 +70,18 @@ export async function DELETE(req: NextRequest) {
   }
 
   const supabase = createServiceClient();
+
+  // 구글드라이브에 보관된 서약서 PDF도 함께 삭제 (best-effort)
+  const { data: sess } = await supabase
+    .from("pledge_sessions")
+    .select("drive_file_id")
+    .eq("id", id)
+    .maybeSingle();
+  const driveId = (sess?.drive_file_id as string | null) ?? null;
+  if (driveId) {
+    await deletePhoto(driveId).catch(() => {});
+  }
+
   // pledge_signatures 는 session_id on delete cascade 라 함께 삭제됨.
   const { error } = await supabase.from("pledge_sessions").delete().eq("id", id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
 import { renderPdf } from "@/lib/export/pdf-render";
 import { buildPledgeHtml } from "@/lib/export/pledge-html";
-import { uploadExport } from "@/lib/gdrive";
+import { uploadExport, deletePhoto } from "@/lib/gdrive";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -26,7 +26,7 @@ export async function GET(req: Request) {
   const { data: session, error: sErr } = await supabase
     .from("pledge_sessions")
     .select(
-      "manager_name, operator, location, install_date, work_content, quantity, start_time, end_time",
+      "manager_name, operator, location, install_date, work_content, quantity, start_time, end_time, drive_file_id",
     )
     .eq("id", sessionId)
     .maybeSingle();
@@ -58,8 +58,17 @@ export async function GET(req: Request) {
   const filename = `안전관리서약서_${operator}_${yymmdd}.pdf`;
 
   // 구글드라이브 보관 (best-effort — 실패해도 다운로드는 진행)
+  // 세션당 PDF 1개만 유지: 새로 올린 뒤 이전 파일을 삭제하고 파일 ID를 세션에 기록.
   try {
-    await uploadExport(PLEDGE_FOLDER, filename, buffer, PDF_MIME);
+    const { id: newFileId } = await uploadExport(PLEDGE_FOLDER, filename, buffer, PDF_MIME);
+    const oldFileId = (session.drive_file_id as string | null) ?? null;
+    if (oldFileId && oldFileId !== newFileId) {
+      await deletePhoto(oldFileId).catch(() => {}); // 이전 PDF 정리
+    }
+    await supabase
+      .from("pledge_sessions")
+      .update({ drive_file_id: newFileId })
+      .eq("id", sessionId);
   } catch (e) {
     console.error("[export/safety] 드라이브 업로드 실패:", e);
   }

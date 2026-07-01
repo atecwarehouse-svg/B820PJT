@@ -81,10 +81,12 @@ create table if not exists pledge_sessions (
   start_time    text,                          -- 설치 시작시간 — 선택
   end_time      text,                          -- 설치 종료시간 — '설치 종료' 시 자동 기록
   ended_at      timestamptz,                   -- 안전관리자가 '설치 종료' 누른 시각(null=진행중). 설치 후 서명 개방 조건
+  drive_file_id text,                           -- 최근 생성된 서약서 PDF의 구글드라이브 파일 ID(교체/삭제용)
   created_at    timestamptz not null default now()
 );
 
 alter table pledge_sessions add column if not exists ended_at timestamptz;
+alter table pledge_sessions add column if not exists drive_file_id text;
 
 create index if not exists pledge_sessions_created_idx on pledge_sessions (created_at desc);
 
