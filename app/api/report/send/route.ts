@@ -66,7 +66,7 @@ export async function POST(req: NextRequest) {
   const notes = body.notes ?? "";
   const text = formatReportText(report, notes);
   const html = formatReportHtml(report, notes);
-  const subject = `[B820] 설치 완료 보고 (${report.label}, ${report.dow}) — ${report.dailyDone}대`;
+  const subject = `[인천버스 B820] 설치 완료 보고 (${report.label}, ${report.dow}) — ${report.dailyDone}대`;
 
   // 진행현황 엑셀 첨부 (실패해도 메일은 발송)
   const attachments: { filename: string; content: Buffer }[] = [];
