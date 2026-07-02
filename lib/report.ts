@@ -117,6 +117,8 @@ export function formatReportText(r: DailyReport, notes: string): string {
   lines.push(`누적 계획 : ${r.cumPlanned}대`);
   lines.push(`누적 설치 완료 : ${r.cumDone}대 ${r.cumPct.toFixed(1)}%`);
   lines.push(`잔여 : ${r.remaining}대`);
+  lines.push("");
+  lines.push("※ 에이텍모빌리티 내부인원 보고용 자동발송메일입니다.");
   return lines.join("\n");
 }
 
@@ -146,6 +148,7 @@ export function formatReportHtml(r: DailyReport, notes: string): string {
     <div style="font-size:14px;color:#111827">누적 계획 : <b>${r.cumPlanned}대</b></div>
     <div style="font-size:14px;color:#111827;margin-top:3px">누적 설치 완료 : <b>${r.cumDone}대</b> <span style="color:#16a34a;font-weight:700">${r.cumPct.toFixed(1)}%</span></div>
     <div style="font-size:14px;color:#111827;margin-top:3px">잔여 : <b>${r.remaining}대</b></div>
+    <div style="margin-top:14px;font-size:11px;color:#9ca3af">※ 에이텍모빌리티 내부인원 보고용 자동발송메일입니다.</div>
   </div>
 </div>`;
 }
