@@ -37,6 +37,25 @@ function escapeXml(s: string): string {
     .replace(/>/g, "&gt;");
 }
 
+// 셀 하나(<c r="REF" …/> 또는 …>…</c>)를 스타일(s=…)만 유지한 채 inlineStr 텍스트로 교체.
+// (공유문자열 인덱스 변경 없이 해당 셀 표시값만 바꾸므로 다른 셀에 영향 없음.)
+function replaceCellText(xml: string, ref: string, text: string): string {
+  const re = new RegExp(`<c r="${ref}"([^>]*?)(?:/>|>[\\s\\S]*?</c>)`);
+  return xml.replace(re, (_m, attrs: string) => {
+    const s = (attrs.match(/\bs="(\d+)"/) || [])[1];
+    const sAttr = s ? ` s="${s}"` : "";
+    return `<c r="${ref}"${sAttr} t="inlineStr"><is><t>${escapeXml(text)}</t></is></c>`;
+  });
+}
+
+// 숫자 값을 가진 셀의 <v> 만 교체 (스타일·서식 유지).
+function replaceCellNumber(xml: string, ref: string, val: number): string {
+  return xml.replace(
+    new RegExp(`(<c r="${ref}"[^>]*>)<v>[\\d.]+</v>(</c>)`),
+    (_m, pre: string, post: string) => `${pre}<v>${val}</v>${post}`,
+  );
+}
+
 // sharedStrings.xml → 문자열 배열 (각 <si>의 <t>들을 이어붙임)
 function parseSharedStrings(xml: string): string[] {
   const out: string[] = [];
@@ -82,8 +101,9 @@ interface FillResult {
 export async function fillProgressXlsx(
   templateBuffer: Buffer,
   completed: Map<string, CompletedInfo>,
-  asOfSerial?: number, // 진행현황 시트 기준일(A10:C10) — 다운로드 시점 업무일
-  plannedQty?: number, // 진행현황 시트 계획수량(A6:B6 병합) — 다운로드 전 입력값
+  asOfSerial?: number, // 진행현황 시트 기준일(A3:E3 · A10:C10) — 선택한 업무일
+  dailyPlan?: number, // 금일 계획수량(A6:B6 병합) — 기준일 당일 설치예정 대수
+  cumPlan?: number, // 누적 계획수량(F6) — 기준일까지 설치예정 누적 대수
 ): Promise<FillResult> {
   const zip = await JSZip.loadAsync(templateBuffer);
 
@@ -191,27 +211,40 @@ export async function fillProgressXlsx(
     zip.file(SCHEDULE_SHEET, schedXml);
   }
 
-  // 3-c) 진행현황 시트 기준일(A10:C10 병합셀)·계획수량(A6:B6 병합셀) 갱신
-  //  - A10: 다운로드 시점 업무일
-  //  - A6: 다운로드 전 입력한 계획수량 (D6 달성률 = C6/A6 가 자동 연동)
-  const needAsOf = typeof asOfSerial === "number" && isFinite(asOfSerial);
-  const needPlan = typeof plannedQty === "number" && isFinite(plannedQty);
-  if (needAsOf || needPlan) {
+  // 3-c) 진행현황 시트 값·라벨·병합 보정
+  //  - A3(A3:E3)·A10(A10:C10): 기준일(선택 업무일) — 두 날짜를 동일하게 맞춘다.
+  //  - A6(A6:B6): 금일 계획수량 (기준일 당일 설치예정 대수, D6 달성률 = C6/A6 연동)
+  //  - F6: 누적 계획수량 (기준일까지 설치예정 누적 대수, H6 달성률 = G6/F6 연동)
+  //  - F11 헤더 라벨: "완료수량" → "누적 완료수량"
+  //  - B11:C11 병합 해제 → B11="영업소"(유지), C11="노선"
+  {
     const pFile = zip.file(PROGRESS_SHEET);
     if (pFile) {
       let pXml = await pFile.async("string");
-      if (needAsOf) {
+
+      if (typeof asOfSerial === "number" && isFinite(asOfSerial)) {
+        pXml = replaceCellNumber(pXml, "A10", asOfSerial);
+        pXml = replaceCellNumber(pXml, "A3", asOfSerial); // A3 날짜 = A10 날짜
+      }
+      if (typeof dailyPlan === "number" && isFinite(dailyPlan)) {
+        pXml = replaceCellNumber(pXml, "A6", dailyPlan);
+      }
+      if (typeof cumPlan === "number" && isFinite(cumPlan)) {
+        pXml = replaceCellNumber(pXml, "F6", cumPlan);
+      }
+
+      // 헤더 라벨 변경 (스타일 유지)
+      pXml = replaceCellText(pXml, "F11", "누적 완료수량");
+      // 영업소/노선 헤더 분리: 병합 해제 후 C11 채움 (B11 "영업소"는 그대로)
+      pXml = replaceCellText(pXml, "C11", "노선");
+      if (pXml.includes('<mergeCell ref="B11:C11"/>')) {
+        pXml = pXml.replace('<mergeCell ref="B11:C11"/>', "");
         pXml = pXml.replace(
-          /(<c r="A10"[^>]*>)<v>[\d.]+<\/v>(<\/c>)/,
-          (_m, pre: string, post: string) => `${pre}<v>${asOfSerial}</v>${post}`,
+          /(<mergeCells count=")(\d+)(")/,
+          (_m, pre: string, n: string, post: string) => `${pre}${Number(n) - 1}${post}`,
         );
       }
-      if (needPlan) {
-        pXml = pXml.replace(
-          /(<c r="A6"[^>]*>)<v>[\d.]+<\/v>(<\/c>)/,
-          (_m, pre: string, post: string) => `${pre}<v>${plannedQty}</v>${post}`,
-        );
-      }
+
       zip.file(PROGRESS_SHEET, pXml);
     }
   }

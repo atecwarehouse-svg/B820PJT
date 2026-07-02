@@ -36,6 +36,13 @@ export function workDateExcelSerial(value: string | Date): number {
   return Math.round((Date.UTC(y, m - 1, d) - EXCEL_EPOCH_UTC) / DAY_MS);
 }
 
+/** "YYYY-MM-DD"(달력 날짜) → Excel 날짜 직렬값 (시프트 없음, 진행현황 기준일 A3/A10용). */
+export function excelSerialFromDate(ymd: string): number {
+  const [y, m, d] = ymd.split("-").map(Number);
+  if (!y || !m || !d) return NaN;
+  return Math.round((Date.UTC(y, m - 1, d) - EXCEL_EPOCH_UTC) / DAY_MS);
+}
+
 const DOW = ["일", "월", "화", "수", "목", "금", "토"];
 /** "YYYY-MM-DD" → "M/D (요일)" 라벨. */
 export function weekdayLabel(date: string): string {

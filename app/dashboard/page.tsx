@@ -81,12 +81,10 @@ export default async function DashboardPage() {
   const inProgressCount = inProgressList.length;
   const remainCount = Math.max(0, s.totalVehicles - s.complete - inProgressCount);
 
-  // 진행현황 다운로드 기본 계획수량 = 설치일정상 '오늘(업무일)까지' 누적 계획 대수.
-  // 예정일(planned_date)에서 계산되므로 일정 업로드로 날짜가 바뀌면 자동 갱신된다.
+  // 진행현황 다운로드 기준일 기본값 = 현재 업무일. 팝업에서 날짜를 바꾸면
+  // 그 날짜까지의 스냅샷(계획·기준일·완료)으로 받는다. 계획수량은 예정일(planned_date)에서 파생.
   const today = ip?.today ?? workDateString(new Date());
-  const defaultPlan = sch
-    ? sch.days.reduce((sum, d) => (d.date <= today ? sum + d.planned : sum), 0)
-    : 0;
+  const scheduleDays = sch?.days.map((d) => ({ date: d.date, planned: d.planned })) ?? [];
 
   return (
     <main className="mx-auto max-w-3xl px-3 pb-16 pt-4">
@@ -132,7 +130,7 @@ export default async function DashboardPage() {
               inProgress={inProgressCount}
             />
           )}
-          <ProgressDownloadButton defaultPlan={defaultPlan} />
+          <ProgressDownloadButton today={today} scheduleDays={scheduleDays} />
         </div>
       </div>
 
