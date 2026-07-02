@@ -34,26 +34,37 @@ export default function SafetySign({
 }) {
   const router = useRouter();
   const padRef = useRef<SignaturePadHandle>(null);
+  const submittingRef = useRef(false); // 연타/중복 제출 하드 가드
 
   const [phase, setPhase] = useState<Phase>("before");
   const [name, setName] = useState("");
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [done, setDone] = useState<string | null>(null);
+  const [completed, setCompleted] = useState<{ phase: Phase; who: string } | null>(null);
 
   const pending = signers.filter((s) => !s.has_after); // 설치 후 미완료자
 
   function switchPhase(p: Phase) {
     setPhase(p);
     setError(null);
-    setDone(null);
+    setName("");
+    setSelectedId(null);
+    padRef.current?.clear();
+  }
+
+  // 완료 화면에서 '다른 작업자'가 한 기기로 이어서 서명할 때만 폼을 다시 연다.
+  function signAnother() {
+    setCompleted(null);
+    setPhase("before");
+    setError(null);
     setName("");
     setSelectedId(null);
     padRef.current?.clear();
   }
 
   async function submit() {
+    if (submittingRef.current || completed) return; // 제출 중이거나 이미 완료 → 중복 저장 차단
     setError(null);
     const signature = padRef.current?.getDataUrl();
     if (!signature) {
@@ -69,6 +80,7 @@ export default function SafetySign({
       return;
     }
 
+    submittingRef.current = true;
     setSubmitting(true);
     try {
       const res = await fetch("/api/safety/sign", {
@@ -85,17 +97,50 @@ export default function SafetySign({
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "제출 실패");
 
-      const who = phase === "before" ? name.trim() : signers.find((s) => s.id === selectedId)?.worker_name;
-      setDone(`${who}님 ${phase === "before" ? "설치 전" : "설치 후"} 서명이 저장되었습니다.`);
+      const who =
+        phase === "before"
+          ? name.trim()
+          : signers.find((s) => s.id === selectedId)?.worker_name ?? "";
+      // 완료 화면으로 전환 → 폼이 사라져 같은 사람이 다시 저장할 수 없음
       setName("");
       setSelectedId(null);
       padRef.current?.clear();
-      router.refresh();
+      setCompleted({ phase, who });
+      router.refresh(); // 배경에서 서명 목록 갱신 (다른 작업자 이어서 서명 대비)
     } catch (e) {
       setError(e instanceof Error ? e.message : "제출 실패");
     } finally {
+      submittingRef.current = false;
       setSubmitting(false);
     }
+  }
+
+  // 서명 완료 화면 — 폼을 감춰 중복 저장을 원천 차단하고, 창을 닫도록 안내한다.
+  if (completed) {
+    return (
+      <div className="space-y-4">
+        <section className="rounded-2xl border border-green-200 bg-green-50 px-4 py-8 text-center shadow-sm">
+          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-green-100 text-4xl font-bold text-green-600">
+            ✓
+          </div>
+          <h2 className="mt-4 text-xl font-bold text-green-700">서명이 완료되었습니다</h2>
+          <p className="mt-2 text-sm text-gray-700">
+            <b>{completed.who}</b>님 {completed.phase === "before" ? "설치 전" : "설치 후"} 서명이 저장되었습니다.
+          </p>
+          <p className="mt-5 rounded-xl bg-white px-4 py-3 text-sm font-semibold text-gray-700">
+            이 창은 닫으셔도 됩니다.
+          </p>
+          <p className="mt-2 text-[11px] text-gray-400">다시 저장할 필요가 없습니다.</p>
+        </section>
+
+        <button
+          onClick={signAnother}
+          className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-500 active:bg-gray-50"
+        >
+          다른 작업자가 이어서 서명하기
+        </button>
+      </div>
+    );
   }
 
   return (
@@ -184,7 +229,6 @@ export default function SafetySign({
         </div>
 
         {error && <p className="mt-2 text-xs text-red-600">{error}</p>}
-        {done && <p className="mt-2 text-xs font-medium text-green-600">{done}</p>}
 
         <button
           onClick={submit}
