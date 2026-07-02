@@ -26,6 +26,9 @@ yarn-error.log*
 # vercel
 .vercel
 
+# Claude Code 로컬 설정 (개인 권한 규칙 - 공개 저장소에 올리지 않음)
+.claude/settings.local.json
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
