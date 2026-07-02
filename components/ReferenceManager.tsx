@@ -106,7 +106,7 @@ function ReferenceSlot({
       <div className="relative aspect-[3/2] w-full overflow-hidden rounded bg-gray-100">
         {url ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={url} alt={slot.label} className="h-full w-full object-cover" />
+          <img src={url} alt={slot.label} className="h-full w-full object-contain" />
         ) : (
           <div className="flex h-full w-full items-center justify-center text-xs text-gray-400">
             기준사진 없음
