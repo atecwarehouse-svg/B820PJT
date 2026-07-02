@@ -51,7 +51,8 @@ export const PRINT_CSS = `
   .cell:nth-child(3n+2), .cell:nth-child(3n) { border-left:none; }
   .cell-label { text-align:center; font-size:10px; font-weight:700; background:#f2f2f2; border-bottom:1px solid #000; padding:1px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .cell-photo { height:33mm; display:flex; align-items:center; justify-content:center; overflow:hidden; }
-  .cell-photo img { width:100%; height:100%; object-fit:cover; }
+  /* 엑셀 양식과 동일하게: 사진을 칸에 맞춰 늘려 전체가 보이게 (잘림·여백 없음) */
+  .cell-photo img { width:100%; height:100%; object-fit:fill; }
   .cell-photo .empty { color:#999; font-size:10px; }
   .grid, .cell { break-inside: avoid; }
 `;
