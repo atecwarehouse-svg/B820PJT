@@ -87,6 +87,12 @@ export interface CompletedInfo {
   route: string; // 증차 append/매칭용 노선
 }
 
+export interface VehicleDbInfo {
+  operator: string; // 운수사 (차량리스트 B열)
+  route: string; // 노선 (차량리스트 C열)
+  serial: number | null; // 설치 예정일 Excel 직렬값 (I열, null=미정)
+}
+
 interface FillResult {
   buffer: Buffer;
   filled: number; // 차량리스트 기존 행에 G/H 채운 수
@@ -97,6 +103,8 @@ interface FillResult {
  * 템플릿 버퍼 + 완료맵(plate → {직렬값,운수사,노선})을 받아 채운 새 xlsx 버퍼를 반환.
  * - 차량리스트에 있는 차량: G="완료", H=완료일.
  * - 없는 차량(증차): 행 추가 + 전개일정 대상수량 보정.
+ * - dbInfo(plate → {운수사,노선,예정일})를 주면 차량리스트 B/C/I열을 DB 값으로 덮어쓴다
+ *   — 일정변경·노선변경 업로드가 다운로드 파일에도 반영되도록. (템플릿 값은 구버전)
  */
 export async function fillProgressXlsx(
   templateBuffer: Buffer,
@@ -104,6 +112,7 @@ export async function fillProgressXlsx(
   asOfSerial?: number, // 진행현황 시트 기준일(A3:E3 · A10:C10) — 선택한 업무일
   dailyPlan?: number, // 금일 계획수량(A6:B6 병합) — 기준일 당일 설치예정 대수
   cumPlan?: number, // 누적 계획수량(F6) — 기준일까지 설치예정 누적 대수
+  dbInfo?: Map<string, VehicleDbInfo>, // 차량별 DB 최신값 (운수사·노선·설치 예정일)
 ): Promise<FillResult> {
   const zip = await JSZip.loadAsync(templateBuffer);
 
@@ -118,13 +127,16 @@ export async function fillProgressXlsx(
   const shared = parseSharedStrings(await ssFile.async("string"));
   let sheetXml = await vFile.async("string");
 
-  // 1) F 셀(차량번호) 스캔 → 차량리스트에 있는 완료 차량의 행 → 직렬값
+  // 1) F 셀(차량번호) 스캔 → 행→차량번호 맵 + 완료 차량의 행→완료일 직렬값
   const rowSerial = new Map<number, number>();
+  const rowPlate = new Map<number, string>();
   const matchedPlates = new Set<string>();
   for (const m of sheetXml.matchAll(/<c r="F(\d+)"([^>]*)>([\s\S]*?)<\/c>/g)) {
     const row = Number(m[1]);
     const plate = cellValue(m[2], m[3], shared).trim();
-    if (plate && completed.has(plate)) {
+    if (!plate) continue;
+    rowPlate.set(row, plate);
+    if (completed.has(plate)) {
       rowSerial.set(row, completed.get(plate)!.serial);
       matchedPlates.add(plate);
     }
@@ -147,6 +159,61 @@ export async function fillProgressXlsx(
     },
   );
   const filled = seenG.size;
+
+  // 2-b) 차량리스트 B(운수사)/C(노선)/I(설치 예정일)열을 DB 최신값으로 갱신 —
+  //      일정변경·노선변경 업로드가 다운로드에 반영되도록.
+  //      셀이 있으면 값 교체(스타일 유지), I열은 없으면 열 순서에 맞춰 삽입, 미정이면 비움.
+  if (dbInfo && dbInfo.size > 0) {
+    const defaultIStyle = (sheetXml.match(/<c r="I\d+" s="(\d+)"/) || [])[1];
+    sheetXml = sheetXml.replace(
+      /<row r="(\d+)"[^>]*>([\s\S]*?)<\/row>/g,
+      (whole, rowStr: string, inner: string) => {
+        const row = Number(rowStr);
+        const plate = rowPlate.get(row);
+        const info = plate ? dbInfo.get(plate) : undefined;
+        if (!info) return whole;
+        let newInner = inner;
+
+        // B(운수사)·C(노선) 텍스트 교체
+        for (const [col, text] of [["B", info.operator], ["C", info.route]] as const) {
+          if (!text) continue;
+          const re = new RegExp(`<c r="${col}${row}"([^>]*?)(?:/>|>[\\s\\S]*?</c>)`);
+          newInner = newInner.replace(re, (_m, attrs: string) => {
+            const s = (attrs.match(/\bs="(\d+)"/) || [])[1];
+            return `<c r="${col}${row}"${s ? ` s="${s}"` : ""} t="inlineStr"><is><t>${escapeXml(text)}</t></is></c>`;
+          });
+        }
+
+        // I(설치 예정일) 숫자 교체/삽입/비움
+        const serial = info.serial;
+        const iRe = new RegExp(`<c r="I${row}"([^>]*?)(?:/>|>[\\s\\S]*?</c>)`);
+        const m = newInner.match(iRe);
+        if (m) {
+          const s = (m[1].match(/\bs="(\d+)"/) || [])[1];
+          const sAttr = s ? ` s="${s}"` : "";
+          newInner = newInner.replace(
+            iRe,
+            serial == null ? `<c r="I${row}"${sAttr}/>` : `<c r="I${row}"${sAttr}><v>${serial}</v></c>`,
+          );
+        } else if (serial != null) {
+          const sAttr = defaultIStyle ? ` s="${defaultIStyle}"` : "";
+          const cell = `<c r="I${row}"${sAttr}><v>${serial}</v></c>`;
+          // 셀은 열 순서대로 있어야 함: I보다 뒤 열의 첫 셀 앞에 삽입, 없으면 행 끝에 추가
+          let insertAt = -1;
+          for (const cm of newInner.matchAll(/<c r="([A-Z]+)\d+"/g)) {
+            const col = cm[1];
+            if (col.length > 1 || col > "I") {
+              insertAt = cm.index!;
+              break;
+            }
+          }
+          newInner = insertAt >= 0 ? newInner.slice(0, insertAt) + cell + newInner.slice(insertAt) : newInner + cell;
+        }
+
+        return newInner === inner ? whole : whole.replace(inner, () => newInner);
+      },
+    );
+  }
 
   // 3) 증차 = 완료맵에 있으나 차량리스트에 없는 차량
   const added: { plate: string; serial: number; operator: string; route: string }[] = [];

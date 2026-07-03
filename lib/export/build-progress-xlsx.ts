@@ -3,7 +3,11 @@
 
 import { createServiceClient } from "@/lib/supabase/server";
 import { fetchAll } from "@/lib/supabase/paginate";
-import { fillProgressXlsx, type CompletedInfo } from "@/lib/export/fill-progress-xlsx";
+import {
+  fillProgressXlsx,
+  type CompletedInfo,
+  type VehicleDbInfo,
+} from "@/lib/export/fill-progress-xlsx";
 import { workDateString, workDateExcelSerial, excelSerialFromDate } from "@/lib/work-day";
 
 const TEMPLATE_BUCKET = process.env.TEMPLATE_BUCKET ?? "templates";
@@ -59,10 +63,17 @@ export async function buildProgressXlsx(opts?: { asOfDate?: string }): Promise<{
   }
 
   // 계획수량 = 차량리스트 설치예정일(planned_date) 대수. 금일=당일, 누적=기준일까지.
+  // dbInfo = 차량별 최신값 맵 → 다운로드 파일 차량리스트 B/C/I열을 DB 기준으로 갱신.
   let dailyPlan = 0;
   let cumPlan = 0;
+  const dbInfo = new Map<string, VehicleDbInfo>();
   for (const v of vrows) {
     const pd = v.planned_date ? String(v.planned_date).slice(0, 10) : "";
+    dbInfo.set(v.plate, {
+      operator: (v.operator ?? "").trim(),
+      route: (v.route ?? "").trim(),
+      serial: pd ? excelSerialFromDate(pd) : null,
+    });
     if (!pd) continue;
     if (pd <= asOfDate) cumPlan++;
     if (pd === asOfDate) dailyPlan++;
@@ -84,6 +95,7 @@ export async function buildProgressXlsx(opts?: { asOfDate?: string }): Promise<{
     asOfSerial,
     dailyPlan,
     cumPlan,
+    dbInfo,
   );
 
   // 파일명: 기준일 YYMMDD
