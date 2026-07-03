@@ -18,25 +18,27 @@ export interface SignerRow {
   has_after: boolean;
 }
 
-type Phase = "before" | "after";
+export type Phase = "before" | "after";
 
 // 작업자용 서명 화면 (본인 휴대폰).
+// 링크에 따라 단계가 고정된다: /safety/[id]=설치 전, /safety/[id]?phase=after=설치 후.
 // 설치 전: 이름 입력 + 터치 서명 → 새 행 생성.
 // 설치 후: 설치 전에 서명한 본인 이름을 목록에서 선택 + 서명 → 해당 행 갱신.
 export default function SafetySign({
   session,
   signers,
   ended,
+  phase,
 }: {
   session: PledgeSessionInfo;
   signers: SignerRow[];
   ended: boolean;
+  phase: Phase;
 }) {
   const router = useRouter();
   const padRef = useRef<SignaturePadHandle>(null);
   const submittingRef = useRef(false); // 연타/중복 제출 하드 가드
 
-  const [phase, setPhase] = useState<Phase>("before");
   const [name, setName] = useState("");
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -44,14 +46,6 @@ export default function SafetySign({
   const [completed, setCompleted] = useState<{ phase: Phase; who: string } | null>(null);
 
   const pending = signers.filter((s) => !s.has_after); // 설치 후 미완료자
-
-  function switchPhase(p: Phase) {
-    setPhase(p);
-    setError(null);
-    setName("");
-    setSelectedId(null);
-    padRef.current?.clear();
-  }
 
   async function submit() {
     if (submittingRef.current || completed) return; // 제출 중이거나 이미 완료 → 중복 저장 차단
@@ -124,10 +118,10 @@ export default function SafetySign({
         </section>
 
         <button
-          onClick={() => router.push("/")}
+          onClick={() => window.close()}
           className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-500 active:bg-gray-50"
         >
-          홈으로 가기
+          닫기
         </button>
       </div>
     );
@@ -146,33 +140,16 @@ export default function SafetySign({
         </p>
       </section>
 
-      {/* 단계 선택 */}
-      <div className="grid grid-cols-2 gap-2">
-        <button
-          onClick={() => switchPhase("before")}
-          className={`rounded-xl px-4 py-2.5 text-sm font-semibold ${
-            phase === "before" ? "bg-blue-600 text-white" : "border border-gray-300 bg-white text-gray-600"
-          }`}
-        >
-          설치 전 서명
-        </button>
-        <button
-          onClick={() => switchPhase("after")}
-          disabled={!ended}
-          className={`rounded-xl px-4 py-2.5 text-sm font-semibold disabled:opacity-40 ${
-            phase === "after" ? "bg-blue-600 text-white" : "border border-gray-300 bg-white text-gray-600"
-          }`}
-        >
-          설치 후 서명{!ended ? " 🔒" : ""}
-        </button>
+      {/* 서명 단계 — 링크에 따라 고정 */}
+      <div className="rounded-xl bg-blue-600 px-4 py-2.5 text-center text-sm font-semibold text-white">
+        {phase === "before" ? "설치 전 서명" : "설치 후 서명"}
       </div>
 
-      {!ended && (
-        <p className="rounded-lg bg-amber-50 px-3 py-2 text-center text-[11px] text-amber-700">
+      {phase === "after" && !ended ? (
+        <p className="rounded-lg bg-amber-50 px-3 py-4 text-center text-xs text-amber-700">
           설치 후 서명은 안전관리자가 <b>설치 종료</b>한 뒤에 열립니다.
         </p>
-      )}
-
+      ) : (
       <section className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
         {phase === "before" ? (
           <label className="block">
@@ -228,6 +205,7 @@ export default function SafetySign({
           {submitting ? "제출 중…" : "서명 제출"}
         </button>
       </section>
+      )}
 
       <p className="text-center text-[11px] text-gray-400">
         현재까지 설치 전 {signers.length}명 서명 · 설치 후 {signers.filter((s) => s.has_after).length}명 완료

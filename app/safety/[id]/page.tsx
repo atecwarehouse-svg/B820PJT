@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { createServiceClient } from "@/lib/supabase/server";
 import SafetySign, {
+  type Phase,
   type PledgeSessionInfo,
   type SignerRow,
 } from "@/components/SafetySign";
@@ -10,9 +11,13 @@ export const dynamic = "force-dynamic";
 
 export default async function SafetySignPage({
   params,
+  searchParams,
 }: {
   params: { id: string };
+  searchParams: { phase?: string };
 }) {
+  // 링크로 단계 고정: 기본(설치 전) / ?phase=after(설치 후)
+  const phase: Phase = searchParams.phase === "after" ? "after" : "before";
   const supabase = createServiceClient();
 
   const { data: session } = await supabase
@@ -57,7 +62,7 @@ export default async function SafetySignPage({
       <h1 className="mb-4 text-center text-lg font-bold text-blue-700">
         안전관리 서약서 서명
       </h1>
-      <SafetySign session={info} signers={signers} ended={Boolean(session.ended_at)} />
+      <SafetySign session={info} signers={signers} ended={Boolean(session.ended_at)} phase={phase} />
     </main>
   );
 }

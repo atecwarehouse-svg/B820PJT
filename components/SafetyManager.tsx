@@ -33,8 +33,13 @@ export default function SafetyManager({ sessions }: { sessions: PledgeSessionRow
   const [endingId, setEndingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [createdLink, setCreatedLink] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
+  const [createdId, setCreatedId] = useState<string | null>(null);
+  const [copied, setCopied] = useState<string | null>(null); // 복사된 링크 키 (`세션id:단계`)
+
+  // 설치 전/후 서명 링크 — 같은 세션이라 서명 취합·PDF는 함께 된다.
+  function signLink(id: string, phase: "before" | "after") {
+    return `${window.location.origin}/safety/${id}${phase === "after" ? "?phase=after" : ""}`;
+  }
 
   async function create() {
     if (!manager.trim()) {
@@ -64,9 +69,8 @@ export default function SafetyManager({ sessions }: { sessions: PledgeSessionRow
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "생성 실패");
-      const link = `${window.location.origin}/safety/${json.id}`;
-      setCreatedLink(link);
-      setCopied(false);
+      setCreatedId(json.id);
+      setCopied(null);
       sigRef.current?.clear();
       router.refresh(); // 목록 갱신
     } catch (e) {
@@ -76,11 +80,11 @@ export default function SafetyManager({ sessions }: { sessions: PledgeSessionRow
     }
   }
 
-  async function copyLink(link: string) {
+  async function copyLink(link: string, key: string) {
     try {
       await navigator.clipboard.writeText(link);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      setCopied(key);
+      setTimeout(() => setCopied(null), 2000);
     } catch {
       // 클립보드 실패 시 프롬프트로 대체
       window.prompt("링크를 복사하세요", link);
@@ -192,26 +196,36 @@ export default function SafetyManager({ sessions }: { sessions: PledgeSessionRow
           {creating ? "생성 중…" : "링크 생성"}
         </button>
 
-        {createdLink && (
-          <div className="mt-3 rounded-xl border border-blue-200 bg-blue-50 p-3">
-            <p className="text-[11px] font-medium text-blue-700">작업자용 서명 링크</p>
-            <p className="mt-1 break-all text-xs text-gray-700">{createdLink}</p>
-            <div className="mt-2 flex gap-2">
-              <button
-                onClick={() => copyLink(createdLink)}
-                className="flex-1 rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white active:bg-blue-700"
-              >
-                {copied ? "복사됨 ✓" : "링크 복사"}
-              </button>
-              <a
-                href={createdLink}
-                target="_blank"
-                rel="noopener"
-                className="flex-1 rounded-lg border border-blue-300 bg-white px-3 py-2 text-center text-xs font-semibold text-blue-700 active:bg-blue-100"
-              >
-                열어보기
-              </a>
-            </div>
+        {createdId && (
+          <div className="mt-3 space-y-2">
+            {(["before", "after"] as const).map((p) => {
+              const link = signLink(createdId, p);
+              const key = `${createdId}:${p}`;
+              return (
+                <div key={p} className="rounded-xl border border-blue-200 bg-blue-50 p-3">
+                  <p className="text-[11px] font-medium text-blue-700">
+                    {p === "before" ? "설치 전" : "설치 후"} 서명 링크
+                  </p>
+                  <p className="mt-1 break-all text-xs text-gray-700">{link}</p>
+                  <div className="mt-2 flex gap-2">
+                    <button
+                      onClick={() => copyLink(link, key)}
+                      className="flex-1 rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white active:bg-blue-700"
+                    >
+                      {copied === key ? "복사됨 ✓" : "링크 복사"}
+                    </button>
+                    <a
+                      href={link}
+                      target="_blank"
+                      rel="noopener"
+                      className="flex-1 rounded-lg border border-blue-300 bg-white px-3 py-2 text-center text-xs font-semibold text-blue-700 active:bg-blue-100"
+                    >
+                      열어보기
+                    </a>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
       </section>
@@ -253,13 +267,21 @@ export default function SafetyManager({ sessions }: { sessions: PledgeSessionRow
                     PDF
                   </button>
                 </div>
-                <div className="mt-2 flex gap-2">
+                <div className="mt-2 grid grid-cols-2 gap-2">
                   <button
-                    onClick={() => copyLink(`${window.location.origin}/safety/${s.id}`)}
-                    className="flex-1 rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-600 active:bg-gray-100"
+                    onClick={() => copyLink(signLink(s.id, "before"), `${s.id}:before`)}
+                    className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-600 active:bg-gray-100"
                   >
-                    서명 링크 복사
+                    {copied === `${s.id}:before` ? "복사됨 ✓" : "설치 전 링크 복사"}
                   </button>
+                  <button
+                    onClick={() => copyLink(signLink(s.id, "after"), `${s.id}:after`)}
+                    className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-600 active:bg-gray-100"
+                  >
+                    {copied === `${s.id}:after` ? "복사됨 ✓" : "설치 후 링크 복사"}
+                  </button>
+                </div>
+                <div className="mt-2 flex gap-2">
                   {!s.ended && (
                     <button
                       onClick={() => endInstall(s.id)}
