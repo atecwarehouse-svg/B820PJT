@@ -94,6 +94,50 @@ export interface VehicleDbInfo {
   listNo: number | null; // 번호 (A열, null=미적재 → 템플릿 값 유지)
 }
 
+// 차량리스트 데이터 행(2행~)을 번호(list_no)→설치예정일→원순서로 재정렬.
+// 시트에 수식·병합이 없는 순수 값 행이라 행 블록을 통째로 옮기고 셀 참조만 갈아끼운다.
+// 구조가 예상과 다르면(블록 재조립 불일치 등) 원본을 그대로 반환해 안전하게 건너뛴다.
+function sortVehicleRows(
+  xml: string,
+  dbInfo: Map<string, VehicleDbInfo>,
+  shared: string[],
+): string {
+  const open = xml.indexOf("<sheetData>");
+  const close = xml.indexOf("</sheetData>");
+  if (open < 0 || close < 0) return xml;
+  const bodyStart = open + "<sheetData>".length;
+  const body = xml.slice(bodyStart, close);
+
+  const blocks = body.match(/<row r="\d+"[^>]*(?:\/>|>[\s\S]*?<\/row>)/g);
+  if (!blocks || blocks.length < 3) return xml;
+  if (blocks.join("") !== body) return xml; // 행 사이에 예상 밖 내용 → 정렬 포기
+  if (!blocks[0].startsWith('<row r="1"')) return xml; // 1행=헤더 전제
+
+  const keyed = blocks.slice(1).map((block, idx) => {
+    const f = block.match(/<c r="F\d+"([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/);
+    const plate = f ? cellValue(f[1], f[2] ?? "", shared).trim() : "";
+    const info = plate ? dbInfo.get(plate) : undefined;
+    return {
+      block,
+      idx,
+      no: info?.listNo ?? Number.MAX_SAFE_INTEGER,
+      date: info?.serial ?? Number.MAX_SAFE_INTEGER,
+    };
+  });
+  keyed.sort((a, b) => a.no - b.no || a.date - b.date || a.idx - b.idx);
+
+  let out = blocks[0];
+  let rn = 1;
+  for (const k of keyed) {
+    rn++;
+    out +=
+      k.block
+        .replace(/^<row r="\d+"/, `<row r="${rn}"`)
+        .replace(/<c r="([A-Z]{1,2})\d+"/g, (_m, col: string) => `<c r="${col}${rn}"`);
+  }
+  return xml.slice(0, bodyStart) + out + xml.slice(close);
+}
+
 interface FillResult {
   buffer: Buffer;
   filled: number; // 차량리스트 기존 행에 G/H 채운 수
@@ -263,6 +307,11 @@ export async function fillProgressXlsx(
       /<dimension ref="([A-Z]+)1:([A-Z]+)\d+"\/>/,
       (_m, a: string, b: string) => `<dimension ref="${a}1:${b}${rn}"/>`,
     );
+  }
+
+  // 3-a') 차량리스트 행 재정렬 — 번호(list_no)·설치예정일 순 (증차 행 포함, 셀 채움이 끝난 뒤)
+  if (dbInfo && dbInfo.size > 0) {
+    sheetXml = sortVehicleRows(sheetXml, dbInfo, shared);
   }
 
   zip.file(VEHICLE_SHEET, sheetXml);
