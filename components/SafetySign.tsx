@@ -47,6 +47,12 @@ export default function SafetySign({
 
   const pending = signers.filter((s) => !s.has_after); // 설치 후 미완료자
 
+  // 창 닫기 시도 → 브라우저가 거부하면(PC에서 직접 연 탭 등) 홈(차량번호 입력)으로 이동
+  function closeOrHome() {
+    window.close();
+    setTimeout(() => router.push("/"), 250);
+  }
+
   async function submit() {
     if (submittingRef.current || completed) return; // 제출 중이거나 이미 완료 → 중복 저장 차단
     setError(null);
@@ -118,7 +124,7 @@ export default function SafetySign({
         </section>
 
         <button
-          onClick={() => window.close()}
+          onClick={closeOrHome}
           className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-500 active:bg-gray-50"
         >
           닫기
