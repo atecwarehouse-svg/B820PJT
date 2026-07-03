@@ -53,16 +53,6 @@ export default function SafetySign({
     padRef.current?.clear();
   }
 
-  // 완료 화면에서 '다른 작업자'가 한 기기로 이어서 서명할 때만 폼을 다시 연다.
-  function signAnother() {
-    setCompleted(null);
-    setPhase("before");
-    setError(null);
-    setName("");
-    setSelectedId(null);
-    padRef.current?.clear();
-  }
-
   async function submit() {
     if (submittingRef.current || completed) return; // 제출 중이거나 이미 완료 → 중복 저장 차단
     setError(null);
@@ -106,7 +96,7 @@ export default function SafetySign({
       setSelectedId(null);
       padRef.current?.clear();
       setCompleted({ phase, who });
-      router.refresh(); // 배경에서 서명 목록 갱신 (다른 작업자 이어서 서명 대비)
+      router.refresh(); // 배경에서 서명 목록 갱신
     } catch (e) {
       setError(e instanceof Error ? e.message : "제출 실패");
     } finally {
@@ -134,10 +124,10 @@ export default function SafetySign({
         </section>
 
         <button
-          onClick={signAnother}
+          onClick={() => router.push("/")}
           className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-500 active:bg-gray-50"
         >
-          다른 작업자가 이어서 서명하기
+          홈으로 가기
         </button>
       </div>
     );
