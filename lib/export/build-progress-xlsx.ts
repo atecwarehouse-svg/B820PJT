@@ -38,14 +38,14 @@ export async function buildProgressXlsx(opts?: { asOfDate?: string }): Promise<{
         .not("saved_at", "is", null)
         .range(from, to),
     ),
+    // select("*"): list_no 컬럼이 아직 없는 DB(migration_list_no.sql 미실행)에서도 동작
     fetchAll<{
       plate: string;
       operator: string | null;
       route: string | null;
       planned_date: string | null;
-    }>((from, to) =>
-      supabase.from("vehicles").select("plate, operator, route, planned_date").range(from, to),
-    ),
+      list_no?: number | null;
+    }>((from, to) => supabase.from("vehicles").select("*").range(from, to)),
   ]);
 
   const vmap = new Map(vrows.map((v) => [v.plate, v]));
@@ -73,6 +73,7 @@ export async function buildProgressXlsx(opts?: { asOfDate?: string }): Promise<{
       operator: (v.operator ?? "").trim(),
       route: (v.route ?? "").trim(),
       serial: pd ? excelSerialFromDate(pd) : null,
+      listNo: v.list_no ?? null,
     });
     if (!pd) continue;
     if (pd <= asOfDate) cumPlan++;

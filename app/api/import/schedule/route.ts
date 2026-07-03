@@ -103,10 +103,22 @@ export async function POST(req: NextRequest) {
   }
 
   // 적용(apply=true): 실제 반영(upsert).
+  // list_no 컬럼이 아직 없는 DB(migration_list_no.sql 미실행)면 빼고 재시도(폴백).
   let done = 0;
+  let includeListNo = true;
+  const stripListNo = (rows: typeof parsed.rows) =>
+    rows.map(({ list_no: _list_no, ...rest }) => rest);
   for (let i = 0; i < parsed.rows.length; i += CHUNK) {
     const chunk = parsed.rows.slice(i, i + CHUNK);
-    const { error } = await supabase.from("vehicles").upsert(chunk, { onConflict: "plate" });
+    let { error } = await supabase
+      .from("vehicles")
+      .upsert(includeListNo ? chunk : stripListNo(chunk), { onConflict: "plate" });
+    if (error && includeListNo && /list_no/i.test(error.message)) {
+      includeListNo = false;
+      ({ error } = await supabase
+        .from("vehicles")
+        .upsert(stripListNo(chunk), { onConflict: "plate" }));
+    }
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }

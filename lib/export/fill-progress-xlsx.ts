@@ -91,6 +91,7 @@ export interface VehicleDbInfo {
   operator: string; // 운수사 (차량리스트 B열)
   route: string; // 노선 (차량리스트 C열)
   serial: number | null; // 설치 예정일 Excel 직렬값 (I열, null=미정)
+  listNo: number | null; // 번호 (A열, null=미적재 → 템플릿 값 유지)
 }
 
 interface FillResult {
@@ -103,8 +104,8 @@ interface FillResult {
  * 템플릿 버퍼 + 완료맵(plate → {직렬값,운수사,노선})을 받아 채운 새 xlsx 버퍼를 반환.
  * - 차량리스트에 있는 차량: G="완료", H=완료일.
  * - 없는 차량(증차): 행 추가 + 전개일정 대상수량 보정.
- * - dbInfo(plate → {운수사,노선,예정일})를 주면 차량리스트 B/C/I열을 DB 값으로 덮어쓴다
- *   — 일정변경·노선변경 업로드가 다운로드 파일에도 반영되도록. (템플릿 값은 구버전)
+ * - dbInfo(plate → {번호,운수사,노선,예정일})를 주면 차량리스트 A/B/C/I열을 DB 값으로
+ *   덮어쓴다 — 일정변경·노선변경 업로드가 다운로드 파일에도 반영되도록. (템플릿 값은 구버전)
  */
 export async function fillProgressXlsx(
   templateBuffer: Buffer,
@@ -160,7 +161,7 @@ export async function fillProgressXlsx(
   );
   const filled = seenG.size;
 
-  // 2-b) 차량리스트 B(운수사)/C(노선)/I(설치 예정일)열을 DB 최신값으로 갱신 —
+  // 2-b) 차량리스트 A(번호)/B(운수사)/C(노선)/I(설치 예정일)열을 DB 최신값으로 갱신 —
   //      일정변경·노선변경 업로드가 다운로드에 반영되도록.
   //      셀이 있으면 값 교체(스타일 유지), I열은 없으면 열 순서에 맞춰 삽입, 미정이면 비움.
   if (dbInfo && dbInfo.size > 0) {
@@ -173,6 +174,19 @@ export async function fillProgressXlsx(
         const info = plate ? dbInfo.get(plate) : undefined;
         if (!info) return whole;
         let newInner = inner;
+
+        // A(번호) 숫자 교체 — DB에 번호가 적재된 차량만 (null이면 템플릿 값 유지)
+        if (info.listNo != null) {
+          const aRe = new RegExp(`<c r="A${row}"([^>]*?)(?:/>|>[\\s\\S]*?</c>)`);
+          if (aRe.test(newInner)) {
+            newInner = newInner.replace(aRe, (_m, attrs: string) => {
+              const s = (attrs.match(/\bs="(\d+)"/) || [])[1];
+              return `<c r="A${row}"${s ? ` s="${s}"` : ""}><v>${info.listNo}</v></c>`;
+            });
+          } else {
+            newInner = `<c r="A${row}"><v>${info.listNo}</v></c>` + newInner; // A=첫 열이라 행 맨 앞 삽입
+          }
+        }
 
         // B(운수사)·C(노선) 텍스트 교체
         for (const [col, text] of [["B", info.operator], ["C", info.route]] as const) {
