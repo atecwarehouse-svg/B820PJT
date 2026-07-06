@@ -137,6 +137,96 @@ export async function sendStartCard(d: {
   }
 }
 
+// 현장에서 "관리자 호출" 버튼을 눌렀을 때 보내는 카드.
+// 웹후크: TEAMS_ADMIN_CALL_WEBHOOK_URL (진행현황·설치완료와 또 다른 채팅방).
+// 미설정 시 throw — 호출이 목적이므로 조용히 생략하면 안 되고 사용자에게 실패를 알려야 함.
+export async function sendAdminCallCard(d: {
+  team: string;
+  plate: string;
+  operator?: string;
+  route?: string;
+  reason: string;
+  memo?: string;
+}): Promise<void> {
+  const url = process.env.TEAMS_ADMIN_CALL_WEBHOOK_URL;
+  if (!url) {
+    throw new Error(
+      "관리자 호출 웹후크가 설정되지 않았습니다. 관리자에게 문의하세요. (TEAMS_ADMIN_CALL_WEBHOOK_URL)",
+    );
+  }
+
+  const calledAt = new Date().toLocaleString("ko-KR", {
+    timeZone: "Asia/Seoul",
+    month: "numeric",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+
+  const card = {
+    type: "message",
+    attachments: [
+      {
+        contentType: "application/vnd.microsoft.card.adaptive",
+        content: {
+          $schema: "http://adaptivecards.io/schemas/adaptive-card.json",
+          type: "AdaptiveCard",
+          version: "1.4",
+          body: [
+            {
+              type: "TextBlock",
+              size: "Large",
+              weight: "Bolder",
+              color: "Attention",
+              text: "🚨 관리자 호출",
+              wrap: true,
+            },
+            {
+              type: "TextBlock",
+              size: "Medium",
+              weight: "Bolder",
+              color: "Accent",
+              text: `설치팀 ${d.team}`,
+              spacing: "None",
+              wrap: true,
+            },
+            {
+              type: "FactSet",
+              facts: [
+                { title: "차량번호", value: d.plate },
+                ...(d.operator ? [{ title: "운수사", value: d.operator }] : []),
+                ...(d.route ? [{ title: "노선", value: d.route }] : []),
+                { title: "호출 사유", value: d.reason },
+                { title: "호출 시각", value: calledAt },
+              ],
+            },
+            ...(d.memo
+              ? [
+                  {
+                    type: "TextBlock",
+                    text: `📝 ${d.memo}`,
+                    isSubtle: true,
+                    wrap: true,
+                  },
+                ]
+              : []),
+          ],
+        },
+      },
+    ],
+  };
+
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(card),
+  });
+  if (!res.ok) {
+    const t = await res.text().catch(() => "");
+    throw new Error(`Teams 호출카드 응답 ${res.status} ${t.slice(0, 160)}`);
+  }
+}
+
 // 설치 완료(사진 13장 업로드) 시 별도 채팅방으로 보내는 카드.
 // 웹후크: TEAMS_COMPLETE_WEBHOOK_URL (진행현황 카드와 다른 채팅방). 미설정 시 조용히 건너뜀.
 // photos: 공개 HTTPS 절대 URL(앱 /api/photo/...) — Teams가 직접 받아 렌더링(데이터URI 미지원).

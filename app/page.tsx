@@ -1,5 +1,6 @@
 import Link from "next/link";
 import PlateSearch from "@/components/PlateSearch";
+import AdminCallButton from "@/components/AdminCallButton";
 
 export default function HomePage() {
   return (
@@ -30,6 +31,7 @@ export default function HomePage() {
       >
         🖊️ 안전관리 서약서
       </Link>
+      <AdminCallButton />
       <Link
         href="/admin"
         className="mt-2 rounded-xl border border-gray-300 bg-white px-4 py-3 text-center text-sm font-medium text-gray-700 shadow-sm active:bg-gray-100"
