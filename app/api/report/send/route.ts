@@ -3,6 +3,7 @@ import nodemailer from "nodemailer";
 import { loadInstallProgress, loadScheduleStats } from "@/lib/stats";
 import { buildReport, formatReportText, formatReportHtml } from "@/lib/report";
 import { buildProgressXlsx } from "@/lib/export/build-progress-xlsx";
+import { getSetting, REPORT_MAIL_KEY } from "@/lib/settings";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -39,8 +40,11 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // 받는사람: 요청값 우선, 없으면 env REPORT_MAIL_TO, 그래도 없으면 발신자 본인
+  // 받는사람: 요청값 > 관리자 페이지 저장값(DB) > env REPORT_MAIL_TO > 발신자 본인
   let recipients = parseRecipients(body.to);
+  if (recipients.length === 0) {
+    recipients = parseRecipients((await getSetting(REPORT_MAIL_KEY)) ?? undefined);
+  }
   if (recipients.length === 0) recipients = parseRecipients(process.env.REPORT_MAIL_TO);
   if (recipients.length === 0) recipients = [user];
 

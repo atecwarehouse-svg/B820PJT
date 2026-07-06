@@ -130,7 +130,9 @@ export default function DailyReportCard({
       />
 
       {/* 받는사람 */}
-      <label className="mt-2 block text-xs font-medium text-gray-600">받는사람 (쉼표로 여러 명, 비우면 기본값)</label>
+      <label className="mt-2 block text-xs font-medium text-gray-600">
+        받는사람 (쉼표로 여러 명 · 비우면 관리자 페이지의 기본 수신자)
+      </label>
       <input
         type="text"
         value={to}

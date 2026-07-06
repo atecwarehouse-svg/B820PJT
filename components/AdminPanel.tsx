@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import ReportRecipientsManager from "@/components/ReportRecipientsManager";
 
 interface AdminRecord {
   plate: string;
@@ -92,6 +93,9 @@ export default function AdminPanel() {
         <span>🖼️ 기준(양식) 사진 관리</span>
         <span className="text-gray-400">→</span>
       </Link>
+
+      {/* 완료리포트 메일 수신자 관리 */}
+      <ReportRecipientsManager />
 
       <h2 className="mb-2 text-sm font-semibold text-gray-700">차량 삭제</h2>
       <p className="mb-3 text-xs text-gray-500">
