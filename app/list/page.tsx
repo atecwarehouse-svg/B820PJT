@@ -2,6 +2,7 @@ import Link from "next/link";
 import { createServiceClient } from "@/lib/supabase/server";
 import { fetchAll } from "@/lib/supabase/paginate";
 import { workDateString } from "@/lib/work-day";
+import { DEFAULT_PHOTO_COUNT } from "@/lib/slots";
 import type { RecordRow } from "@/lib/types";
 import ListClient, { type ListItem } from "@/components/ListClient";
 
@@ -35,16 +36,22 @@ export default async function ListPage() {
     photoCount.set(p.plate, (photoCount.get(p.plate) ?? 0) + 1);
   }
 
-  const items: ListItem[] = records.map((r) => ({
-    plate: r.plate,
-    operator: r.operator ?? "",
-    route: r.route ?? "",
-    installDate: r.install_date,
-    savedDate: r.saved_at ? workDateString(r.saved_at) : "", // 완료 업무일
-    year: r.year ?? "",
-    model: r.model ?? "",
-    photoCount: photoCount.get(r.plate) ?? 0,
-  }));
+  const items: ListItem[] = records.map((r) => {
+    // '단말기 없음'(하차 등) 체크 칸은 촬영 대상에서 빼서 그 차량의 총수량을 줄인다.
+    // 예) 하차 4칸 없음 → 10장/10장 완료.
+    const naCount = Array.isArray(r.na_slots) ? r.na_slots.length : 0;
+    return {
+      plate: r.plate,
+      operator: r.operator ?? "",
+      route: r.route ?? "",
+      installDate: r.install_date,
+      savedDate: r.saved_at ? workDateString(r.saved_at) : "", // 완료 업무일
+      year: r.year ?? "",
+      model: r.model ?? "",
+      photoCount: photoCount.get(r.plate) ?? 0,
+      target: Math.max(1, DEFAULT_PHOTO_COUNT - naCount),
+    };
+  });
 
   // 작업 시작된(사진 있는) 운수사만 — 운수사별 저장 드롭다운용
   const operators = ((opRes.data ?? []) as { operator: string; complete: number; in_progress: number }[])

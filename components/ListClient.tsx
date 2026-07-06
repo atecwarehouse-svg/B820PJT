@@ -2,7 +2,6 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { DEFAULT_PHOTO_COUNT as TARGET } from "@/lib/slots";
 import { EXPORT_CHUNK } from "@/lib/export/limits";
 
 export interface ListItem {
@@ -14,6 +13,7 @@ export interface ListItem {
   year: string;
   model: string;
   photoCount: number;
+  target: number; // 이 차량의 총 촬영수량 — '단말기 없음' 칸만큼 14에서 차감됨
 }
 
 interface ExportResult {
@@ -46,7 +46,7 @@ export default function ListClient({
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return items.filter((it) => {
-      if (incompleteOnly && it.photoCount >= TARGET) return false;
+      if (incompleteOnly && it.photoCount >= it.target) return false;
       if (dateFilter && it.savedDate !== dateFilter) return false;
       if (!q) return true;
       return (
@@ -59,7 +59,7 @@ export default function ListClient({
   }, [items, query, incompleteOnly, dateFilter]);
 
   const incompleteCount = useMemo(
-    () => items.filter((it) => it.photoCount < TARGET).length,
+    () => items.filter((it) => it.photoCount < it.target).length,
     [items],
   );
 
@@ -279,7 +279,7 @@ export default function ListClient({
           ) : (
             <ul className="divide-y divide-gray-100 overflow-hidden rounded-xl border border-gray-200 bg-white">
               {filtered.map((it) => {
-                const done = it.photoCount >= TARGET;
+                const done = it.photoCount >= it.target;
                 return (
                   <li key={it.plate} className="flex items-center gap-3 px-3 py-2.5">
                     <input
@@ -293,7 +293,7 @@ export default function ListClient({
                         <span className="font-medium">{it.plate}</span>
                         <span className="flex shrink-0 items-center gap-1.5">
                           <span className={`text-xs tabular-nums ${done ? "text-gray-400" : "text-rose-600"}`}>
-                            {String(it.photoCount).padStart(2, "0")}장/{TARGET}장
+                            {String(it.photoCount).padStart(2, "0")}장/{it.target}장
                           </span>
                           {done ? (
                             <span className="rounded bg-green-100 px-1.5 py-0.5 text-[10px] font-semibold text-green-700">
