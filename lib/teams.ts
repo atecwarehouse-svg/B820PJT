@@ -64,11 +64,13 @@ export async function sendProgressCard(d: ProgressCardData): Promise<void> {
 
 // 설치 시작 보고 카드 — 진행현황 카드와 같은 채팅방(설치 진행중 공유방, TEAMS_WEBHOOK_URL).
 // 대시보드 '설치시작 보고' 버튼에서 금일 작업 시작을 알릴 때 사용.
+// groups: 금일 설치계획을 운수사·노선별로 나눈 목록 (예: "삼환교통 42노선 : 5대").
 export async function sendStartReportCard(d: {
   label: string; // 날짜 라벨 (예: "9/17 (수)")
   todayPlanned: number;
   complete: number;
   remain: number;
+  groups: { operator: string; route: string; planned: number }[];
 }): Promise<void> {
   const url = process.env.TEAMS_WEBHOOK_URL;
   if (!url) throw new Error("팀즈 웹후크가 설정되지 않았습니다. (TEAMS_WEBHOOK_URL)");
@@ -98,9 +100,26 @@ export async function sendStartReportCard(d: {
               wrap: true,
             },
             {
+              type: "TextBlock",
+              weight: "Bolder",
+              text: `금일 설치계획 ${d.todayPlanned.toLocaleString()}대`,
+              wrap: true,
+            },
+            ...(d.groups.length
+              ? [
+                  {
+                    type: "FactSet",
+                    spacing: "Small",
+                    facts: d.groups.map((g) => ({
+                      title: `· ${g.operator}${g.route ? ` ${g.route}노선` : ""}`,
+                      value: `${g.planned.toLocaleString()}대`,
+                    })),
+                  },
+                ]
+              : []),
+            {
               type: "FactSet",
               facts: [
-                { title: "금일 설치계획", value: `${d.todayPlanned.toLocaleString()}대` },
                 { title: "누적 완료", value: `${d.complete.toLocaleString()}대` },
                 { title: "잔여(설치대상)", value: `${d.remain.toLocaleString()}대` },
               ],

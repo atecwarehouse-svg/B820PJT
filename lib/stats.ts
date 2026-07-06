@@ -270,6 +270,38 @@ export async function loadInstallProgress(): Promise<InstallProgress> {
   };
 }
 
+// 특정 업무일에 설치 예정인 차량을 운수사·노선별로 집계 — 설치시작 보고 카드용.
+export interface TodayPlanGroup {
+  operator: string;
+  route: string;
+  planned: number;
+}
+
+export async function loadTodayPlanGroups(date: string): Promise<TodayPlanGroup[]> {
+  const supabase = createServiceClient();
+  const vehicles = await fetchAll<{
+    planned_date: string | null;
+    operator: string | null;
+    route: string | null;
+  }>((from, to) =>
+    supabase.from("vehicles").select("planned_date, operator, route").range(from, to),
+  );
+
+  const byGroup = new Map<string, TodayPlanGroup>();
+  for (const v of vehicles) {
+    if (!v.planned_date || v.planned_date.slice(0, 10) !== date) continue;
+    const op = v.operator?.trim() || "미지정";
+    const rt = v.route?.trim() || "";
+    const key = `${op}|||${rt}`;
+    const g = byGroup.get(key) ?? { operator: op, route: rt, planned: 0 };
+    g.planned++;
+    byGroup.set(key, g);
+  }
+  return [...byGroup.values()].sort(
+    (a, b) => b.planned - a.planned || a.operator.localeCompare(b.operator, "ko"),
+  );
+}
+
 export interface ScheduleDay {
   date: string; // YYYY-MM-DD (설치 예정일)
   planned: number; // 그 날 예정 대수

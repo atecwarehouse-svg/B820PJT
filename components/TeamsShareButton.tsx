@@ -19,6 +19,7 @@ export default function TeamsShareButton({
   complete,
   inProgress,
   remain,
+  planGroups = [],
 }: {
   kind?: "progress" | "start";
   today: string;
@@ -26,6 +27,8 @@ export default function TeamsShareButton({
   complete: number;
   inProgress: number;
   remain: number;
+  // 설치 시작 보고용 — 금일 계획의 운수사·노선별 대수
+  planGroups?: { operator: string; route: string; planned: number }[];
 }) {
   const [open, setOpen] = useState(false);
   const [sharing, setSharing] = useState(false);
@@ -41,7 +44,15 @@ export default function TeamsShareButton({
       const res = await fetch("/api/teams/share", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ kind, label, todayPlanned, complete, inProgress, remain }),
+        body: JSON.stringify({
+          kind,
+          label,
+          todayPlanned,
+          complete,
+          inProgress,
+          remain,
+          ...(isStart ? { groups: planGroups } : {}),
+        }),
       });
       const j = await res.json();
       if (!res.ok) throw new Error(j.error ?? "전송 실패");
@@ -56,6 +67,13 @@ export default function TeamsShareButton({
   const rows: [string, number, string][] = isStart
     ? [
         ["금일 설치계획", todayPlanned, "text-gray-700"],
+        ...planGroups.map(
+          (g): [string, number, string] => [
+            `· ${g.operator}${g.route ? ` ${g.route}노선` : ""}`,
+            g.planned,
+            "text-gray-500",
+          ],
+        ),
         ["누적 완료", complete, "text-green-700"],
         ["잔여(설치대상)", remain, "text-gray-600"],
       ]

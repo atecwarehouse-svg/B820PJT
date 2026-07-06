@@ -1,7 +1,13 @@
 import Link from "next/link";
 import { unstable_cache } from "next/cache";
-import { loadStats, loadInstallProgress, loadScheduleStats, loadInProgressList } from "@/lib/stats";
-import type { InstallProgress, ScheduleStats, InProgressVehicle } from "@/lib/stats";
+import {
+  loadStats,
+  loadInstallProgress,
+  loadScheduleStats,
+  loadInProgressList,
+  loadTodayPlanGroups,
+} from "@/lib/stats";
+import type { InstallProgress, ScheduleStats, InProgressVehicle, TodayPlanGroup } from "@/lib/stats";
 import { workDateString } from "@/lib/work-day";
 import ProgressDownloadButton from "@/components/ProgressDownloadButton";
 import ScheduleUploadModal from "@/components/ScheduleUploadModal";
@@ -61,12 +67,27 @@ const getInProgress = unstable_cache(
   { revalidate: 60, tags: ["dashboard"] },
 );
 
+// 금일 설치계획 운수사·노선별 집계 — 설치시작 보고 카드용. 날짜가 캐시 키에 포함됨.
+const getTodayPlan = unstable_cache(
+  async (date: string): Promise<TodayPlanGroup[]> => {
+    try {
+      return await loadTodayPlanGroups(date);
+    } catch {
+      return [];
+    }
+  },
+  ["dashboard-todayplan"],
+  { revalidate: 60, tags: ["dashboard"] },
+);
+
 export default async function DashboardPage() {
-  const [s, ip, sch, inProgressList] = await Promise.all([
+  const todayWork = workDateString(new Date()); // 현재 업무일
+  const [s, ip, sch, inProgressList, todayPlanGroups] = await Promise.all([
     getStats(),
     getInstall(),
     getSchedule(),
     getInProgress(),
+    getTodayPlan(todayWork),
   ]);
   // 렌더 시각(KST) — 새로고침할 때마다 갱신되어 데이터 최신 여부를 바로 알 수 있다.
   const updatedAt = new Intl.DateTimeFormat("ko-KR", {
@@ -83,7 +104,7 @@ export default async function DashboardPage() {
 
   // 진행현황 다운로드 기준일 기본값 = 현재 업무일. 팝업에서 날짜를 바꾸면
   // 그 날짜까지의 스냅샷(계획·기준일·완료)으로 받는다. 계획수량은 예정일(planned_date)에서 파생.
-  const today = ip?.today ?? workDateString(new Date());
+  const today = ip?.today ?? todayWork;
   const scheduleDays = sch?.days.map((d) => ({ date: d.date, planned: d.planned })) ?? [];
 
   return (
@@ -119,6 +140,7 @@ export default async function DashboardPage() {
               complete={s.complete}
               inProgress={inProgressCount}
               remain={remainCount}
+              planGroups={todayPlanGroups}
             />
           )}
           {ip && (
