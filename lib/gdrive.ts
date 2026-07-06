@@ -24,8 +24,14 @@ function oauthClient() {
 
 type Drive = ReturnType<typeof google.drive>;
 
+// 웜 인스턴스에서 클라이언트(액세스 토큰 포함)를 재사용해 요청마다 토큰 재발급을 피한다.
+let cachedDrive: Drive | null = null;
+
 function drive(): Drive {
-  return google.drive({ version: "v3", auth: oauthClient() });
+  if (!cachedDrive) {
+    cachedDrive = google.drive({ version: "v3", auth: oauthClient() });
+  }
+  return cachedDrive;
 }
 
 const FOLDER_MIME = "application/vnd.google-apps.folder";
@@ -62,6 +68,19 @@ async function ensureFolder(d: Drive, name: string, parentId: string): Promise<s
   return created.data.id;
 }
 
+// 폴더 ID 인메모리 캐시 — 업로드마다 하는 files.list 왕복(운수사/차량 폴더 탐색)을 절약.
+// 폴더가 밖에서 삭제됐을 수 있으므로 업로드 실패 시 캐시를 비우고 한 번 재시도한다.
+const folderCache = new Map<string, string>();
+
+async function ensureFolderCached(d: Drive, name: string, parentId: string): Promise<string> {
+  const key = `${parentId}/${name}`;
+  const hit = folderCache.get(key);
+  if (hit) return hit;
+  const id = await ensureFolder(d, name, parentId);
+  folderCache.set(key, id);
+  return id;
+}
+
 // 업로드. 경로: 루트(GDRIVE_FOLDER_ID) / 운수사 / 차량번호 / {fileName}
 // 항상 '새 파일'을 만들고 그 Drive 파일 ID를 반환한다. (기존 파일 삭제는 호출부가
 // DB 저장 성공을 확인한 뒤 deletePhoto로 수행 — 부분 실패로 인한 깨짐/고아 방지)
@@ -72,15 +91,27 @@ export async function uploadPhoto(opts: {
   body: Buffer;
   contentType?: string;
 }): Promise<string> {
-  const { plate, operator, fileName, body, contentType = "image/jpeg" } = opts;
   const d = drive();
-  const media = { mimeType: contentType, body: Readable.from(body) };
+  try {
+    return await createPhotoFile(d, opts);
+  } catch (e) {
+    // 캐시된 폴더 ID가 유효하지 않을 가능성 — 캐시 비우고 한 번만 재시도
+    if (folderCache.size === 0) throw e;
+    folderCache.clear();
+    return await createPhotoFile(d, opts);
+  }
+}
 
-  const operatorFolder = await ensureFolder(d, operator || "미지정", rootFolderId());
-  const plateFolder = await ensureFolder(d, plate, operatorFolder);
+async function createPhotoFile(
+  d: Drive,
+  opts: { plate: string; operator: string; fileName: string; body: Buffer; contentType?: string },
+): Promise<string> {
+  const { plate, operator, fileName, body, contentType = "image/jpeg" } = opts;
+  const operatorFolder = await ensureFolderCached(d, operator || "미지정", rootFolderId());
+  const plateFolder = await ensureFolderCached(d, plate, operatorFolder);
   const res = await d.files.create({
     requestBody: { name: fileName, parents: [plateFolder] },
-    media,
+    media: { mimeType: contentType, body: Readable.from(body) },
     fields: "id",
   });
   const newId = res.data.id;

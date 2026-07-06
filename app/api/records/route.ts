@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
 import type { CustomSlot } from "@/lib/slots";
 import { notifyInstallProgress, originFromRequest } from "@/lib/install-status";
+import { runAfterResponse } from "@/lib/background";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -35,12 +36,12 @@ export async function POST(req: NextRequest) {
 
   const supabase = createServiceClient();
 
-  // 차량 마스터 확인 (운수사/노선 스냅샷용)
-  const { data: vehicle, error: vErr } = await supabase
-    .from("vehicles")
-    .select("plate, operator, route")
-    .eq("plate", plate)
-    .maybeSingle();
+  // 차량 마스터 확인(운수사/노선 스냅샷용)과 기존 레코드 조회를 병렬로
+  const [vehicleRes, existingRes] = await Promise.all([
+    supabase.from("vehicles").select("plate, operator, route").eq("plate", plate).maybeSingle(),
+    supabase.from("records").select("install_date").eq("plate", plate).maybeSingle(),
+  ]);
+  const { data: vehicle, error: vErr } = vehicleRes;
   if (vErr) return NextResponse.json({ error: vErr.message }, { status: 500 });
   if (!vehicle) {
     return NextResponse.json(
@@ -50,11 +51,7 @@ export async function POST(req: NextRequest) {
   }
 
   // 기존 레코드의 install_date 보존 (없으면 today 기본값)
-  const { data: existing } = await supabase
-    .from("records")
-    .select("install_date")
-    .eq("plate", plate)
-    .maybeSingle();
+  const existing = existingRes.data;
 
   const payload: Record<string, unknown> = {
     plate,
@@ -88,11 +85,9 @@ export async function POST(req: NextRequest) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   // 단말기 없음 체크 등으로 칸이 모두 충족되면 팀즈 시작/완료 알림 (중복방지 내장, best-effort)
-  await notifyInstallProgress({
-    supabase,
-    plate,
-    origin: originFromRequest(req) || req.nextUrl.origin,
-  }).catch(() => {});
+  // — 응답을 먼저 돌려보내고 백그라운드로 처리해 저장 버튼 반응을 빠르게 한다.
+  const origin = originFromRequest(req) || req.nextUrl.origin;
+  runAfterResponse(() => notifyInstallProgress({ supabase, plate, origin }));
 
   return NextResponse.json({ record: data });
 }

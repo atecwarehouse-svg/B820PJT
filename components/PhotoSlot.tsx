@@ -40,6 +40,10 @@ export default function PhotoSlot({
   async function handleFile(file: File) {
     setBusy(true);
     setError(null);
+    // 찍은 사진을 업로드 완료 전에 즉시 미리보기로 표시 (실패 시 원래대로 복구)
+    const prevUrl = url;
+    const localUrl = URL.createObjectURL(file);
+    setUrl(localUrl);
     try {
       const compressed = await compressImage(file);
       const form = new FormData();
@@ -54,9 +58,17 @@ export default function PhotoSlot({
       const res = await fetch("/api/photos", { method: "POST", body: form });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "업로드 실패");
-      setUrl(json.url);
       onUploaded(slot.slotKey, json.url);
+      // 서버 이미지를 미리 받아둔 뒤 교체(깜빡임 방지) — 그때까지는 로컬 미리보기 유지
+      const server = new window.Image();
+      server.onload = () => {
+        setUrl((u) => (u === localUrl ? json.url : u));
+        URL.revokeObjectURL(localUrl);
+      };
+      server.src = json.url;
     } catch (e) {
+      setUrl(prevUrl); // 업로드 실패 → 이전 사진으로 복구
+      setTimeout(() => URL.revokeObjectURL(localUrl), 1000);
       const msg = e instanceof Error ? e.message : "업로드 실패";
       setError(msg);
       onError?.(msg);

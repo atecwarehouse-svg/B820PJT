@@ -147,6 +147,7 @@ export default function RecordEditor({ plate, initial }: Props) {
   }
 
   const [submitting, setSubmitting] = useState(false);
+  const [savedPopup, setSavedPopup] = useState(false); // 저장 완료 팝업
   async function handleSave() {
     if (!team.trim()) {
       showToast("팀명을 입력해야 저장할 수 있습니다", "error");
@@ -156,10 +157,9 @@ export default function RecordEditor({ plate, initial }: Props) {
     const ok = await saveRecord({ saved: true });
     setSubmitting(false);
     if (ok) {
-      alert("저장되었습니다. 목록에서 다운로드할 수 있습니다.");
-      router.push("/list");
+      setSavedPopup(true);
     } else {
-      alert("저장에 실패했습니다. 다시 시도해주세요.");
+      showToast("저장에 실패했습니다. 다시 시도해주세요", "error");
     }
   }
 
@@ -229,6 +229,25 @@ export default function RecordEditor({ plate, initial }: Props) {
           >
             {toast.type === "success" ? "✓ " : "⚠ "}
             {toast.msg}
+          </div>
+        </div>
+      )}
+
+      {/* 저장 완료 팝업 */}
+      {savedPopup && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4 no-print">
+          <div className="w-full max-w-xs rounded-2xl bg-white p-5 text-center shadow-xl">
+            <div className="text-4xl">✅</div>
+            <p className="mt-2 text-lg font-bold text-gray-800">저장되었습니다</p>
+            <p className="mt-1 text-xs text-gray-500">
+              {plate} · 목록에서 확인·다운로드할 수 있습니다.
+            </p>
+            <button
+              onClick={() => router.push("/list")}
+              className="mt-4 w-full rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white active:bg-blue-700"
+            >
+              확인
+            </button>
           </div>
         </div>
       )}

@@ -4,28 +4,29 @@ import { uploadPhoto, deletePhoto } from "@/lib/gdrive";
 import { publicPhotoUrl } from "@/lib/photo-url";
 import { checkPhotoRotation } from "@/lib/gemini";
 import { notifyInstallProgress, originFromRequest } from "@/lib/install-status";
+import { runAfterResponse } from "@/lib/background";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// 레코드가 없으면 최소 레코드를 생성 (사진 FK 충족)
+// 레코드가 없으면 최소 레코드를 생성 (사진 FK 충족). 운수사명을 함께 돌려줘 추가 조회를 없앤다.
 async function ensureRecord(
   supabase: ReturnType<typeof createServiceClient>,
   plate: string,
-) {
+): Promise<{ ok: boolean; operator: string }> {
   const { data: rec } = await supabase
     .from("records")
-    .select("plate")
+    .select("plate, operator")
     .eq("plate", plate)
     .maybeSingle();
-  if (rec) return true;
+  if (rec) return { ok: true, operator: (rec.operator as string) ?? "" };
 
   const { data: vehicle } = await supabase
     .from("vehicles")
     .select("operator, route")
     .eq("plate", plate)
     .maybeSingle();
-  if (!vehicle) return false;
+  if (!vehicle) return { ok: false, operator: "" };
 
   await supabase.from("records").upsert(
     {
@@ -36,7 +37,7 @@ async function ensureRecord(
     },
     { onConflict: "plate" },
   );
-  return true;
+  return { ok: true, operator: (vehicle.operator as string) ?? "" };
 }
 
 // POST /api/photos  (multipart/form-data)
@@ -56,42 +57,29 @@ export async function POST(req: NextRequest) {
   }
 
   const supabase = createServiceClient();
-  const ok = await ensureRecord(supabase, plate);
-  if (!ok) {
+  const buffer = Buffer.from(await file.arrayBuffer());
+
+  // 0) 회전 검사(Gemini)는 결과만 나중에 확인하면 되므로 DB 준비·Drive 업로드와 병렬 실행
+  const rotPromise = checkPhotoRotation(buffer);
+
+  // 레코드 확인(운수사 포함)과 기존 사진 조회를 병렬로
+  const [recResult, existingRes] = await Promise.all([
+    ensureRecord(supabase, plate),
+    supabase
+      .from("photos")
+      .select("storage_path")
+      .eq("plate", plate)
+      .eq("slot_key", slotKey)
+      .maybeSingle(),
+  ]);
+  if (!recResult.ok) {
     return NextResponse.json(
       { error: "차량리스트에 없는 차량번호입니다." },
       { status: 404 },
     );
   }
-
-  // 폴더 구조(운수사/차량번호)를 위해 운수사명을 가져온다.
-  const { data: rec } = await supabase
-    .from("records")
-    .select("operator")
-    .eq("plate", plate)
-    .maybeSingle();
-  const operator = (rec?.operator as string) ?? "";
-
-  // 같은 칸을 다시 찍으면 기존 Drive 파일 내용을 갱신(파일 ID 유지).
-  const { data: existing } = await supabase
-    .from("photos")
-    .select("storage_path")
-    .eq("plate", plate)
-    .eq("slot_key", slotKey)
-    .maybeSingle();
-
-  const arrayBuffer = await file.arrayBuffer();
-
-  const buffer = Buffer.from(arrayBuffer);
-
-  // 0) 회전 검사 (Gemini): 돌아간 사진이면 Drive/DB 저장 전에 차단
-  const rot = await checkPhotoRotation(buffer);
-  if (rot.rotated) {
-    return NextResponse.json(
-      { error: "사진이 회전되어 있습니다. 똑바로 다시 촬영해주세요." },
-      { status: 422 },
-    );
-  }
+  const operator = recResult.operator;
+  const existing = existingRes.data;
 
   // 파일명: 설치전/후_차량번호_칸라벨.jpg (라벨 없으면 슬롯키)
   const sectionKo = section === "before" ? "설치전" : "설치후";
@@ -105,13 +93,23 @@ export async function POST(req: NextRequest) {
       plate,
       operator,
       fileName,
-      body: Buffer.from(arrayBuffer),
+      body: buffer,
       contentType: "image/jpeg",
     });
   } catch (e) {
     return NextResponse.json(
       { error: e instanceof Error ? e.message : "Google Drive 업로드 실패" },
       { status: 500 },
+    );
+  }
+
+  // 1-a) 회전 검사 결과 확인 — 돌아간 사진이면 방금 올린 파일을 지우고 차단
+  const rot = await rotPromise;
+  if (rot.rotated) {
+    await deletePhoto(fileId).catch(() => {});
+    return NextResponse.json(
+      { error: "사진이 회전되어 있습니다. 똑바로 다시 촬영해주세요." },
+      { status: 422 },
     );
   }
 
@@ -140,18 +138,18 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: dbErr.message }, { status: 500 });
   }
 
-  // 3) DB 커밋 성공 후에야 옛 파일 삭제 (수정인 경우, best-effort)
-  if (existing?.storage_path && existing.storage_path !== fileId) {
-    await deletePhoto(existing.storage_path).catch(() => {});
-  }
-
-  // 4) 팀즈 알림 — 설치전 6칸 충족 시 '설치 시작', 13칸 충족 시 '설치 완료'.
-  //    판정·중복방지는 공용 헬퍼(사진+단말기없음 기준). best-effort.
-  await notifyInstallProgress({
-    supabase,
-    plate,
-    origin: originFromRequest(req) || req.nextUrl.origin,
-  }).catch(() => {});
+  // 3~4) 옛 파일 삭제·팀즈 알림은 응답을 먼저 돌려보낸 뒤 백그라운드로 처리 (best-effort)
+  const origin = originFromRequest(req) || req.nextUrl.origin;
+  const oldPath = existing?.storage_path as string | undefined;
+  runAfterResponse(async () => {
+    // DB 커밋 성공 후에야 옛 파일 삭제 (수정인 경우)
+    if (oldPath && oldPath !== fileId) {
+      await deletePhoto(oldPath).catch(() => {});
+    }
+    // 팀즈 알림 — 설치전 6칸 충족 시 '설치 시작', 13칸 충족 시 '설치 완료'.
+    // 판정·중복방지는 공용 헬퍼(사진+단말기없음 기준).
+    await notifyInstallProgress({ supabase, plate, origin }).catch(() => {});
+  });
 
   return NextResponse.json({
     photo: data,
