@@ -62,6 +62,66 @@ export async function sendProgressCard(d: ProgressCardData): Promise<void> {
   }
 }
 
+// 설치 시작 보고 카드 — 진행현황 카드와 같은 채팅방(설치 진행중 공유방, TEAMS_WEBHOOK_URL).
+// 대시보드 '설치시작 보고' 버튼에서 금일 작업 시작을 알릴 때 사용.
+export async function sendStartReportCard(d: {
+  label: string; // 날짜 라벨 (예: "9/17 (수)")
+  todayPlanned: number;
+  complete: number;
+  remain: number;
+}): Promise<void> {
+  const url = process.env.TEAMS_WEBHOOK_URL;
+  if (!url) throw new Error("팀즈 웹후크가 설정되지 않았습니다. (TEAMS_WEBHOOK_URL)");
+
+  const card = {
+    type: "message",
+    attachments: [
+      {
+        contentType: "application/vnd.microsoft.card.adaptive",
+        content: {
+          $schema: "http://adaptivecards.io/schemas/adaptive-card.json",
+          type: "AdaptiveCard",
+          version: "1.4",
+          body: [
+            {
+              type: "TextBlock",
+              size: "Large",
+              weight: "Bolder",
+              text: "🚧 B820 단말기 설치 시작 보고",
+              wrap: true,
+            },
+            {
+              type: "TextBlock",
+              text: d.label ? `${d.label} 설치 시작` : "금일 설치 시작",
+              isSubtle: true,
+              spacing: "None",
+              wrap: true,
+            },
+            {
+              type: "FactSet",
+              facts: [
+                { title: "금일 설치계획", value: `${d.todayPlanned.toLocaleString()}대` },
+                { title: "누적 완료", value: `${d.complete.toLocaleString()}대` },
+                { title: "잔여(설치대상)", value: `${d.remain.toLocaleString()}대` },
+              ],
+            },
+          ],
+        },
+      },
+    ],
+  };
+
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(card),
+  });
+  if (!res.ok) {
+    const t = await res.text().catch(() => "");
+    throw new Error(`Teams 시작보고 응답 ${res.status} ${t.slice(0, 160)}`);
+  }
+}
+
 // 설치 시작(설치전 6장 업로드 완료) 시 보내는 카드. 완료 카드와 같은 채팅방.
 export async function sendStartCard(d: {
   operator: string;

@@ -113,6 +113,16 @@ export default async function DashboardPage() {
         <div className="flex flex-wrap items-center gap-2">
           {ip && (
             <TeamsShareButton
+              kind="start"
+              today={ip.today}
+              todayPlanned={sch?.days.find((d) => d.date === ip.today)?.planned ?? 0}
+              complete={s.complete}
+              inProgress={inProgressCount}
+              remain={remainCount}
+            />
+          )}
+          {ip && (
+            <TeamsShareButton
               today={ip.today}
               todayPlanned={sch?.days.find((d) => d.date === ip.today)?.planned ?? 0}
               complete={s.complete}

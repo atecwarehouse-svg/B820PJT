@@ -10,14 +10,17 @@ function fmtLabel(date: string): string {
   return `${m}/${d} (${dow})`;
 }
 
-// '설치진행중 공유' 버튼 → 카드 팝업 → 팀즈 채널로 전송.
+// '설치진행중 공유' / '설치시작 보고' 버튼 → 카드 팝업 → 팀즈 채널(같은 공유방)로 전송.
+// kind="start" 는 금일 작업 시작 보고 카드(진행중 항목 없음)를 보낸다.
 export default function TeamsShareButton({
+  kind = "progress",
   today,
   todayPlanned,
   complete,
   inProgress,
   remain,
 }: {
+  kind?: "progress" | "start";
   today: string;
   todayPlanned: number;
   complete: number;
@@ -28,6 +31,7 @@ export default function TeamsShareButton({
   const [sharing, setSharing] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const label = fmtLabel(today);
+  const isStart = kind === "start";
 
   async function share() {
     if (sharing) return;
@@ -37,7 +41,7 @@ export default function TeamsShareButton({
       const res = await fetch("/api/teams/share", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ label, todayPlanned, complete, inProgress, remain }),
+        body: JSON.stringify({ kind, label, todayPlanned, complete, inProgress, remain }),
       });
       const j = await res.json();
       if (!res.ok) throw new Error(j.error ?? "전송 실패");
@@ -49,12 +53,18 @@ export default function TeamsShareButton({
     }
   }
 
-  const rows: [string, number, string][] = [
-    ["금일 설치계획", todayPlanned, "text-gray-700"],
-    ["진행중", inProgress, "text-amber-600"],
-    ["완료", complete, "text-green-700"],
-    ["잔여(설치대상)", remain, "text-gray-600"],
-  ];
+  const rows: [string, number, string][] = isStart
+    ? [
+        ["금일 설치계획", todayPlanned, "text-gray-700"],
+        ["누적 완료", complete, "text-green-700"],
+        ["잔여(설치대상)", remain, "text-gray-600"],
+      ]
+    : [
+        ["금일 설치계획", todayPlanned, "text-gray-700"],
+        ["진행중", inProgress, "text-amber-600"],
+        ["완료", complete, "text-green-700"],
+        ["잔여(설치대상)", remain, "text-gray-600"],
+      ];
 
   return (
     <>
@@ -64,9 +74,11 @@ export default function TeamsShareButton({
           setMsg(null);
           setOpen(true);
         }}
-        className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-indigo-700"
+        className={`rounded-lg px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition-colors ${
+          isStart ? "bg-orange-600 hover:bg-orange-700" : "bg-indigo-600 hover:bg-indigo-700"
+        }`}
       >
-        설치진행중 공유
+        {isStart ? "설치시작 보고" : "설치진행중 공유"}
       </button>
 
       {open && (
@@ -79,9 +91,15 @@ export default function TeamsShareButton({
             onClick={(e) => e.stopPropagation()}
           >
             {/* 카드 미리보기 */}
-            <div className="rounded-t-2xl bg-indigo-600 px-4 py-3 text-white">
-              <p className="text-sm font-bold">🚌 B820 단말기 설치 진행 현황</p>
-              <p className="text-xs text-indigo-200">{label} 기준</p>
+            <div
+              className={`rounded-t-2xl px-4 py-3 text-white ${isStart ? "bg-orange-600" : "bg-indigo-600"}`}
+            >
+              <p className="text-sm font-bold">
+                {isStart ? "🚧 B820 단말기 설치 시작 보고" : "🚌 B820 단말기 설치 진행 현황"}
+              </p>
+              <p className={`text-xs ${isStart ? "text-orange-200" : "text-indigo-200"}`}>
+                {isStart ? `${label} 설치 시작` : `${label} 기준`}
+              </p>
             </div>
             <div className="px-4 py-3">
               <ul className="divide-y divide-gray-100">
@@ -103,9 +121,11 @@ export default function TeamsShareButton({
               <button
                 onClick={share}
                 disabled={sharing}
-                className="flex-1 rounded-lg bg-indigo-600 px-3 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
+                className={`flex-1 rounded-lg px-3 py-2 text-sm font-semibold text-white disabled:opacity-50 ${
+                  isStart ? "bg-orange-600 hover:bg-orange-700" : "bg-indigo-600 hover:bg-indigo-700"
+                }`}
               >
-                {sharing ? "전송 중…" : "팀즈로 공유"}
+                {sharing ? "전송 중…" : isStart ? "팀즈로 보고" : "팀즈로 공유"}
               </button>
             </div>
             {msg && (
