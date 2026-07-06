@@ -37,6 +37,12 @@ export default function AdminCallButton() {
   const [selected, setSelected] = useState<Vehicle | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // 진행중 차량 목록에서 선택
+  const [ipOpen, setIpOpen] = useState(false);
+  const [ipList, setIpList] = useState<(Vehicle & { photoCount: number })[] | null>(null);
+  const [ipLoading, setIpLoading] = useState(false);
+  const [ipError, setIpError] = useState<string | null>(null);
+
   const [reason, setReason] = useState<string | null>(null);
   const [memo, setMemo] = useState("");
 
@@ -83,6 +89,27 @@ export default function AdminCallButton() {
     setSent(false);
     setError(null);
     setCooldownWarn(null);
+  }
+
+  async function toggleInProgress() {
+    if (ipOpen) {
+      setIpOpen(false);
+      return;
+    }
+    setIpOpen(true);
+    if (ipList || ipLoading) return; // 이미 불러왔거나 불러오는 중
+    setIpLoading(true);
+    setIpError(null);
+    try {
+      const res = await fetch("/api/vehicles/in-progress");
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "조회 실패");
+      setIpList(json.results ?? []);
+    } catch (e) {
+      setIpError(e instanceof Error ? e.message : "조회 실패");
+    } finally {
+      setIpLoading(false);
+    }
   }
 
   function resetForm() {
@@ -265,6 +292,44 @@ export default function AdminCallButton() {
                       )}
                       {!searching && q.trim().length >= 1 && results.length === 0 && (
                         <p className="mt-1 text-xs text-gray-400">일치하는 차량이 없습니다.</p>
+                      )}
+                      <button
+                        type="button"
+                        onClick={toggleInProgress}
+                        className="mt-2 w-full rounded-lg border border-dashed border-red-300 bg-white px-3 py-2 text-xs font-medium text-red-600 active:bg-red-50"
+                      >
+                        {ipOpen ? "▲ 진행중인 차량 닫기" : "▼ 진행중인 차량에서 선택"}
+                      </button>
+                      {ipOpen && (
+                        <>
+                          {ipLoading && (
+                            <p className="mt-1 text-xs text-gray-400">진행중 차량 불러오는 중…</p>
+                          )}
+                          {ipError && <p className="mt-1 text-xs text-red-500">{ipError}</p>}
+                          {ipList && ipList.length === 0 && (
+                            <p className="mt-1 text-xs text-gray-400">진행중인 차량이 없습니다.</p>
+                          )}
+                          {ipList && ipList.length > 0 && (
+                            <ul className="mt-1 max-h-44 divide-y divide-gray-100 overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-sm">
+                              {ipList.map((v) => (
+                                <li key={v.plate}>
+                                  <button
+                                    onClick={() => {
+                                      setSelected(v);
+                                      setIpOpen(false);
+                                    }}
+                                    className="flex w-full items-center justify-between px-3 py-2 text-left active:bg-red-50"
+                                  >
+                                    <span className="text-sm font-medium">{v.plate}</span>
+                                    <span className="text-xs text-gray-500">
+                                      {v.operator} · {v.route} · {v.photoCount}장
+                                    </span>
+                                  </button>
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                        </>
                       )}
                     </>
                   )}
