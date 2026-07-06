@@ -13,9 +13,10 @@ export default function HomePage() {
       </header>
       <PlateSearch />
       <p className="mt-6 text-center text-xs text-gray-400">예) 인천70바4005</p>
+      <AdminCallButton />
       <Link
         href="/dashboard"
-        className="mt-8 rounded-xl border border-gray-300 bg-white px-4 py-3 text-center text-sm font-medium text-gray-700 shadow-sm active:bg-gray-100"
+        className="mt-2 rounded-xl border border-gray-300 bg-white px-4 py-3 text-center text-sm font-medium text-gray-700 shadow-sm active:bg-gray-100"
       >
         📊 진행 현황 (대시보드)
       </Link>
@@ -31,7 +32,6 @@ export default function HomePage() {
       >
         🖊️ 안전관리 서약서
       </Link>
-      <AdminCallButton />
       <Link
         href="/admin"
         className="mt-2 rounded-xl border border-gray-300 bg-white px-4 py-3 text-center text-sm font-medium text-gray-700 shadow-sm active:bg-gray-100"

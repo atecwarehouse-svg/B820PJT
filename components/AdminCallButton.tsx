@@ -155,7 +155,7 @@ export default function AdminCallButton() {
       <button
         type="button"
         onClick={openModal}
-        className="mt-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-center text-sm font-semibold text-red-700 shadow-sm active:bg-red-100"
+        className="mt-8 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-center text-sm font-semibold text-red-700 shadow-sm active:bg-red-100"
       >
         🚨 관리자 호출
       </button>
