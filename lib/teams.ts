@@ -1,5 +1,7 @@
 // 팀즈 설치 진행 현황 카드 전송 — 공유 버튼/크론이 공유하는 로직.
 
+import type { DailyReport } from "./report";
+
 export interface ProgressCardData {
   label: string; // 날짜 라벨 (예: "9/17 (수)")
   todayPlanned: number;
@@ -138,6 +140,105 @@ export async function sendStartReportCard(d: {
   if (!res.ok) {
     const t = await res.text().catch(() => "");
     throw new Error(`Teams 시작보고 응답 ${res.status} ${t.slice(0, 160)}`);
+  }
+}
+
+// 금일 설치 완료 보고 카드 — 진행현황·설치시작 보고 카드와 같은 채팅방(설치 진행중 공유방, TEAMS_WEBHOOK_URL).
+// 금일 완료 리포트 메일 발송 시 함께 전송. 내용은 메일 카드(formatReportText)와 동일 구성.
+export async function sendCompletionReportCard(r: DailyReport, notes: string): Promise<void> {
+  const url = process.env.TEAMS_WEBHOOK_URL;
+  if (!url) throw new Error("팀즈 웹후크가 설정되지 않았습니다. (TEAMS_WEBHOOK_URL)");
+
+  const noteText = notes.trim()
+    ? notes
+        .trim()
+        .split(/\r?\n/)
+        .map((l) => l.trim())
+        .filter(Boolean)
+        .map((l) => (l.startsWith("-") ? l : `- ${l}`))
+        .join("\n")
+    : "- 없음";
+
+  const card = {
+    type: "message",
+    attachments: [
+      {
+        contentType: "application/vnd.microsoft.card.adaptive",
+        content: {
+          $schema: "http://adaptivecards.io/schemas/adaptive-card.json",
+          type: "AdaptiveCard",
+          version: "1.4",
+          body: [
+            {
+              type: "TextBlock",
+              size: "Large",
+              weight: "Bolder",
+              text: "✅ B820 단말기 설치 완료 보고",
+              wrap: true,
+            },
+            {
+              type: "TextBlock",
+              text: `${r.label} (${r.dow}) 설치 완료`,
+              isSubtle: true,
+              spacing: "None",
+              wrap: true,
+            },
+            {
+              type: "TextBlock",
+              weight: "Bolder",
+              text: `설치 수량 (실적/계획): ${r.dailyDone.toLocaleString()}대 / ${r.dailyPlanned.toLocaleString()}대 (${r.dailyPct.toFixed(1)}%)`,
+              wrap: true,
+            },
+            ...(r.groups.length
+              ? [
+                  {
+                    type: "FactSet",
+                    spacing: "Small",
+                    facts: r.groups.map((g) => ({
+                      title: `· ${g.operator}${g.route ? ` ${g.route}노선` : ""}`,
+                      value: `${g.count.toLocaleString()}대`,
+                    })),
+                  },
+                ]
+              : []),
+            {
+              type: "FactSet",
+              facts: [
+                { title: "누적 계획", value: `${r.cumPlanned.toLocaleString()}대` },
+                {
+                  title: "누적 완료",
+                  value: `${r.cumDone.toLocaleString()}대 (${r.cumPct.toFixed(1)}%)`,
+                },
+                { title: "잔여", value: `${r.remaining.toLocaleString()}대` },
+              ],
+            },
+            {
+              type: "TextBlock",
+              weight: "Bolder",
+              text: "○ 특이사항",
+              spacing: "Small",
+              wrap: true,
+            },
+            {
+              type: "TextBlock",
+              text: noteText,
+              spacing: "None",
+              wrap: true,
+            },
+          ],
+        },
+      },
+    ],
+  };
+
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(card),
+  });
+  if (!res.ok) {
+    const t = await res.text().catch(() => "");
+    throw new Error(`Teams 완료보고 응답 ${res.status} ${t.slice(0, 160)}`);
   }
 }
 

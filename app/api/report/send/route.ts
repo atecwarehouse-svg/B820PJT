@@ -4,6 +4,7 @@ import { loadInstallProgress, loadScheduleStats } from "@/lib/stats";
 import { buildReport, formatReportText, formatReportHtml } from "@/lib/report";
 import { buildProgressXlsx } from "@/lib/export/build-progress-xlsx";
 import { getSetting, REPORT_MAIL_KEY } from "@/lib/settings";
+import { sendCompletionReportCard } from "@/lib/teams";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -103,5 +104,14 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  return NextResponse.json({ ok: true, to: recipients, subject, attached: attachments.length > 0 });
+  // 팀즈 '설치 진행중' 공유방에도 완료보고 카드 전송 (실패해도 메일 발송 결과는 성공 유지)
+  let teams = false;
+  try {
+    await sendCompletionReportCard(report, notes);
+    teams = true;
+  } catch (e) {
+    console.warn("[report/send] 팀즈 완료보고 카드 전송 실패:", e instanceof Error ? e.message : e);
+  }
+
+  return NextResponse.json({ ok: true, to: recipients, subject, attached: attachments.length > 0, teams });
 }

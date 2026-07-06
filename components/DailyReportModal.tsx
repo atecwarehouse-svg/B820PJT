@@ -15,6 +15,7 @@ export default function DailyReportModal(props: {
 }) {
   const [open, setOpen] = useState(false);
   const [sentTo, setSentTo] = useState<string[] | null>(null); // 발송 완료 팝업
+  const [teamsSent, setTeamsSent] = useState(false); // 팀즈 완료보고 카드 전송 여부
 
   return (
     <>
@@ -47,7 +48,13 @@ export default function DailyReportModal(props: {
               </button>
             </div>
             <div className="p-4">
-              <DailyReportCard {...props} onSent={(to) => setSentTo(to)} />
+              <DailyReportCard
+                {...props}
+                onSent={(to, teams) => {
+                  setSentTo(to);
+                  setTeamsSent(teams === true);
+                }}
+              />
             </div>
           </div>
         </div>
@@ -61,6 +68,11 @@ export default function DailyReportModal(props: {
             <p className="mt-2 text-base font-bold text-gray-800">발송 완료</p>
             <p className="mt-1 break-words text-xs text-gray-500">
               {sentTo.length > 0 ? sentTo.join(", ") : "기본 수신자"}
+            </p>
+            <p className={`mt-2 text-xs font-medium ${teamsSent ? "text-green-600" : "text-amber-600"}`}>
+              {teamsSent
+                ? "팀즈 '설치 진행중' 공유방에도 완료보고 카드를 보냈습니다."
+                : "⚠️ 팀즈 완료보고 카드 전송에 실패했습니다. (메일은 발송됨)"}
             </p>
             <button
               onClick={() => {

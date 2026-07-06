@@ -20,7 +20,7 @@ export default function DailyReportCard({
   cumPlanned: number;
   today: string;
   inProgress?: number; // 진행중(미완료) 차량 수 — 발송 전 경고용
-  onSent?: (recipients: string[]) => void; // 발송 성공 시 부모가 완료 팝업 표시
+  onSent?: (recipients: string[], teamsSent?: boolean) => void; // 발송 성공 시 부모가 완료 팝업 표시 (팀즈 카드 전송 여부 포함)
 }) {
   const [date, setDate] = useState(today);
   const [planned, setPlanned] = useState(""); // 금일 계획 수량 직접 입력
@@ -66,7 +66,7 @@ export default function DailyReportCard({
       const j = await res.json();
       if (!res.ok) throw new Error(j.error ?? "발송 실패");
       setSent(true);
-      onSent?.(j.to ?? []);
+      onSent?.(j.to ?? [], j.teams === true);
     } catch (e) {
       setMsg({ ok: false, text: e instanceof Error ? e.message : "발송 실패" });
     } finally {
