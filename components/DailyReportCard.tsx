@@ -26,6 +26,7 @@ export default function DailyReportCard({
   const [planned, setPlanned] = useState(""); // 금일 계획 수량 직접 입력
   const [notes, setNotes] = useState("");
   const [to, setTo] = useState("");
+  const [pw, setPw] = useState(""); // 관리자 비밀번호
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false); // 이중발송 방지
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
@@ -52,7 +53,7 @@ export default function DailyReportCard({
   const text = useMemo(() => formatReportText(report, notes), [report, notes]);
 
   async function send() {
-    if (sending || sent) return; // 이중발송 방지
+    if (sending || sent || !pw) return; // 이중발송 방지 + 비밀번호 필수
     const warn = inProgress > 0 ? `⚠️ 미완료(진행중) 차량이 ${inProgress}대 있습니다.\n\n` : "";
     if (!window.confirm(`${warn}이 내용으로 메일을 발송할까요?`)) return;
     setSending(true);
@@ -61,7 +62,7 @@ export default function DailyReportCard({
       const res = await fetch("/api/report/send", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ date, notes, to, planned: plannedOverride }),
+        body: JSON.stringify({ date, notes, to, planned: plannedOverride, pw }),
       });
       const j = await res.json();
       if (!res.ok) throw new Error(j.error ?? "발송 실패");
@@ -141,6 +142,17 @@ export default function DailyReportCard({
         className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
       />
 
+      {/* 관리자 비밀번호 (발송 필수) */}
+      <label className="mt-2 block text-xs font-medium text-gray-600">관리자 비밀번호</label>
+      <input
+        type="password"
+        value={pw}
+        onChange={(e) => setPw(e.target.value)}
+        placeholder="비밀번호 입력"
+        autoComplete="off"
+        className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+      />
+
       {inProgress > 0 && (
         <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs font-medium text-amber-700">
           ⚠️ 미완료(진행중) 차량이 {inProgress}대 있습니다. 발송 전 확인하세요.
@@ -156,7 +168,7 @@ export default function DailyReportCard({
         </button>
         <button
           onClick={send}
-          disabled={sending || sent}
+          disabled={sending || sent || !pw}
           className="flex-1 rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
         >
           {sending ? "발송 중…" : sent ? "발송됨 ✓" : "메일 발송"}

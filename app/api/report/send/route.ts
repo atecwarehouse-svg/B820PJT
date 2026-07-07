@@ -5,6 +5,7 @@ import { buildReport, formatReportText, formatReportHtml } from "@/lib/report";
 import { buildProgressXlsx } from "@/lib/export/build-progress-xlsx";
 import { getSetting, REPORT_MAIL_KEY } from "@/lib/settings";
 import { sendCompletionReportCard } from "@/lib/teams";
+import { adminPassword, isAdmin } from "@/lib/admin-auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -15,6 +16,7 @@ interface SendBody {
   notes?: string;
   to?: string; // 받는사람 (쉼표/세미콜론 구분). 없으면 env 기본값
   planned?: number | null; // 금일 계획 수량 직접 입력값
+  pw?: string; // 관리자 비밀번호 (관리자 페이지 로그인 쿠키로 대체 가능)
 }
 
 function parseRecipients(raw: string | undefined): string[] {
@@ -27,6 +29,11 @@ function parseRecipients(raw: string | undefined): string[] {
 // POST /api/report/send  → 금일 완료 리포트를 Gmail SMTP로 발송
 export async function POST(req: NextRequest) {
   const body = (await req.json()) as SendBody;
+
+  if ((body.pw ?? "") !== adminPassword() && !isAdmin()) {
+    return NextResponse.json({ error: "관리자 비밀번호가 올바르지 않습니다." }, { status: 401 });
+  }
+
   const date = (body.date ?? "").trim();
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
     return NextResponse.json({ error: "날짜(date)가 올바르지 않습니다." }, { status: 400 });

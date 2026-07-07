@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
 import { parseScheduleBuffer } from "@/lib/import/parse-schedule";
+import { adminPassword, isAdmin } from "@/lib/admin-auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -15,7 +16,8 @@ interface ChangeGroup {
   count: number;
 }
 
-// POST /api/import/schedule  (multipart/form-data: file=수정한 진행현황 xlsx, apply=true|false)
+// POST /api/import/schedule  (multipart/form-data: file=수정한 진행현황 xlsx, apply=true|false, pw=관리자 비밀번호)
+//   관리자 비밀번호(pw) 또는 관리자 페이지 로그인 쿠키가 있어야 한다.
 //   apply!=="true" → 미리보기: 파싱+변경내역만 계산(DB 미변경).
 //   apply==="true" → 차량리스트 설치 예정일(I열)·시범설치를 vehicles에 반영(upsert).
 //   plate 기준 upsert로 planned_date/operator/route/is_pilot만 갱신(삭제·is_added 보존).
@@ -23,6 +25,10 @@ export async function POST(req: NextRequest) {
   const form = await req.formData();
   const file = form.get("file") as File | null;
   const apply = form.get("apply") === "true";
+  const pw = String(form.get("pw") ?? "");
+  if (pw !== adminPassword() && !isAdmin()) {
+    return NextResponse.json({ error: "관리자 비밀번호가 올바르지 않습니다." }, { status: 401 });
+  }
   if (!file) {
     return NextResponse.json({ error: "파일이 없습니다." }, { status: 400 });
   }

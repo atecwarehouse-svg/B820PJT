@@ -9,6 +9,11 @@ export function adminPassword(): string {
   return process.env.ADMIN_PASSWORD || "atec1004!!";
 }
 
+// 진행현황 엑셀 다운로드 비밀번호 — 환경변수 PROGRESS_DOWNLOAD_PASSWORD, 미설정 시 기본값.
+export function progressDownloadPassword(): string {
+  return process.env.PROGRESS_DOWNLOAD_PASSWORD || "wktks2020!!";
+}
+
 // 서버 컴포넌트/route에서 현재 요청이 관리자 인증됐는지 확인.
 export function isAdmin(): boolean {
   const v = cookies().get(ADMIN_COOKIE)?.value;

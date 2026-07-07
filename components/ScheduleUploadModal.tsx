@@ -38,6 +38,7 @@ export default function ScheduleUploadModal() {
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<UploadResult | null>(null);
   const [file, setFile] = useState<File | null>(null);
+  const [pw, setPw] = useState(""); // 관리자 비밀번호
   const fileRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
 
@@ -53,6 +54,7 @@ export default function ScheduleUploadModal() {
   function close() {
     setOpen(false);
     reset();
+    setPw(""); // 닫으면 비밀번호도 초기화
   }
 
   // 1단계: 파일 선택 → 미리보기(apply 없이)
@@ -62,6 +64,7 @@ export default function ScheduleUploadModal() {
     try {
       const form = new FormData();
       form.append("file", f);
+      form.append("pw", pw);
       const res = await fetch("/api/import/schedule", { method: "POST", body: form });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "업로드 실패");
@@ -84,6 +87,7 @@ export default function ScheduleUploadModal() {
       const form = new FormData();
       form.append("file", file);
       form.append("apply", "true");
+      form.append("pw", pw);
       const res = await fetch("/api/import/schedule", { method: "POST", body: form });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "반영 실패");
@@ -184,11 +188,23 @@ export default function ScheduleUploadModal() {
                     </p>
                   </div>
 
+                  <label className="mt-3 block">
+                    <span className="text-[11px] font-medium text-gray-500">관리자 비밀번호</span>
+                    <input
+                      type="password"
+                      value={pw}
+                      onChange={(e) => setPw(e.target.value)}
+                      placeholder="비밀번호 입력"
+                      autoComplete="off"
+                      className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-base focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    />
+                  </label>
+
                   <button
                     type="button"
                     onClick={() => fileRef.current?.click()}
-                    disabled={busy}
-                    className="mt-4 flex w-full flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed border-blue-300 px-4 py-6 text-blue-500 active:bg-blue-50 disabled:opacity-50"
+                    disabled={busy || !pw}
+                    className="mt-3 flex w-full flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed border-blue-300 px-4 py-6 text-blue-500 active:bg-blue-50 disabled:opacity-50"
                   >
                     <span className="text-2xl">⬆️</span>
                     <span className="text-sm font-medium">
@@ -205,6 +221,7 @@ export default function ScheduleUploadModal() {
                     className="hidden"
                     onChange={(e) => {
                       const f = e.target.files?.[0];
+                      e.target.value = ""; // 비밀번호 오류 후 같은 파일 재선택도 인식되도록
                       if (f) handlePreview(f);
                     }}
                   />

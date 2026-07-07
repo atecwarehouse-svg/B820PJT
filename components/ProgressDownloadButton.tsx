@@ -26,6 +26,8 @@ export default function ProgressDownloadButton({
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [date, setDate] = useState(today);
+  const [pw, setPw] = useState("");
+  const [error, setError] = useState<string | null>(null);
 
   // 미리보기용(서버가 동일 로직으로 다시 계산해 채운다)
   const valid = /^\d{4}-\d{2}-\d{2}$/.test(date);
@@ -34,6 +36,8 @@ export default function ProgressDownloadButton({
 
   function openModal() {
     setDate(today); // 열 때마다 오늘로 초기화
+    setPw("");
+    setError(null);
     setOpen(true);
   }
 
@@ -42,10 +46,27 @@ export default function ProgressDownloadButton({
     setOpen(false);
   }
 
-  function handleDownload() {
-    if (!valid) return;
+  async function handleDownload() {
+    if (!valid || !pw) return;
     setLoading(true);
-    downloadUrl(`/api/export/progress?date=${encodeURIComponent(date)}`);
+    setError(null);
+
+    // 다운로드는 브라우저 기본 동작이라 실패를 알 수 없으므로, 비밀번호를 먼저 서버에서 확인한다.
+    try {
+      const res = await fetch(`/api/export/progress?check=1&pw=${encodeURIComponent(pw)}`);
+      if (!res.ok) {
+        const j = await res.json().catch(() => null);
+        throw new Error(j?.error ?? "비밀번호가 올바르지 않습니다.");
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "비밀번호 확인 실패");
+      setLoading(false);
+      return;
+    }
+
+    downloadUrl(
+      `/api/export/progress?date=${encodeURIComponent(date)}&pw=${encodeURIComponent(pw)}`,
+    );
     // 다운로드는 브라우저 기본 동작으로 진행되어 완료 시점을 알 수 없으므로,
     // 잠깐 뒤 팝업을 닫고 버튼을 되돌린다.
     setTimeout(() => {
@@ -106,6 +127,20 @@ export default function ProgressDownloadButton({
                 <span className="text-gray-400"> · 금일 계획 {dailyPlan}대</span>
               </div>
 
+              <label className="mt-3 block">
+                <span className="text-[11px] font-medium text-gray-500">다운로드 비밀번호</span>
+                <input
+                  type="password"
+                  value={pw}
+                  onChange={(e) => setPw(e.target.value)}
+                  placeholder="비밀번호 입력"
+                  autoComplete="off"
+                  className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-base focus:border-green-500 focus:outline-none focus:ring-1 focus:ring-green-500"
+                />
+              </label>
+
+              {error && <p className="mt-2 text-xs text-red-500">{error}</p>}
+
               <div className="mt-4 flex gap-2">
                 <button
                   onClick={close}
@@ -116,7 +151,7 @@ export default function ProgressDownloadButton({
                 </button>
                 <button
                   onClick={handleDownload}
-                  disabled={loading || !valid}
+                  disabled={loading || !valid || !pw}
                   className="flex-1 rounded-lg bg-green-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-green-700 disabled:opacity-50"
                 >
                   {loading ? "준비 중…" : "다운로드"}
