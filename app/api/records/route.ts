@@ -16,7 +16,7 @@ interface UpsertBody {
   team?: string | null; // 설치 팀명
   custom_slots?: CustomSlot[];
   na_slots?: string[]; // 단말기 없음 표시 슬롯키
-  saved?: boolean; // true면 '저장'(목록 등록) 처리 → saved_at = now()
+  saved?: boolean; // true면 '저장'(목록 등록) 처리 → 최초 1회만 saved_at = now()
 }
 
 // POST /api/records  → 레코드 upsert (연식/차종/커스텀 슬롯 저장)
@@ -39,7 +39,7 @@ export async function POST(req: NextRequest) {
   // 차량 마스터 확인(운수사/노선 스냅샷용)과 기존 레코드 조회를 병렬로
   const [vehicleRes, existingRes] = await Promise.all([
     supabase.from("vehicles").select("plate, operator, route").eq("plate", plate).maybeSingle(),
-    supabase.from("records").select("install_date").eq("plate", plate).maybeSingle(),
+    supabase.from("records").select("install_date, saved_at").eq("plate", plate).maybeSingle(),
   ]);
   const { data: vehicle, error: vErr } = vehicleRes;
   if (vErr) return NextResponse.json({ error: vErr.message }, { status: 500 });
@@ -72,7 +72,8 @@ export async function POST(req: NextRequest) {
   if (existing?.install_date) {
     payload.install_date = existing.install_date;
   }
-  if (body.saved) {
+  // 최초 저장 시각만 기록 — 이후 수정 저장해도 완료일(saved_at)은 바뀌지 않는다.
+  if (body.saved && !existing?.saved_at) {
     payload.saved_at = new Date().toISOString();
   }
 
