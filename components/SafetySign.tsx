@@ -1,8 +1,36 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import SignaturePad, { type SignaturePadHandle } from "./SignaturePad";
+
+const SIGNED_KEY = "pledgeSigned"; // 이 기기(브라우저)에서 서명 완료한 세션·단계 기록
+const SIGNED_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30일 지난 기록은 정리
+
+// localStorage에서 서명 완료 기록 맵을 읽기 (오래된 항목은 정리)
+function readSigned(): Record<string, { who: string; at: number }> {
+  try {
+    const raw = localStorage.getItem(SIGNED_KEY);
+    const map: Record<string, { who: string; at: number }> = raw ? JSON.parse(raw) : {};
+    const now = Date.now();
+    for (const k of Object.keys(map)) {
+      if (!map[k]?.at || now - map[k].at >= SIGNED_TTL_MS) delete map[k];
+    }
+    return map;
+  } catch {
+    return {};
+  }
+}
+
+function markSigned(key: string, who: string) {
+  try {
+    const map = readSigned();
+    map[key] = { who, at: Date.now() };
+    localStorage.setItem(SIGNED_KEY, JSON.stringify(map));
+  } catch {
+    // localStorage 사용 불가 환경 무시 — 완료 화면 전환은 그대로 동작
+  }
+}
 
 export interface PledgeSessionInfo {
   id: string;
@@ -46,6 +74,13 @@ export default function SafetySign({
   const [completed, setCompleted] = useState<{ phase: Phase; who: string } | null>(null);
 
   const pending = signers.filter((s) => !s.has_after); // 설치 후 미완료자
+
+  // 이 기기에서 이미 서명 완료한 세션·단계면 재접속(새로고침) 시 완료 화면 복원 → 중복 제출 방지
+  const signedKey = `${session.id}:${phase}`;
+  useEffect(() => {
+    const prev = readSigned()[signedKey];
+    if (prev) setCompleted({ phase, who: prev.who });
+  }, [signedKey, phase]);
 
   // 창 닫기 시도 → 브라우저가 거부하면(PC에서 직접 연 탭 등) 홈(차량번호 입력)으로 이동
   function closeOrHome() {
@@ -96,6 +131,7 @@ export default function SafetySign({
       setSelectedId(null);
       padRef.current?.clear();
       setCompleted({ phase, who });
+      markSigned(signedKey, who); // 이 기기 재접속 시에도 완료 화면 유지
       router.refresh(); // 배경에서 서명 목록 갱신
     } catch (e) {
       setError(e instanceof Error ? e.message : "제출 실패");

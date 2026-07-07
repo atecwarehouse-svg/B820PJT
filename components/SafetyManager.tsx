@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { downloadUrl } from "@/lib/download";
+import { workDateString } from "@/lib/work-day";
 import SignaturePad, { type SignaturePadHandle } from "./SignaturePad";
 
 export interface PledgeSessionRow {
@@ -20,7 +21,8 @@ export interface PledgeSessionRow {
 export default function SafetyManager({ sessions }: { sessions: PledgeSessionRow[] }) {
   const router = useRouter();
   const sigRef = useRef<SignaturePadHandle>(null);
-  const today = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  // 설치일자 기본값은 업무일(20:00~익일 12:00) 기준 — 자정 넘어 링크를 만들어도 작업 시작일로 잡힌다.
+  const today = workDateString(new Date());
 
   const [manager, setManager] = useState("");
   const [operator, setOperator] = useState("");
