@@ -62,6 +62,9 @@ export function toDate(v: unknown): string | null {
 
 const pilotKey = (op: string, route: string) => `${op}|||${route}`;
 
+// "M6628(예비)"처럼 노선 뒤에 차량별 주석이 붙은 경우 기본 노선명 (시범설치 판정 폴백용)
+const baseRoute = (route: string) => route.replace(/\([^)]*\)\s*$/, "").trim();
+
 async function parseWorkbook(wb: ExcelJS.Workbook): Promise<ParseResult> {
   // 1) 진행현황 시트에서 시범설치 영업소(운수사+노선) 집합 수집
   const pilotKeys = new Set<string>();
@@ -107,7 +110,9 @@ async function parseWorkbook(wb: ExcelJS.Workbook): Promise<ParseResult> {
     const model = txt(row.getCell("L").value) || null;
     const listRaw = txt(row.getCell("A").value);
     const list_no = /^\d+$/.test(listRaw) ? Number(listRaw) : null;
-    const is_pilot = pilotKeys.has(pilotKey(operator, route));
+    const is_pilot =
+      pilotKeys.has(pilotKey(operator, route)) ||
+      (baseRoute(route) !== "" && pilotKeys.has(pilotKey(operator, baseRoute(route))));
     if (is_pilot) pilotCount++;
     map.set(plate, { plate, operator, route, planned_date, is_pilot, year, model, list_no });
   }
