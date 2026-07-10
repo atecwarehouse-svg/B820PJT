@@ -219,6 +219,8 @@ export default function ConsultationModal({ operators }: { operators: OperatorSc
   const [mountBoardOpt, setMountBoardOpt] = useState("");
   const [mountBoardCustom, setMountBoardCustom] = useState("");
   const [handleRemoval, setHandleRemoval] = useState("");
+  const [listCheck, setListCheck] = useState(""); // 차량리스트·수량 확인 (이상 없음/변동 있음)
+  const [listChange, setListChange] = useState(""); // 변동 있음일 때 변동사항
   const [notes, setNotes] = useState("");
   const [consulter, setConsulter] = useState("");
 
@@ -258,6 +260,8 @@ export default function ConsultationModal({ operators }: { operators: OperatorSc
     setMountBoardOpt("");
     setMountBoardCustom("");
     setHandleRemoval("");
+    setListCheck("");
+    setListChange("");
     setNotes("");
     setConsulter("");
     setVehOpen(false);
@@ -311,6 +315,10 @@ export default function ConsultationModal({ operators }: { operators: OperatorSc
       setError("승차 단말기 위치의 직접입력 내용을 입력하세요.");
       return;
     }
+    if (listCheck === "변동 있음" && !listChange.trim()) {
+      setError("차량리스트 변동사항 내용을 입력하세요.");
+      return;
+    }
 
     setBusy(true);
     setError(null);
@@ -323,6 +331,8 @@ export default function ConsultationModal({ operators }: { operators: OperatorSc
           date,
           count,
           routes: routesText,
+          listCheck,
+          listChange: listCheck === "변동 있음" ? listChange : "",
           place,
           workStart: workStart ?? "",
           dayOff,
@@ -451,6 +461,28 @@ export default function ConsultationModal({ operators }: { operators: OperatorSc
                       🚌 차량리스트 보기 ({count}대)
                     </button>
                   )}
+
+                  <label className="block">
+                    <span className={LABEL}>차량리스트·수량 확인</span>
+                    <select
+                      value={listCheck}
+                      onChange={(e) => setListCheck(e.target.value)}
+                      className={INPUT}
+                    >
+                      <option value="">선택</option>
+                      <option value="이상 없음">이상 없음</option>
+                      <option value="변동 있음">변동 있음</option>
+                    </select>
+                    {listCheck === "변동 있음" && (
+                      <input
+                        type="text"
+                        value={listChange}
+                        onChange={(e) => setListChange(e.target.value)}
+                        placeholder="변동사항 입력 (예: 차량 교체·추가·제외)"
+                        className={INPUT}
+                      />
+                    )}
+                  </label>
 
                   <div>
                     <span className={LABEL}>2. 설치 대수 (자동 표기)</span>

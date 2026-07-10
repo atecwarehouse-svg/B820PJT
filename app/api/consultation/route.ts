@@ -45,6 +45,8 @@ export async function POST(req: NextRequest) {
       date,
       count,
       routes: text("routes", 300),
+      listCheck: text("listCheck", 20),
+      listChange: text("listChange", 300),
       place: text("place"),
       workStart: time("workStart"),
       dayOff: text("dayOff"),
