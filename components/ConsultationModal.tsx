@@ -22,6 +22,20 @@ function fmtDot(d: string): string {
   return d.replace(/-/g, ".");
 }
 
+// 카드 미리보기의 항목 한 줄 (팀즈 FactSet 모양)
+function PreviewRow({ title, value }: { title: string; value: string }) {
+  return (
+    <div className="flex gap-2 py-0.5">
+      <span className="w-28 shrink-0 font-semibold text-gray-500">{title}</span>
+      <span className="min-w-0 break-words text-gray-800">{value}</span>
+    </div>
+  );
+}
+
+function PreviewSub({ text }: { text: string }) {
+  return <p className="mt-2 text-xs font-bold text-gray-800">{text}</p>;
+}
+
 // 시/분 드롭다운 — 작업 시간(4)·도착 예정(7)·익일 첫차(8)·차고지 출발(9) 공용.
 // 시를 고르면 분은 00으로 시작, 시를 '--'로 되돌리면 값 없음(null).
 function TimeField({
@@ -381,7 +395,7 @@ export default function ConsultationModal({ operators }: { operators: OperatorSc
           onClick={close}
         >
           <div
-            className="mb-12 mt-8 w-full max-w-md rounded-2xl bg-white shadow-xl"
+            className="mb-12 mt-8 w-full max-w-md rounded-2xl bg-white shadow-xl md:max-w-4xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
@@ -422,6 +436,7 @@ export default function ConsultationModal({ operators }: { operators: OperatorSc
                   </button>
                 </div>
               ) : (
+                <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-3">
                   {/* 제목 미리보기 — 설치일 선택 시 자동 표기 */}
                   <p className="rounded-lg bg-blue-50 px-3 py-2 text-center text-sm font-bold text-blue-700">
@@ -712,6 +727,79 @@ export default function ConsultationModal({ operators }: { operators: OperatorSc
                   >
                     {busy ? "전송 중..." : "팀즈로 보내기"}
                   </button>
+                </div>
+
+                {/* 카드 미리보기 — 입력하면 실시간 반영 (PC: 오른쪽, 모바일: 아래) */}
+                <div className="h-fit rounded-xl border border-gray-200 bg-gray-50 p-3 md:sticky md:top-2">
+                  <p className="mb-2 text-[11px] font-semibold text-gray-400">
+                    카드 미리보기 (팀즈 협의사항방)
+                  </p>
+                  <div className="rounded-lg border border-gray-200 bg-white p-3 text-xs leading-relaxed shadow-sm">
+                    <p className="text-sm font-bold text-gray-900">
+                      📋 [{date ? fmtDot(date) : "0000.00.00"} 설치 일정] 운수사 협의사항
+                    </p>
+                    <p className="font-bold text-blue-600">
+                      {selectedOp?.operator ?? "운수사 미선택"} · {date ? count : 0}대
+                    </p>
+                    <div className="mt-1.5">
+                      <PreviewRow title="운수사" value={selectedOp?.operator ?? "-"} />
+                      <PreviewRow title="설치 대수" value={date ? `${count}대` : "-"} />
+                      <PreviewRow title="설치 노선" value={routesText || "-"} />
+                      <PreviewRow title="차량리스트 확인" value={listCheck.trim() || "-"} />
+                      {listCheck === "변동 있음" && listChange.trim() && (
+                        <PreviewRow title="변동사항" value={listChange.trim()} />
+                      )}
+                      <PreviewRow title="설치 장소" value={place.trim() || "-"} />
+                      <PreviewRow
+                        title="작업 시간"
+                        value={workStart ? `${workStart} 이후부터 가능` : "-"}
+                      />
+                      <PreviewRow title="당일 휴차" value={dayOff.trim() || "-"} />
+                      <PreviewRow title="익일 휴차" value={nextDayOff.trim() || "-"} />
+                    </div>
+                    <PreviewSub text="○ 차량 운행 시간" />
+                    <PreviewRow title="첫차 종료 후 도착" value={arrival ?? "-"} />
+                    <PreviewRow title="익일 첫차 출발" value={nextFirstBus ?? "-"} />
+                    <PreviewRow title="차고지 출발(첫차)" value={depotOut ?? "-"} />
+                    <PreviewSub text="○ 협조·확인사항" />
+                    <PreviewRow
+                      title="차키 협조"
+                      value={(keyOpt === "직접입력" ? keyCustom : keyOpt).trim() || "-"}
+                    />
+                    <PreviewRow title="작업 중 시동" value={engineOn.trim() || "-"} />
+                    <PreviewRow title="충전 여부" value={fuel.trim() || "-"} />
+                    <PreviewSub text="○ 담당자·단말기 설치 위치" />
+                    <PreviewRow title="담당자(주간)" value={managerDay.trim() || "-"} />
+                    <PreviewRow title="담당자(야간)" value={managerNight.trim() || "-"} />
+                    <PreviewRow title="표출기" value={mountDisplay.trim() || "-"} />
+                    <PreviewRow
+                      title="통합단말기"
+                      value={(mountMainOpt === "직접입력" ? mountMainCustom : mountMainOpt).trim() || "-"}
+                    />
+                    <PreviewRow
+                      title="승차"
+                      value={(mountBoardOpt === "직접입력" ? mountBoardCustom : mountBoardOpt).trim() || "-"}
+                    />
+                    <PreviewRow title="격벽 손잡이 탈거" value={handleRemoval.trim() || "-"} />
+                    <PreviewSub text="○ 특이사항" />
+                    <div className="text-gray-800">
+                      {(notes.trim()
+                        ? notes
+                            .trim()
+                            .split(/\r?\n/)
+                            .map((l) => l.trim())
+                            .filter(Boolean)
+                            .map((l) => (l.startsWith("-") ? l : `- ${l}`))
+                        : ["- 없음"]
+                      ).map((l, i) => (
+                        <p key={i}>{l}</p>
+                      ))}
+                    </div>
+                    <div className="mt-1.5">
+                      <PreviewRow title="협의자" value={consulter.trim() || "-"} />
+                    </div>
+                  </div>
+                </div>
                 </div>
               )}
             </div>
