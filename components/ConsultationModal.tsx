@@ -15,6 +15,7 @@ const ENGINE_OPTIONS = ["가능", "불가능"];
 const FUEL_OPTIONS = ["가스 충분", "부족(에어컨 조절 필요)"];
 const MOUNT_MAIN_OPTIONS = ["운전석 위", "직접입력"];
 const MOUNT_BOARD_OPTIONS = ["격벽 ㄷ봉 사용", "표출기 뒤", "직접입력"];
+const HANDLE_REMOVAL_OPTIONS = ["가능(탈거후 정비과 반납요청)", "불가능"];
 
 // "2026-07-15" → "2026.07.15"
 function fmtDot(d: string): string {
@@ -217,6 +218,7 @@ export default function ConsultationModal({ operators }: { operators: OperatorSc
   const [mountMainCustom, setMountMainCustom] = useState("");
   const [mountBoardOpt, setMountBoardOpt] = useState("");
   const [mountBoardCustom, setMountBoardCustom] = useState("");
+  const [handleRemoval, setHandleRemoval] = useState("");
   const [notes, setNotes] = useState("");
   const [consulter, setConsulter] = useState("");
 
@@ -246,6 +248,7 @@ export default function ConsultationModal({ operators }: { operators: OperatorSc
     setMountMainCustom("");
     setMountBoardOpt("");
     setMountBoardCustom("");
+    setHandleRemoval("");
     setNotes("");
     setConsulter("");
   }
@@ -302,6 +305,7 @@ export default function ConsultationModal({ operators }: { operators: OperatorSc
           mountDisplay,
           mountMain: mountMainOpt === "직접입력" ? mountMainCustom : mountMainOpt,
           mountBoard: mountBoardOpt === "직접입력" ? mountBoardCustom : mountBoardOpt,
+          handleRemoval,
           notes,
           consulter,
         }),
@@ -558,6 +562,21 @@ export default function ConsultationModal({ operators }: { operators: OperatorSc
                       onCustomChange={setMountBoardCustom}
                       placeholder="설치 위치 직접 입력"
                     />
+                    <label className="block">
+                      <span className={LABEL}>격벽 손잡이(얇은봉) 탈거 유무</span>
+                      <select
+                        value={handleRemoval}
+                        onChange={(e) => setHandleRemoval(e.target.value)}
+                        className={INPUT}
+                      >
+                        <option value="">선택</option>
+                        {HANDLE_REMOVAL_OPTIONS.map((o) => (
+                          <option key={o} value={o}>
+                            {o}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
                   </div>
 
                   <label className="block">

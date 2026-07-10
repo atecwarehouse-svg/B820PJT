@@ -525,6 +525,7 @@ export interface ConsultationCardData {
   mountDisplay?: string; // 14. 표출기
   mountMain?: string; // 14. 통합단말기
   mountBoard?: string; // 14. 승차
+  handleRemoval?: string; // 14. 격벽 손잡이(얇은봉) 탈거 유무
   notes?: string; // 15. 특이사항
   consulter?: string; // 16. 협의자
 }
@@ -631,6 +632,7 @@ export async function sendConsultationCard(d: ConsultationCardData): Promise<voi
                 { title: "표출기", value: v(d.mountDisplay) },
                 { title: "통합단말기", value: v(d.mountMain) },
                 { title: "승차", value: v(d.mountBoard) },
+                { title: "격벽 손잡이 탈거", value: v(d.handleRemoval) },
               ],
             },
             sub("○ 특이사항"),

@@ -59,6 +59,7 @@ export async function POST(req: NextRequest) {
       mountDisplay: text("mountDisplay"),
       mountMain: text("mountMain"),
       mountBoard: text("mountBoard"),
+      handleRemoval: text("handleRemoval", 50),
       notes: text("notes", 500),
       consulter: text("consulter"),
     });
