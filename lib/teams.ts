@@ -708,12 +708,13 @@ export async function sendPlanReportCard(d: {
   }
 
   const v = (s?: string) => s?.trim() || "-";
-  const header = [
+  // 제목은 채팅방별로 다름 — 시작보고방은 '설치계획 보고', 협의사항방은 '집합시간 및 특이사항 공지'
+  const header = (title: string) => [
     {
       type: "TextBlock",
       size: "Large",
       weight: "Bolder",
-      text: "B820 단말기 설치계획 보고",
+      text: title,
       wrap: true,
     },
     {
@@ -760,7 +761,7 @@ export async function sendPlanReportCard(d: {
 
   // 시작보고방: 휴차 없이 간단히
   const startCard = mkCard([
-    ...header,
+    ...header("B820 단말기 설치계획 보고"),
     ...d.groups.flatMap((g) => [
       groupHead(g),
       { type: "FactSet", spacing: "Small", facts: baseFacts(g) },
@@ -769,7 +770,7 @@ export async function sendPlanReportCard(d: {
 
   // 협의사항방: 휴차 + 도착시간 + 협조·확인사항 + 단말기 설치위치 + 특이사항
   const consultCard = mkCard([
-    ...header,
+    ...header("집합시간 및 특이사항 공지"),
     ...d.groups.flatMap((g) => [
       groupHead(g),
       {
