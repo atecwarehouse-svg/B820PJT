@@ -20,6 +20,7 @@ import ProgressDownloadButton from "@/components/ProgressDownloadButton";
 import ScheduleUploadModal from "@/components/ScheduleUploadModal";
 import ConsultationModal from "@/components/ConsultationModal";
 import PlanReportModal from "@/components/PlanReportModal";
+import TeamStatsModal from "@/components/TeamStatsModal";
 import ScheduleChart from "@/components/ScheduleChart";
 import InstallDateSearch from "@/components/InstallDateSearch";
 import DailyReportModal from "@/components/DailyReportModal";
@@ -187,6 +188,7 @@ export default async function DashboardPage() {
             />
           )}
           <ProgressDownloadButton today={today} scheduleDays={scheduleDays} />
+          <TeamStatsModal />
         </div>
       </div>
 
