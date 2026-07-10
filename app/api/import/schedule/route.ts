@@ -19,8 +19,9 @@ interface ChangeGroup {
 // POST /api/import/schedule  (multipart/form-data: file=수정한 진행현황 xlsx, apply=true|false, pw=관리자 비밀번호)
 //   관리자 비밀번호(pw) 또는 관리자 페이지 로그인 쿠키가 있어야 한다.
 //   apply!=="true" → 미리보기: 파싱+변경내역만 계산(DB 미변경).
-//   apply==="true" → 차량리스트 설치 예정일(I열)·시범설치를 vehicles에 반영(upsert).
-//   plate 기준 upsert로 planned_date/operator/route/is_pilot만 갱신(삭제·is_added 보존).
+//   apply==="true" → 차량리스트 설치 예정일(I열)·시범설치를 vehicles에 반영(upsert)
+//   + 차량리스트에서 빠진 차량은 삭제(수량 교정). 단 증차(is_added)와
+//   설치기록·사진이 있는 차량은 보호(삭제하지 않고 미리보기에 알림만).
 export async function POST(req: NextRequest) {
   const form = await req.formData();
   const file = form.get("file") as File | null;
@@ -53,19 +54,42 @@ export async function POST(req: NextRequest) {
 
   const supabase = createServiceClient();
 
-  // 1) 변경 비교용으로 반영 전 현재 예정일을 먼저 읽어둔다 (plate→예정일).
-  const before = new Map<string, string | null>();
+  // 1) 변경 비교·제외 판정용으로 반영 전 차량 전체를 읽어둔다 (plate→예정일·운수사·증차여부).
+  //    is_added 컬럼이 없는 DB(migration_added.sql 미실행)면 빼고 재시도(폴백).
+  const before = new Map<
+    string,
+    { plate: string; planned: string | null; operator: string; isAdded: boolean }
+  >();
+  let hasIsAdded = true;
   for (let from = 0; ; from += PAGE) {
-    const { data, error } = await supabase
-      .from("vehicles")
-      .select("plate, planned_date")
-      .range(from, from + PAGE - 1);
+    const select = () =>
+      supabase
+        .from("vehicles")
+        .select(
+          hasIsAdded ? "plate, planned_date, operator, is_added" : "plate, planned_date, operator",
+        )
+        .range(from, from + PAGE - 1);
+    let { data, error } = await select();
+    if (error && hasIsAdded && /is_added/i.test(error.message)) {
+      hasIsAdded = false;
+      ({ data, error } = await select());
+    }
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
     if (!data || data.length === 0) break;
-    for (const v of data) {
-      before.set(v.plate, v.planned_date ? String(v.planned_date).slice(0, 10) : null);
+    for (const v of data as unknown as {
+      plate: string;
+      planned_date: string | null;
+      operator: string | null;
+      is_added?: boolean | null;
+    }[]) {
+      before.set(v.plate, {
+        plate: v.plate,
+        planned: v.planned_date ? String(v.planned_date).slice(0, 10) : null,
+        operator: v.operator ?? "",
+        isAdded: Boolean(v.is_added),
+      });
     }
     if (data.length < PAGE) break;
   }
@@ -79,7 +103,7 @@ export async function POST(req: NextRequest) {
       added++;
       continue;
     }
-    const from = before.get(r.plate) ?? null;
+    const from = before.get(r.plate)?.planned ?? null;
     const to = r.planned_date;
     if (from === to) continue; // 변경 없음
     changedCount++;
@@ -92,6 +116,43 @@ export async function POST(req: NextRequest) {
     (a, b) => b.count - a.count || a.operator.localeCompare(b.operator),
   );
 
+  // 3) 차량리스트에서 빠진 차량 = 제외(삭제) 대상. 증차(is_added)는 엑셀에 없어도 보호,
+  //    설치기록·사진이 있는 차량도 보호(작업 데이터 유실 방지 — 알림만).
+  const filePlates = new Set(parsed.rows.map((r) => r.plate));
+  const candidates = [...before.values()].filter((v) => !filePlates.has(v.plate) && !v.isAdded);
+  const toRemove: typeof candidates = [];
+  const protectedPlates: string[] = [];
+  if (candidates.length > 0) {
+    const started = new Set<string>();
+    const candPlates = candidates.map((v) => v.plate);
+    // in() 필터는 GET 쿼리스트링이라 한글 차량번호를 많이 담으면 URL 길이 초과로 실패 → 100대씩.
+    const IN_CHUNK = 100;
+    for (let i = 0; i < candPlates.length; i += IN_CHUNK) {
+      const slice = candPlates.slice(i, i + IN_CHUNK);
+      for (const table of ["records", "photos"] as const) {
+        const { data, error } = await supabase.from(table).select("plate").in("plate", slice);
+        if (error) {
+          return NextResponse.json({ error: error.message }, { status: 500 });
+        }
+        for (const r of data ?? []) started.add(r.plate);
+      }
+    }
+    for (const v of candidates) {
+      if (started.has(v.plate)) protectedPlates.push(v.plate);
+      else toRemove.push(v);
+    }
+  }
+  const removedMap = new Map<string, { operator: string; count: number; plates: string[] }>();
+  for (const v of toRemove) {
+    const g = removedMap.get(v.operator) ?? { operator: v.operator, count: 0, plates: [] };
+    g.count++;
+    g.plates.push(v.plate);
+    removedMap.set(v.operator, g);
+  }
+  const removed = [...removedMap.values()].sort(
+    (a, b) => b.count - a.count || a.operator.localeCompare(b.operator),
+  );
+
   const withDate = parsed.rows.filter((r) => r.planned_date).length;
   const summary = {
     total: parsed.rows.length, // 양식의 차량 수(반영 대상)
@@ -101,6 +162,9 @@ export async function POST(req: NextRequest) {
     added,
     changedCount,
     changes,
+    removedCount: toRemove.length,
+    removed,
+    protectedPlates,
   };
 
   // 미리보기(apply=false): DB 변경 없이 변경내역만 반환.
@@ -129,6 +193,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
     done += chunk.length;
+  }
+
+  // 제외 차량 삭제 — 미리보기에서 보여준 목록 그대로 (records/photos 있는 차량은 위에서 제외됨).
+  // in() 필터 URL 길이 제한 때문에 100대씩 나눠 삭제.
+  for (let i = 0; i < toRemove.length; i += 100) {
+    const plates = toRemove.slice(i, i + 100).map((v) => v.plate);
+    const { error } = await supabase.from("vehicles").delete().in("plate", plates);
+    if (error) {
+      return NextResponse.json({ error: `제외 차량 삭제 실패: ${error.message}` }, { status: 500 });
+    }
   }
 
   return NextResponse.json({ applied: true, updated: done, ...summary });

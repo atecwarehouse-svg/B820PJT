@@ -10,6 +10,12 @@ interface ChangeGroup {
   count: number;
 }
 
+interface RemovedGroup {
+  operator: string;
+  count: number;
+  plates: string[];
+}
+
 interface UploadResult {
   applied: boolean;
   updated?: number; // 적용 시에만
@@ -20,6 +26,9 @@ interface UploadResult {
   added: number;
   changedCount: number;
   changes: ChangeGroup[];
+  removedCount?: number; // 차량리스트에서 빠져 삭제(예정)된 차량 수
+  removed?: RemovedGroup[];
+  protectedPlates?: string[]; // 기록·사진이 있어 삭제하지 않은 차량
 }
 
 // "2026-07-10" → "7/10", null → "미정"
@@ -135,6 +144,42 @@ export default function ScheduleUploadModal() {
     );
   }
 
+  // 차량리스트에서 빠진(제외) 차량 목록 + 보호 차량 알림 (preview·done 공용)
+  function RemovedList() {
+    if (!result) return null;
+    return (
+      <>
+        {(result.removed?.length ?? 0) > 0 && (
+          <div className="mt-3 max-h-60 overflow-y-auto rounded-lg border border-red-100">
+            <p className="border-b border-red-100 bg-red-50 px-3 py-1.5 text-[11px] font-semibold text-red-500">
+              차량리스트에서 제외된 차량 {(result.removedCount ?? 0).toLocaleString()}대
+              {result.applied ? " — 삭제됨" : " — 반영 시 삭제됩니다"}
+            </p>
+            <ul className="divide-y divide-red-50">
+              {result.removed!.map((g, i) => (
+                <li key={i} className="px-3 py-2 text-xs">
+                  <span className="font-medium text-gray-700">
+                    {g.operator}
+                    <span className="ml-1 font-normal text-gray-400">{g.count}대</span>
+                  </span>
+                  <p className="mt-0.5 break-all text-gray-500">{g.plates.join(", ")}</p>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+        {(result.protectedPlates?.length ?? 0) > 0 && (
+          <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-[11px] leading-relaxed text-amber-700">
+            아래 차량은 리스트에서 빠졌지만 <b>설치 기록·사진이 있어 삭제하지 않았습니다</b>.
+            삭제가 필요하면 관리자에게 문의하세요.
+            <br />
+            {result.protectedPlates!.join(", ")}
+          </p>
+        )}
+      </>
+    );
+  }
+
   return (
     <>
       <button
@@ -185,6 +230,10 @@ export default function ScheduleUploadModal() {
                       날짜만 바꾸면 됩니다. <b>계획수량</b>은 예정일에서 자동으로 계산되어
                       일정·다운로드(계획수량 기본값)에 함께 반영되므로 따로 입력할 필요가 없습니다.
                       (시범설치는 「진행현황」 시트 비고 기준)
+                    </p>
+                    <p className="mt-1 text-gray-500">
+                      차량리스트에서 <b>행을 삭제한 차량은 반영 시 함께 제외</b>되어 수량이
+                      수정됩니다. (앱에서 추가한 증차, 설치 기록이 있는 차량은 보호)
                     </p>
                   </div>
 
@@ -238,9 +287,19 @@ export default function ScheduleUploadModal() {
                     총 {result.total.toLocaleString()}대 · 일정 변경{" "}
                     <b className="text-blue-700">{result.changedCount.toLocaleString()}대</b>
                     {result.added > 0 && <> · 신규 {result.added.toLocaleString()}대</>}
+                    {(result.removedCount ?? 0) > 0 && (
+                      <>
+                        {" "}
+                        · 제외{" "}
+                        <b className="text-red-600">
+                          {(result.removedCount ?? 0).toLocaleString()}대
+                        </b>
+                      </>
+                    )}
                   </p>
 
                   <ChangeList />
+                  <RemovedList />
 
                   {error && <p className="mt-3 text-xs text-red-500">{error}</p>}
 
@@ -273,10 +332,20 @@ export default function ScheduleUploadModal() {
                       차량 {(result.updated ?? result.total).toLocaleString()}대 반영 · 일정 변경{" "}
                       <b className="text-blue-700">{result.changedCount.toLocaleString()}대</b>
                       {result.added > 0 && <> · 신규 {result.added.toLocaleString()}대</>}
+                      {(result.removedCount ?? 0) > 0 && (
+                        <>
+                          {" "}
+                          · 제외{" "}
+                          <b className="text-red-600">
+                            {(result.removedCount ?? 0).toLocaleString()}대
+                          </b>
+                        </>
+                      )}
                     </p>
                   </div>
 
                   <ChangeList />
+                  <RemovedList />
 
                   <button
                     onClick={close}

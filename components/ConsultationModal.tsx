@@ -325,7 +325,7 @@ export default function ConsultationModal({ operators }: { operators: OperatorSc
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="rounded-lg border border-blue-300 bg-white px-3 py-1.5 text-xs font-semibold text-blue-600 shadow-sm transition-colors hover:bg-blue-50"
+        className="rounded-lg border border-red-300 bg-white px-3 py-1.5 text-xs font-semibold text-red-600 shadow-sm transition-colors hover:bg-red-50"
       >
         운수사 협의사항
       </button>
