@@ -361,3 +361,42 @@ export async function loadScheduleStats(): Promise<ScheduleStats> {
 
   return { days, cumPlanned, cumDone, totalPlanned: cp, totalDone: cd, pilotTotal, pilotDone };
 }
+
+export interface OperatorScheduleDate {
+  date: string; // YYYY-MM-DD
+  count: number; // 해당 운수사·날짜 설치 예정 대수
+}
+
+export interface OperatorSchedule {
+  operator: string;
+  dates: OperatorScheduleDate[]; // 날짜 오름차순
+}
+
+// 운수사 협의사항 폼용 — 운수사별 설치 예정일 목록과 날짜별 대수.
+// 예정일 없는 차량의 운수사도 목록에 포함(dates가 빈 배열일 수 있음).
+export async function loadOperatorSchedules(): Promise<OperatorSchedule[]> {
+  const supabase = createServiceClient();
+  const vehicles = await fetchAll<{ operator: string | null; planned_date: string | null }>(
+    (from, to) => supabase.from("vehicles").select("operator, planned_date").range(from, to),
+  );
+
+  const byOperator = new Map<string, Map<string, number>>();
+  for (const v of vehicles) {
+    const operator = v.operator?.trim() || "미지정";
+    const dates = byOperator.get(operator) ?? new Map<string, number>();
+    if (v.planned_date) {
+      const date = v.planned_date.slice(0, 10);
+      dates.set(date, (dates.get(date) ?? 0) + 1);
+    }
+    byOperator.set(operator, dates);
+  }
+
+  return [...byOperator.entries()]
+    .map(([operator, dates]) => ({
+      operator,
+      dates: [...dates.entries()]
+        .map(([date, count]) => ({ date, count }))
+        .sort((a, b) => a.date.localeCompare(b.date)),
+    }))
+    .sort((a, b) => a.operator.localeCompare(b.operator, "ko"));
+}

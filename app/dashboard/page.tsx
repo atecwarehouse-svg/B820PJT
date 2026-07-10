@@ -6,11 +6,19 @@ import {
   loadScheduleStats,
   loadInProgressList,
   loadTodayPlanGroups,
+  loadOperatorSchedules,
 } from "@/lib/stats";
-import type { InstallProgress, ScheduleStats, InProgressVehicle, TodayPlanGroup } from "@/lib/stats";
+import type {
+  InstallProgress,
+  ScheduleStats,
+  InProgressVehicle,
+  TodayPlanGroup,
+  OperatorSchedule,
+} from "@/lib/stats";
 import { workDateString } from "@/lib/work-day";
 import ProgressDownloadButton from "@/components/ProgressDownloadButton";
 import ScheduleUploadModal from "@/components/ScheduleUploadModal";
+import ConsultationModal from "@/components/ConsultationModal";
 import ScheduleChart from "@/components/ScheduleChart";
 import InstallDateSearch from "@/components/InstallDateSearch";
 import DailyReportModal from "@/components/DailyReportModal";
@@ -80,14 +88,28 @@ const getTodayPlan = unstable_cache(
   { revalidate: 60, tags: ["dashboard"] },
 );
 
+// 운수사별 설치 예정일·대수 — 운수사 협의사항 폼(운수사 검색 → 날짜 선택)용.
+const getOperatorSchedules = unstable_cache(
+  async (): Promise<OperatorSchedule[]> => {
+    try {
+      return await loadOperatorSchedules();
+    } catch {
+      return [];
+    }
+  },
+  ["dashboard-operator-schedules"],
+  { revalidate: 60, tags: ["dashboard"] },
+);
+
 export default async function DashboardPage() {
   const todayWork = workDateString(new Date()); // 현재 업무일
-  const [s, ip, sch, inProgressList, todayPlanGroups] = await Promise.all([
+  const [s, ip, sch, inProgressList, todayPlanGroups, operatorSchedules] = await Promise.all([
     getStats(),
     getInstall(),
     getSchedule(),
     getInProgress(),
     getTodayPlan(todayWork),
+    getOperatorSchedules(),
   ]);
   // 렌더 시각(KST) — 새로고침할 때마다 갱신되어 데이터 최신 여부를 바로 알 수 있다.
   const updatedAt = new Intl.DateTimeFormat("ko-KR", {
@@ -209,7 +231,10 @@ export default async function DashboardPage() {
           설치 일정
           <span className="ml-1 font-normal text-gray-400">(예정일 기준 계획 대비 실적)</span>
         </h2>
-        <ScheduleUploadModal />
+        <div className="flex flex-wrap items-center gap-2">
+          <ConsultationModal operators={operatorSchedules} />
+          <ScheduleUploadModal />
+        </div>
       </div>
       <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
         {sch === null ? (

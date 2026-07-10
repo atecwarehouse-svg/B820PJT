@@ -505,3 +505,158 @@ export async function sendCompletionCard(d: {
     throw new Error(`Teams 완료카드 응답 ${res.status} ${t.slice(0, 160)}`);
   }
 }
+
+export interface ConsultationCardData {
+  operator: string; // 1. 운수사
+  date: string; // 설치 일정 (YYYY-MM-DD)
+  count: number; // 2. 설치 대수
+  place?: string; // 3. 설치 장소
+  workStart?: string; // 4. 작업 시간 — 첫차 운행 종료 "HH:MM"
+  dayOff?: string; // 5. 당일 휴차
+  nextDayOff?: string; // 6. 익일 휴차
+  arrival?: string; // 7. 첫차 운행 종료 후 도착 예정 "HH:MM"
+  nextFirstBus?: string; // 8. 익일 첫차 출발 "HH:MM"
+  depotOut?: string; // 9. 차고지에서 나가는 시간(첫차 기준) "HH:MM"
+  keyMethod?: string; // 10. 차키 협조
+  engineOn?: string; // 11. 작업 중 차량 시동 가능 여부
+  fuel?: string; // 12. 충전 여부
+  managerDay?: string; // 13. 운수사 담당자(주간)
+  managerNight?: string; // 13. 운수사 담당자(야간)
+  mountDisplay?: string; // 14. 표출기
+  mountMain?: string; // 14. 통합단말기
+  mountBoard?: string; // 14. 승차
+  notes?: string; // 15. 특이사항
+  consulter?: string; // 16. 협의자
+}
+
+// 운수사 협의사항 카드 — 대시보드 '운수사 협의사항' 폼에서 전송.
+// 웹후크: TEAMS_COMPLETE_WEBHOOK_URL (설치완료 사진과 같은 채팅방).
+// 사용자가 명시적으로 보내는 것이므로 미설정 시 throw해 실패를 알린다.
+export async function sendConsultationCard(d: ConsultationCardData): Promise<void> {
+  const url = process.env.TEAMS_COMPLETE_WEBHOOK_URL;
+  if (!url) {
+    throw new Error(
+      "협의사항 웹후크가 설정되지 않았습니다. 관리자에게 문의하세요. (TEAMS_COMPLETE_WEBHOOK_URL)",
+    );
+  }
+
+  // 미입력 항목은 "-" 표기 — 아직 협의되지 않은 항목이 카드에서 바로 보이게.
+  const v = (s?: string) => s?.trim() || "-";
+  const dateDot = d.date.replace(/-/g, ".");
+  const sub = (text: string) => ({
+    type: "TextBlock",
+    weight: "Bolder",
+    text,
+    spacing: "Medium",
+    wrap: true,
+  });
+
+  const noteText = d.notes?.trim()
+    ? d.notes
+        .trim()
+        .split(/\r?\n/)
+        .map((l) => l.trim())
+        .filter(Boolean)
+        .map((l) => (l.startsWith("-") ? l : `- ${l}`))
+        .join("\n")
+    : "- 없음";
+
+  const card = {
+    type: "message",
+    attachments: [
+      {
+        contentType: "application/vnd.microsoft.card.adaptive",
+        content: {
+          $schema: "http://adaptivecards.io/schemas/adaptive-card.json",
+          type: "AdaptiveCard",
+          version: "1.4",
+          body: [
+            {
+              type: "TextBlock",
+              size: "Large",
+              weight: "Bolder",
+              text: `📋 [${dateDot} 설치 일정] 운수사 협의사항`,
+              wrap: true,
+            },
+            {
+              type: "TextBlock",
+              size: "Medium",
+              weight: "Bolder",
+              color: "Accent",
+              text: `${d.operator} · ${d.count}대`,
+              spacing: "None",
+              wrap: true,
+            },
+            {
+              type: "FactSet",
+              facts: [
+                { title: "운수사", value: d.operator },
+                { title: "설치 대수", value: `${d.count}대` },
+                { title: "설치 장소", value: v(d.place) },
+                {
+                  title: "작업 시간",
+                  value: d.workStart ? `${d.workStart} 이후부터 가능` : "-",
+                },
+                { title: "당일 휴차", value: v(d.dayOff) },
+                { title: "익일 휴차", value: v(d.nextDayOff) },
+              ],
+            },
+            sub("○ 차량 운행 시간"),
+            {
+              type: "FactSet",
+              spacing: "Small",
+              facts: [
+                { title: "첫차 종료 후 도착", value: v(d.arrival) },
+                { title: "익일 첫차 출발", value: v(d.nextFirstBus) },
+                { title: "차고지 출발(첫차)", value: v(d.depotOut) },
+              ],
+            },
+            sub("○ 협조·확인사항"),
+            {
+              type: "FactSet",
+              spacing: "Small",
+              facts: [
+                { title: "차키 협조", value: v(d.keyMethod) },
+                { title: "작업 중 시동", value: v(d.engineOn) },
+                { title: "충전 여부", value: v(d.fuel) },
+              ],
+            },
+            sub("○ 담당자·단말기 설치 위치"),
+            {
+              type: "FactSet",
+              spacing: "Small",
+              facts: [
+                { title: "담당자(주간)", value: v(d.managerDay) },
+                { title: "담당자(야간)", value: v(d.managerNight) },
+                { title: "표출기", value: v(d.mountDisplay) },
+                { title: "통합단말기", value: v(d.mountMain) },
+                { title: "승차", value: v(d.mountBoard) },
+              ],
+            },
+            sub("○ 특이사항"),
+            {
+              type: "TextBlock",
+              text: noteText,
+              spacing: "None",
+              wrap: true,
+            },
+            {
+              type: "FactSet",
+              facts: [{ title: "협의자", value: v(d.consulter) }],
+            },
+          ],
+        },
+      },
+    ],
+  };
+
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(card),
+  });
+  if (!res.ok) {
+    const t = await res.text().catch(() => "");
+    throw new Error(`Teams 협의사항카드 응답 ${res.status} ${t.slice(0, 160)}`);
+  }
+}
