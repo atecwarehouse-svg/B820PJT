@@ -365,6 +365,7 @@ export async function loadScheduleStats(): Promise<ScheduleStats> {
 export interface OperatorScheduleDate {
   date: string; // YYYY-MM-DD
   count: number; // 해당 운수사·날짜 설치 예정 대수
+  routes: { route: string; count: number }[]; // 그날 설치하는 노선별 대수 (대수 내림차순)
 }
 
 export interface OperatorSchedule {
@@ -372,21 +373,29 @@ export interface OperatorSchedule {
   dates: OperatorScheduleDate[]; // 날짜 오름차순
 }
 
-// 운수사 협의사항 폼용 — 운수사별 설치 예정일 목록과 날짜별 대수.
+// 운수사 협의사항 폼용 — 운수사별 설치 예정일 목록과 날짜별 대수·노선.
 // 예정일 없는 차량의 운수사도 목록에 포함(dates가 빈 배열일 수 있음).
 export async function loadOperatorSchedules(): Promise<OperatorSchedule[]> {
   const supabase = createServiceClient();
-  const vehicles = await fetchAll<{ operator: string | null; planned_date: string | null }>(
-    (from, to) => supabase.from("vehicles").select("operator, planned_date").range(from, to),
+  const vehicles = await fetchAll<{
+    operator: string | null;
+    route: string | null;
+    planned_date: string | null;
+  }>((from, to) =>
+    supabase.from("vehicles").select("operator, route, planned_date").range(from, to),
   );
 
-  const byOperator = new Map<string, Map<string, number>>();
+  // 운수사 → 날짜 → 노선 → 대수
+  const byOperator = new Map<string, Map<string, Map<string, number>>>();
   for (const v of vehicles) {
     const operator = v.operator?.trim() || "미지정";
-    const dates = byOperator.get(operator) ?? new Map<string, number>();
+    const dates = byOperator.get(operator) ?? new Map<string, Map<string, number>>();
     if (v.planned_date) {
       const date = v.planned_date.slice(0, 10);
-      dates.set(date, (dates.get(date) ?? 0) + 1);
+      const route = v.route?.trim() || "미지정";
+      const routes = dates.get(date) ?? new Map<string, number>();
+      routes.set(route, (routes.get(route) ?? 0) + 1);
+      dates.set(date, routes);
     }
     byOperator.set(operator, dates);
   }
@@ -395,7 +404,12 @@ export async function loadOperatorSchedules(): Promise<OperatorSchedule[]> {
     .map(([operator, dates]) => ({
       operator,
       dates: [...dates.entries()]
-        .map(([date, count]) => ({ date, count }))
+        .map(([date, routeMap]) => {
+          const routes = [...routeMap.entries()]
+            .map(([route, count]) => ({ route, count }))
+            .sort((a, b) => b.count - a.count || a.route.localeCompare(b.route, "ko"));
+          return { date, count: routes.reduce((s, r) => s + r.count, 0), routes };
+        })
         .sort((a, b) => a.date.localeCompare(b.date)),
     }))
     .sort((a, b) => a.operator.localeCompare(b.operator, "ko"));

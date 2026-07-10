@@ -222,7 +222,16 @@ export default function ConsultationModal({ operators }: { operators: OperatorSc
   const [notes, setNotes] = useState("");
   const [consulter, setConsulter] = useState("");
 
+  // '차량리스트 보기' 팝업 — 버튼 클릭 시 운수사·날짜에 맞는 차량번호를 조회해 별도 팝업으로 표시
+  const [vehOpen, setVehOpen] = useState(false);
+  const [vehLoading, setVehLoading] = useState(false);
+  const [vehError, setVehError] = useState<string | null>(null);
+  const [vehList, setVehList] = useState<{ plate: string; route: string }[]>([]);
+
   const count = selectedOp?.dates.find((d) => d.date === date)?.count ?? 0;
+  // 선택한 날짜에 설치하는 노선별 대수 (자동 표기·카드에도 포함)
+  const routes = selectedOp?.dates.find((d) => d.date === date)?.routes ?? [];
+  const routesText = routes.map((r) => `${r.route} ${r.count}대`).join(" · ");
 
   function reset() {
     setStep("form");
@@ -251,6 +260,29 @@ export default function ConsultationModal({ operators }: { operators: OperatorSc
     setHandleRemoval("");
     setNotes("");
     setConsulter("");
+    setVehOpen(false);
+    setVehLoading(false);
+    setVehError(null);
+    setVehList([]);
+  }
+
+  async function openVehicleList() {
+    if (!selectedOp || !date) return;
+    setVehOpen(true);
+    setVehLoading(true);
+    setVehError(null);
+    try {
+      const res = await fetch(
+        `/api/consultation/vehicles?operator=${encodeURIComponent(selectedOp.operator)}&date=${date}`,
+      );
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "조회 실패");
+      setVehList(json.vehicles ?? []);
+    } catch (e) {
+      setVehError(e instanceof Error ? e.message : "조회 실패");
+    } finally {
+      setVehLoading(false);
+    }
   }
 
   function close() {
@@ -290,6 +322,7 @@ export default function ConsultationModal({ operators }: { operators: OperatorSc
           operator: selectedOp.operator,
           date,
           count,
+          routes: routesText,
           place,
           workStart: workStart ?? "",
           dayOff,
@@ -409,12 +442,31 @@ export default function ConsultationModal({ operators }: { operators: OperatorSc
                       </label>
                     ))}
 
+                  {selectedOp && date && (
+                    <button
+                      type="button"
+                      onClick={openVehicleList}
+                      className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-xs font-semibold text-gray-600 hover:bg-gray-50"
+                    >
+                      🚌 차량리스트 보기 ({count}대)
+                    </button>
+                  )}
+
                   <div>
                     <span className={LABEL}>2. 설치 대수 (자동 표기)</span>
                     <p className="mt-1 rounded-lg bg-gray-50 px-3 py-2 text-sm font-semibold text-gray-700">
                       {date ? `${count}대` : "-"}
                     </p>
                   </div>
+
+                  {date && routes.length > 0 && (
+                    <div>
+                      <span className={LABEL}>설치 노선 (자동 표기)</span>
+                      <p className="mt-1 rounded-lg bg-gray-50 px-3 py-2 text-sm leading-relaxed text-gray-700">
+                        {routesText}
+                      </p>
+                    </div>
+                  )}
 
                   <label className="block">
                     <span className={LABEL}>3. 설치 장소</span>
@@ -622,6 +674,87 @@ export default function ConsultationModal({ operators }: { operators: OperatorSc
                   </button>
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 차량리스트 팝업 — 협의사항 팝업 위에 겹쳐서 표시 */}
+      {vehOpen && (
+        <div
+          className="fixed inset-0 z-[60] flex items-start justify-center overflow-y-auto bg-black/40 p-4"
+          onClick={() => setVehOpen(false)}
+        >
+          <div
+            className="mb-12 mt-16 w-full max-w-sm rounded-2xl bg-white shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
+              <h2 className="min-w-0 truncate text-sm font-bold text-blue-700">
+                차량리스트 — {selectedOp?.operator} {date && fmtDot(date)}
+              </h2>
+              <button
+                onClick={() => setVehOpen(false)}
+                className="shrink-0 rounded-lg px-2 py-1 text-sm text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+                aria-label="닫기"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="max-h-[60vh] overflow-y-auto p-4">
+              {vehLoading ? (
+                <p className="py-6 text-center text-xs text-gray-400">불러오는 중…</p>
+              ) : vehError ? (
+                <p className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600">{vehError}</p>
+              ) : vehList.length === 0 ? (
+                <p className="py-6 text-center text-xs text-gray-400">
+                  해당 날짜의 차량이 없습니다.
+                </p>
+              ) : (
+                (() => {
+                  // 노선별로 묶어서 표시
+                  const groups = new Map<string, string[]>();
+                  for (const v of vehList) {
+                    const r = v.route?.trim() || "미지정";
+                    groups.set(r, [...(groups.get(r) ?? []), v.plate]);
+                  }
+                  return (
+                    <div className="space-y-3">
+                      <p className="text-xs font-semibold text-gray-600">
+                        총 {vehList.length}대
+                      </p>
+                      {[...groups.entries()].map(([route, plates]) => (
+                        <div key={route}>
+                          <p className="text-[11px] font-semibold text-blue-700">
+                            {route} <span className="font-normal text-gray-400">{plates.length}대</span>
+                          </p>
+                          <ul className="mt-1 grid grid-cols-2 gap-x-2 gap-y-1">
+                            {plates.map((p) => (
+                              <li
+                                key={p}
+                                className="rounded bg-gray-50 px-2 py-1 text-xs text-gray-700"
+                              >
+                                {p}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })()
+              )}
+            </div>
+
+            <div className="border-t border-gray-100 p-4">
+              <button
+                type="button"
+                onClick={() => setVehOpen(false)}
+                className="w-full rounded-xl bg-gray-600 py-2.5 text-sm font-bold text-white active:bg-gray-700"
+              >
+                닫기
+              </button>
             </div>
           </div>
         </div>

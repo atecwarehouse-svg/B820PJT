@@ -44,6 +44,7 @@ export async function POST(req: NextRequest) {
       operator,
       date,
       count,
+      routes: text("routes", 300),
       place: text("place"),
       workStart: time("workStart"),
       dayOff: text("dayOff"),

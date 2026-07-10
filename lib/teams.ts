@@ -510,6 +510,7 @@ export interface ConsultationCardData {
   operator: string; // 1. 운수사
   date: string; // 설치 일정 (YYYY-MM-DD)
   count: number; // 2. 설치 대수
+  routes?: string; // 그날 설치 노선별 대수 (예: "M6628 3대 · 9500 2대")
   place?: string; // 3. 설치 장소
   workStart?: string; // 4. 작업 시간 — 첫차 운행 종료 "HH:MM"
   dayOff?: string; // 5. 당일 휴차
@@ -593,6 +594,7 @@ export async function sendConsultationCard(d: ConsultationCardData): Promise<voi
               facts: [
                 { title: "운수사", value: d.operator },
                 { title: "설치 대수", value: `${d.count}대` },
+                { title: "설치 노선", value: v(d.routes) },
                 { title: "설치 장소", value: v(d.place) },
                 {
                   title: "작업 시간",
