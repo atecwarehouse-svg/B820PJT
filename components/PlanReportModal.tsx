@@ -122,7 +122,7 @@ export default function PlanReportModal({
       const res = await fetch("/api/plan-report", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ label, groups }),
+        body: JSON.stringify({ label, date: today, groups }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "전송 실패");
@@ -194,8 +194,9 @@ export default function PlanReportModal({
                     {label} 설치계획 {total.toLocaleString()}대
                   </p>
                   <p className="text-[11px] text-gray-400">
-                    설치 장소·휴차는 운수사 협의사항에 저장된 내용이 자동으로 채워집니다. 수정
-                    가능합니다.
+                    설치 장소·휴차는 운수사 협의사항에 저장된 내용이 자동으로 채워집니다(수정
+                    가능). 시작보고방 카드에는 휴차가 빠지고, 협의사항방 카드에는 협의사항의
+                    도착시간·협조확인·단말기 설치위치·특이사항이 함께 표시됩니다.
                   </p>
 
                   {operators.map((o) => {

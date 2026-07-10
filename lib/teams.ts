@@ -677,32 +677,73 @@ export interface PlanReportGroup {
   count: number; // 운수사 합계
   time?: string; // 집합시간 "HH:MM" (24시간)
   place?: string; // 설치 장소
-  dayOff?: string; // 당일 휴차
-  nextDayOff?: string; // 익일 휴차
+  dayOff?: string; // 당일 휴차 (협의사항방 카드에만 표시)
+  nextDayOff?: string; // 익일 휴차 (협의사항방 카드에만 표시)
+  // 아래는 협의사항방 카드 전용 — consultations 저장 데이터에서 서버가 채움
+  arrival?: string; // 첫차 종료 후 도착 예정
+  keyMethod?: string; // 차키 협조
+  engineOn?: string; // 작업 중 시동
+  fuel?: string; // 충전 여부
+  mountDisplay?: string; // 표출기
+  mountMain?: string; // 통합단말기
+  mountBoard?: string; // 승차
+  handleRemoval?: string; // 격벽 손잡이 탈거
+  notes?: string; // 특이사항
 }
 
-// 설치계획 보고 카드 — 대시보드 '설치계획 보고' 버튼.
-// 시작보고 채팅방(TEAMS_WEBHOOK_URL)과 협의사항/사진 채팅방(TEAMS_COMPLETE_WEBHOOK_URL)
-// 두 곳에 같은 카드를 보낸다. 둘 중 하나라도 미설정이면 throw(사용자가 명시적으로 보내는 것).
+// 설치계획 보고 카드 — 대시보드 '설치계획 보고' 버튼. 채팅방별로 내용이 다르다:
+//   시작보고 채팅방(TEAMS_WEBHOOK_URL): 노선·집합시간·설치 장소만 (휴차 없음)
+//   협의사항 채팅방(TEAMS_COMPLETE_WEBHOOK_URL): + 휴차·도착시간·협조확인·설치위치·특이사항
+// 둘 중 하나라도 미설정이면 throw(사용자가 명시적으로 보내는 것).
 export async function sendPlanReportCard(d: {
   label: string; // 날짜 라벨 (예: "7/10 (금)")
   total: number; // 금일 설치계획 합계
   groups: PlanReportGroup[];
 }): Promise<void> {
-  const targets = [
-    { name: "시작보고 채팅방", url: process.env.TEAMS_WEBHOOK_URL, env: "TEAMS_WEBHOOK_URL" },
-    {
-      name: "협의사항 채팅방",
-      url: process.env.TEAMS_COMPLETE_WEBHOOK_URL,
-      env: "TEAMS_COMPLETE_WEBHOOK_URL",
-    },
-  ];
-  for (const t of targets) {
-    if (!t.url) throw new Error(`${t.name} 웹후크가 설정되지 않았습니다. (${t.env})`);
+  const startUrl = process.env.TEAMS_WEBHOOK_URL;
+  const consultUrl = process.env.TEAMS_COMPLETE_WEBHOOK_URL;
+  if (!startUrl) throw new Error("시작보고 채팅방 웹후크가 설정되지 않았습니다. (TEAMS_WEBHOOK_URL)");
+  if (!consultUrl) {
+    throw new Error("협의사항 채팅방 웹후크가 설정되지 않았습니다. (TEAMS_COMPLETE_WEBHOOK_URL)");
   }
 
   const v = (s?: string) => s?.trim() || "-";
-  const card = {
+  const header = [
+    {
+      type: "TextBlock",
+      size: "Large",
+      weight: "Bolder",
+      text: "B820 단말기 설치계획 보고",
+      wrap: true,
+    },
+    {
+      type: "TextBlock",
+      text: `${d.label} 설치 계획`,
+      isSubtle: true,
+      spacing: "None",
+      wrap: true,
+    },
+    {
+      type: "TextBlock",
+      weight: "Bolder",
+      text: `금일 설치계획 ${d.total.toLocaleString()}대`,
+      wrap: true,
+    },
+  ];
+  const groupHead = (g: PlanReportGroup) => ({
+    type: "TextBlock",
+    weight: "Bolder",
+    color: "Accent",
+    text: `○ ${g.operator} · ${g.count.toLocaleString()}대`,
+    spacing: "Medium",
+    wrap: true,
+  });
+  const baseFacts = (g: PlanReportGroup) => [
+    { title: "노선", value: g.routes.map((r) => `${r.route} ${r.count}대`).join(" · ") || "-" },
+    { title: "집합시간", value: v(g.time) },
+    { title: "설치 장소", value: v(g.place) },
+  ];
+  const mkCard = (body: unknown[]) => ({
     type: "message",
     attachments: [
       {
@@ -711,62 +752,56 @@ export async function sendPlanReportCard(d: {
           $schema: "http://adaptivecards.io/schemas/adaptive-card.json",
           type: "AdaptiveCard",
           version: "1.4",
-          body: [
-            {
-              type: "TextBlock",
-              size: "Large",
-              weight: "Bolder",
-              text: "B820 단말기 설치계획 보고",
-              wrap: true,
-            },
-            {
-              type: "TextBlock",
-              text: `${d.label} 설치 계획`,
-              isSubtle: true,
-              spacing: "None",
-              wrap: true,
-            },
-            {
-              type: "TextBlock",
-              weight: "Bolder",
-              text: `금일 설치계획 ${d.total.toLocaleString()}대`,
-              wrap: true,
-            },
-            ...d.groups.flatMap((g) => [
-              {
-                type: "TextBlock",
-                weight: "Bolder",
-                color: "Accent",
-                text: `○ ${g.operator} · ${g.count.toLocaleString()}대`,
-                spacing: "Medium",
-                wrap: true,
-              },
-              {
-                type: "FactSet",
-                spacing: "Small",
-                facts: [
-                  {
-                    title: "노선",
-                    value: g.routes.map((r) => `${r.route} ${r.count}대`).join(" · ") || "-",
-                  },
-                  { title: "집합시간", value: v(g.time) },
-                  { title: "설치 장소", value: v(g.place) },
-                  { title: "당일 휴차", value: v(g.dayOff) },
-                  { title: "익일 휴차", value: v(g.nextDayOff) },
-                ],
-              },
-            ]),
-          ],
+          body,
         },
       },
     ],
-  };
+  });
 
+  // 시작보고방: 휴차 없이 간단히
+  const startCard = mkCard([
+    ...header,
+    ...d.groups.flatMap((g) => [
+      groupHead(g),
+      { type: "FactSet", spacing: "Small", facts: baseFacts(g) },
+    ]),
+  ]);
+
+  // 협의사항방: 휴차 + 도착시간 + 협조·확인사항 + 단말기 설치위치 + 특이사항
+  const consultCard = mkCard([
+    ...header,
+    ...d.groups.flatMap((g) => [
+      groupHead(g),
+      {
+        type: "FactSet",
+        spacing: "Small",
+        facts: [
+          ...baseFacts(g),
+          { title: "당일 휴차", value: v(g.dayOff) },
+          { title: "익일 휴차", value: v(g.nextDayOff) },
+          { title: "첫차 종료 후 도착", value: v(g.arrival) },
+          { title: "차키 협조", value: v(g.keyMethod) },
+          { title: "작업 중 시동", value: v(g.engineOn) },
+          { title: "충전 여부", value: v(g.fuel) },
+          { title: "표출기", value: v(g.mountDisplay) },
+          { title: "통합단말기", value: v(g.mountMain) },
+          { title: "승차", value: v(g.mountBoard) },
+          { title: "격벽 손잡이 탈거", value: v(g.handleRemoval) },
+          { title: "특이사항", value: v(g.notes) },
+        ],
+      },
+    ]),
+  ]);
+
+  const targets = [
+    { name: "시작보고 채팅방", url: startUrl, card: startCard },
+    { name: "협의사항 채팅방", url: consultUrl, card: consultCard },
+  ];
   for (const t of targets) {
-    const res = await fetch(t.url!, {
+    const res = await fetch(t.url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(card),
+      body: JSON.stringify(t.card),
     });
     if (!res.ok) {
       const txt = await res.text().catch(() => "");
