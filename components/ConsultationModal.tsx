@@ -8,7 +8,7 @@ const INPUT =
 const LABEL = "text-[11px] font-medium text-gray-500";
 
 const HOURS = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, "0"));
-const MINUTES = ["00", "10", "20", "30", "40", "50"];
+const MINUTES = Array.from({ length: 12 }, (_, i) => String(i * 5).padStart(2, "0")); // 5분 단위
 
 const KEY_OPTIONS = ["차량 내 보관", "배차실 수령", "직접입력"];
 const ENGINE_OPTIONS = ["가능", "불가능"];
