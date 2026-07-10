@@ -197,6 +197,7 @@ export default function ConsultationModal({ operators }: { operators: OperatorSc
   const [step, setStep] = useState<"form" | "done">("form");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [savedOk, setSavedOk] = useState(true); // DB 저장 성공 여부(전송과 별개)
 
   const [selectedOp, setSelectedOp] = useState<OperatorSchedule | null>(null);
   const [date, setDate] = useState("");
@@ -355,6 +356,7 @@ export default function ConsultationModal({ operators }: { operators: OperatorSc
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "전송 실패");
+      setSavedOk(json.saved !== false);
       setStep("done");
     } catch (e) {
       setError(e instanceof Error ? e.message : "전송 실패");
@@ -405,6 +407,12 @@ export default function ConsultationModal({ operators }: { operators: OperatorSc
                   <p className="mt-1 text-xs text-gray-400">
                     [{fmtDot(date)} 설치 일정] {selectedOp?.operator}
                   </p>
+                  {!savedOk && (
+                    <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-[11px] text-amber-700">
+                      전송은 완료됐지만 DB 저장은 되지 않았습니다. (관리자에게 문의 —
+                      마이그레이션 필요)
+                    </p>
+                  )}
                   <button
                     type="button"
                     onClick={close}

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import ReportRecipientsManager from "@/components/ReportRecipientsManager";
+import ConsultationManager from "@/components/ConsultationManager";
 
 interface AdminRecord {
   plate: string;
@@ -96,6 +97,9 @@ export default function AdminPanel() {
 
       {/* 완료리포트 메일 수신자 관리 */}
       <ReportRecipientsManager />
+
+      {/* 운수사 협의사항 관리 */}
+      <ConsultationManager />
 
       <h2 className="mb-2 text-sm font-semibold text-gray-700">차량 삭제</h2>
       <p className="mb-3 text-xs text-gray-500">

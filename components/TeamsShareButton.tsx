@@ -113,7 +113,7 @@ export default function TeamsShareButton({
               className={`rounded-t-2xl px-4 py-3 text-white ${isStart ? "bg-orange-600" : "bg-indigo-600"}`}
             >
               <p className="text-sm font-bold">
-                {isStart ? "🚧 B820 단말기 설치 시작 보고" : "🚌 B820 단말기 설치 진행 현황"}
+                {isStart ? "B820 단말기 설치 시작 보고" : "🚌 B820 단말기 설치 진행 현황"}
               </p>
               <p className={`text-xs ${isStart ? "text-orange-200" : "text-indigo-200"}`}>
                 {isStart ? `${label} 설치 시작` : `${label} 기준`}

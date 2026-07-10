@@ -19,6 +19,7 @@ import { workDateString } from "@/lib/work-day";
 import ProgressDownloadButton from "@/components/ProgressDownloadButton";
 import ScheduleUploadModal from "@/components/ScheduleUploadModal";
 import ConsultationModal from "@/components/ConsultationModal";
+import PlanReportModal from "@/components/PlanReportModal";
 import ScheduleChart from "@/components/ScheduleChart";
 import InstallDateSearch from "@/components/InstallDateSearch";
 import DailyReportModal from "@/components/DailyReportModal";
@@ -154,6 +155,7 @@ export default async function DashboardPage() {
           <span className="ml-1 font-normal text-gray-400">(완료 = ‘저장’ 기준)</span>
         </h2>
         <div className="flex flex-wrap items-center gap-2">
+          <PlanReportModal today={todayWork} planGroups={todayPlanGroups} />
           {ip && (
             <TeamsShareButton
               kind="start"
