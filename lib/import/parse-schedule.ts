@@ -3,7 +3,8 @@
  *
  *   - 차량리스트 시트: A=번호(list_no), F=차량번호, B=운수사, C=노선,
  *     I=설치 예정일(planned_date), J=연식(year), L=모델명(model)
- *   - 진행현황 시트: 비고열(I~N)에 "시범설치"인 영업소(B=운수사, C=노선) → is_pilot=true
+ *   - 시범설치: 예정일(I열)이 PILOT_CUTOFF(2026-07-30) 이전이면 is_pilot=true
+ *     (2026-07-10 기준 변경 — 이전의 진행현황 시트 비고란 "시범설치" 글자 판정은 폐기)
  *
  * scripts/import-schedule.ts(파일 경로 임포트)와 /api/import/schedule(웹 업로드)가
  * 동일 로직을 쓰도록 공용화한 파서. vehicles upsert 페이로드 형태로 반환.
@@ -12,8 +13,9 @@
 import ExcelJS from "exceljs";
 
 const VEHICLE_SHEET = "차량리스트";
-const PROGRESS_SHEET = "인천버스 B800단말기 설치 진행현황";
-const PILOT_KEYWORD = "시범설치";
+
+// 시범설치 컷오프 — 설치 예정일이 이 날짜 이전(미만)인 차량은 시범설치.
+export const PILOT_CUTOFF = "2026-07-30";
 
 export interface ScheduleRow {
   plate: string;
@@ -60,33 +62,8 @@ export function toDate(v: unknown): string | null {
   return isNaN(d.getTime()) ? null : d.toISOString().slice(0, 10);
 }
 
-const pilotKey = (op: string, route: string) => `${op}|||${route}`;
-
-// "M6628(예비)"처럼 노선 뒤에 차량별 주석이 붙은 경우 기본 노선명 (시범설치 판정 폴백용)
-const baseRoute = (route: string) => route.replace(/\([^)]*\)\s*$/, "").trim();
-
 async function parseWorkbook(wb: ExcelJS.Workbook): Promise<ParseResult> {
-  // 1) 진행현황 시트에서 시범설치 영업소(운수사+노선) 집합 수집
-  const pilotKeys = new Set<string>();
-  const pws = wb.getWorksheet(PROGRESS_SHEET);
-  if (pws) {
-    for (let r = 1; r <= pws.rowCount; r++) {
-      const row = pws.getRow(r);
-      const op = txt(row.getCell("B").value);
-      const route = txt(row.getCell("C").value);
-      if (!op || !route) continue;
-      let isPilot = false;
-      for (const col of ["I", "J", "K", "L", "M", "N"]) {
-        if (txt(row.getCell(col).value).includes(PILOT_KEYWORD)) {
-          isPilot = true;
-          break;
-        }
-      }
-      if (isPilot) pilotKeys.add(pilotKey(op, route));
-    }
-  }
-
-  // 2) 차량리스트 시트에서 차량별 예정일 + 시범설치 여부 구성
+  // 차량리스트 시트에서 차량별 예정일 + 시범설치 여부 구성
   const vws = wb.getWorksheet(VEHICLE_SHEET);
   if (!vws) {
     throw new Error(`"${VEHICLE_SHEET}" 시트를 찾을 수 없습니다. 진행현황 양식인지 확인해주세요.`);
@@ -110,9 +87,7 @@ async function parseWorkbook(wb: ExcelJS.Workbook): Promise<ParseResult> {
     const model = txt(row.getCell("L").value) || null;
     const listRaw = txt(row.getCell("A").value);
     const list_no = /^\d+$/.test(listRaw) ? Number(listRaw) : null;
-    const is_pilot =
-      pilotKeys.has(pilotKey(operator, route)) ||
-      (baseRoute(route) !== "" && pilotKeys.has(pilotKey(operator, baseRoute(route))));
+    const is_pilot = planned_date !== null && planned_date < PILOT_CUTOFF;
     if (is_pilot) pilotCount++;
     map.set(plate, { plate, operator, route, planned_date, is_pilot, year, model, list_no });
   }

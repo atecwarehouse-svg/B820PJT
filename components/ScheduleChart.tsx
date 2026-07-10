@@ -48,11 +48,14 @@ export default function ScheduleChart({ stats }: { stats: ScheduleStats }) {
   const BAR_W = 16; // 칸 너비(px)
   const BAR_H = 96; // 막대 영역 높이(px)
   const donePct = totalPlanned ? ((totalDone / totalPlanned) * 100).toFixed(1) : "0.0";
+  // 본설치 = 전체 − 시범설치 (시범설치 = 예정일이 PILOT_CUTOFF 이전인 차량)
+  const mainTotal = totalPlanned - pilotTotal;
+  const mainDone = totalDone - pilotDone;
 
   return (
     <div className="space-y-4">
       {/* 요약 */}
-      <div className="grid grid-cols-3 gap-2 text-center">
+      <div className="grid grid-cols-2 gap-2 text-center sm:grid-cols-4">
         <div className="rounded-xl bg-blue-50 p-3">
           <p className="text-xl font-bold tabular-nums text-blue-700">
             {totalDone.toLocaleString()}
@@ -66,6 +69,13 @@ export default function ScheduleChart({ stats }: { stats: ScheduleStats }) {
             <span className="text-sm font-medium text-gray-400"> / {pilotTotal.toLocaleString()}</span>
           </p>
           <p className="mt-0.5 text-xs text-gray-500">시범설치</p>
+        </div>
+        <div className="rounded-xl bg-sky-50 p-3">
+          <p className="text-xl font-bold tabular-nums text-sky-700">
+            {mainDone.toLocaleString()}
+            <span className="text-sm font-medium text-gray-400"> / {mainTotal.toLocaleString()}</span>
+          </p>
+          <p className="mt-0.5 text-xs text-gray-500">본설치</p>
         </div>
         <div className="rounded-xl bg-gray-50 p-3">
           <p className="text-xl font-bold tabular-nums text-gray-700">{n}</p>
