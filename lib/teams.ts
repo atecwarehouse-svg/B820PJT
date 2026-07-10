@@ -768,16 +768,36 @@ export async function sendPlanReportCard(d: {
     ]),
   ]);
 
-  // 협의사항방: 휴차 + 도착시간 + 협조·확인사항 + 단말기 설치위치 + 특이사항
+  // 협의사항방: 휴차 + 도착시간 + 협조·확인사항 + 단말기 설치위치 + 특이사항.
+  // 집합시간·설치 장소는 노선 위에 굵고 큰 글자(Medium)로 강조(사용자 요청).
   const consultCard = mkCard([
     ...header("집합시간 및 특이사항 공지"),
     ...d.groups.flatMap((g) => [
       groupHead(g),
       {
+        type: "TextBlock",
+        size: "Medium",
+        weight: "Bolder",
+        text: `집합시간 : ${v(g.time)}`,
+        spacing: "Small",
+        wrap: true,
+      },
+      {
+        type: "TextBlock",
+        size: "Medium",
+        weight: "Bolder",
+        text: `설치 장소 : ${v(g.place)}`,
+        spacing: "None",
+        wrap: true,
+      },
+      {
         type: "FactSet",
         spacing: "Small",
         facts: [
-          ...baseFacts(g),
+          {
+            title: "노선",
+            value: g.routes.map((r) => `${r.route} ${r.count}대`).join(" · ") || "-",
+          },
           { title: "당일 휴차", value: v(g.dayOff) },
           { title: "익일 휴차", value: v(g.nextDayOff) },
           { title: "첫차 종료 후 도착", value: v(g.arrival) },
