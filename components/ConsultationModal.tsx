@@ -212,6 +212,7 @@ export default function ConsultationModal({ operators }: { operators: OperatorSc
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [savedOk, setSavedOk] = useState(true); // DB 저장 성공 여부(전송과 별개)
+  const [previewOpen, setPreviewOpen] = useState(false); // 모바일 미리보기 토글(PC는 항상 표시)
 
   const [selectedOp, setSelectedOp] = useState<OperatorSchedule | null>(null);
   const [date, setDate] = useState("");
@@ -283,6 +284,7 @@ export default function ConsultationModal({ operators }: { operators: OperatorSc
     setVehLoading(false);
     setVehError(null);
     setVehList([]);
+    setPreviewOpen(false);
   }
 
   async function openVehicleList() {
@@ -727,10 +729,21 @@ export default function ConsultationModal({ operators }: { operators: OperatorSc
                   >
                     {busy ? "전송 중..." : "팀즈로 보내기"}
                   </button>
+
+                  {/* 모바일 전용 — 미리보기 토글 버튼 (PC는 오른쪽에 항상 표시) */}
+                  <button
+                    type="button"
+                    onClick={() => setPreviewOpen((v) => !v)}
+                    className="w-full rounded-xl border border-gray-300 bg-white py-2.5 text-sm font-semibold text-gray-600 active:bg-gray-50 md:hidden"
+                  >
+                    {previewOpen ? "미리보기 닫기 ▲" : "카드 미리보기 ▼"}
+                  </button>
                 </div>
 
-                {/* 카드 미리보기 — 입력하면 실시간 반영 (PC: 오른쪽, 모바일: 아래) */}
-                <div className="h-fit rounded-xl border border-gray-200 bg-gray-50 p-3 md:sticky md:top-2">
+                {/* 카드 미리보기 — 입력하면 실시간 반영 (PC: 오른쪽 항상, 모바일: 버튼으로 토글) */}
+                <div
+                  className={`h-fit rounded-xl border border-gray-200 bg-gray-50 p-3 md:sticky md:top-2 md:block ${previewOpen ? "" : "hidden"}`}
+                >
                   <p className="mb-2 text-[11px] font-semibold text-gray-400">
                     카드 미리보기 (팀즈 협의사항방)
                   </p>
