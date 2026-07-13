@@ -1,8 +1,10 @@
 // 진행현황 양식 채운 xlsx 버퍼 생성 — 다운로드 라우트와 리포트 메일 첨부가 공유.
-// 완료(saved_at) 데이터를 읽어 Supabase 비공개 버킷의 템플릿 차량리스트를 채운다.
+// 완료(저장 + 설치 전·후 사진 전부 충족) 데이터를 읽어
+// Supabase 비공개 버킷의 템플릿 차량리스트를 채운다.
 
 import { createServiceClient } from "@/lib/supabase/server";
 import { fetchAll } from "@/lib/supabase/paginate";
+import { fetchCompletedMap } from "@/lib/stats";
 import {
   fillProgressXlsx,
   type CompletedInfo,
@@ -30,15 +32,10 @@ export async function buildProgressXlsx(opts?: { asOfDate?: string }): Promise<{
       ? opts.asOfDate
       : workDateString(new Date());
 
-  // 완료(saved_at 있음) 레코드 + 차량 운수사/노선/예정일 전수 조회
-  const [recs, vrows] = await Promise.all([
-    fetchAll<{ plate: string; saved_at: string }>((from, to) =>
-      supabase
-        .from("records")
-        .select("plate, saved_at")
-        .not("saved_at", "is", null)
-        .range(from, to),
-    ),
+  // 완료(저장 + 슬롯 충족) 맵 + 차량 운수사/노선/예정일 전수 조회
+  // — 완료 판정은 팀즈 카드·대시보드와 같은 fetchCompletedMap 기준(진행현황 일치).
+  const [completedMap, vrows] = await Promise.all([
+    fetchCompletedMap(supabase),
     // select("*"): list_no 컬럼이 아직 없는 DB(migration_list_no.sql 미실행)에서도 동작
     fetchAll<{
       plate: string;
@@ -51,13 +48,12 @@ export async function buildProgressXlsx(opts?: { asOfDate?: string }): Promise<{
 
   const vmap = new Map(vrows.map((v) => [v.plate, v]));
   const completed = new Map<string, CompletedInfo>();
-  for (const r of recs) {
-    if (!r.plate || !r.saved_at) continue;
+  for (const [plate, savedAt] of completedMap) {
     // 기준일까지 완료된 것만 (스냅샷) — 완료 업무일이 기준일 이후면 제외
-    if (workDateString(r.saved_at) > asOfDate) continue;
-    const v = vmap.get(r.plate);
-    completed.set(r.plate, {
-      serial: workDateExcelSerial(r.saved_at),
+    if (workDateString(savedAt) > asOfDate) continue;
+    const v = vmap.get(plate);
+    completed.set(plate, {
+      serial: workDateExcelSerial(savedAt),
       operator: (v?.operator ?? "").trim(),
       route: (v?.route ?? "").trim(),
     });

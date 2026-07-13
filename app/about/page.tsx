@@ -86,7 +86,7 @@ export default function AboutPage() {
       <SectionTitle emoji="📊" title="진행 현황 대시보드" />
       <Card>
         <ul className="space-y-1.5 text-sm text-gray-600">
-          <li>· 설치 진행현황 요약 — 금일/누적 완료, 진행률 (완료 = ‘저장’ 기준)</li>
+          <li>· 설치 진행현황 요약 — 금일/누적 완료, 진행률 (완료 = 저장 + 설치 전·후 사진 완료)</li>
           <li>· KPI 카드 — 완료 / 진행중 / 설치대상, 진행중 차량 목록 팝업</li>
           <li>· 설치 일정 차트 — 날짜별 계획·실적, 시범설치/본설치 구분</li>
           <li>· 운수사별 · 영업소별 진행 현황, 날짜별 완료 차량 검색</li>

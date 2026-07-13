@@ -25,7 +25,7 @@ export default function TeamsShareButton({
   kind?: "progress" | "start";
   today: string;
   todayPlanned: number;
-  todayDone?: number; // 금일 완료 (진행 현황 카드용, 저장 기준)
+  todayDone?: number; // 금일 완료 (진행 현황 카드용, 저장 + 설치 전·후 사진 전부 충족)
   complete: number;
   inProgress: number;
   remain: number;

@@ -52,7 +52,7 @@ export async function GET(req: NextRequest) {
 
   const complete = s.complete;
   const inProgress = inProgressList.length;
-  const todayDone = ip.todayComplete; // 금일 완료 (저장 기준, 현재 업무일)
+  const todayDone = ip.todayComplete; // 금일 완료 (저장 + 설치 전·후 사진 전부 충족)
   const remain = Math.max(0, s.totalVehicles - complete - inProgress);
 
   try {

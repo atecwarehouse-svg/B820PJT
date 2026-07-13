@@ -149,11 +149,11 @@ export default async function DashboardPage() {
         <span className="text-xs text-gray-400">갱신 {updatedAt}</span>
       </div>
 
-      {/* ===== 설치 진행현황 (완료 = '저장' 기준) — 최상단 + 버튼 ===== */}
+      {/* ===== 설치 진행현황 (완료 = 저장 + 설치 전·후 사진 완료) — 최상단 + 버튼 ===== */}
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-sm font-semibold text-gray-700">
           설치 진행현황
-          <span className="ml-1 font-normal text-gray-400">(완료 = ‘저장’ 기준)</span>
+          <span className="ml-1 font-normal text-gray-400">(완료 = 저장 + 설치 전·후 사진 완료)</span>
         </h2>
         <div className="flex flex-wrap items-center gap-2">
           <PlanReportModal today={todayWork} planGroups={todayPlanGroups} />

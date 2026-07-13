@@ -6,7 +6,7 @@ export interface ProgressCardData {
   label: string; // 날짜 라벨 (예: "9/17 (수)")
   todayPlanned: number;
   inProgress: number;
-  todayDone: number; // 금일 완료 (저장 기준, 현재 업무일)
+  todayDone: number; // 금일 완료 (저장 + 설치 전·후 사진 전부 충족, 현재 업무일)
   complete: number; // 누적 완료
   remain: number;
 }

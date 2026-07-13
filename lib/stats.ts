@@ -4,7 +4,7 @@
 import { createServiceClient } from "@/lib/supabase/server";
 import { fetchAll } from "@/lib/supabase/paginate";
 import { workDateString } from "@/lib/work-day";
-import { DEFAULT_PHOTO_COUNT } from "@/lib/slots";
+import { DEFAULT_PHOTO_COUNT, BEFORE_SLOTS, AFTER_SLOTS } from "@/lib/slots";
 
 export interface OperatorProgress {
   operator: string;
@@ -172,21 +172,47 @@ export async function loadInProgressList(): Promise<InProgressVehicle[]> {
 }
 
 // ============================================================
-// 설치 진행현황 (완료 = '저장' 기준) · 설치 일정
-// 완료 = records.saved_at 있음. 완료일 = saved_at(KST 날짜).
+// 설치 진행현황 (완료 = 저장 + 설치 전·후 사진 완료) · 설치 일정
+// 완료 = records.saved_at 있음 + 설치전 7·설치후 7 표준 슬롯 전부 충족(사진 또는 '단말기 없음').
+// 완료일 = saved_at(업무일 기준).
 // ============================================================
 
-// 완료(저장)된 plate → saved_at(ISO) 맵
-async function fetchCompletedMap(supabase: SB): Promise<Map<string, string>> {
-  const rows = await fetchAll<{ plate: string; saved_at: string }>((from, to) =>
-    supabase
-      .from("records")
-      .select("plate, saved_at")
-      .not("saved_at", "is", null)
-      .range(from, to),
-  );
+// 완료된 plate → saved_at(ISO) 맵.
+// 설치 시작 단계(설치전 사진만 올리고 저장 — 설치시작 카드 발송용)에서도 saved_at이
+// 찍히므로, 저장 여부만으로 완료로 집계하면 안 된다. 설치후 사진까지 모두 충족해야 완료.
+export async function fetchCompletedMap(supabase: SB): Promise<Map<string, string>> {
+  const stdSlots = [...BEFORE_SLOTS, ...AFTER_SLOTS].map((s) => s.slotKey);
+  const [recs, photoRows] = await Promise.all([
+    fetchAll<{ plate: string; saved_at: string; na_slots: string[] | null }>((from, to) =>
+      supabase
+        .from("records")
+        .select("plate, saved_at, na_slots")
+        .not("saved_at", "is", null)
+        .range(from, to),
+    ),
+    fetchAll<{ plate: string; slot_key: string }>((from, to) =>
+      supabase
+        .from("photos")
+        .select("plate, slot_key")
+        .in("slot_key", stdSlots)
+        .range(from, to),
+    ),
+  ]);
+
+  const bySlot = new Map<string, Set<string>>();
+  for (const p of photoRows) {
+    const s = bySlot.get(p.plate) ?? new Set<string>();
+    s.add(p.slot_key);
+    bySlot.set(p.plate, s);
+  }
+
   const map = new Map<string, string>();
-  for (const r of rows) if (r.plate && r.saved_at) map.set(r.plate, r.saved_at);
+  for (const r of recs) {
+    if (!r.plate || !r.saved_at) continue;
+    const have = bySlot.get(r.plate);
+    const na = new Set<string>(Array.isArray(r.na_slots) ? r.na_slots : []);
+    if (stdSlots.every((k) => have?.has(k) || na.has(k))) map.set(r.plate, r.saved_at);
+  }
   return map;
 }
 
