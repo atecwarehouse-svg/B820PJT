@@ -109,6 +109,7 @@ export default function RecordEditor({ plate, initial, teamOptions = [] }: Props
         check_note: string;
         extra_note: string;
         saved: boolean;
+        team_change: boolean;
       }>,
     ) => {
       setSaveState("saving");
@@ -129,6 +130,8 @@ export default function RecordEditor({ plate, initial, teamOptions = [] }: Props
             check_note: overrides?.check_note ?? checkNote,
             extra_note: overrides?.extra_note ?? extraNote,
             saved: overrides?.saved ?? false,
+            // 팀명 칸에서 직접 바꾼 경우에만 잠금 검증 대상으로 표시
+            ...(overrides?.team_change ? { team_change: true } : {}),
             // 팀명 변경 잠금 해제용 관리자 비밀번호 (있을 때만)
             ...(adminPwRef.current ? { admin_pw: adminPwRef.current } : {}),
           }),
@@ -177,7 +180,7 @@ export default function RecordEditor({ plate, initial, teamOptions = [] }: Props
   async function changeTeam(v: string) {
     const prev = team;
     setTeam(v);
-    const ok = await saveRecord({ team: v });
+    const ok = await saveRecord({ team: v, team_change: true });
     if (ok) {
       if (v.trim()) {
         setTeamLocked(true);

@@ -84,11 +84,16 @@ export async function notifyInstallProgress(opts: {
   const checkPresent = new Set((checkRes.data ?? []).map((p) => p.slot_key));
 
   const satisfied = (slotKey: string) => present.has(slotKey) || na.has(slotKey);
-  // 이상유무 조건 — 테이블/컬럼이 없는 DB(마이그레이션 전)면 통과 처리(알림 누락 방지)
+  // 이상유무 조건 — 테이블이 없는 DB(마이그레이션 전)만 통과 처리(알림 누락 방지).
+  // 일시적 조회 오류(네트워크 등)는 미충족으로 간주해 조기 발송을 막는다(다음 저장 때 재평가).
+  const checkTableMissing =
+    !!checkRes.error && /check_photos/i.test(checkRes.error.message);
   const checkOk =
-    !hasCheckCols || checkRes.error
+    !hasCheckCols || checkTableMissing
       ? true
-      : CHECK_SLOTS.every((s) => checkPresent.has(s.slotKey) || checkNa.has(s.slotKey));
+      : checkRes.error
+        ? false
+        : CHECK_SLOTS.every((s) => checkPresent.has(s.slotKey) || checkNa.has(s.slotKey));
   const started = checkOk && BEFORE_SLOTS.every((s) => satisfied(s.slotKey));
   const completed =
     BEFORE_SLOTS.every((s) => satisfied(s.slotKey)) &&
@@ -129,17 +134,31 @@ export async function notifyInstallProgress(opts: {
       const timesOnly = Object.fromEntries(
         Object.entries(fields).filter(([k]) => k.endsWith("_at")),
       );
-      r = await supabase.from("records").update(timesOnly).eq("plate", plate);
+      if (Object.keys(timesOnly).length > 0) {
+        r = await supabase.from("records").update(timesOnly).eq("plate", plate);
+      }
     }
   };
 
-  // 재발송 판정: 지문 컬럼이 있으면 "지문이 달라졌을 때"(최초 포함), 없으면 최초 1회만.
-  const shouldSend = (sentAt: string | null, savedSig: string | null | undefined, sig: string) =>
-    hasCheckCols ? savedSig !== sig : !sentAt;
+  // 재발송 판정:
+  //  - 지문이 저장돼 있으면 "지문이 달라졌을 때"(수정사항 있음) 재발송.
+  //  - 지문이 없으면(최초 또는 지문 도입 전 발송분) 발송 이력이 없을 때만 —
+  //    과거에 이미 카드가 나간 차량이 저장만 눌렀다고 중복 발송되지 않도록.
+  const shouldSend = (sentAt: string | null, savedSig: string | null | undefined, sig: string) => {
+    if (!hasCheckCols) return !sentAt;
+    if (savedSig) return savedSig !== sig;
+    return !sentAt;
+  };
 
   // 설치 완료 — 14칸 충족: 완료 카드만 발송(시작 카드 재발송 생략)
   if (completed) {
-    if (!shouldSend(rec.complete_notified_at, rec.complete_notified_sig, completeSig)) return;
+    if (!shouldSend(rec.complete_notified_at, rec.complete_notified_sig, completeSig)) {
+      // 지문 도입 전 발송분: 현재 내용을 지문으로 기록해 이후 수정 감지 기준으로 삼는다
+      if (hasCheckCols && rec.complete_notified_at && !rec.complete_notified_sig) {
+        await stamp({ complete_notified_sig: completeSig });
+      }
+      return;
+    }
     const photos = (photoRows ?? [])
       .filter((p) => p.storage_path && !na.has(p.slot_key))
       .sort((a, b) => {
@@ -162,9 +181,18 @@ export async function notifyInstallProgress(opts: {
     return;
   }
 
-  // 설치 시작 — 설치전 7칸 + 이상유무 8칸 충족
+  // 설치 시작 — 설치전 7칸 + 이상유무 8칸 충족.
+  // 이미 완료 카드가 나간 차량은 제외 — 재촬영으로 사진을 잠깐 지웠다 저장해도
+  // 뒤늦은 '설치 시작' 카드가 나가지 않도록.
   if (started) {
-    if (!shouldSend(rec.start_notified_at, rec.start_notified_sig, startSig)) return;
+    if (rec.complete_notified_at) return;
+    if (!shouldSend(rec.start_notified_at, rec.start_notified_sig, startSig)) {
+      // 지문 도입 전 발송분: 현재 내용을 지문으로 기록해 이후 수정 감지 기준으로 삼는다
+      if (hasCheckCols && rec.start_notified_at && !rec.start_notified_sig) {
+        await stamp({ start_notified_sig: startSig });
+      }
+      return;
+    }
     try {
       await sendStartCard({ operator, plate, route, team, checkNote, extraNote });
     } catch {

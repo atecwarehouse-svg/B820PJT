@@ -22,6 +22,7 @@ interface UpsertBody {
   extra_note?: string | null; // 설치 특이사항
   saved?: boolean; // true면 '저장'(목록 등록) 처리 → 최초 1회만 saved_at = now()
   admin_pw?: string; // 팀명 변경용 관리자 비밀번호 (한번 저장된 팀명은 관리자만 변경)
+  team_change?: boolean; // true = 사용자가 의도적으로 팀명을 바꾸는 요청 (잠금 검증 대상)
 }
 
 // 마이그레이션(migration_inspection.sql) 전 DB에는 없는 컬럼 — upsert 실패 시 빼고 재시도
@@ -36,12 +37,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "차량번호가 필요합니다." }, { status: 400 });
   }
 
-  // 최종 '저장'(목록 등록) 시 팀명·비고(차량 이상유무)·특이사항 필수
+  // 최종 '저장'(목록 등록) 시 비고(차량 이상유무)·특이사항 필수 (팀명은 아래에서 검증)
   const team = (body.team ?? "").trim();
   if (body.saved) {
-    if (!team) {
-      return NextResponse.json({ error: "팀명을 입력해야 저장할 수 있습니다." }, { status: 400 });
-    }
     if (!(body.check_note ?? "").trim()) {
       return NextResponse.json(
         { error: "비고(차량 이상유무)를 입력해야 저장할 수 있습니다. (없으면 '없음')" },
@@ -75,16 +73,29 @@ export async function POST(req: NextRequest) {
   // 기존 레코드의 install_date 보존 (없으면 today 기본값)
   const existing = existingRes.data;
 
-  // 팀명은 한번 저장되면 관리자만 변경 가능 — 기존 값이 있고 다른 값으로 바꾸려면
-  // 관리자 비밀번호(admin_pw) 또는 관리자 로그인 쿠키 필요.
+  // 팀명은 한번 저장되면 관리자만 변경 가능.
+  //  - 의도적 변경(team_change=true, 팀명 칸에서 직접 바꿈): 관리자 비밀번호/쿠키 없으면 401.
+  //  - 그 외 저장(자동저장 등)이 다른 팀명을 들고 오면: 낡은 탭의 우발적 값이므로
+  //    거부하지 않고 기존 팀명을 유지한 채 나머지 필드만 저장한다(저장 막힘 방지).
   const prevTeam = ((existing?.team as string | null) ?? "").trim();
-  if (body.team !== undefined && prevTeam && team !== prevTeam) {
-    if ((body.admin_pw ?? "") !== adminPassword() && !isAdmin()) {
-      return NextResponse.json(
-        { error: "팀명은 저장 후 관리자만 변경할 수 있습니다. 관리자 비밀번호를 확인해주세요." },
-        { status: 401 },
-      );
+  let effectiveTeam = body.team !== undefined ? team : undefined;
+  if (effectiveTeam !== undefined && prevTeam && effectiveTeam !== prevTeam) {
+    const authorized = (body.admin_pw ?? "") === adminPassword() || isAdmin();
+    if (body.team_change) {
+      if (!authorized) {
+        return NextResponse.json(
+          { error: "팀명은 저장 후 관리자만 변경할 수 있습니다. 관리자 비밀번호를 확인해주세요." },
+          { status: 401 },
+        );
+      }
+    } else if (!authorized) {
+      effectiveTeam = prevTeam; // 우발적 변경 무시 — 기존 팀명 유지
     }
+  }
+
+  // 최종 '저장' 시 팀명 필수 — 이번 요청 값 또는 기존 저장값 기준
+  if (body.saved && !(effectiveTeam ?? prevTeam)) {
+    return NextResponse.json({ error: "팀명을 입력해야 저장할 수 있습니다." }, { status: 400 });
   }
 
   const payload: Record<string, unknown> = {
@@ -97,8 +108,8 @@ export async function POST(req: NextRequest) {
     custom_slots: body.custom_slots ?? [],
     updated_at: new Date().toISOString(),
   };
-  if (body.team !== undefined) {
-    payload.team = team || null;
+  if (effectiveTeam !== undefined) {
+    payload.team = effectiveTeam || null;
   }
   if (body.na_slots !== undefined) {
     payload.na_slots = body.na_slots;
@@ -124,8 +135,25 @@ export async function POST(req: NextRequest) {
     supabase.from("records").upsert(p, { onConflict: "plate" }).select("*").single();
 
   let { data, error } = await upsert(payload);
-  // 이상유무 컬럼이 아직 없는 DB(migration_inspection.sql 미실행)면 그 필드만 빼고 재시도
-  if (error && INSPECTION_COLUMNS.some((c) => payload[c] !== undefined && error!.message.includes(c))) {
+  // 이상유무 컬럼이 아직 없는 DB(migration_inspection.sql 미실행) 폴백:
+  //  - 컬럼 누락 에러(schema/column 문구)일 때만 발동.
+  //  - 최종 '저장'이고 필수 비고/특이사항이 들어 있으면 조용히 버리지 않고 실패 처리
+  //    (성공으로 보이면서 내용이 유실되는 것 방지) — 마이그레이션 안내를 돌려준다.
+  //  - 자동저장은 이상유무 필드만 빼고 재시도해 나머지 입력 흐름을 유지.
+  const missingInspectionCol =
+    !!error &&
+    /column|schema/i.test(error.message) &&
+    INSPECTION_COLUMNS.some((c) => payload[c] !== undefined && error!.message.includes(c));
+  if (missingInspectionCol) {
+    if (body.saved && ((body.check_note ?? "").trim() || (body.extra_note ?? "").trim())) {
+      return NextResponse.json(
+        {
+          error:
+            "비고·특이사항을 저장할 DB 준비가 안 됐습니다. 관리자에게 supabase/migration_inspection.sql 실행을 요청해주세요.",
+        },
+        { status: 500 },
+      );
+    }
     const stripped = { ...payload };
     for (const c of INSPECTION_COLUMNS) delete stripped[c];
     ({ data, error } = await upsert(stripped));
