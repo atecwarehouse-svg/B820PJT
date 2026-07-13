@@ -57,20 +57,40 @@ export interface CustomSlot {
   sort_order: number;
 }
 
-// 기본 설치전 슬롯 + 동적 추가 슬롯을 병합해 최종 설치전 슬롯 목록 생성
-export function buildBeforeSlots(customSlots: CustomSlot[] = []): SlotDef[] {
-  const custom: SlotDef[] = [...customSlots]
+// records.custom_slots 한 배열에 설치전(before_custom_*)·이상유무(check_custom_*)
+// 커스텀 슬롯을 함께 저장하고, 접두사로 섹션을 구분한다.
+function pickCustom(
+  customSlots: CustomSlot[],
+  prefix: string,
+  section: Section,
+): SlotDef[] {
+  return [...customSlots]
+    .filter((c) => c.slot_key.startsWith(prefix))
     .sort((a, b) => a.sort_order - b.sort_order)
     .map((c) => ({
       slotKey: c.slot_key,
       label: c.label,
-      section: "before" as const,
+      section,
       isCustom: true,
     }));
-  return [...BEFORE_SLOTS, ...custom];
+}
+
+// 기본 설치전 슬롯 + 동적 추가 슬롯을 병합해 최종 설치전 슬롯 목록 생성
+export function buildBeforeSlots(customSlots: CustomSlot[] = []): SlotDef[] {
+  return [...BEFORE_SLOTS, ...pickCustom(customSlots, "before_custom_", "before")];
+}
+
+// 차량 이상유무 8종 + 동적 추가 슬롯 (추가 슬롯도 check_photos·Drive 하위폴더에 저장,
+// 설치시작 판정에는 기본 8종만 포함)
+export function buildCheckSlots(customSlots: CustomSlot[] = []): SlotDef[] {
+  return [...CHECK_SLOTS, ...pickCustom(customSlots, "check_custom_", "check")];
 }
 
 // 새 커스텀 슬롯 키 생성 (충돌 방지를 위해 호출부에서 인덱스/타임스탬프 전달)
 export function makeCustomSlotKey(seq: number): string {
   return `before_custom_${seq}`;
+}
+
+export function makeCheckCustomSlotKey(seq: number): string {
+  return `check_custom_${seq}`;
 }
