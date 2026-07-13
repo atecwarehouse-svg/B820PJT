@@ -81,7 +81,8 @@ async function ensureFolderCached(d: Drive, name: string, parentId: string): Pro
   return id;
 }
 
-// 업로드. 경로: 루트(GDRIVE_FOLDER_ID) / 운수사 / 차량번호 / {fileName}
+// 업로드. 경로: 루트(GDRIVE_FOLDER_ID) / 운수사 / 차량번호 [/ subfolder] / {fileName}
+// subfolder: 차량 폴더 안 하위 폴더명 (예: "차량이상유무(인천70바1273)")
 // 항상 '새 파일'을 만들고 그 Drive 파일 ID를 반환한다. (기존 파일 삭제는 호출부가
 // DB 저장 성공을 확인한 뒤 deletePhoto로 수행 — 부분 실패로 인한 깨짐/고아 방지)
 export async function uploadPhoto(opts: {
@@ -90,6 +91,7 @@ export async function uploadPhoto(opts: {
   fileName: string; // 저장 파일명 (확장자 포함). 예: 설치전_인천70바1273_GPS안테나.jpg
   body: Buffer;
   contentType?: string;
+  subfolder?: string;
 }): Promise<string> {
   const d = drive();
   try {
@@ -104,13 +106,23 @@ export async function uploadPhoto(opts: {
 
 async function createPhotoFile(
   d: Drive,
-  opts: { plate: string; operator: string; fileName: string; body: Buffer; contentType?: string },
+  opts: {
+    plate: string;
+    operator: string;
+    fileName: string;
+    body: Buffer;
+    contentType?: string;
+    subfolder?: string;
+  },
 ): Promise<string> {
-  const { plate, operator, fileName, body, contentType = "image/jpeg" } = opts;
+  const { plate, operator, fileName, body, contentType = "image/jpeg", subfolder } = opts;
   const operatorFolder = await ensureFolderCached(d, operator || "미지정", rootFolderId());
   const plateFolder = await ensureFolderCached(d, plate, operatorFolder);
+  const parentFolder = subfolder
+    ? await ensureFolderCached(d, subfolder, plateFolder)
+    : plateFolder;
   const res = await d.files.create({
-    requestBody: { name: fileName, parents: [plateFolder] },
+    requestBody: { name: fileName, parents: [parentFolder] },
     media: { mimeType: contentType, body: Readable.from(body) },
     fields: "id",
   });

@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import type { RecordBundle } from "@/lib/types";
 import {
   AFTER_SLOTS,
+  CHECK_SLOTS,
   buildBeforeSlots,
   makeCustomSlotKey,
   type CustomSlot,
@@ -42,12 +43,18 @@ export default function RecordEditor({ plate, initial }: Props) {
   );
   // 단말기 없음으로 표시한 슬롯키(하차 등) — 사진 없이도 충족 처리
   const [naSlots, setNaSlots] = useState<string[]>(initial.record?.na_slots ?? []);
+  // 차량 이상유무 '없음' 체크(장비 미장착) — 사진 없이 충족 처리
+  const [checkNaSlots, setCheckNaSlots] = useState<string[]>(
+    initial.record?.check_na_slots ?? [],
+  );
+  const [checkNote, setCheckNote] = useState(initial.record?.check_note ?? ""); // 이상유무 비고
+  const [extraNote, setExtraNote] = useState(initial.record?.extra_note ?? ""); // 설치 특이사항
   const [editInfo, setEditInfo] = useState(false); // 운수사/노선 수정 모드
 
-  // slotKey -> 미리보기 URL
+  // slotKey -> 미리보기 URL (설치전/후 + 차량 이상유무 확인 사진)
   const [urls, setUrls] = useState<Record<string, string>>(() => {
     const m: Record<string, string> = {};
-    for (const p of initial.photos) {
+    for (const p of [...initial.photos, ...(initial.checkPhotos ?? [])]) {
       m[p.slot_key] = `${publicPhotoUrl(p.storage_path)}?t=${p.updated_at ?? ""}`;
     }
     return m;
@@ -94,6 +101,9 @@ export default function RecordEditor({ plate, initial }: Props) {
         team: string;
         custom_slots: CustomSlot[];
         na_slots: string[];
+        check_na_slots: string[];
+        check_note: string;
+        extra_note: string;
         saved: boolean;
       }>,
     ) => {
@@ -111,6 +121,9 @@ export default function RecordEditor({ plate, initial }: Props) {
             team: overrides?.team ?? team,
             custom_slots: overrides?.custom_slots ?? customSlots,
             na_slots: overrides?.na_slots ?? naSlots,
+            check_na_slots: overrides?.check_na_slots ?? checkNaSlots,
+            check_note: overrides?.check_note ?? checkNote,
+            extra_note: overrides?.extra_note ?? extraNote,
             saved: overrides?.saved ?? false,
           }),
         });
@@ -126,7 +139,20 @@ export default function RecordEditor({ plate, initial }: Props) {
         return false;
       }
     },
-    [plate, operator, route, year, model, team, customSlots, naSlots, showToast],
+    [
+      plate,
+      operator,
+      route,
+      year,
+      model,
+      team,
+      customSlots,
+      naSlots,
+      checkNaSlots,
+      checkNote,
+      extraNote,
+      showToast,
+    ],
   );
 
   // '단말기 없음' 토글 → 상태 갱신 후 저장(서버가 시작/완료 판정·팀즈 알림)
@@ -136,6 +162,15 @@ export default function RecordEditor({ plate, initial }: Props) {
       : naSlots.filter((k) => k !== slotKey);
     setNaSlots(next);
     saveRecord({ na_slots: next });
+  }
+
+  // 차량 이상유무 '없음' 토글 — 사진 없이 충족 처리(설치시작 알림 조건에 반영)
+  function toggleCheckNa(slotKey: string, value: boolean) {
+    const next = value
+      ? Array.from(new Set([...checkNaSlots, slotKey]))
+      : checkNaSlots.filter((k) => k !== slotKey);
+    setCheckNaSlots(next);
+    saveRecord({ check_na_slots: next });
   }
 
   function toggleEditInfo() {
@@ -343,6 +378,41 @@ export default function RecordEditor({ plate, initial }: Props) {
         </div>
       </section>
 
+      {/* 차량 이상유무 확인 (작업 시작 전 8종 — 사진은 드라이브 보관용, PDF/엑셀 미포함) */}
+      <SectionHeader title="차량 이상유무 확인" />
+      <p className="mb-2 -mt-1 text-[11px] text-gray-500">
+        작업 시작 전 촬영 · 장비가 없는 항목은 &lsquo;없음&rsquo;에 체크해주세요.
+      </p>
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+        {CHECK_SLOTS.map((slot, i) => (
+          <PhotoSlot
+            key={slot.slotKey}
+            plate={plate}
+            slot={slot}
+            sortOrder={i}
+            initialUrl={urls[slot.slotKey] ?? null}
+            onUploaded={handleUploaded}
+            onDeleted={handleDeleted}
+            onError={handleSlotError}
+            allowNoTerminal
+            naLabel="없음"
+            noTerminal={checkNaSlots.includes(slot.slotKey)}
+            onToggleNoTerminal={toggleCheckNa}
+          />
+        ))}
+      </div>
+      <label className="mt-2 flex flex-col">
+        <span className="text-xs text-gray-500">비고 (차량 이상유무)</span>
+        <textarea
+          value={checkNote}
+          placeholder="차량 이상 내용이 있으면 적어주세요 (예: 전광판 화면 깨짐)"
+          onChange={(e) => setCheckNote(e.target.value)}
+          onBlur={() => saveRecord()}
+          rows={2}
+          className="mt-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:border-blue-500"
+        />
+      </label>
+
       {/* 설치 전 */}
       <SectionHeader title="설치 전" />
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
@@ -390,6 +460,17 @@ export default function RecordEditor({ plate, initial }: Props) {
           />
         ))}
       </div>
+
+      {/* 특이사항 */}
+      <SectionHeader title="특이사항" />
+      <textarea
+        value={extraNote}
+        placeholder="설치 중 특이사항이 있으면 적어주세요"
+        onChange={(e) => setExtraNote(e.target.value)}
+        onBlur={() => saveRecord()}
+        rows={3}
+        className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:border-blue-500"
+      />
 
       {/* 저장 */}
       <div className="fixed inset-x-0 bottom-0 border-t border-gray-200 bg-white/95 p-3 backdrop-blur no-print">

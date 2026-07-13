@@ -1,12 +1,14 @@
 // 설치 시작/완료 판정 + 팀즈 카드 발송(중복방지) — 사진 업로드/단말기없음 토글 양쪽에서 호출.
 //
 // 충족(satisfied) = 해당 슬롯에 사진이 있거나, na_slots(단말기 없음)에 포함됨.
-//   - 설치 시작 = 설치전 6개 표준 슬롯(BEFORE_SLOTS) 모두 충족
-//   - 설치 완료 = 설치전 6 + 설치후 7 = 13개 표준 슬롯 모두 충족
-// (커스텀 추가 슬롯은 시작/완료 판정에 포함하지 않음 — 13장 기준 유지)
+//   - 설치 시작 = 설치전 7개 표준 슬롯(BEFORE_SLOTS) + 차량 이상유무 8종(CHECK_SLOTS,
+//     사진 또는 check_na_slots '없음' 체크) 모두 충족
+//   - 설치 완료 = 설치전 7 + 설치후 7 = 14개 표준 슬롯 모두 충족 (이상유무는 완료 판정 미포함)
+// (커스텀 추가 슬롯은 시작/완료 판정에 포함하지 않음)
+// 마이그레이션(migration_inspection.sql) 전 DB에서는 이상유무 조건을 건너뛴다(기존 동작 유지).
 
 import { createServiceClient } from "@/lib/supabase/server";
-import { BEFORE_SLOTS, AFTER_SLOTS } from "@/lib/slots";
+import { BEFORE_SLOTS, AFTER_SLOTS, CHECK_SLOTS } from "@/lib/slots";
 import { sendStartCard, sendCompletionCard } from "@/lib/teams";
 
 type SB = ReturnType<typeof createServiceClient>;
@@ -18,23 +20,59 @@ export async function notifyInstallProgress(opts: {
 }): Promise<void> {
   const { supabase, plate, origin } = opts;
 
-  const { data: rec } = await supabase
+  // check_na_slots 컬럼이 아직 없는 DB면 기존 컬럼만으로 재시도(폴백)
+  let recRes = await supabase
     .from("records")
-    .select("operator, route, team, na_slots, start_notified_at, complete_notified_at")
+    .select("operator, route, team, na_slots, check_na_slots, start_notified_at, complete_notified_at")
     .eq("plate", plate)
     .maybeSingle();
+  let hasCheckCols = true;
+  if (recRes.error && /check_na_slots/i.test(recRes.error.message)) {
+    hasCheckCols = false;
+    recRes = await supabase
+      .from("records")
+      .select("operator, route, team, na_slots, start_notified_at, complete_notified_at")
+      .eq("plate", plate)
+      .maybeSingle();
+  }
+  const rec = recRes.data as
+    | {
+        operator: string | null;
+        route: string | null;
+        team: string | null;
+        na_slots: unknown;
+        check_na_slots?: unknown;
+        start_notified_at: string | null;
+        complete_notified_at: string | null;
+      }
+    | null;
   if (!rec) return;
 
   const na = new Set<string>(Array.isArray(rec.na_slots) ? (rec.na_slots as string[]) : []);
-  const { data: photoRows } = await supabase
-    .from("photos")
-    .select("slot_key, storage_path, label, section, sort_order")
-    .eq("plate", plate);
+  const checkNa = new Set<string>(
+    Array.isArray(rec.check_na_slots) ? (rec.check_na_slots as string[]) : [],
+  );
+  const [photosRes, checkRes] = await Promise.all([
+    supabase
+      .from("photos")
+      .select("slot_key, storage_path, label, section, sort_order")
+      .eq("plate", plate),
+    supabase.from("check_photos").select("slot_key").eq("plate", plate),
+  ]);
+  const photoRows = photosRes.data;
   const present = new Set((photoRows ?? []).map((p) => p.slot_key));
+  const checkPresent = new Set((checkRes.data ?? []).map((p) => p.slot_key));
 
   const satisfied = (slotKey: string) => present.has(slotKey) || na.has(slotKey);
-  const started = BEFORE_SLOTS.every((s) => satisfied(s.slotKey));
-  const completed = started && AFTER_SLOTS.every((s) => satisfied(s.slotKey));
+  // 이상유무 조건 — 테이블/컬럼이 없는 DB(마이그레이션 전)면 통과 처리(알림 누락 방지)
+  const checkOk =
+    !hasCheckCols || checkRes.error
+      ? true
+      : CHECK_SLOTS.every((s) => checkPresent.has(s.slotKey) || checkNa.has(s.slotKey));
+  const started = checkOk && BEFORE_SLOTS.every((s) => satisfied(s.slotKey));
+  const completed =
+    BEFORE_SLOTS.every((s) => satisfied(s.slotKey)) &&
+    AFTER_SLOTS.every((s) => satisfied(s.slotKey));
 
   const operator = (rec.operator as string) ?? "";
   const route = (rec.route as string) ?? "";

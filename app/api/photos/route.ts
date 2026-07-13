@@ -41,7 +41,9 @@ async function ensureRecord(
 }
 
 // POST /api/photos  (multipart/form-data)
-//   file, plate, section, slot_key, label, sort_order, is_custom
+//   file, plate, section(before|after|check), slot_key, label, sort_order, is_custom
+//   section="check" = 차량 이상유무 확인 사진 → check_photos 테이블 +
+//   Drive의 차량 폴더 안 "차량이상유무(차량번호)" 하위 폴더에 저장 (PDF/엑셀·KPI 미포함)
 export async function POST(req: NextRequest) {
   const form = await req.formData();
   const file = form.get("file") as File | null;
@@ -51,11 +53,13 @@ export async function POST(req: NextRequest) {
   const label = (form.get("label") as string) ?? "";
   const sortOrder = Number(form.get("sort_order") ?? 0);
   const isCustom = form.get("is_custom") === "true";
+  const isCheck = section === "check";
 
-  if (!file || !plate || !slotKey || (section !== "before" && section !== "after")) {
+  if (!file || !plate || !slotKey || (section !== "before" && section !== "after" && !isCheck)) {
     return NextResponse.json({ error: "필수 파라미터 누락" }, { status: 400 });
   }
 
+  const table = isCheck ? "check_photos" : "photos";
   const supabase = createServiceClient();
   const buffer = Buffer.from(await file.arrayBuffer());
 
@@ -66,7 +70,7 @@ export async function POST(req: NextRequest) {
   const [recResult, existingRes] = await Promise.all([
     ensureRecord(supabase, plate),
     supabase
-      .from("photos")
+      .from(table)
       .select("storage_path")
       .eq("plate", plate)
       .eq("slot_key", slotKey)
@@ -81,8 +85,8 @@ export async function POST(req: NextRequest) {
   const operator = recResult.operator;
   const existing = existingRes.data;
 
-  // 파일명: 설치전/후_차량번호_칸라벨.jpg (라벨 없으면 슬롯키)
-  const sectionKo = section === "before" ? "설치전" : "설치후";
+  // 파일명: 설치전/후/차량이상유무_차량번호_칸라벨.jpg (라벨 없으면 슬롯키)
+  const sectionKo = isCheck ? "차량이상유무" : section === "before" ? "설치전" : "설치후";
   const safeLabel = (label || slotKey).replace(/[\\/]/g, "-").trim();
   const fileName = `${sectionKo}_${plate}_${safeLabel}.jpg`;
 
@@ -95,6 +99,7 @@ export async function POST(req: NextRequest) {
       fileName,
       body: buffer,
       contentType: "image/jpeg",
+      subfolder: isCheck ? `차량이상유무(${plate})` : undefined,
     });
   } catch (e) {
     return NextResponse.json(
@@ -113,29 +118,37 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // 2) DB 저장 (새 파일 ID 기록)
+  // 2) DB 저장 (새 파일 ID 기록) — check_photos에는 section/is_custom 컬럼 없음
+  const row: Record<string, unknown> = {
+    plate,
+    slot_key: slotKey,
+    label,
+    storage_path: fileId, // Drive 파일 ID 저장
+    sort_order: sortOrder,
+    updated_at: new Date().toISOString(),
+  };
+  if (!isCheck) {
+    row.section = section;
+    row.is_custom = isCustom;
+  }
   const { error: dbErr, data } = await supabase
-    .from("photos")
-    .upsert(
-      {
-        plate,
-        section,
-        slot_key: slotKey,
-        label,
-        storage_path: fileId, // Drive 파일 ID 저장
-        sort_order: sortOrder,
-        is_custom: isCustom,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: "plate,slot_key" },
-    )
+    .from(table)
+    .upsert(row, { onConflict: "plate,slot_key" })
     .select("*")
     .single();
 
   // 2-a) DB 실패 → 방금 올린 새 파일 롤백(고아 방지). 기존 사진/DB는 그대로 유지됨.
   if (dbErr) {
     await deletePhoto(fileId).catch(() => {});
-    return NextResponse.json({ error: dbErr.message }, { status: 500 });
+    const missing = isCheck && /check_photos/i.test(dbErr.message);
+    return NextResponse.json(
+      {
+        error: missing
+          ? "DB 준비가 안 됐습니다. supabase/migration_inspection.sql을 실행해주세요."
+          : dbErr.message,
+      },
+      { status: 500 },
+    );
   }
 
   // 3~4) 옛 파일 삭제·팀즈 알림은 응답을 먼저 돌려보낸 뒤 백그라운드로 처리 (best-effort)
@@ -158,6 +171,7 @@ export async function POST(req: NextRequest) {
 }
 
 // DELETE /api/photos?plate=...&slot_key=...
+// slot_key가 check_* 면 차량 이상유무 사진(check_photos)에서 삭제
 export async function DELETE(req: NextRequest) {
   const plate = req.nextUrl.searchParams.get("plate")?.trim();
   const slotKey = req.nextUrl.searchParams.get("slot_key")?.trim();
@@ -165,9 +179,10 @@ export async function DELETE(req: NextRequest) {
     return NextResponse.json({ error: "필수 파라미터 누락" }, { status: 400 });
   }
 
+  const table = slotKey.startsWith("check_") ? "check_photos" : "photos";
   const supabase = createServiceClient();
   const { data: photo } = await supabase
-    .from("photos")
+    .from(table)
     .select("storage_path")
     .eq("plate", plate)
     .eq("slot_key", slotKey)
@@ -176,7 +191,7 @@ export async function DELETE(req: NextRequest) {
   if (photo?.storage_path) {
     await deletePhoto(photo.storage_path).catch(() => {});
   }
-  await supabase.from("photos").delete().eq("plate", plate).eq("slot_key", slotKey);
+  await supabase.from(table).delete().eq("plate", plate).eq("slot_key", slotKey);
 
   return NextResponse.json({ ok: true });
 }

@@ -16,8 +16,14 @@ interface UpsertBody {
   team?: string | null; // 설치 팀명
   custom_slots?: CustomSlot[];
   na_slots?: string[]; // 단말기 없음 표시 슬롯키
+  check_na_slots?: string[]; // 차량 이상유무 '없음' 표시 슬롯키
+  check_note?: string | null; // 차량 이상유무 비고
+  extra_note?: string | null; // 설치 특이사항
   saved?: boolean; // true면 '저장'(목록 등록) 처리 → 최초 1회만 saved_at = now()
 }
+
+// 마이그레이션(migration_inspection.sql) 전 DB에는 없는 컬럼 — upsert 실패 시 빼고 재시도
+const INSPECTION_COLUMNS = ["check_na_slots", "check_note", "extra_note"] as const;
 
 // POST /api/records  → 레코드 upsert (연식/차종/커스텀 슬롯 저장)
 // 차량(vehicles)이 존재해야 하며, 운수사/노선/설치일자는 서버에서 채운다.
@@ -69,6 +75,15 @@ export async function POST(req: NextRequest) {
   if (body.na_slots !== undefined) {
     payload.na_slots = body.na_slots;
   }
+  if (body.check_na_slots !== undefined) {
+    payload.check_na_slots = body.check_na_slots;
+  }
+  if (body.check_note !== undefined) {
+    payload.check_note = (body.check_note ?? "").trim() || null;
+  }
+  if (body.extra_note !== undefined) {
+    payload.extra_note = (body.extra_note ?? "").trim() || null;
+  }
   if (existing?.install_date) {
     payload.install_date = existing.install_date;
   }
@@ -77,11 +92,16 @@ export async function POST(req: NextRequest) {
     payload.saved_at = new Date().toISOString();
   }
 
-  const { data, error } = await supabase
-    .from("records")
-    .upsert(payload, { onConflict: "plate" })
-    .select("*")
-    .single();
+  const upsert = (p: Record<string, unknown>) =>
+    supabase.from("records").upsert(p, { onConflict: "plate" }).select("*").single();
+
+  let { data, error } = await upsert(payload);
+  // 이상유무 컬럼이 아직 없는 DB(migration_inspection.sql 미실행)면 그 필드만 빼고 재시도
+  if (error && INSPECTION_COLUMNS.some((c) => payload[c] !== undefined && error!.message.includes(c))) {
+    const stripped = { ...payload };
+    for (const c of INSPECTION_COLUMNS) delete stripped[c];
+    ({ data, error } = await upsert(stripped));
+  }
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 

@@ -20,13 +20,14 @@ export async function DELETE(req: NextRequest) {
 
   const supabase = createServiceClient();
 
-  // 1) Drive 파일 삭제 (사진별 storage_path)
-  const { data: photos } = await supabase
-    .from("photos")
-    .select("storage_path")
-    .eq("plate", plate);
+  // 1) Drive 파일 삭제 (사진별 storage_path) — 이상유무 확인 사진(check_photos) 포함
+  //    (check_photos는 마이그레이션 전 DB면 조회 error → 무시)
+  const [photosRes, checkRes] = await Promise.all([
+    supabase.from("photos").select("storage_path").eq("plate", plate),
+    supabase.from("check_photos").select("storage_path").eq("plate", plate),
+  ]);
   let deletedPhotos = 0;
-  for (const p of photos ?? []) {
+  for (const p of [...(photosRes.data ?? []), ...(checkRes.data ?? [])]) {
     if (p.storage_path) {
       await deletePhoto(p.storage_path).catch(() => {});
       deletedPhotos++;
@@ -35,6 +36,9 @@ export async function DELETE(req: NextRequest) {
 
   // 2) DB: 사진 행 삭제 후 레코드 삭제 (FK cascade 있어도 명시적으로)
   await supabase.from("photos").delete().eq("plate", plate);
+  if (!checkRes.error) {
+    await supabase.from("check_photos").delete().eq("plate", plate);
+  }
   await supabase.from("records").delete().eq("plate", plate);
 
   // 3) 증차(앱에서 추가한) 차량이면 차량리스트에서도 완전 삭제

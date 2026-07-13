@@ -16,6 +16,7 @@ interface Props {
   allowNoTerminal?: boolean; // '단말기 없음' 체크 허용(하차 칸 등)
   noTerminal?: boolean; // 단말기 없음 상태
   onToggleNoTerminal?: (slotKey: string, value: boolean) => void;
+  naLabel?: string; // 없음 체크 라벨 (기본 "단말기 없음", 이상유무 칸은 "없음")
 }
 
 export default function PhotoSlot({
@@ -30,6 +31,7 @@ export default function PhotoSlot({
   allowNoTerminal,
   noTerminal,
   onToggleNoTerminal,
+  naLabel = "단말기 없음",
 }: Props) {
   const [url, setUrl] = useState<string | null>(initialUrl ?? null);
   const [busy, setBusy] = useState(false);
@@ -118,7 +120,7 @@ export default function PhotoSlot({
       <div className="relative aspect-[3/2] w-full overflow-hidden rounded bg-gray-100">
         {noTerminal ? (
           <div className="flex h-full w-full items-center justify-center text-xs font-medium text-gray-500">
-            단말기 없음
+            {naLabel}
           </div>
         ) : url ? (
           // eslint-disable-next-line @next/next/no-img-element
@@ -146,7 +148,7 @@ export default function PhotoSlot({
             onChange={(e) => onToggleNoTerminal?.(slot.slotKey, e.target.checked)}
             className="h-3.5 w-3.5"
           />
-          단말기 없음
+          {naLabel}
         </label>
       )}
 

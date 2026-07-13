@@ -37,10 +37,11 @@ async function main() {
     .eq("plate", plate);
   console.log(`대상: ${plate} ${veh ? `(${veh.operator ?? ""} ${veh.route ?? ""})` : "(차량리스트에 없음)"} · 사진 ${photoCount ?? 0}장`);
 
-  // 1) Drive 파일 삭제
+  // 1) Drive 파일 삭제 — 이상유무 확인 사진(check_photos) 포함(테이블 없으면 무시)
   const { data: photos } = await sb.from("photos").select("storage_path").eq("plate", plate);
+  const checkRes = await sb.from("check_photos").select("storage_path").eq("plate", plate);
   let driveDeleted = 0;
-  for (const p of photos ?? []) {
+  for (const p of [...(photos ?? []), ...(checkRes.data ?? [])]) {
     if (p.storage_path) {
       await deletePhoto(p.storage_path).catch(() => {});
       driveDeleted++;
@@ -49,6 +50,9 @@ async function main() {
 
   // 2) DB 삭제 (사진 → 기록 → 차량)
   await sb.from("photos").delete().eq("plate", plate);
+  if (!checkRes.error) {
+    await sb.from("check_photos").delete().eq("plate", plate);
+  }
   await sb.from("records").delete().eq("plate", plate);
   const del = await sb.from("vehicles").delete().eq("plate", plate);
   if (del.error) {

@@ -13,10 +13,12 @@ export async function GET(
   const plate = decodeURIComponent(params.plate).trim();
   const supabase = createServiceClient();
 
-  const [vehicleRes, recordRes, photosRes] = await Promise.all([
+  const [vehicleRes, recordRes, photosRes, checkRes] = await Promise.all([
     supabase.from("vehicles").select("plate, operator, route").eq("plate", plate).maybeSingle(),
     supabase.from("records").select("*").eq("plate", plate).maybeSingle(),
     supabase.from("photos").select("*").eq("plate", plate).order("sort_order"),
+    // 차량 이상유무 확인 사진 — 테이블 없는 DB(마이그레이션 전)면 error → 빈 배열
+    supabase.from("check_photos").select("*").eq("plate", plate).order("sort_order"),
   ]);
 
   if (vehicleRes.error) {
@@ -27,6 +29,7 @@ export async function GET(
     vehicle: vehicleRes.data ?? null,
     record: (recordRes.data as RecordBundle["record"]) ?? null,
     photos: (photosRes.data as RecordBundle["photos"]) ?? [],
+    checkPhotos: (checkRes.data as RecordBundle["checkPhotos"]) ?? [],
   };
   return NextResponse.json(bundle);
 }
