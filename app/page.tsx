@@ -38,6 +38,12 @@ export default function HomePage() {
       >
         🔒 관리자
       </Link>
+      <Link
+        href="/about"
+        className="mt-2 rounded-xl border border-gray-300 bg-white px-4 py-3 text-center text-sm font-medium text-gray-700 shadow-sm active:bg-gray-100"
+      >
+        ℹ️ 앱 소개
+      </Link>
     </main>
   );
 }
