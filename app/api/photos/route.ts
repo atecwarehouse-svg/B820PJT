@@ -3,7 +3,6 @@ import { createServiceClient } from "@/lib/supabase/server";
 import { uploadPhoto, deletePhoto } from "@/lib/gdrive";
 import { publicPhotoUrl } from "@/lib/photo-url";
 import { checkPhotoRotation } from "@/lib/gemini";
-import { notifyInstallProgress, originFromRequest } from "@/lib/install-status";
 import { runAfterResponse } from "@/lib/background";
 
 export const runtime = "nodejs";
@@ -151,17 +150,14 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // 3~4) 옛 파일 삭제·팀즈 알림은 응답을 먼저 돌려보낸 뒤 백그라운드로 처리 (best-effort)
-  const origin = originFromRequest(req) || req.nextUrl.origin;
+  // 3) 옛 파일 삭제는 응답을 먼저 돌려보낸 뒤 백그라운드로 처리 (best-effort)
+  //    팀즈 시작/완료 알림은 사진 업로드가 아니라 '저장' 버튼(/api/records saved=true)에서 발송.
   const oldPath = existing?.storage_path as string | undefined;
   runAfterResponse(async () => {
     // DB 커밋 성공 후에야 옛 파일 삭제 (수정인 경우)
     if (oldPath && oldPath !== fileId) {
       await deletePhoto(oldPath).catch(() => {});
     }
-    // 팀즈 알림 — 설치전 6칸 충족 시 '설치 시작', 13칸 충족 시 '설치 완료'.
-    // 판정·중복방지는 공용 헬퍼(사진+단말기없음 기준).
-    await notifyInstallProgress({ supabase, plate, origin }).catch(() => {});
   });
 
   return NextResponse.json({

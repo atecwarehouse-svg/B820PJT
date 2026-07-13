@@ -31,3 +31,8 @@ create policy "check_photos_anon_select" on check_photos
 alter table records add column if not exists check_na_slots jsonb not null default '[]'::jsonb;
 alter table records add column if not exists check_note text;
 alter table records add column if not exists extra_note text;
+
+-- 팀즈 시작/완료 카드 재발송 판정용 내용 지문 — 저장 시 카드 내용이 지난 발송과
+-- 달라졌으면(사진·비고·특이사항·팀명 등 수정) 같은 카드를 다시 보낸다.
+alter table records add column if not exists start_notified_sig text;
+alter table records add column if not exists complete_notified_sig text;

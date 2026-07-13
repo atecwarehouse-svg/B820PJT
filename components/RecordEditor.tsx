@@ -188,6 +188,14 @@ export default function RecordEditor({ plate, initial }: Props) {
       showToast("팀명을 입력해야 저장할 수 있습니다", "error");
       return;
     }
+    if (!checkNote.trim()) {
+      showToast("비고(차량 이상유무)를 입력해주세요. 없으면 '없음'", "error");
+      return;
+    }
+    if (!extraNote.trim()) {
+      showToast("특이사항을 입력해주세요. 없으면 '없음'", "error");
+      return;
+    }
     setSubmitting(true);
     const ok = await saveRecord({ saved: true });
     setSubmitting(false);
@@ -402,15 +410,24 @@ export default function RecordEditor({ plate, initial }: Props) {
         ))}
       </div>
       <label className="mt-2 flex flex-col">
-        <span className="text-xs text-gray-500">비고 (차량 이상유무)</span>
+        <span className="text-xs text-gray-500">
+          비고 (차량 이상유무) <span className="text-red-500">*</span>
+        </span>
         <textarea
           value={checkNote}
-          placeholder="차량 이상 내용이 있으면 적어주세요 (예: 전광판 화면 깨짐)"
+          placeholder="차량 이상 내용을 적어주세요 (예: 전광판 화면 깨짐 · 이상 없으면 '없음')"
           onChange={(e) => setCheckNote(e.target.value)}
           onBlur={() => saveRecord()}
           rows={2}
-          className="mt-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:border-blue-500"
+          className={`mt-1 rounded-lg border px-3 py-2 text-sm outline-none focus:border-blue-500 ${
+            checkNote.trim() ? "border-gray-300 bg-white" : "border-red-300 bg-red-50"
+          }`}
         />
+        {!checkNote.trim() && (
+          <span className="mt-0.5 text-[11px] text-red-500">
+            필수 입력 — 이상이 없으면 &lsquo;없음&rsquo;이라고 적어주세요.
+          </span>
+        )}
       </label>
 
       {/* 설치 전 */}
@@ -462,15 +479,22 @@ export default function RecordEditor({ plate, initial }: Props) {
       </div>
 
       {/* 특이사항 */}
-      <SectionHeader title="특이사항" />
+      <SectionHeader title="특이사항 *" />
       <textarea
         value={extraNote}
-        placeholder="설치 중 특이사항이 있으면 적어주세요"
+        placeholder="설치 중 특이사항을 적어주세요 (없으면 '없음')"
         onChange={(e) => setExtraNote(e.target.value)}
         onBlur={() => saveRecord()}
         rows={3}
-        className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:border-blue-500"
+        className={`w-full rounded-lg border px-3 py-2 text-sm outline-none focus:border-blue-500 ${
+          extraNote.trim() ? "border-gray-300 bg-white" : "border-red-300 bg-red-50"
+        }`}
       />
+      {!extraNote.trim() && (
+        <p className="mt-0.5 text-[11px] text-red-500">
+          필수 입력 — 특이사항이 없으면 &lsquo;없음&rsquo;이라고 적어주세요.
+        </p>
+      )}
 
       {/* 저장 */}
       <div className="fixed inset-x-0 bottom-0 border-t border-gray-200 bg-white/95 p-3 backdrop-blur no-print">

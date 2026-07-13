@@ -34,10 +34,24 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "차량번호가 필요합니다." }, { status: 400 });
   }
 
-  // 최종 '저장'(목록 등록) 시 팀명 필수
+  // 최종 '저장'(목록 등록) 시 팀명·비고(차량 이상유무)·특이사항 필수
   const team = (body.team ?? "").trim();
-  if (body.saved && !team) {
-    return NextResponse.json({ error: "팀명을 입력해야 저장할 수 있습니다." }, { status: 400 });
+  if (body.saved) {
+    if (!team) {
+      return NextResponse.json({ error: "팀명을 입력해야 저장할 수 있습니다." }, { status: 400 });
+    }
+    if (!(body.check_note ?? "").trim()) {
+      return NextResponse.json(
+        { error: "비고(차량 이상유무)를 입력해야 저장할 수 있습니다. (없으면 '없음')" },
+        { status: 400 },
+      );
+    }
+    if (!(body.extra_note ?? "").trim()) {
+      return NextResponse.json(
+        { error: "특이사항을 입력해야 저장할 수 있습니다. (없으면 '없음')" },
+        { status: 400 },
+      );
+    }
   }
 
   const supabase = createServiceClient();
@@ -105,10 +119,13 @@ export async function POST(req: NextRequest) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  // 단말기 없음 체크 등으로 칸이 모두 충족되면 팀즈 시작/완료 알림 (중복방지 내장, best-effort)
-  // — 응답을 먼저 돌려보내고 백그라운드로 처리해 저장 버튼 반응을 빠르게 한다.
-  const origin = originFromRequest(req) || req.nextUrl.origin;
-  runAfterResponse(() => notifyInstallProgress({ supabase, plate, origin }));
+  // 팀즈 시작/완료 알림은 '저장' 버튼(saved=true)에서만 발송 —
+  // 칸 충족 + 내용 지문 비교(수정사항 있으면 재발송)는 공용 헬퍼가 판정.
+  // 응답을 먼저 돌려보내고 백그라운드로 처리해 저장 버튼 반응을 빠르게 한다.
+  if (body.saved) {
+    const origin = originFromRequest(req) || req.nextUrl.origin;
+    runAfterResponse(() => notifyInstallProgress({ supabase, plate, origin }));
+  }
 
   return NextResponse.json({ record: data });
 }
