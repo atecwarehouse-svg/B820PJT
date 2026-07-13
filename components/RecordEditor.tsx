@@ -60,7 +60,27 @@ export default function RecordEditor({ plate, initial, teamOptions = [] }: Props
   const [editInfo, setEditInfo] = useState(false); // 운수사/노선 수정 모드
 
   // 현재 단계 (0=이상유무 · 1=설치 전 · 2=설치 후)
-  const [step, setStep] = useState(0);
+  // 다시 들어오면 저장된 사진·입력을 보고 완료된 단계는 건너뛰고 이어서 시작.
+  const [step, setStep] = useState(() => {
+    const rec = initial.record;
+    const photoKeys = new Set(
+      [...initial.photos, ...(initial.checkPhotos ?? [])].map((p) => p.slot_key),
+    );
+    const na = new Set(rec?.na_slots ?? []);
+    const checkNa = new Set(rec?.check_na_slots ?? []);
+    const customs = rec?.custom_slots ?? [];
+    const checkDone =
+      !!(rec?.team ?? "").trim() &&
+      !!(rec?.check_note ?? "").trim() &&
+      buildCheckSlots(customs).every(
+        (s) => photoKeys.has(s.slotKey) || checkNa.has(s.slotKey),
+      );
+    if (!checkDone) return 0;
+    const beforeDone = buildBeforeSlots(customs).every(
+      (s) => photoKeys.has(s.slotKey) || na.has(s.slotKey),
+    );
+    return beforeDone ? 2 : 1;
+  });
   useEffect(() => {
     window.scrollTo({ top: 0 });
   }, [step]);
