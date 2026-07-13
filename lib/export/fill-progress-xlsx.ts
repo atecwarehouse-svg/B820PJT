@@ -16,13 +16,44 @@
 
 import JSZip from "jszip";
 
-const VEHICLE_SHEET = "xl/worksheets/sheet4.xml"; // 차량리스트
-const SCHEDULE_SHEET = "xl/worksheets/sheet3.xml"; // 전개일정
-const PROGRESS_SHEET = "xl/worksheets/sheet2.xml"; // 인천버스 B800단말기 설치 진행현황
 const WORKBOOK = "xl/workbook.xml";
 
-// 증차 추가 행에 재사용할 셀 스타일(차량리스트 데이터 행과 동일)
-const STYLE = { op: "121", route: "88", plate: "122", done: "123", date: "124" };
+// 시트 물리 파일명(sheetN.xml)은 엑셀에서 재저장하면 시트 순서대로 바뀌므로
+// workbook.xml + rels에서 시트 "이름"으로 경로를 해석한다. 실패 시 구 템플릿 고정 경로.
+const FALLBACK_PATHS = {
+  vehicle: "xl/worksheets/sheet4.xml", // 차량리스트
+  schedule: "xl/worksheets/sheet3.xml", // 전개일정
+  progress: "xl/worksheets/sheet2.xml", // 인천버스 B800단말기 설치 진행현황
+};
+
+async function resolveSheetPaths(zip: JSZip): Promise<typeof FALLBACK_PATHS> {
+  const out = { ...FALLBACK_PATHS };
+  const wbFile = zip.file(WORKBOOK);
+  const relsFile = zip.file("xl/_rels/workbook.xml.rels");
+  if (!wbFile || !relsFile) return out;
+  const wb = await wbFile.async("string");
+  const rels = await relsFile.async("string");
+
+  const ridToPath = new Map<string, string>();
+  for (const m of rels.matchAll(/<Relationship\b[^>]*>/g)) {
+    const id = m[0].match(/ Id="([^"]+)"/)?.[1];
+    const target = m[0].match(/ Target="([^"]+)"/)?.[1];
+    if (!id || !target) continue;
+    if (/^worksheets\/sheet\d+\.xml$/.test(target)) ridToPath.set(id, "xl/" + target);
+  }
+  for (const m of wb.matchAll(/<sheet\b[^>]*>/g)) {
+    const name = m[0].match(/ name="([^"]+)"/)?.[1];
+    const rid = m[0].match(/ r:id="([^"]+)"/)?.[1];
+    if (!name || !rid) continue;
+    const path = ridToPath.get(rid);
+    if (!path) continue;
+    const n = unescapeXml(name);
+    if (n === "차량리스트") out.vehicle = path;
+    else if (n === "전개일정") out.schedule = path;
+    else if (n.includes("진행현황")) out.progress = path;
+  }
+  return out;
+}
 
 function unescapeXml(s: string): string {
   return s
@@ -51,12 +82,14 @@ function replaceCellText(xml: string, ref: string, text: string): string {
   });
 }
 
-// 숫자 값을 가진 셀의 <v> 만 교체 (스타일·서식 유지).
-function replaceCellNumber(xml: string, ref: string, val: number): string {
-  return xml.replace(
-    new RegExp(`(<c r="${ref}"[^>]*>)<v>[\\d.]+</v>(</c>)`),
-    (_m, pre: string, post: string) => `${pre}<v>${val}</v>${post}`,
-  );
+// 숫자 값 셀 세팅 (스타일 유지) — 빈 셀(<c/>)이어도 값을 넣는다. 수식 셀은 재계산에 맡기고 건너뜀.
+function setCellNumber(xml: string, ref: string, val: number): string {
+  const re = new RegExp(`<c r="${ref}"([^>]*?)(?:/>|>([\\s\\S]*?)</c>)`);
+  return xml.replace(re, (m, attrs: string, inner?: string) => {
+    if (inner && /<f[ >]/.test(inner)) return m;
+    const s = (attrs.match(/\bs="(\d+)"/) || [])[1];
+    return `<c r="${ref}"${s ? ` s="${s}"` : ""}><v>${val}</v></c>`;
+  });
 }
 
 // sharedStrings.xml → 문자열 배열 (각 <si>의 <t>들을 이어붙임)
@@ -171,12 +204,13 @@ export async function fillProgressXlsx(
 ): Promise<FillResult> {
   const zip = await JSZip.loadAsync(templateBuffer);
 
-  const vFile = zip.file(VEHICLE_SHEET);
-  const sFile = zip.file(SCHEDULE_SHEET);
+  const sheetPaths = await resolveSheetPaths(zip);
+  const vFile = zip.file(sheetPaths.vehicle);
+  const sFile = zip.file(sheetPaths.schedule);
   const ssFile = zip.file("xl/sharedStrings.xml");
   const wbFile = zip.file(WORKBOOK);
   if (!vFile || !ssFile || !wbFile) {
-    throw new Error("양식 구조가 예상과 다릅니다 (sheet4/sharedStrings/workbook 누락).");
+    throw new Error("양식 구조가 예상과 다릅니다 (차량리스트/sharedStrings/workbook 누락).");
   }
 
   const shared = parseSharedStrings(await ssFile.async("string"));
@@ -210,15 +244,17 @@ export async function fillProgressXlsx(
     }
   }
 
-  // 2) 기존 행 G/H 채움
+  // 2) 기존 행 G/H 채움. 완료가 아닌 차량 행은 비운다 —
+  //    템플릿(사용자 편집본)에 박혀 있던 완료 표기가 기준일 스냅샷을 오염시키지 않도록.
   const seenG = new Set<number>();
   sheetXml = sheetXml.replace(
     /<c r="([GH])(\d+)"([^>]*?)(?:\/>|>[\s\S]*?<\/c>)/g,
     (whole, col: string, rowStr: string, attrs: string) => {
       const row = Number(rowStr);
-      if (!rowSerial.has(row)) return whole;
+      if (!rowPlate.has(row)) return whole; // 차량 행이 아니면(헤더 등) 그대로
       const sMatch = attrs.match(/\bs="(\d+)"/);
       const s = sMatch ? ` s="${sMatch[1]}"` : "";
+      if (!rowSerial.has(row)) return `<c r="${col}${row}"${s}/>`;
       if (col === "G") {
         seenG.add(row);
         return `<c r="G${row}"${s} t="inlineStr"><is><t>완료</t></is></c>`;
@@ -335,15 +371,21 @@ export async function fillProgressXlsx(
 
   // 3-a) 차량리스트에 행 추가 — 완료차는 G/H, 미완료차는 I(예정일)까지 채운다
   if (added.length > 0) {
-    // A(번호)·I(예정일) 셀 스타일은 기존 데이터 행(2행~)에서 가져온다
+    // 셀 스타일은 기존 데이터 행(2행~)에서 열별로 가져온다
+    // (스타일 인덱스는 템플릿을 엑셀에서 재저장할 때마다 바뀌므로 상수로 둘 수 없음)
     const dataStyle = (col: string): string | undefined => {
       for (const m of sheetXml.matchAll(new RegExp(`<c r="${col}(\\d+)" s="(\\d+)"`, "g"))) {
         if (Number(m[1]) >= 2) return m[2];
       }
       return undefined;
     };
-    const styleA = dataStyle("A");
-    const styleI = dataStyle("I");
+    const st = (col: string): string => {
+      const s = dataStyle(col);
+      return s ? ` s="${s}"` : "";
+    };
+    const styles = {
+      A: st("A"), B: st("B"), C: st("C"), F: st("F"), G: st("G"), H: st("H"), I: st("I"),
+    };
     let maxRow = 0;
     for (const m of sheetXml.matchAll(/<row r="(\d+)"/g)) maxRow = Math.max(maxRow, Number(m[1]));
     let rowsXml = "";
@@ -352,19 +394,15 @@ export async function fillProgressXlsx(
       rn++;
       rowsXml +=
         `<row r="${rn}" spans="1:37">` +
-        (a.listNo != null
-          ? `<c r="A${rn}"${styleA ? ` s="${styleA}"` : ""}><v>${a.listNo}</v></c>`
-          : "") +
-        `<c r="B${rn}" s="${STYLE.op}" t="inlineStr"><is><t>${escapeXml(a.operator)}</t></is></c>` +
-        `<c r="C${rn}" s="${STYLE.route}" t="inlineStr"><is><t>${escapeXml(a.route)}</t></is></c>` +
-        `<c r="F${rn}" s="${STYLE.plate}" t="inlineStr"><is><t>${escapeXml(a.plate)}</t></is></c>` +
+        (a.listNo != null ? `<c r="A${rn}"${styles.A}><v>${a.listNo}</v></c>` : "") +
+        `<c r="B${rn}"${styles.B} t="inlineStr"><is><t>${escapeXml(a.operator)}</t></is></c>` +
+        `<c r="C${rn}"${styles.C} t="inlineStr"><is><t>${escapeXml(a.route)}</t></is></c>` +
+        `<c r="F${rn}"${styles.F} t="inlineStr"><is><t>${escapeXml(a.plate)}</t></is></c>` +
         (a.doneSerial != null
-          ? `<c r="G${rn}" s="${STYLE.done}" t="inlineStr"><is><t>완료</t></is></c>` +
-            `<c r="H${rn}" s="${STYLE.date}"><v>${a.doneSerial}</v></c>`
+          ? `<c r="G${rn}"${styles.G} t="inlineStr"><is><t>완료</t></is></c>` +
+            `<c r="H${rn}"${styles.H}><v>${a.doneSerial}</v></c>`
           : "") +
-        (a.planSerial != null
-          ? `<c r="I${rn}"${styleI ? ` s="${styleI}"` : ""}><v>${a.planSerial}</v></c>`
-          : "") +
+        (a.planSerial != null ? `<c r="I${rn}"${styles.I}><v>${a.planSerial}</v></c>` : "") +
         `</row>`;
     }
     sheetXml = sheetXml.replace("</sheetData>", rowsXml + "</sheetData>");
@@ -382,7 +420,7 @@ export async function fillProgressXlsx(
     removed = r.removed;
   }
 
-  zip.file(VEHICLE_SHEET, sheetXml);
+  zip.file(sheetPaths.vehicle, sheetXml);
 
   // 3-b) 전개일정 대상수량 보정 — (운수사|노선) 그룹별 델타(실제 대수 − 템플릿 대수)를
   //      해당 행의 C열과 정적 E열에 더한다(E가 수식 "$C행"이면 재계산이 처리).
@@ -482,7 +520,7 @@ export async function fillProgressXlsx(
         }
         return out;
       });
-      zip.file(SCHEDULE_SHEET, schedXml);
+      zip.file(sheetPaths.schedule, schedXml);
     }
   }
 
@@ -493,19 +531,19 @@ export async function fillProgressXlsx(
   //  - F11 헤더 라벨: "완료수량" → "누적 완료수량"
   //  - B11:C11 병합 해제 → B11="영업소"(유지), C11="노선"
   {
-    const pFile = zip.file(PROGRESS_SHEET);
+    const pFile = zip.file(sheetPaths.progress);
     if (pFile) {
       let pXml = await pFile.async("string");
 
       if (typeof asOfSerial === "number" && isFinite(asOfSerial)) {
-        pXml = replaceCellNumber(pXml, "A10", asOfSerial);
-        pXml = replaceCellNumber(pXml, "A3", asOfSerial); // A3 날짜 = A10 날짜
+        pXml = setCellNumber(pXml, "A10", asOfSerial);
+        pXml = setCellNumber(pXml, "A3", asOfSerial); // A3 날짜 = A10 날짜
       }
       if (typeof dailyPlan === "number" && isFinite(dailyPlan)) {
-        pXml = replaceCellNumber(pXml, "A6", dailyPlan);
+        pXml = setCellNumber(pXml, "A6", dailyPlan);
       }
       if (typeof cumPlan === "number" && isFinite(cumPlan)) {
-        pXml = replaceCellNumber(pXml, "F6", cumPlan);
+        pXml = setCellNumber(pXml, "F6", cumPlan);
       }
 
       // 헤더 라벨 변경 (스타일 유지)
@@ -516,7 +554,7 @@ export async function fillProgressXlsx(
       // 전개일정에서 노선 라벨을 교정한 행 → 진행현황의 같은 행(D열이 그 행의 E를 참조) 노선도 동기화
       for (const { schedRow, label } of schedRelabels) {
         const dm = pXml.match(
-          new RegExp(`<c r="D(\\d+)"[^>]*><f[^>]*>전개일정!E${schedRow}</f>`),
+          new RegExp(`<c r="D(\\d+)"[^>]*><f[^>]*>'?전개일정'?!\\$?E\\$?${schedRow}</f>`),
         );
         if (dm) pXml = replaceCellText(pXml, `C${dm[1]}`, label);
       }
@@ -528,7 +566,7 @@ export async function fillProgressXlsx(
         );
       }
 
-      zip.file(PROGRESS_SHEET, pXml);
+      zip.file(sheetPaths.progress, pXml);
     }
   }
 
