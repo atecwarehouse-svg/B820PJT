@@ -1,13 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
 import { parseScheduleBuffer } from "@/lib/import/parse-schedule";
+import { prepareTemplateBuffer } from "@/lib/import/prepare-template";
 import { adminPassword, isAdmin } from "@/lib/admin-auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 const CHUNK = 500;
 const PAGE = 1000;
+
+// 다운로드 템플릿 위치 (build-progress-xlsx.ts와 동일 규칙)
+const TEMPLATE_BUCKET = process.env.TEMPLATE_BUCKET ?? "templates";
+const TEMPLATE_OBJECT = process.env.TEMPLATE_OBJECT ?? "progress-template.xlsx";
+const TEMPLATE_BACKUP = TEMPLATE_OBJECT.replace(/\.xlsx$/, "") + ".backup.xlsx";
 
 interface ChangeGroup {
   operator: string;
@@ -35,8 +42,8 @@ export async function POST(req: NextRequest) {
   }
 
   let parsed;
+  const buf = Buffer.from(await file.arrayBuffer());
   try {
-    const buf = Buffer.from(await file.arrayBuffer());
     parsed = await parseScheduleBuffer(buf);
   } catch (e) {
     return NextResponse.json(
@@ -168,8 +175,14 @@ export async function POST(req: NextRequest) {
   };
 
   // 미리보기(apply=false): DB 변경 없이 변경내역만 반환.
+  // + 이 파일이 다운로드 양식(템플릿)으로 교체 가능한지 미리 알려준다.
   if (!apply) {
-    return NextResponse.json({ applied: false, ...summary });
+    const t = await prepareTemplateBuffer(buf, { checkOnly: true });
+    return NextResponse.json({
+      applied: false,
+      ...summary,
+      template: { ok: t.ok, reason: t.reason, warn: t.warn },
+    });
   }
 
   // 적용(apply=true): 실제 반영(upsert).
@@ -205,5 +218,35 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  return NextResponse.json({ applied: true, updated: done, ...summary });
+  // 다운로드 양식(템플릿) 자동 교체 — 업로드 파일이 완전한 양식이면 그 파일이 곧 최신 양식이다.
+  // (노선명 변경·일정 재편성을 DB에만 반영하고 템플릿이 옛 버전으로 남으면
+  //  전개일정 대상수량 보정이 어긋나 총대수가 틀어지는 문제 방지 — 2026-07-13 실사례)
+  // 교체 실패는 일정 반영을 되돌리지 않고 안내만 한다.
+  let templateReplaced = false;
+  let templateNote: string | undefined;
+  try {
+    const prep = await prepareTemplateBuffer(buf);
+    if (!prep.ok || !prep.buffer) {
+      templateNote = prep.reason;
+    } else {
+      const storage = supabase.storage.from(TEMPLATE_BUCKET);
+      // 직전 템플릿 백업(실패해도 교체는 진행)
+      await storage.remove([TEMPLATE_BACKUP]);
+      await storage.copy(TEMPLATE_OBJECT, TEMPLATE_BACKUP);
+      const { error: upError } = await storage.upload(TEMPLATE_OBJECT, prep.buffer, {
+        contentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        upsert: true,
+      });
+      if (upError) {
+        templateNote = `다운로드 양식 교체 실패(${upError.message}) — 일정만 반영되었습니다.`;
+      } else {
+        templateReplaced = true;
+        templateNote = prep.warn;
+      }
+    }
+  } catch (e) {
+    templateNote = `다운로드 양식 교체 실패(${e instanceof Error ? e.message : "알 수 없는 오류"}) — 일정만 반영되었습니다.`;
+  }
+
+  return NextResponse.json({ applied: true, updated: done, templateReplaced, templateNote, ...summary });
 }

@@ -29,6 +29,9 @@ interface UploadResult {
   removedCount?: number; // 차량리스트에서 빠져 삭제(예정)된 차량 수
   removed?: RemovedGroup[];
   protectedPlates?: string[]; // 기록·사진이 있어 삭제하지 않은 차량
+  template?: { ok: boolean; reason?: string; warn?: string }; // 미리보기: 양식 교체 가능 여부
+  templateReplaced?: boolean; // 적용: 다운로드 양식(템플릿) 교체 여부
+  templateNote?: string; // 적용: 미교체 사유 또는 경고
 }
 
 // "2026-07-10" → "7/10", null → "미정"
@@ -144,6 +147,52 @@ export default function ScheduleUploadModal() {
     );
   }
 
+  // 다운로드 양식(템플릿) 자동 교체 안내 (preview·done 공용)
+  function TemplateNote() {
+    if (!result) return null;
+    if (result.applied) {
+      // 반영 후: 교체 결과
+      return (
+        <>
+          {result.templateReplaced ? (
+            <p className="mt-2 rounded-lg bg-blue-50 px-3 py-2 text-[11px] leading-relaxed text-blue-700">
+              📄 <b>진행현황 다운로드 양식(템플릿)</b>도 이 파일로 교체되었습니다.
+            </p>
+          ) : result.templateNote ? (
+            <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-[11px] leading-relaxed text-amber-700">
+              {result.templateNote}
+            </p>
+          ) : null}
+          {result.templateReplaced && result.templateNote && (
+            <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-[11px] leading-relaxed text-amber-700">
+              ⚠️ {result.templateNote}
+            </p>
+          )}
+        </>
+      );
+    }
+    // 미리보기: 교체 예고
+    if (!result.template) return null;
+    return (
+      <>
+        {result.template.ok ? (
+          <p className="mt-2 rounded-lg bg-blue-50 px-3 py-2 text-[11px] leading-relaxed text-blue-700">
+            📄 반영 시 이 파일이 <b>진행현황 다운로드 양식(템플릿)</b>으로도 함께 교체됩니다.
+          </p>
+        ) : (
+          <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-[11px] leading-relaxed text-amber-700">
+            {result.template.reason} 일정(차량리스트)만 반영됩니다.
+          </p>
+        )}
+        {result.template.warn && (
+          <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-[11px] leading-relaxed text-amber-700">
+            ⚠️ {result.template.warn}
+          </p>
+        )}
+      </>
+    );
+  }
+
   // 차량리스트에서 빠진(제외) 차량 목록 + 보호 차량 알림 (preview·done 공용)
   function RemovedList() {
     if (!result) return null;
@@ -235,6 +284,10 @@ export default function ScheduleUploadModal() {
                       차량리스트에서 <b>행을 삭제한 차량은 반영 시 함께 제외</b>되어 수량이
                       수정됩니다. (앱에서 추가한 증차, 설치 기록이 있는 차량은 보호)
                     </p>
+                    <p className="mt-1 text-gray-500">
+                      반영 시 이 파일이 <b>진행현황 다운로드 양식(템플릿)</b>으로도 자동
+                      교체됩니다. (노선명 변경·일정 재편성도 다운로드에 바로 반영)
+                    </p>
                   </div>
 
                   <label className="mt-3 block">
@@ -298,6 +351,7 @@ export default function ScheduleUploadModal() {
                     )}
                   </p>
 
+                  <TemplateNote />
                   <ChangeList />
                   <RemovedList />
 
@@ -344,6 +398,7 @@ export default function ScheduleUploadModal() {
                     </p>
                   </div>
 
+                  <TemplateNote />
                   <ChangeList />
                   <RemovedList />
 
