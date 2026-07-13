@@ -4,6 +4,19 @@
 import { createServiceClient } from "@/lib/supabase/server";
 
 export const REPORT_MAIL_KEY = "report_mail_to";
+export const INSTALL_TEAMS_KEY = "install_teams"; // 설치팀 목록 (JSON 배열 문자열)
+
+// 설치팀 목록 읽기 — 미설정/테이블 미생성이면 빈 배열 (기록 페이지는 자유입력으로 폴백)
+export async function getInstallTeams(): Promise<string[]> {
+  const raw = await getSetting(INSTALL_TEAMS_KEY);
+  if (!raw) return [];
+  try {
+    const arr = JSON.parse(raw);
+    return Array.isArray(arr) ? arr.map((v) => String(v).trim()).filter(Boolean) : [];
+  } catch {
+    return [];
+  }
+}
 
 // 값 읽기. 행 없음/테이블 미생성 등 오류 시 null → 호출측에서 env 폴백.
 export async function getSetting(key: string): Promise<string | null> {

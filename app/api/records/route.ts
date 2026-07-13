@@ -3,6 +3,7 @@ import { createServiceClient } from "@/lib/supabase/server";
 import type { CustomSlot } from "@/lib/slots";
 import { notifyInstallProgress, originFromRequest } from "@/lib/install-status";
 import { runAfterResponse } from "@/lib/background";
+import { adminPassword, isAdmin } from "@/lib/admin-auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -20,6 +21,7 @@ interface UpsertBody {
   check_note?: string | null; // 차량 이상유무 비고
   extra_note?: string | null; // 설치 특이사항
   saved?: boolean; // true면 '저장'(목록 등록) 처리 → 최초 1회만 saved_at = now()
+  admin_pw?: string; // 팀명 변경용 관리자 비밀번호 (한번 저장된 팀명은 관리자만 변경)
 }
 
 // 마이그레이션(migration_inspection.sql) 전 DB에는 없는 컬럼 — upsert 실패 시 빼고 재시도
@@ -59,7 +61,7 @@ export async function POST(req: NextRequest) {
   // 차량 마스터 확인(운수사/노선 스냅샷용)과 기존 레코드 조회를 병렬로
   const [vehicleRes, existingRes] = await Promise.all([
     supabase.from("vehicles").select("plate, operator, route").eq("plate", plate).maybeSingle(),
-    supabase.from("records").select("install_date, saved_at").eq("plate", plate).maybeSingle(),
+    supabase.from("records").select("install_date, saved_at, team").eq("plate", plate).maybeSingle(),
   ]);
   const { data: vehicle, error: vErr } = vehicleRes;
   if (vErr) return NextResponse.json({ error: vErr.message }, { status: 500 });
@@ -72,6 +74,18 @@ export async function POST(req: NextRequest) {
 
   // 기존 레코드의 install_date 보존 (없으면 today 기본값)
   const existing = existingRes.data;
+
+  // 팀명은 한번 저장되면 관리자만 변경 가능 — 기존 값이 있고 다른 값으로 바꾸려면
+  // 관리자 비밀번호(admin_pw) 또는 관리자 로그인 쿠키 필요.
+  const prevTeam = ((existing?.team as string | null) ?? "").trim();
+  if (body.team !== undefined && prevTeam && team !== prevTeam) {
+    if ((body.admin_pw ?? "") !== adminPassword() && !isAdmin()) {
+      return NextResponse.json(
+        { error: "팀명은 저장 후 관리자만 변경할 수 있습니다. 관리자 비밀번호를 확인해주세요." },
+        { status: 401 },
+      );
+    }
+  }
 
   const payload: Record<string, unknown> = {
     plate,

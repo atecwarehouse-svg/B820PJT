@@ -17,6 +17,7 @@ import PhotoSlot from "@/components/PhotoSlot";
 interface Props {
   plate: string;
   initial: RecordBundle;
+  teamOptions?: string[]; // 설치팀 선택지 (관리자 페이지에서 관리, 비면 직접 입력)
 }
 
 function todayStr(): string {
@@ -26,7 +27,7 @@ function todayStr(): string {
   return `${d.getFullYear()}-${mm}-${dd}`;
 }
 
-export default function RecordEditor({ plate, initial }: Props) {
+export default function RecordEditor({ plate, initial, teamOptions = [] }: Props) {
   const vehicle = initial.vehicle!;
   const installDate = initial.record?.install_date ?? todayStr();
 
@@ -38,6 +39,9 @@ export default function RecordEditor({ plate, initial }: Props) {
   const [year, setYear] = useState(initial.record?.year ?? vehicle.year ?? "");
   const [model, setModel] = useState(initial.record?.model ?? vehicle.model ?? "");
   const [team, setTeam] = useState(initial.record?.team ?? "");
+  // 팀명 잠금 — 한번 저장된 팀명은 관리자 비밀번호를 입력해야 변경 가능(서버도 검증)
+  const [teamLocked, setTeamLocked] = useState(!!(initial.record?.team ?? "").trim());
+  const adminPwRef = useRef<string | null>(null); // 잠금 해제 시 입력한 관리자 비밀번호
   const [customSlots, setCustomSlots] = useState<CustomSlot[]>(
     initial.record?.custom_slots ?? [],
   );
@@ -125,17 +129,22 @@ export default function RecordEditor({ plate, initial }: Props) {
             check_note: overrides?.check_note ?? checkNote,
             extra_note: overrides?.extra_note ?? extraNote,
             saved: overrides?.saved ?? false,
+            // 팀명 변경 잠금 해제용 관리자 비밀번호 (있을 때만)
+            ...(adminPwRef.current ? { admin_pw: adminPwRef.current } : {}),
           }),
         });
-        if (!res.ok) throw new Error();
+        if (!res.ok) {
+          const j = await res.json().catch(() => null);
+          throw new Error(j?.error ?? "저장에 실패했습니다");
+        }
         setSaveState("saved");
         setTimeout(() => setSaveState("idle"), 1500);
         // 최종 '저장'(saved=true)은 별도 안내가 있으므로 토스트 생략
         if (!overrides?.saved) showToast("저장되었습니다");
         return true;
-      } catch {
+      } catch (e) {
         setSaveState("error");
-        showToast("저장에 실패했습니다", "error");
+        showToast(e instanceof Error ? e.message : "저장에 실패했습니다", "error");
         return false;
       }
     },
@@ -162,6 +171,31 @@ export default function RecordEditor({ plate, initial }: Props) {
       : naSlots.filter((k) => k !== slotKey);
     setNaSlots(next);
     saveRecord({ na_slots: next });
+  }
+
+  // 팀명 변경 — 선택 즉시 저장. 성공하면 잠금(이후 변경은 관리자 비밀번호 필요).
+  async function changeTeam(v: string) {
+    const prev = team;
+    setTeam(v);
+    const ok = await saveRecord({ team: v });
+    if (ok) {
+      if (v.trim()) {
+        setTeamLocked(true);
+        adminPwRef.current = null;
+      }
+    } else {
+      setTeam(prev); // 실패(비밀번호 오류 등) → 원래 값으로 복구
+      if (prev.trim()) setTeamLocked(true);
+      adminPwRef.current = null;
+    }
+  }
+
+  // 잠긴 팀명 변경 — 관리자 비밀번호 입력 후 잠금 해제(저장 시 서버가 재검증)
+  function unlockTeam() {
+    const pw = prompt("팀명 변경은 관리자만 가능합니다.\n관리자 비밀번호를 입력하세요.");
+    if (!pw || !pw.trim()) return;
+    adminPwRef.current = pw.trim();
+    setTeamLocked(false);
   }
 
   // 차량 이상유무 '없음' 토글 — 사진 없이 충족 처리(설치시작 알림 조건에 반영)
@@ -367,19 +401,55 @@ export default function RecordEditor({ plate, initial }: Props) {
           <label className="col-span-2 flex flex-col">
             <span className="text-xs text-gray-400">
               팀명 <span className="text-red-500">*</span>
+              {teamLocked && <span className="ml-1 text-gray-400">(변경은 관리자만)</span>}
             </span>
-            <input
-              value={team}
-              placeholder="설치 팀명 (필수)"
-              onChange={(e) => setTeam(e.target.value)}
-              onBlur={() => saveRecord()}
-              className={`rounded border px-2 py-1 outline-none focus:border-blue-500 ${
-                team.trim() ? "border-gray-300" : "border-red-300 bg-red-50"
-              }`}
-            />
+            <div className="flex items-center gap-2">
+              {teamOptions.length > 0 ? (
+                <select
+                  value={team}
+                  disabled={teamLocked}
+                  onChange={(e) => changeTeam(e.target.value)}
+                  className={`min-w-0 flex-1 rounded border px-2 py-1.5 outline-none focus:border-blue-500 disabled:bg-gray-100 disabled:text-gray-500 ${
+                    team.trim() ? "border-gray-300 bg-white" : "border-red-300 bg-red-50"
+                  }`}
+                >
+                  <option value="">팀 선택</option>
+                  {teamOptions.map((t) => (
+                    <option key={t} value={t}>
+                      {t}
+                    </option>
+                  ))}
+                  {team.trim() && !teamOptions.includes(team) && (
+                    <option value={team}>{team}</option>
+                  )}
+                </select>
+              ) : (
+                <input
+                  value={team}
+                  disabled={teamLocked}
+                  placeholder="설치 팀명 (필수)"
+                  onChange={(e) => setTeam(e.target.value)}
+                  onBlur={() => changeTeam(team)}
+                  className={`min-w-0 flex-1 rounded border px-2 py-1 outline-none focus:border-blue-500 disabled:bg-gray-100 disabled:text-gray-500 ${
+                    team.trim() ? "border-gray-300" : "border-red-300 bg-red-50"
+                  }`}
+                />
+              )}
+              {teamLocked && (
+                <button
+                  type="button"
+                  onClick={unlockTeam}
+                  className="shrink-0 rounded border border-gray-300 px-2.5 py-1.5 text-xs font-medium text-gray-600 active:bg-gray-100"
+                >
+                  변경
+                </button>
+              )}
+            </div>
             {!team.trim() && (
               <span className="mt-0.5 text-[11px] text-red-500">
-                팀명을 입력해야 저장할 수 있습니다.
+                {teamOptions.length > 0
+                  ? "팀을 선택해야 저장할 수 있습니다."
+                  : "팀명을 입력해야 저장할 수 있습니다."}
               </span>
             )}
           </label>

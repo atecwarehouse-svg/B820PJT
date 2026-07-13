@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { createServiceClient } from "@/lib/supabase/server";
+import { getInstallTeams } from "@/lib/settings";
 import type { RecordBundle } from "@/lib/types";
 import RecordEditor from "@/components/RecordEditor";
 
@@ -14,12 +15,14 @@ export default async function RecordPage({
   const plate = decodeURIComponent(params.plate).trim();
   const supabase = createServiceClient();
 
-  const [vehicleRes, recordRes, photosRes, checkRes] = await Promise.all([
+  const [vehicleRes, recordRes, photosRes, checkRes, teamOptions] = await Promise.all([
     supabase.from("vehicles").select("plate, operator, route, year, model").eq("plate", plate).maybeSingle(),
     supabase.from("records").select("*").eq("plate", plate).maybeSingle(),
     supabase.from("photos").select("*").eq("plate", plate).order("sort_order"),
     // 차량 이상유무 확인 사진 — 테이블 없는 DB(마이그레이션 전)면 error → 빈 배열
     supabase.from("check_photos").select("*").eq("plate", plate).order("sort_order"),
+    // 설치팀 목록 (관리자 페이지에서 관리) — 비어 있으면 팀명 직접 입력으로 폴백
+    getInstallTeams(),
   ]);
 
   if (!vehicleRes.data) {
@@ -41,5 +44,5 @@ export default async function RecordPage({
     checkPhotos: (checkRes.data as RecordBundle["checkPhotos"]) ?? [],
   };
 
-  return <RecordEditor plate={plate} initial={bundle} />;
+  return <RecordEditor plate={plate} initial={bundle} teamOptions={teamOptions} />;
 }

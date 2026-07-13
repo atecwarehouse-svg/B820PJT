@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import ReportRecipientsManager from "@/components/ReportRecipientsManager";
+import TeamNamesManager from "@/components/TeamNamesManager";
 import ConsultationManager from "@/components/ConsultationManager";
 
 interface AdminRecord {
@@ -94,6 +95,9 @@ export default function AdminPanel() {
         <span>🖼️ 기준(양식) 사진 관리</span>
         <span className="text-gray-400">→</span>
       </Link>
+
+      {/* 설치팀 목록 관리 (기록 페이지 팀명 드롭다운) */}
+      <TeamNamesManager />
 
       {/* 완료리포트 메일 수신자 관리 */}
       <ReportRecipientsManager />
