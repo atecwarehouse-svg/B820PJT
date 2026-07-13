@@ -20,14 +20,16 @@ export async function notifyInstallProgress(opts: {
 }): Promise<void> {
   const { supabase, plate, origin } = opts;
 
-  // check_na_slots 컬럼이 아직 없는 DB면 기존 컬럼만으로 재시도(폴백)
+  // 이상유무 컬럼(check_*)이 아직 없는 DB면 기존 컬럼만으로 재시도(폴백)
   let recRes = await supabase
     .from("records")
-    .select("operator, route, team, na_slots, check_na_slots, start_notified_at, complete_notified_at")
+    .select(
+      "operator, route, team, na_slots, check_na_slots, check_note, extra_note, start_notified_at, complete_notified_at",
+    )
     .eq("plate", plate)
     .maybeSingle();
   let hasCheckCols = true;
-  if (recRes.error && /check_na_slots/i.test(recRes.error.message)) {
+  if (recRes.error && /check_na_slots|check_note|extra_note/i.test(recRes.error.message)) {
     hasCheckCols = false;
     recRes = await supabase
       .from("records")
@@ -42,6 +44,8 @@ export async function notifyInstallProgress(opts: {
         team: string | null;
         na_slots: unknown;
         check_na_slots?: unknown;
+        check_note?: string | null;
+        extra_note?: string | null;
         start_notified_at: string | null;
         complete_notified_at: string | null;
       }
@@ -77,11 +81,13 @@ export async function notifyInstallProgress(opts: {
   const operator = (rec.operator as string) ?? "";
   const route = (rec.route as string) ?? "";
   const team = (rec.team as string) ?? "";
+  const checkNote = rec.check_note ?? ""; // 차량이상 비고 — 시작/완료 카드에 표시
+  const extraNote = rec.extra_note ?? ""; // 특이사항 — 시작/완료 카드에 표시
 
   // 설치 시작 — 설치전 6칸 충족 & 아직 미발송
   if (started && !rec.start_notified_at) {
     try {
-      await sendStartCard({ operator, plate, route, team });
+      await sendStartCard({ operator, plate, route, team, checkNote, extraNote });
     } catch {
       /* best-effort */
     }
@@ -104,7 +110,7 @@ export async function notifyInstallProgress(opts: {
         label: (p.label as string) ?? "",
       }));
     try {
-      await sendCompletionCard({ operator, plate, route, team, photos });
+      await sendCompletionCard({ operator, plate, route, team, checkNote, extraNote, photos });
     } catch {
       /* best-effort */
     }

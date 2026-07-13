@@ -242,12 +242,57 @@ export async function sendCompletionReportCard(r: DailyReport, notes: string): P
   }
 }
 
-// 설치 시작(설치전 6장 업로드 완료) 시 보내는 카드. 완료 카드와 같은 채팅방.
+// 차량이상 비고·특이사항 블록 — 설치 시작/완료 카드가 공유.
+// 차량이상 비고는 결함 알림이므로 붉은색(Attention)으로 강조.
+function noteBlocks(d: { checkNote?: string; extraNote?: string }): unknown[] {
+  const blocks: unknown[] = [];
+  if (d.checkNote?.trim()) {
+    blocks.push(
+      {
+        type: "TextBlock",
+        weight: "Bolder",
+        color: "Attention",
+        text: "○ 차량이상 비고",
+        spacing: "Small",
+        wrap: true,
+      },
+      {
+        type: "TextBlock",
+        color: "Attention",
+        text: d.checkNote.trim(),
+        spacing: "None",
+        wrap: true,
+      },
+    );
+  }
+  if (d.extraNote?.trim()) {
+    blocks.push(
+      {
+        type: "TextBlock",
+        weight: "Bolder",
+        text: "○ 특이사항",
+        spacing: "Small",
+        wrap: true,
+      },
+      {
+        type: "TextBlock",
+        text: d.extraNote.trim(),
+        spacing: "None",
+        wrap: true,
+      },
+    );
+  }
+  return blocks;
+}
+
+// 설치 시작(설치전 7장 + 차량이상유무 8종 충족) 시 보내는 카드. 완료 카드와 같은 채팅방.
 export async function sendStartCard(d: {
   operator: string;
   plate: string;
   route?: string;
   team?: string;
+  checkNote?: string; // 차량이상 비고 (records.check_note)
+  extraNote?: string; // 특이사항 (records.extra_note)
 }): Promise<void> {
   const url = process.env.TEAMS_COMPLETE_WEBHOOK_URL;
   if (!url) return;
@@ -300,6 +345,7 @@ export async function sendStartCard(d: {
                   },
                 ]
               : []),
+            ...noteBlocks(d),
           ],
         },
       },
@@ -415,6 +461,8 @@ export async function sendCompletionCard(d: {
   plate: string;
   route?: string;
   team?: string;
+  checkNote?: string; // 차량이상 비고 (records.check_note)
+  extraNote?: string; // 특이사항 (records.extra_note)
   photos?: { url: string; label: string }[];
 }): Promise<void> {
   const url = process.env.TEAMS_COMPLETE_WEBHOOK_URL;
@@ -469,6 +517,7 @@ export async function sendCompletionCard(d: {
                   },
                 ]
               : []),
+            ...noteBlocks(d),
             ...(photos.length
               ? [
                   {
