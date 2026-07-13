@@ -6,7 +6,8 @@ export interface ProgressCardData {
   label: string; // 날짜 라벨 (예: "9/17 (수)")
   todayPlanned: number;
   inProgress: number;
-  complete: number;
+  todayDone: number; // 금일 완료 (저장 기준, 현재 업무일)
+  complete: number; // 누적 완료
   remain: number;
 }
 
@@ -43,7 +44,8 @@ export async function sendProgressCard(d: ProgressCardData): Promise<void> {
               facts: [
                 { title: "금일 설치계획", value: `${d.todayPlanned.toLocaleString()}대` },
                 { title: "진행중", value: `${d.inProgress.toLocaleString()}대` },
-                { title: "완료", value: `${d.complete.toLocaleString()}대` },
+                { title: "금일완료", value: `${d.todayDone.toLocaleString()}대` },
+                { title: "누적완료", value: `${d.complete.toLocaleString()}대` },
                 { title: "잔여(설치대상)", value: `${d.remain.toLocaleString()}대` },
               ],
             },

@@ -16,6 +16,7 @@ export default function TeamsShareButton({
   kind = "progress",
   today,
   todayPlanned,
+  todayDone = 0,
   complete,
   inProgress,
   remain,
@@ -24,6 +25,7 @@ export default function TeamsShareButton({
   kind?: "progress" | "start";
   today: string;
   todayPlanned: number;
+  todayDone?: number; // 금일 완료 (진행 현황 카드용, 저장 기준)
   complete: number;
   inProgress: number;
   remain: number;
@@ -48,6 +50,7 @@ export default function TeamsShareButton({
           kind,
           label,
           todayPlanned,
+          todayDone,
           complete,
           inProgress,
           remain,
@@ -80,7 +83,8 @@ export default function TeamsShareButton({
     : [
         ["금일 설치계획", todayPlanned, "text-gray-700"],
         ["진행중", inProgress, "text-amber-600"],
-        ["완료", complete, "text-green-700"],
+        ["금일완료", todayDone, "text-green-600"],
+        ["누적완료", complete, "text-green-700"],
         ["잔여(설치대상)", remain, "text-gray-600"],
       ];
 

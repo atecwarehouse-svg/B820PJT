@@ -172,6 +172,7 @@ export default async function DashboardPage() {
             <TeamsShareButton
               today={ip.today}
               todayPlanned={sch?.days.find((d) => d.date === ip.today)?.planned ?? 0}
+              todayDone={ip.todayComplete}
               complete={s.complete}
               inProgress={inProgressCount}
               remain={remainCount}

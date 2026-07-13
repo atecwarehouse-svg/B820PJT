@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { loadStats, loadInProgressList, loadScheduleStats } from "@/lib/stats";
+import {
+  loadStats,
+  loadInProgressList,
+  loadScheduleStats,
+  loadInstallProgress,
+} from "@/lib/stats";
 import { workDateString, weekdayLabel } from "@/lib/work-day";
 import { sendProgressCard } from "@/lib/teams";
 
@@ -25,12 +30,13 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ skipped: true, reason: `설치 시작(${START_DATE}) 이전`, workDay });
   }
 
-  let s, inProgressList, sch;
+  let s, inProgressList, sch, ip;
   try {
-    [s, inProgressList, sch] = await Promise.all([
+    [s, inProgressList, sch, ip] = await Promise.all([
       loadStats(),
       loadInProgressList(),
       loadScheduleStats(),
+      loadInstallProgress(),
     ]);
   } catch (e) {
     return NextResponse.json(
@@ -46,6 +52,7 @@ export async function GET(req: NextRequest) {
 
   const complete = s.complete;
   const inProgress = inProgressList.length;
+  const todayDone = ip.todayComplete; // 금일 완료 (저장 기준, 현재 업무일)
   const remain = Math.max(0, s.totalVehicles - complete - inProgress);
 
   try {
@@ -53,6 +60,7 @@ export async function GET(req: NextRequest) {
       label: weekdayLabel(workDay),
       todayPlanned: planned,
       inProgress,
+      todayDone,
       complete,
       remain,
     });
@@ -63,5 +71,5 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  return NextResponse.json({ sent: true, workDay, planned, complete, inProgress, remain });
+  return NextResponse.json({ sent: true, workDay, planned, todayDone, complete, inProgress, remain });
 }

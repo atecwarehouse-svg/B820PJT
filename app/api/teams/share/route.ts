@@ -8,6 +8,7 @@ interface ShareBody {
   kind?: string; // "start" = 설치 시작 보고 카드, 그 외 = 진행 현황 카드
   label?: string;
   todayPlanned?: number;
+  todayDone?: number; // 금일 완료 (진행 현황 카드)
   complete?: number;
   inProgress?: number;
   remain?: number;
@@ -38,6 +39,7 @@ export async function POST(req: NextRequest) {
         label: (b.label ?? "").toString().slice(0, 40),
         todayPlanned: n(b.todayPlanned),
         inProgress: n(b.inProgress),
+        todayDone: n(b.todayDone),
         complete: n(b.complete),
         remain: n(b.remain),
       });
