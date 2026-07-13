@@ -5,11 +5,14 @@
 // 보고 자동 계산된다. 따라서 G/H만 채우고 workbook의 fullCalcOnLoad를 켜면 Excel이 열릴 때
 // 전 시트를 재계산한다.
 //
-// 증차(마스터 차량리스트에 없는 완료 차량)는:
-//   ① 차량리스트 시트에 행을 추가(운수사·노선·차량번호·완료·완료일)하고,
-//   ② 전개일정의 해당 영업소(운수사+노선) 대상수량(C열)을 증차 수만큼 올린다.
-// → 전개일정의 MIN(대상수량, 완료수)에 가려지지 않고 진행현황 숫자에 정확히 반영된다.
-//   (진행현황 시트의 대상대수/완료수량은 전개일정을 참조하므로 자동 연동.)
+// 차량 수 정합(총대수 = DB와 일치):
+//   ① 템플릿 차량리스트에 없는 DB 차량(신규 증차·미완료 포함)은 행을 추가하고,
+//      DB에서 삭제된 차량의 템플릿 행은 제거한다.
+//   ② 전개일정의 (운수사|노선) 행별 대상수량(C열·정적 E열)을 "실제 대수 − 템플릿 대수"
+//      델타만큼 보정한다 → 신규·삭제·노선이동이 모두 반영된다.
+//      (진행현황 총대수 I6 = D합계 = 전개일정 E열 합이므로 자동 연동.)
+//   ③ 전개일정 행을 정확히 못 찾으면 노선 정규화("번" 접미사 등)·운수사 단일행으로 매칭하고,
+//      그렇게 잡힌 행은 노선 라벨을 DB 값으로 바꿔 완료 COUNTIFS도 맞게 한다.
 
 import JSZip from "jszip";
 
@@ -94,24 +97,26 @@ export interface VehicleDbInfo {
   listNo: number | null; // 번호 (A열, null=미적재 → 템플릿 값 유지)
 }
 
-// 차량리스트 데이터 행(2행~)을 번호(list_no)→설치예정일→원순서로 재정렬.
+// 차량리스트 데이터 행(2행~)을 번호(list_no)→설치예정일→원순서로 재정렬하고,
+// keepPlate가 false인 차량(DB에서 삭제된 차량) 행은 제거한다.
 // 시트에 수식·병합이 없는 순수 값 행이라 행 블록을 통째로 옮기고 셀 참조만 갈아끼운다.
 // 구조가 예상과 다르면(블록 재조립 불일치 등) 원본을 그대로 반환해 안전하게 건너뛴다.
 function sortVehicleRows(
   xml: string,
   dbInfo: Map<string, VehicleDbInfo>,
   shared: string[],
-): string {
+  keepPlate: (plate: string) => boolean,
+): { xml: string; removed: number } {
   const open = xml.indexOf("<sheetData>");
   const close = xml.indexOf("</sheetData>");
-  if (open < 0 || close < 0) return xml;
+  if (open < 0 || close < 0) return { xml, removed: 0 };
   const bodyStart = open + "<sheetData>".length;
   const body = xml.slice(bodyStart, close);
 
   const blocks = body.match(/<row r="\d+"[^>]*(?:\/>|>[\s\S]*?<\/row>)/g);
-  if (!blocks || blocks.length < 3) return xml;
-  if (blocks.join("") !== body) return xml; // 행 사이에 예상 밖 내용 → 정렬 포기
-  if (!blocks[0].startsWith('<row r="1"')) return xml; // 1행=헤더 전제
+  if (!blocks || blocks.length < 3) return { xml, removed: 0 };
+  if (blocks.join("") !== body) return { xml, removed: 0 }; // 행 사이에 예상 밖 내용 → 정렬 포기
+  if (!blocks[0].startsWith('<row r="1"')) return { xml, removed: 0 }; // 1행=헤더 전제
 
   const keyed = blocks.slice(1).map((block, idx) => {
     const f = block.match(/<c r="F\d+"([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/);
@@ -120,34 +125,39 @@ function sortVehicleRows(
     return {
       block,
       idx,
+      plate,
       no: info?.listNo ?? Number.MAX_SAFE_INTEGER,
       date: info?.serial ?? Number.MAX_SAFE_INTEGER,
     };
   });
-  keyed.sort((a, b) => a.no - b.no || a.date - b.date || a.idx - b.idx);
+  const kept = keyed.filter((k) => !k.plate || keepPlate(k.plate));
+  const removed = keyed.length - kept.length;
+  kept.sort((a, b) => a.no - b.no || a.date - b.date || a.idx - b.idx);
 
   let out = blocks[0];
   let rn = 1;
-  for (const k of keyed) {
+  for (const k of kept) {
     rn++;
     out +=
       k.block
         .replace(/^<row r="\d+"/, `<row r="${rn}"`)
         .replace(/<c r="([A-Z]{1,2})\d+"/g, (_m, col: string) => `<c r="${col}${rn}"`);
   }
-  return xml.slice(0, bodyStart) + out + xml.slice(close);
+  return { xml: xml.slice(0, bodyStart) + out + xml.slice(close), removed };
 }
 
 interface FillResult {
   buffer: Buffer;
   filled: number; // 차량리스트 기존 행에 G/H 채운 수
-  added: number; // 증차로 새 행 추가한 수
+  added: number; // 템플릿에 없어 새 행으로 추가한 수(신규·증차)
+  removed: number; // DB에서 삭제돼 템플릿에서 뺀 행 수
 }
 
 /**
  * 템플릿 버퍼 + 완료맵(plate → {직렬값,운수사,노선})을 받아 채운 새 xlsx 버퍼를 반환.
  * - 차량리스트에 있는 차량: G="완료", H=완료일.
- * - 없는 차량(증차): 행 추가 + 전개일정 대상수량 보정.
+ * - 템플릿에 없는 차량(신규·증차, 미완료 포함): 행 추가. DB에서 삭제된 차량: 행 제거.
+ * - 전개일정 대상수량은 (운수사|노선) 그룹별 "실제 대수 − 템플릿 대수" 델타로 보정.
  * - dbInfo(plate → {번호,운수사,노선,예정일})를 주면 차량리스트 A/B/C/I열을 DB 값으로
  *   덮어쓴다 — 일정변경·노선변경 업로드가 다운로드 파일에도 반영되도록. (템플릿 값은 구버전)
  */
@@ -172,15 +182,28 @@ export async function fillProgressXlsx(
   const shared = parseSharedStrings(await ssFile.async("string"));
   let sheetXml = await vFile.async("string");
 
-  // 1) F 셀(차량번호) 스캔 → 행→차량번호 맵 + 완료 차량의 행→완료일 직렬값
+  // 1) 차량리스트 행 스캔 → 행→차량번호 맵 + 완료 차량의 행→완료일 직렬값
+  //    + 템플릿 원본 (운수사|노선) 그룹별 대수 — 전개일정 대상수량 델타 보정(3-b)의 기준.
+  //    (B/C가 DB 값으로 덮어써지기 전에 읽어야 노선이동 델타가 정확하다)
   const rowSerial = new Map<number, number>();
   const rowPlate = new Map<number, string>();
   const matchedPlates = new Set<string>();
-  for (const m of sheetXml.matchAll(/<c r="F(\d+)"([^>]*)>([\s\S]*?)<\/c>/g)) {
-    const row = Number(m[1]);
-    const plate = cellValue(m[2], m[3], shared).trim();
+  const tplGroupCount = new Map<string, number>();
+  for (const rowM of sheetXml.matchAll(/<row r="(\d+)"[^>]*>([\s\S]*?)<\/row>/g)) {
+    const row = Number(rowM[1]);
+    if (row < 2) continue; // 1행=헤더
+    let plate = "";
+    let op = "";
+    let rt = "";
+    for (const cm of rowM[2].matchAll(/<c r="([A-Z]+)\d+"([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/g)) {
+      if (cm[1] === "F") plate = cellValue(cm[2], cm[3] ?? "", shared).trim();
+      else if (cm[1] === "B") op = cellValue(cm[2], cm[3] ?? "", shared).trim();
+      else if (cm[1] === "C") rt = cellValue(cm[2], cm[3] ?? "", shared).trim();
+    }
     if (!plate) continue;
     rowPlate.set(row, plate);
+    const key = `${op}|||${rt}`;
+    tplGroupCount.set(key, (tplGroupCount.get(key) ?? 0) + 1);
     if (completed.has(plate)) {
       rowSerial.set(row, completed.get(plate)!.serial);
       matchedPlates.add(plate);
@@ -273,20 +296,54 @@ export async function fillProgressXlsx(
     );
   }
 
-  // 3) 증차 = 완료맵에 있으나 차량리스트에 없는 차량
-  const added: { plate: string; serial: number; operator: string; route: string }[] = [];
-  const bumpByGroup = new Map<string, { operator: string; route: string; count: number }>();
+  // 3) 템플릿 차량리스트에 없는 차량 = 추가 대상.
+  //    ① DB 차량 전체 중 템플릿에 없는 차량 — 미완료 신규분 포함(총대수가 DB와 맞도록)
+  //    ② DB에는 없지만 완료 기록이 있는 차량(증차 완료분)
+  const tplPlates = new Set(rowPlate.values());
+  const added: {
+    plate: string;
+    operator: string;
+    route: string;
+    doneSerial: number | null;
+    planSerial: number | null;
+    listNo: number | null;
+  }[] = [];
+  if (dbInfo) {
+    for (const [plate, info] of dbInfo) {
+      if (tplPlates.has(plate)) continue;
+      added.push({
+        plate,
+        operator: info.operator,
+        route: info.route,
+        doneSerial: completed.get(plate)?.serial ?? null,
+        planSerial: info.serial,
+        listNo: info.listNo,
+      });
+    }
+  }
   for (const [plate, info] of completed) {
-    if (matchedPlates.has(plate)) continue;
-    added.push({ plate, serial: info.serial, operator: info.operator, route: info.route });
-    const key = `${info.operator}|||${info.route}`;
-    const g = bumpByGroup.get(key) ?? { operator: info.operator, route: info.route, count: 0 };
-    g.count++;
-    bumpByGroup.set(key, g);
+    if (tplPlates.has(plate) || dbInfo?.has(plate)) continue;
+    added.push({
+      plate,
+      operator: info.operator,
+      route: info.route,
+      doneSerial: info.serial,
+      planSerial: null,
+      listNo: null,
+    });
   }
 
-  // 3-a) 차량리스트에 증차 행 추가
+  // 3-a) 차량리스트에 행 추가 — 완료차는 G/H, 미완료차는 I(예정일)까지 채운다
   if (added.length > 0) {
+    // A(번호)·I(예정일) 셀 스타일은 기존 데이터 행(2행~)에서 가져온다
+    const dataStyle = (col: string): string | undefined => {
+      for (const m of sheetXml.matchAll(new RegExp(`<c r="${col}(\\d+)" s="(\\d+)"`, "g"))) {
+        if (Number(m[1]) >= 2) return m[2];
+      }
+      return undefined;
+    };
+    const styleA = dataStyle("A");
+    const styleI = dataStyle("I");
     let maxRow = 0;
     for (const m of sheetXml.matchAll(/<row r="(\d+)"/g)) maxRow = Math.max(maxRow, Number(m[1]));
     let rowsXml = "";
@@ -295,11 +352,19 @@ export async function fillProgressXlsx(
       rn++;
       rowsXml +=
         `<row r="${rn}" spans="1:37">` +
+        (a.listNo != null
+          ? `<c r="A${rn}"${styleA ? ` s="${styleA}"` : ""}><v>${a.listNo}</v></c>`
+          : "") +
         `<c r="B${rn}" s="${STYLE.op}" t="inlineStr"><is><t>${escapeXml(a.operator)}</t></is></c>` +
         `<c r="C${rn}" s="${STYLE.route}" t="inlineStr"><is><t>${escapeXml(a.route)}</t></is></c>` +
         `<c r="F${rn}" s="${STYLE.plate}" t="inlineStr"><is><t>${escapeXml(a.plate)}</t></is></c>` +
-        `<c r="G${rn}" s="${STYLE.done}" t="inlineStr"><is><t>완료</t></is></c>` +
-        `<c r="H${rn}" s="${STYLE.date}"><v>${a.serial}</v></c>` +
+        (a.doneSerial != null
+          ? `<c r="G${rn}" s="${STYLE.done}" t="inlineStr"><is><t>완료</t></is></c>` +
+            `<c r="H${rn}" s="${STYLE.date}"><v>${a.doneSerial}</v></c>`
+          : "") +
+        (a.planSerial != null
+          ? `<c r="I${rn}"${styleI ? ` s="${styleI}"` : ""}><v>${a.planSerial}</v></c>`
+          : "") +
         `</row>`;
     }
     sheetXml = sheetXml.replace("</sheetData>", rowsXml + "</sheetData>");
@@ -309,36 +374,116 @@ export async function fillProgressXlsx(
     );
   }
 
-  // 3-a') 차량리스트 행 재정렬 — 번호(list_no)·설치예정일 순 (증차 행 포함, 셀 채움이 끝난 뒤)
+  // 3-a') 차량리스트 행 재정렬(번호→예정일 순) + DB에서 삭제된 차량 행 제거
+  let removed = 0;
   if (dbInfo && dbInfo.size > 0) {
-    sheetXml = sortVehicleRows(sheetXml, dbInfo, shared);
+    const r = sortVehicleRows(sheetXml, dbInfo, shared, (p) => dbInfo.has(p) || completed.has(p));
+    sheetXml = r.xml;
+    removed = r.removed;
   }
 
   zip.file(VEHICLE_SHEET, sheetXml);
 
-  // 3-b) 전개일정 대상수량(C열) 보정 — 증차 영업소만큼 올림
-  if (bumpByGroup.size > 0 && sFile) {
-    let schedXml = await sFile.async("string");
-    schedXml = schedXml.replace(
-      /<row r="(\d+)"[^>]*>([\s\S]*?)<\/row>/g,
-      (whole, _rn: string, inner: string) => {
-        const aCell = inner.match(/<c r="A\d+"([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/);
-        const bCell = inner.match(/<c r="B\d+"([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/);
-        if (!aCell || !bCell) return whole;
+  // 3-b) 전개일정 대상수량 보정 — (운수사|노선) 그룹별 델타(실제 대수 − 템플릿 대수)를
+  //      해당 행의 C열과 정적 E열에 더한다(E가 수식 "$C행"이면 재계산이 처리).
+  //      진행현황 시트의 대상대수(D열)·총대수(I6)는 전개일정 E열을 참조하므로 자동 연동.
+  const schedRelabels: { schedRow: number; label: string }[] = [];
+  if (sFile) {
+    // 실제 대수 = DB 차량 전체 + DB에 없는 완료 차량(증차 완료분)
+    const realGroup = new Map<string, number>();
+    const bump = (op: string, rt: string) => {
+      const key = `${op}|||${rt}`;
+      realGroup.set(key, (realGroup.get(key) ?? 0) + 1);
+    };
+    if (dbInfo) for (const info of dbInfo.values()) bump(info.operator, info.route);
+    for (const [plate, info] of completed) {
+      if (!dbInfo?.has(plate)) bump(info.operator, info.route);
+    }
+
+    // 델타. dbInfo(차량 전수)가 없으면 템플릿 대비 비교가 불가능하므로 증차 완료분만 +1(구 동작).
+    const deltas = new Map<string, number>();
+    if (dbInfo && dbInfo.size > 0) {
+      for (const key of new Set([...realGroup.keys(), ...tplGroupCount.keys()])) {
+        const d = (realGroup.get(key) ?? 0) - (tplGroupCount.get(key) ?? 0);
+        if (d !== 0) deltas.set(key, d);
+      }
+    } else {
+      for (const [plate, info] of completed) {
+        if (matchedPlates.has(plate)) continue;
+        const key = `${info.operator}|||${info.route}`;
+        deltas.set(key, (deltas.get(key) ?? 0) + 1);
+      }
+    }
+
+    if (deltas.size > 0) {
+      let schedXml = await sFile.async("string");
+
+      // 전개일정 데이터 행(5행~) 인덱싱: 정확 키 / 노선 정규화 키 / 운수사별
+      const norm = (s: string) => s.replace(/\s+/g, "").replace(/번$/, "");
+      const exactIdx = new Map<string, number[]>();
+      const normIdx = new Map<string, number[]>();
+      const opIdx = new Map<string, number[]>();
+      for (const rm of schedXml.matchAll(/<row r="(\d+)"[^>]*>([\s\S]*?)<\/row>/g)) {
+        const rn = Number(rm[1]);
+        if (rn < 5) continue;
+        const aCell = rm[2].match(/<c r="A\d+"([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/);
+        const bCell = rm[2].match(/<c r="B\d+"([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/);
+        if (!aCell || !bCell) continue;
         const op = cellValue(aCell[1], aCell[2] ?? "", shared).trim();
         const rt = cellValue(bCell[1], bCell[2] ?? "", shared).trim();
-        const g = bumpByGroup.get(`${op}|||${rt}`);
-        if (!g) return whole;
-        // C열 대상수량 숫자에 증차 수 더하기
-        const newInner = inner.replace(
-          /(<c r="C\d+"[^>]*>)<v>(\d+(?:\.\d+)?)<\/v>(<\/c>)/,
-          (_cm, pre: string, num: string, post: string) =>
-            `${pre}<v>${Number(num) + g.count}</v>${post}`,
-        );
-        return whole.replace(inner, newInner);
-      },
-    );
-    zip.file(SCHEDULE_SHEET, schedXml);
+        if (!op || op === "합계") continue;
+        const push = (m: Map<string, number[]>, k: string) => m.set(k, [...(m.get(k) ?? []), rn]);
+        push(exactIdx, `${op}|||${rt}`);
+        push(normIdx, `${op}|||${norm(rt)}`);
+        push(opIdx, op);
+      }
+
+      // 델타 → 행 배정. 같은 (운수사|노선)이 여러 행이면 마지막 행에 반영.
+      const rowAdjust = new Map<number, number>();
+      const rowLabel = new Map<number, string>();
+      for (const [key, delta] of deltas) {
+        const [op, rt] = key.split("|||");
+        let rows = exactIdx.get(key);
+        let renamed = false;
+        if (!rows) {
+          rows = normIdx.get(`${op}|||${norm(rt)}`);
+          if (!rows && (opIdx.get(op)?.length ?? 0) === 1) rows = opIdx.get(op);
+          renamed = !!rows;
+        }
+        if (!rows || rows.length === 0) {
+          console.warn(`[fill-progress] 전개일정에 (${op} | ${rt}) 행이 없어 대상수량 Δ${delta} 미반영`);
+          continue;
+        }
+        const rn = rows[rows.length - 1];
+        rowAdjust.set(rn, (rowAdjust.get(rn) ?? 0) + delta);
+        // 노선 라벨이 다른 행에 매칭됐으면 라벨을 실제(DB) 노선명으로 교정 —
+        // 완료 COUNTIFS(차량리스트 B/C 대조)가 맞아떨어지도록.
+        if (renamed) rowLabel.set(rn, rt);
+      }
+
+      schedXml = schedXml.replace(/<row r="(\d+)"[^>]*>[\s\S]*?<\/row>/g, (whole, rnStr: string) => {
+        const rn = Number(rnStr);
+        const adj = rowAdjust.get(rn) ?? 0;
+        const label = rowLabel.get(rn);
+        if (!adj && !label) return whole;
+        let out = whole;
+        if (adj) {
+          for (const col of ["C", "E"] as const) {
+            out = out.replace(
+              new RegExp(`(<c r="${col}${rn}"[^>]*>)<v>(\\d+(?:\\.\\d+)?)</v>(</c>)`),
+              (_m, pre: string, num: string, post: string) =>
+                `${pre}<v>${Math.max(0, Number(num) + adj)}</v>${post}`,
+            );
+          }
+        }
+        if (label) {
+          out = replaceCellText(out, `B${rn}`, label);
+          schedRelabels.push({ schedRow: rn, label });
+        }
+        return out;
+      });
+      zip.file(SCHEDULE_SHEET, schedXml);
+    }
   }
 
   // 3-c) 진행현황 시트 값·라벨·병합 보정
@@ -367,6 +512,14 @@ export async function fillProgressXlsx(
       pXml = replaceCellText(pXml, "F11", "누적 완료수량");
       // 영업소/노선 헤더 분리: 병합 해제 후 C11 채움 (B11 "영업소"는 그대로)
       pXml = replaceCellText(pXml, "C11", "노선");
+
+      // 전개일정에서 노선 라벨을 교정한 행 → 진행현황의 같은 행(D열이 그 행의 E를 참조) 노선도 동기화
+      for (const { schedRow, label } of schedRelabels) {
+        const dm = pXml.match(
+          new RegExp(`<c r="D(\\d+)"[^>]*><f[^>]*>전개일정!E${schedRow}</f>`),
+        );
+        if (dm) pXml = replaceCellText(pXml, `C${dm[1]}`, label);
+      }
       if (pXml.includes('<mergeCell ref="B11:C11"/>')) {
         pXml = pXml.replace('<mergeCell ref="B11:C11"/>', "");
         pXml = pXml.replace(
@@ -393,5 +546,5 @@ export async function fillProgressXlsx(
   zip.file(WORKBOOK, wbXml);
 
   const buffer = await zip.generateAsync({ type: "nodebuffer", compression: "DEFLATE" });
-  return { buffer, filled, added: added.length };
+  return { buffer, filled, added: added.length, removed };
 }

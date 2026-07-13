@@ -21,6 +21,7 @@ export async function buildProgressXlsx(opts?: { asOfDate?: string }): Promise<{
   filename: string;
   filled: number;
   added: number;
+  removed: number;
 }> {
   const supabase = createServiceClient();
 
@@ -90,7 +91,7 @@ export async function buildProgressXlsx(opts?: { asOfDate?: string }): Promise<{
   const template = Buffer.from(await file.arrayBuffer());
 
   const asOfSerial = excelSerialFromDate(asOfDate);
-  const { buffer, filled, added } = await fillProgressXlsx(
+  const { buffer, filled, added, removed } = await fillProgressXlsx(
     template,
     completed,
     asOfSerial,
@@ -103,5 +104,5 @@ export async function buildProgressXlsx(opts?: { asOfDate?: string }): Promise<{
   const [yy, mm, dd] = asOfDate.split("-");
   const filename = `인천버스_설치_전개현황_${yy.slice(2)}${mm}${dd}.xlsx`;
 
-  return { buffer, filename, filled, added };
+  return { buffer, filename, filled, added, removed };
 }

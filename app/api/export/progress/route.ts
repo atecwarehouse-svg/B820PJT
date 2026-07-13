@@ -33,7 +33,9 @@ export async function GET(req: Request) {
     const r = await buildProgressXlsx({ asOfDate });
     buffer = r.buffer;
     filename = r.filename;
-    console.log(`[export/progress] 기준일 ${asOfDate ?? "오늘"} · 기존 ${r.filled}대 채움, 증차 ${r.added}대 추가`);
+    console.log(
+      `[export/progress] 기준일 ${asOfDate ?? "오늘"} · 기존 ${r.filled}대 채움, 신규 ${r.added}대 추가, 제외 ${r.removed}대 제거`,
+    );
   } catch (e) {
     return NextResponse.json(
       { error: e instanceof Error ? e.message : "양식 생성 실패" },
