@@ -158,7 +158,7 @@ export async function sendServiceStartCard(d: {
   const url = process.env.TEAMS_WEBHOOK_URL;
   if (!url) throw new Error("팀즈 웹후크가 설정되지 않았습니다. (TEAMS_WEBHOOK_URL)");
 
-  const mark = (b: boolean) => (b ? "✅ 완료" : "⬜ 미확인");
+  const mark = (b: boolean, done = "완료") => (b ? `✅ ${done}` : "⬜ 미확인");
   const reportedAt = new Date().toLocaleString("ko-KR", {
     timeZone: "Asia/Seoul",
     hour: "2-digit",
@@ -211,7 +211,7 @@ export async function sendServiceStartCard(d: {
             {
               type: "FactSet",
               facts: [
-                { title: "운전자 교육", value: mark(d.driverEdu) },
+                { title: "승무사원 교육", value: mark(d.driverEdu, "교육완료") },
                 { title: "요금세팅", value: fareValue },
               ],
             },
@@ -227,8 +227,8 @@ export async function sendServiceStartCard(d: {
               type: "FactSet",
               spacing: "Small",
               facts: [
-                { title: "BIS", value: mark(d.bisCheck) },
-                { title: "카카오", value: mark(d.kakaoCheck) },
+                { title: "BIS(인천)", value: mark(d.bisCheck, "이상없음") },
+                { title: "카카오(초정밀)", value: mark(d.kakaoCheck, "이상없음") },
               ],
             },
             {

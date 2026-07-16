@@ -493,7 +493,7 @@ function ServiceStartPanel({ onClose }: { onClose: () => void }) {
       <CheckRow
         checked={driverEdu}
         onChange={setDriverEdu}
-        label="첫차 운행시작 · 운전자 교육 완료"
+        label="첫차 운행시작 · 승무사원 교육 완료"
       />
 
       <CheckRow
