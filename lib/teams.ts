@@ -161,8 +161,6 @@ export async function sendServiceStartCard(d: {
   const mark = (b: boolean) => (b ? "✅ 완료" : "⬜ 미확인");
   const reportedAt = new Date().toLocaleString("ko-KR", {
     timeZone: "Asia/Seoul",
-    month: "numeric",
-    day: "numeric",
     hour: "2-digit",
     minute: "2-digit",
   });
@@ -200,7 +198,7 @@ export async function sendServiceStartCard(d: {
               type: "TextBlock",
               size: "Large",
               weight: "Bolder",
-              text: "🚍 운행시작 보고",
+              text: "운행시작 보고",
               wrap: true,
             },
             {
@@ -215,8 +213,6 @@ export async function sendServiceStartCard(d: {
               facts: [
                 { title: "운전자 교육", value: mark(d.driverEdu) },
                 { title: "요금세팅", value: fareValue },
-                { title: "BIS", value: mark(d.bisCheck) },
-                { title: "카카오", value: mark(d.kakaoCheck) },
               ],
             },
             {
@@ -226,6 +222,14 @@ export async function sendServiceStartCard(d: {
               size: "Small",
               spacing: "None",
               wrap: true,
+            },
+            {
+              type: "FactSet",
+              spacing: "Small",
+              facts: [
+                { title: "BIS", value: mark(d.bisCheck) },
+                { title: "카카오", value: mark(d.kakaoCheck) },
+              ],
             },
             {
               type: "TextBlock",
