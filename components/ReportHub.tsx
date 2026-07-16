@@ -440,6 +440,65 @@ function CheckRow({
   );
 }
 
+type Status = "" | "ok" | "issue";
+
+// 이상없음/이상 선택 + 이상 시 증상 입력 — BIS·카카오 점검용
+function StatusRow({
+  label,
+  desc,
+  status,
+  onStatus,
+  symptom,
+  onSymptom,
+}: {
+  label: string;
+  desc?: string;
+  status: Status;
+  onStatus: (v: Status) => void;
+  symptom: string;
+  onSymptom: (v: string) => void;
+}) {
+  return (
+    <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5">
+      <p className="text-sm font-medium text-gray-800">{label}</p>
+      {desc && <p className="mt-0.5 text-[11px] text-gray-500">{desc}</p>}
+      <div className="mt-2 flex gap-2">
+        <button
+          type="button"
+          onClick={() => onStatus("ok")}
+          className={`flex-1 rounded-lg border px-3 py-1.5 text-xs font-semibold ${
+            status === "ok"
+              ? "border-emerald-600 bg-emerald-600 text-white"
+              : "border-gray-300 bg-white text-gray-600"
+          }`}
+        >
+          이상없음
+        </button>
+        <button
+          type="button"
+          onClick={() => onStatus("issue")}
+          className={`flex-1 rounded-lg border px-3 py-1.5 text-xs font-semibold ${
+            status === "issue"
+              ? "border-red-500 bg-red-500 text-white"
+              : "border-gray-300 bg-white text-gray-600"
+          }`}
+        >
+          이상
+        </button>
+      </div>
+      {status === "issue" && (
+        <input
+          type="text"
+          value={symptom}
+          onChange={(e) => onSymptom(e.target.value)}
+          placeholder="증상 입력 (예: 도착정보 미표시)"
+          className="mt-2 w-full rounded-lg border border-red-300 px-3 py-2 text-base focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
+        />
+      )}
+    </div>
+  );
+}
+
 function ServiceStartPanel({ onClose }: { onClose: () => void }) {
   const INPUT =
     "mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-base focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500";
@@ -450,18 +509,37 @@ function ServiceStartPanel({ onClose }: { onClose: () => void }) {
   const [driverEdu, setDriverEdu] = useState(false);
   const [fareSetting, setFareSetting] = useState(false);
   const [baseFare, setBaseFare] = useState("");
-  const [bisCheck, setBisCheck] = useState(false);
-  const [kakaoCheck, setKakaoCheck] = useState(false);
+  const [bisStatus, setBisStatus] = useState<Status>("");
+  const [bisSymptom, setBisSymptom] = useState("");
+  const [kakaoStatus, setKakaoStatus] = useState<Status>("");
+  const [kakaoSymptom, setKakaoSymptom] = useState("");
   const [notes, setNotes] = useState("");
 
   async function handleSend() {
+    if (bisStatus === "issue" && !bisSymptom.trim()) {
+      setError("BIS 이상 증상을 입력하세요.");
+      return;
+    }
+    if (kakaoStatus === "issue" && !kakaoSymptom.trim()) {
+      setError("카카오(초정밀) 이상 증상을 입력하세요.");
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
       const res = await fetch("/api/service-start", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ driverEdu, fareSetting, baseFare, bisCheck, kakaoCheck, notes }),
+        body: JSON.stringify({
+          driverEdu,
+          fareSetting,
+          baseFare,
+          bisStatus,
+          bisSymptom,
+          kakaoStatus,
+          kakaoSymptom,
+          notes,
+        }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "전송 실패");
@@ -518,14 +596,23 @@ function ServiceStartPanel({ onClose }: { onClose: () => void }) {
         </span>
       </label>
 
-      <CheckRow
-        checked={bisCheck}
-        onChange={setBisCheck}
-        label="BIS 서비스 확인"
-        desc="인천시 버스 도착정보 서비스 정상 확인"
+      <StatusRow
+        label="BIS(인천) 서비스"
+        desc="인천시 버스 도착정보 서비스 이상 유무"
+        status={bisStatus}
+        onStatus={setBisStatus}
+        symptom={bisSymptom}
+        onSymptom={setBisSymptom}
       />
 
-      <CheckRow checked={kakaoCheck} onChange={setKakaoCheck} label="카카오 초정밀 버스 정상 유무" />
+      <StatusRow
+        label="카카오(초정밀) 버스"
+        desc="카카오 초정밀버스 이상 유무"
+        status={kakaoStatus}
+        onStatus={setKakaoStatus}
+        symptom={kakaoSymptom}
+        onSymptom={setKakaoSymptom}
+      />
 
       <label className="block">
         <span className="text-[11px] font-medium text-gray-500">특이사항</span>

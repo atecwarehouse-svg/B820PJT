@@ -15,6 +15,16 @@ export async function POST(req: NextRequest) {
   }
 
   const bool = (key: string) => body[key] === true;
+  // 상태값 정규화 — "ok"(이상없음)/"issue"(이상)만 허용, 그 외는 미선택
+  const status = (key: string) => {
+    const s = String(body[key] ?? "").trim();
+    return s === "ok" || s === "issue" ? s : undefined;
+  };
+  const short = (key: string) =>
+    String(body[key] ?? "")
+      .trim()
+      .slice(0, 200) || undefined;
+
   const baseFare = String(body.baseFare ?? "")
     .trim()
     .slice(0, 30);
@@ -27,8 +37,10 @@ export async function POST(req: NextRequest) {
       driverEdu: bool("driverEdu"),
       fareSetting: bool("fareSetting"),
       baseFare: baseFare || undefined,
-      bisCheck: bool("bisCheck"),
-      kakaoCheck: bool("kakaoCheck"),
+      bisStatus: status("bisStatus"),
+      bisSymptom: short("bisSymptom"),
+      kakaoStatus: status("kakaoStatus"),
+      kakaoSymptom: short("kakaoSymptom"),
       notes: notes || undefined,
     });
   } catch (e) {

@@ -148,17 +148,31 @@ export async function sendStartReportCard(d: {
 // 운행시작 보고 카드 — 진행현황·설치시작 보고 카드와 같은 채팅방(설치 진행중 공유방, TEAMS_WEBHOOK_URL).
 // 대시보드 '운행시작 보고' 버튼 → 첫차 운행시작 전 점검 결과를 공유할 때 사용.
 export async function sendServiceStartCard(d: {
-  driverEdu: boolean; // 첫차 운행시작 - 운전자 교육 완료
+  driverEdu: boolean; // 첫차 운행시작 - 승무사원 교육 완료
   fareSetting: boolean; // 단말기 요금세팅 확인 (다인승 조작으로 기본요금 확인)
   baseFare?: string; // 기본요금 (버스 문 게시 요금과 동일 여부 확인)
-  bisCheck: boolean; // BIS 서비스 — 인천시 버스 도착정보 서비스
-  kakaoCheck: boolean; // 카카오 초정밀 버스 정상 유무
+  bisStatus?: string; // BIS(인천 버스 도착정보) — "ok"(이상없음) | "issue"(이상)
+  bisSymptom?: string; // BIS 이상 시 증상
+  kakaoStatus?: string; // 카카오(초정밀) — "ok" | "issue"
+  kakaoSymptom?: string; // 카카오 이상 시 증상
   notes?: string; // 특이사항
 }): Promise<void> {
   const url = process.env.TEAMS_WEBHOOK_URL;
   if (!url) throw new Error("팀즈 웹후크가 설정되지 않았습니다. (TEAMS_WEBHOOK_URL)");
 
   const mark = (b: boolean, done = "완료") => (b ? `✅ ${done}` : "⬜ 미확인");
+  // 이상없음/이상 상태값 — 이상이면 붉은 경고 표기
+  const statusVal = (status?: string) =>
+    status === "ok" ? "✅ 이상없음" : status === "issue" ? "⚠️ 이상" : "⬜ 미확인";
+
+  // 이상 항목 증상 목록 (카드 하단에 붉게 별도 표기)
+  const issues: string[] = [];
+  if (d.bisStatus === "issue") {
+    issues.push(`- BIS(인천): ${d.bisSymptom?.trim() || "증상 미기재"}`);
+  }
+  if (d.kakaoStatus === "issue") {
+    issues.push(`- 카카오(초정밀): ${d.kakaoSymptom?.trim() || "증상 미기재"}`);
+  }
   const reportedAt = new Date().toLocaleString("ko-KR", {
     timeZone: "Asia/Seoul",
     hour: "2-digit",
@@ -227,10 +241,29 @@ export async function sendServiceStartCard(d: {
               type: "FactSet",
               spacing: "Small",
               facts: [
-                { title: "BIS(인천)", value: mark(d.bisCheck, "이상없음") },
-                { title: "카카오(초정밀)", value: mark(d.kakaoCheck, "이상없음") },
+                { title: "BIS(인천)", value: statusVal(d.bisStatus) },
+                { title: "카카오(초정밀)", value: statusVal(d.kakaoStatus) },
               ],
             },
+            ...(issues.length
+              ? [
+                  {
+                    type: "TextBlock",
+                    weight: "Bolder",
+                    color: "Attention",
+                    text: "○ 이상 증상",
+                    spacing: "Medium",
+                    wrap: true,
+                  },
+                  {
+                    type: "TextBlock",
+                    color: "Attention",
+                    text: issues.join("\n"),
+                    spacing: "None",
+                    wrap: true,
+                  },
+                ]
+              : []),
             {
               type: "TextBlock",
               weight: "Bolder",
