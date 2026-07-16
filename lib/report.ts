@@ -151,7 +151,7 @@ export function formatReportText(r: DailyReport, notes: string, check?: ServiceC
   const lines: string[] = [];
   lines.push("[인천버스 B820 단말기 설치 프로젝트]");
   lines.push(`설치 완료 (${r.label}, ${r.dow})`);
-  lines.push(`설치 수량 (실적/계획): ${r.dailyDone}대 / ${r.dailyPlanned}대 ${r.dailyPct.toFixed(1)}%`);
+  lines.push(`금일 설치 수량 (실적/계획): ${r.dailyDone}대 / ${r.dailyPlanned}대 ${r.dailyPct.toFixed(1)}%`);
   lines.push("");
   if (r.groups.length === 0) {
     lines.push("- (완료 없음)");
@@ -209,7 +209,7 @@ export function formatReportHtml(r: DailyReport, notes: string, check?: ServiceC
     <div style="font-size:18px;font-weight:700;margin-top:2px">설치 완료 (${r.label}, ${r.dow})</div>
   </div>
   <div style="padding:16px 18px">
-    <div style="font-size:15px;margin-bottom:10px">설치 수량 (실적/계획): <b>${r.dailyDone}대</b> / ${r.dailyPlanned}대 <span style="color:#1d4ed8;font-weight:700">${r.dailyPct.toFixed(1)}%</span></div>
+    <div style="font-size:15px;margin-bottom:10px">금일 설치 수량 (실적/계획): <b>${r.dailyDone}대</b> / ${r.dailyPlanned}대 <span style="color:#1d4ed8;font-weight:700">${r.dailyPct.toFixed(1)}%</span></div>
     <ul style="margin:0 0 12px;padding-left:18px;line-height:1.7;color:#374151">${rows}</ul>
     <div style="border-top:1px dashed #d1d5db;margin:12px 0"></div>
     <div style="font-size:14px;color:#111827">누적 계획 : <b>${r.cumPlanned}대</b></div>

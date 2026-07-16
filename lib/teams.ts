@@ -212,7 +212,7 @@ export async function sendCompletionReportCard(
             {
               type: "TextBlock",
               weight: "Bolder",
-              text: `설치 수량 (실적/계획): ${r.dailyDone.toLocaleString()}대 / ${r.dailyPlanned.toLocaleString()}대 (${r.dailyPct.toFixed(1)}%)`,
+              text: `금일 설치 수량 (실적/계획): ${r.dailyDone.toLocaleString()}대 / ${r.dailyPlanned.toLocaleString()}대 (${r.dailyPct.toFixed(1)}%)`,
               wrap: true,
             },
             ...(r.groups.length
