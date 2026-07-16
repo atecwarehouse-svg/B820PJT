@@ -20,7 +20,6 @@ import ProgressDownloadButton from "@/components/ProgressDownloadButton";
 import ScheduleUploadModal from "@/components/ScheduleUploadModal";
 import ConsultationModal from "@/components/ConsultationModal";
 import ReportHub from "@/components/ReportHub";
-import ServiceStartModal from "@/components/ServiceStartModal";
 import VocModal from "@/components/VocModal";
 import TeamStatsModal from "@/components/TeamStatsModal";
 import ScheduleChart from "@/components/ScheduleChart";
@@ -167,7 +166,6 @@ export default async function DashboardPage() {
             inProgress={inProgressCount}
             remain={remainCount}
           />
-          <ServiceStartModal />
           {ip && (
             <DailyReportModal
               completedList={ip.completedList}
