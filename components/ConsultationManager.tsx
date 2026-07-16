@@ -31,7 +31,7 @@ interface Consultation {
   updated_at: string;
 }
 
-// 상세 표시용 항목 라벨 (표시 순서 = 폼 순서)
+// 상세 표시·수정용 항목 라벨 (표시 순서 = 폼 순서)
 const FIELDS: [keyof Consultation, string][] = [
   ["routes", "설치 노선"],
   ["list_check", "차량리스트 확인"],
@@ -56,7 +56,10 @@ const FIELDS: [keyof Consultation, string][] = [
   ["consulter", "협의자"],
 ];
 
-// 관리자 페이지 — 운수사 협의사항 조회·삭제.
+const INPUT =
+  "mt-0.5 w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-xs focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500";
+
+// 관리자 페이지 — 운수사 협의사항 조회·수정·삭제.
 // 협의사항 폼에서 팀즈 전송 시 저장된 데이터(운수사+설치일당 최신 1건).
 export default function ConsultationManager() {
   const [list, setList] = useState<Consultation[]>([]);
@@ -65,6 +68,12 @@ export default function ConsultationManager() {
   const [needMigration, setNeedMigration] = useState(false);
   const [openId, setOpenId] = useState<number | null>(null);
   const [deleting, setDeleting] = useState<number | null>(null);
+
+  // 수정 상태 — editId가 있으면 해당 항목이 편집 폼으로 표시됨
+  const [editId, setEditId] = useState<number | null>(null);
+  const [form, setForm] = useState<Partial<Consultation>>({});
+  const [saving, setSaving] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -86,6 +95,47 @@ export default function ConsultationManager() {
     load();
   }, [load]);
 
+  function startEdit(c: Consultation) {
+    setEditId(c.id);
+    setOpenId(c.id);
+    setEditError(null);
+    setForm({ ...c });
+  }
+
+  function cancelEdit() {
+    setEditId(null);
+    setEditError(null);
+    setForm({});
+  }
+
+  function setField(key: keyof Consultation, value: string) {
+    setForm((f) => ({ ...f, [key]: value }));
+  }
+
+  async function saveEdit(id: number) {
+    setSaving(true);
+    setEditError(null);
+    try {
+      const payload: Record<string, unknown> = { id };
+      for (const [key] of FIELDS) payload[key] = form[key] ?? "";
+      payload.count = form.count ?? 0;
+
+      const res = await fetch("/api/admin/consultations", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "수정 실패");
+      setList((l) => l.map((x) => (x.id === id ? (json.item as Consultation) : x)));
+      cancelEdit();
+    } catch (e) {
+      setEditError(e instanceof Error ? e.message : "수정 실패");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function handleDelete(c: Consultation) {
     if (!confirm(`${c.operator} ${c.date} 협의사항을 삭제할까요?`)) return;
     setDeleting(c.id);
@@ -106,7 +156,7 @@ export default function ConsultationManager() {
       <h2 className="mb-2 text-sm font-semibold text-gray-700">📋 운수사 협의사항</h2>
       <p className="mb-3 text-xs text-gray-500">
         협의사항 폼에서 팀즈 전송한 내용이 운수사+설치일 기준으로 저장됩니다. (재전송 시 최신
-        내용으로 갱신)
+        내용으로 갱신 · 여기서 직접 수정도 가능)
       </p>
 
       {needMigration && (
@@ -149,15 +199,31 @@ export default function ConsultationManager() {
                     </span>
                   </p>
                 </button>
+                {editId === c.id ? (
+                  <button
+                    onClick={cancelEdit}
+                    className="shrink-0 rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-semibold text-gray-600 active:bg-gray-50"
+                  >
+                    취소
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => startEdit(c)}
+                    className="shrink-0 rounded-lg border border-blue-300 px-3 py-1.5 text-xs font-semibold text-blue-600 active:bg-blue-50"
+                  >
+                    수정
+                  </button>
+                )}
                 <button
                   onClick={() => handleDelete(c)}
-                  disabled={deleting === c.id}
+                  disabled={deleting === c.id || editId === c.id}
                   className="shrink-0 rounded-lg border border-red-300 px-3 py-1.5 text-xs font-semibold text-red-600 active:bg-red-50 disabled:opacity-50"
                 >
                   {deleting === c.id ? "삭제 중…" : "삭제"}
                 </button>
               </div>
-              {openId === c.id && (
+
+              {openId === c.id && editId !== c.id && (
                 <dl className="grid grid-cols-2 gap-x-3 gap-y-1 border-t border-gray-50 bg-gray-50/50 px-3 py-2.5">
                   {FIELDS.map(([key, label]) => (
                     <div key={key} className="flex gap-1.5 text-xs">
@@ -168,6 +234,81 @@ export default function ConsultationManager() {
                     </div>
                   ))}
                 </dl>
+              )}
+
+              {editId === c.id && (
+                <div className="border-t border-gray-50 bg-blue-50/40 px-3 py-3">
+                  <p className="mb-2 text-[11px] text-gray-500">
+                    {c.date?.slice(0, 10).replace(/-/g, ".")} · {c.operator} — 내용 수정
+                    <span className="ml-1 text-gray-400">(운수사·설치일은 변경 불가)</span>
+                  </p>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <label className="block">
+                      <span className="text-[11px] font-medium text-gray-500">설치 대수</span>
+                      <input
+                        type="number"
+                        min={0}
+                        value={form.count ?? 0}
+                        onChange={(e) =>
+                          setForm((f) => ({ ...f, count: Number(e.target.value) }))
+                        }
+                        className={INPUT}
+                      />
+                    </label>
+                    {FIELDS.map(([key, label]) =>
+                      key === "notes" ? (
+                        <label key={key} className="block sm:col-span-2">
+                          <span className="text-[11px] font-medium text-gray-500">
+                            {label}
+                          </span>
+                          <textarea
+                            value={String(form[key] ?? "")}
+                            onChange={(e) => setField(key, e.target.value)}
+                            rows={3}
+                            className={INPUT}
+                          />
+                        </label>
+                      ) : (
+                        <label key={key} className="block">
+                          <span className="text-[11px] font-medium text-gray-500">
+                            {label}
+                          </span>
+                          <input
+                            type="text"
+                            value={String(form[key] ?? "")}
+                            onChange={(e) => setField(key, e.target.value)}
+                            className={INPUT}
+                          />
+                        </label>
+                      ),
+                    )}
+                  </div>
+
+                  {editError && (
+                    <p className="mt-2 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600">
+                      {editError}
+                    </p>
+                  )}
+
+                  <div className="mt-3 flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => saveEdit(c.id)}
+                      disabled={saving}
+                      className="flex-1 rounded-lg bg-blue-600 py-2 text-xs font-bold text-white active:bg-blue-700 disabled:opacity-50"
+                    >
+                      {saving ? "저장 중…" : "저장"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={cancelEdit}
+                      disabled={saving}
+                      className="flex-1 rounded-lg border border-gray-300 bg-white py-2 text-xs font-semibold text-gray-600 active:bg-gray-50 disabled:opacity-50"
+                    >
+                      취소
+                    </button>
+                  </div>
+                </div>
               )}
             </li>
           ))}
