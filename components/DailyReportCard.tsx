@@ -3,6 +3,94 @@
 import { useEffect, useMemo, useState } from "react";
 import type { CompletedVehicle, ScheduleDay } from "@/lib/stats";
 import { buildReport, formatReportText } from "@/lib/report";
+import type { ServiceCheck } from "@/lib/report";
+
+type Status = "" | "ok" | "issue";
+
+// 체크박스 한 줄 (승무사원 교육·요금세팅)
+function ChkRow({
+  checked,
+  onChange,
+  label,
+  desc,
+}: {
+  checked: boolean;
+  onChange: (v: boolean) => void;
+  label: string;
+  desc?: string;
+}) {
+  return (
+    <label className="flex cursor-pointer items-start gap-2 rounded-lg border border-gray-200 bg-white px-2.5 py-2">
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+        className="mt-0.5 h-4 w-4 shrink-0 accent-blue-600"
+      />
+      <span className="min-w-0">
+        <span className="block text-xs font-medium text-gray-800">{label}</span>
+        {desc && <span className="mt-0.5 block text-[11px] text-gray-500">{desc}</span>}
+      </span>
+    </label>
+  );
+}
+
+// 이상없음/이상 선택 + 이상 시 증상 입력 (BIS·카카오)
+function StatRow({
+  label,
+  desc,
+  status,
+  onStatus,
+  symptom,
+  onSymptom,
+}: {
+  label: string;
+  desc?: string;
+  status: Status;
+  onStatus: (v: Status) => void;
+  symptom: string;
+  onSymptom: (v: string) => void;
+}) {
+  return (
+    <div className="rounded-lg border border-gray-200 bg-white px-2.5 py-2">
+      <p className="text-xs font-medium text-gray-800">{label}</p>
+      {desc && <p className="mt-0.5 text-[11px] text-gray-500">{desc}</p>}
+      <div className="mt-1.5 flex gap-2">
+        <button
+          type="button"
+          onClick={() => onStatus("ok")}
+          className={`flex-1 rounded-lg border px-2 py-1 text-xs font-semibold ${
+            status === "ok"
+              ? "border-emerald-600 bg-emerald-600 text-white"
+              : "border-gray-300 bg-white text-gray-600"
+          }`}
+        >
+          이상없음
+        </button>
+        <button
+          type="button"
+          onClick={() => onStatus("issue")}
+          className={`flex-1 rounded-lg border px-2 py-1 text-xs font-semibold ${
+            status === "issue"
+              ? "border-red-500 bg-red-500 text-white"
+              : "border-gray-300 bg-white text-gray-600"
+          }`}
+        >
+          이상
+        </button>
+      </div>
+      {status === "issue" && (
+        <input
+          type="text"
+          value={symptom}
+          onChange={(e) => onSymptom(e.target.value)}
+          placeholder="증상 입력 (예: 도착정보 미표시)"
+          className="mt-1.5 w-full rounded-lg border border-red-300 px-2.5 py-1.5 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
+        />
+      )}
+    </div>
+  );
+}
 
 // 금일 설치 완료 리포트 카드 — 미리보기 + Gmail 발송.
 export default function DailyReportCard({
@@ -25,6 +113,14 @@ export default function DailyReportCard({
   const [date, setDate] = useState(today);
   const [planned, setPlanned] = useState(""); // 금일 계획 수량 직접 입력
   const [notes, setNotes] = useState("");
+  // 운행시작 점검 (특이사항 위에 표기)
+  const [driverEdu, setDriverEdu] = useState(false);
+  const [fareSetting, setFareSetting] = useState(false);
+  const [baseFare, setBaseFare] = useState("");
+  const [bisStatus, setBisStatus] = useState<Status>("");
+  const [bisSymptom, setBisSymptom] = useState("");
+  const [kakaoStatus, setKakaoStatus] = useState<Status>("");
+  const [kakaoSymptom, setKakaoSymptom] = useState("");
   const [to, setTo] = useState("");
   const [pw, setPw] = useState(""); // 관리자 비밀번호
   const [sending, setSending] = useState(false);
@@ -41,28 +137,49 @@ export default function DailyReportCard({
     setPlanned(String(sd));
   }, [date, scheduleDays]);
 
+  const check: ServiceCheck = useMemo(
+    () => ({
+      driverEdu,
+      fareSetting,
+      baseFare,
+      bisStatus,
+      bisSymptom,
+      kakaoStatus,
+      kakaoSymptom,
+    }),
+    [driverEdu, fareSetting, baseFare, bisStatus, bisSymptom, kakaoStatus, kakaoSymptom],
+  );
+
   // 내용을 바꾸면 다시 발송 가능
   useEffect(() => {
     setSent(false);
-  }, [date, notes, to, planned]);
+  }, [date, notes, to, planned, check]);
 
   const report = useMemo(
     () => buildReport({ date, completedList, scheduleDays, cumDone, cumPlanned, plannedOverride }),
     [date, completedList, scheduleDays, cumDone, cumPlanned, plannedOverride],
   );
-  const text = useMemo(() => formatReportText(report, notes), [report, notes]);
+  const text = useMemo(() => formatReportText(report, notes, check), [report, notes, check]);
 
   async function send() {
     if (sending || sent || !pw) return; // 이중발송 방지 + 비밀번호 필수
+    if (bisStatus === "issue" && !bisSymptom.trim()) {
+      setMsg({ ok: false, text: "BIS 이상 증상을 입력하세요." });
+      return;
+    }
+    if (kakaoStatus === "issue" && !kakaoSymptom.trim()) {
+      setMsg({ ok: false, text: "카카오(초정밀) 이상 증상을 입력하세요." });
+      return;
+    }
     const warn = inProgress > 0 ? `⚠️ 미완료(진행중) 차량이 ${inProgress}대 있습니다.\n\n` : "";
-    if (!window.confirm(`${warn}이 내용으로 메일을 발송할까요?`)) return;
+    if (!window.confirm(`${warn}이 내용으로 메일 발송 + 팀즈 카드 전송할까요?`)) return;
     setSending(true);
     setMsg(null);
     try {
       const res = await fetch("/api/report/send", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ date, notes, to, planned: plannedOverride, pw }),
+        body: JSON.stringify({ date, notes, to, planned: plannedOverride, pw, check }),
       });
       const j = await res.json();
       if (!res.ok) throw new Error(j.error ?? "발송 실패");
@@ -120,6 +237,52 @@ export default function DailyReportCard({
         {text}
       </pre>
 
+      {/* 운행시작 점검 (특이사항 위) */}
+      <div className="mt-3 space-y-2 rounded-xl border border-gray-200 bg-gray-50/60 p-3">
+        <p className="text-xs font-semibold text-gray-700">운행시작 점검</p>
+        <ChkRow
+          checked={driverEdu}
+          onChange={setDriverEdu}
+          label="첫차 운행시작 · 승무사원 교육 완료"
+        />
+        <ChkRow
+          checked={fareSetting}
+          onChange={setFareSetting}
+          label="단말기 요금세팅 확인"
+          desc="다인승 조작으로 기본요금 확인"
+        />
+        <div className="rounded-lg border border-gray-200 bg-white px-2.5 py-2">
+          <label className="block text-[11px] font-medium text-gray-500">기본요금 (원)</label>
+          <input
+            type="text"
+            inputMode="numeric"
+            value={baseFare}
+            onChange={(e) => setBaseFare(e.target.value)}
+            placeholder="예: 1500"
+            className="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
+          />
+          <p className="mt-1 text-[11px] text-gray-400">
+            버스 문에 붙어있는 요금과 동일한지 확인
+          </p>
+        </div>
+        <StatRow
+          label="BIS(인천) 서비스"
+          desc="인천시 버스 도착정보 서비스 이상 유무"
+          status={bisStatus}
+          onStatus={setBisStatus}
+          symptom={bisSymptom}
+          onSymptom={setBisSymptom}
+        />
+        <StatRow
+          label="카카오(초정밀) 버스"
+          desc="카카오 초정밀버스 이상 유무"
+          status={kakaoStatus}
+          onStatus={setKakaoStatus}
+          symptom={kakaoSymptom}
+          onSymptom={setKakaoSymptom}
+        />
+      </div>
+
       {/* 특이사항 */}
       <label className="mt-3 block text-xs font-medium text-gray-600">특이사항 (선택)</label>
       <textarea
@@ -171,7 +334,7 @@ export default function DailyReportCard({
           disabled={sending || sent || !pw}
           className="flex-1 rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
         >
-          {sending ? "발송 중…" : sent ? "발송됨 ✓" : "메일 발송"}
+          {sending ? "발송 중…" : sent ? "발송됨 ✓" : "메일 발송 + 팀즈 전송"}
         </button>
       </div>
       {msg && (

@@ -1,6 +1,7 @@
 // 팀즈 설치 진행 현황 카드 전송 — 공유 버튼/크론이 공유하는 로직.
 
-import type { DailyReport } from "./report";
+import type { DailyReport, ServiceCheck } from "./report";
+import { serviceCheckRows } from "./report";
 
 export interface ProgressCardData {
   label: string; // 날짜 라벨 (예: "9/17 (수)")
@@ -145,158 +146,13 @@ export async function sendStartReportCard(d: {
   }
 }
 
-// 운행시작 보고 카드 — 진행현황·설치시작 보고 카드와 같은 채팅방(설치 진행중 공유방, TEAMS_WEBHOOK_URL).
-// 대시보드 '운행시작 보고' 버튼 → 첫차 운행시작 전 점검 결과를 공유할 때 사용.
-export async function sendServiceStartCard(d: {
-  driverEdu: boolean; // 첫차 운행시작 - 승무사원 교육 완료
-  fareSetting: boolean; // 단말기 요금세팅 확인 (다인승 조작으로 기본요금 확인)
-  baseFare?: string; // 기본요금 (버스 문 게시 요금과 동일 여부 확인)
-  bisStatus?: string; // BIS(인천 버스 도착정보) — "ok"(이상없음) | "issue"(이상)
-  bisSymptom?: string; // BIS 이상 시 증상
-  kakaoStatus?: string; // 카카오(초정밀) — "ok" | "issue"
-  kakaoSymptom?: string; // 카카오 이상 시 증상
-  notes?: string; // 특이사항
-}): Promise<void> {
-  const url = process.env.TEAMS_WEBHOOK_URL;
-  if (!url) throw new Error("팀즈 웹후크가 설정되지 않았습니다. (TEAMS_WEBHOOK_URL)");
-
-  const mark = (b: boolean, done = "완료") => (b ? `✅ ${done}` : "⬜ 미확인");
-  // 이상없음/이상 상태값 — 이상이면 붉은 경고 표기
-  const statusVal = (status?: string) =>
-    status === "ok" ? "✅ 이상없음" : status === "issue" ? "⚠️ 이상" : "⬜ 미확인";
-
-  // 이상 항목 증상 목록 (카드 하단에 붉게 별도 표기)
-  const issues: string[] = [];
-  if (d.bisStatus === "issue") {
-    issues.push(`- BIS(인천): ${d.bisSymptom?.trim() || "증상 미기재"}`);
-  }
-  if (d.kakaoStatus === "issue") {
-    issues.push(`- 카카오(초정밀): ${d.kakaoSymptom?.trim() || "증상 미기재"}`);
-  }
-  const reportedAt = new Date().toLocaleString("ko-KR", {
-    timeZone: "Asia/Seoul",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-
-  // 기본요금 — 숫자만 입력하면 천단위 콤마+원 붙이고, 그 외 문자는 그대로 표기
-  const fareRaw = d.baseFare?.trim() ?? "";
-  const fareFmt = /^\d+$/.test(fareRaw) ? `${Number(fareRaw).toLocaleString()}원` : fareRaw;
-  const fareValue = d.fareSetting
-    ? fareFmt
-      ? `✅ 확인 (${fareFmt})`
-      : "✅ 확인"
-    : "⬜ 미확인";
-
-  const noteText = d.notes?.trim()
-    ? d.notes
-        .trim()
-        .split(/\r?\n/)
-        .map((l) => l.trim())
-        .filter(Boolean)
-        .map((l) => (l.startsWith("-") ? l : `- ${l}`))
-        .join("\n")
-    : "- 없음";
-
-  const card = {
-    type: "message",
-    attachments: [
-      {
-        contentType: "application/vnd.microsoft.card.adaptive",
-        content: {
-          $schema: "http://adaptivecards.io/schemas/adaptive-card.json",
-          type: "AdaptiveCard",
-          version: "1.4",
-          body: [
-            {
-              type: "TextBlock",
-              size: "Large",
-              weight: "Bolder",
-              text: "운행시작 보고",
-              wrap: true,
-            },
-            {
-              type: "TextBlock",
-              text: `${reportedAt} 점검`,
-              isSubtle: true,
-              spacing: "None",
-              wrap: true,
-            },
-            {
-              type: "FactSet",
-              facts: [
-                { title: "승무사원 교육", value: mark(d.driverEdu, "교육완료") },
-                { title: "요금세팅", value: fareValue },
-              ],
-            },
-            {
-              type: "TextBlock",
-              text: "※ 기본요금은 버스 문에 붙어있는 요금과 동일한지 확인",
-              isSubtle: true,
-              size: "Small",
-              spacing: "None",
-              wrap: true,
-            },
-            {
-              type: "FactSet",
-              spacing: "Small",
-              facts: [
-                { title: "BIS(인천)", value: statusVal(d.bisStatus) },
-                { title: "카카오(초정밀)", value: statusVal(d.kakaoStatus) },
-              ],
-            },
-            ...(issues.length
-              ? [
-                  {
-                    type: "TextBlock",
-                    weight: "Bolder",
-                    color: "Attention",
-                    text: "○ 이상 증상",
-                    spacing: "Medium",
-                    wrap: true,
-                  },
-                  {
-                    type: "TextBlock",
-                    color: "Attention",
-                    text: issues.join("\n"),
-                    spacing: "None",
-                    wrap: true,
-                  },
-                ]
-              : []),
-            {
-              type: "TextBlock",
-              weight: "Bolder",
-              text: "○ 특이사항",
-              spacing: "Medium",
-              wrap: true,
-            },
-            {
-              type: "TextBlock",
-              text: noteText,
-              spacing: "None",
-              wrap: true,
-            },
-          ],
-        },
-      },
-    ],
-  };
-
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(card),
-  });
-  if (!res.ok) {
-    const t = await res.text().catch(() => "");
-    throw new Error(`Teams 운행시작 응답 ${res.status} ${t.slice(0, 160)}`);
-  }
-}
-
 // 금일 설치 완료 보고 카드 — 진행현황·설치시작 보고 카드와 같은 채팅방(설치 진행중 공유방, TEAMS_WEBHOOK_URL).
 // 금일 완료 리포트 메일 발송 시 함께 전송. 내용은 메일 카드(formatReportText)와 동일 구성.
-export async function sendCompletionReportCard(r: DailyReport, notes: string): Promise<void> {
+export async function sendCompletionReportCard(
+  r: DailyReport,
+  notes: string,
+  check?: ServiceCheck,
+): Promise<void> {
   const url = process.env.TEAMS_WEBHOOK_URL;
   if (!url) throw new Error("팀즈 웹후크가 설정되지 않았습니다. (TEAMS_WEBHOOK_URL)");
 
@@ -309,6 +165,25 @@ export async function sendCompletionReportCard(r: DailyReport, notes: string): P
         .map((l) => (l.startsWith("-") ? l : `- ${l}`))
         .join("\n")
     : "- 없음";
+
+  // 운행시작 점검 섹션 (있을 때만) — 특이사항 위에 표기
+  const checkRows = serviceCheckRows(check);
+  const checkBlocks: unknown[] = checkRows.length
+    ? [
+        {
+          type: "TextBlock",
+          weight: "Bolder",
+          text: "○ 운행시작 점검",
+          spacing: "Small",
+          wrap: true,
+        },
+        {
+          type: "FactSet",
+          spacing: "Small",
+          facts: checkRows.map((row) => ({ title: row.title, value: row.value })),
+        },
+      ]
+    : [];
 
   const card = {
     type: "message",
@@ -363,6 +238,7 @@ export async function sendCompletionReportCard(r: DailyReport, notes: string): P
                 { title: "잔여", value: `${r.remaining.toLocaleString()}대` },
               ],
             },
+            ...checkBlocks,
             {
               type: "TextBlock",
               weight: "Bolder",

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import nodemailer from "nodemailer";
 import { loadInstallProgress, loadScheduleStats } from "@/lib/stats";
 import { buildReport, formatReportText, formatReportHtml } from "@/lib/report";
+import type { ServiceCheck } from "@/lib/report";
 import { buildProgressXlsx } from "@/lib/export/build-progress-xlsx";
 import { getSetting, REPORT_MAIL_KEY } from "@/lib/settings";
 import { sendCompletionReportCard } from "@/lib/teams";
@@ -17,6 +18,7 @@ interface SendBody {
   to?: string; // 받는사람 (쉼표/세미콜론 구분). 없으면 env 기본값
   planned?: number | null; // 금일 계획 수량 직접 입력값
   pw?: string; // 관리자 비밀번호 (관리자 페이지 로그인 쿠키로 대체 가능)
+  check?: ServiceCheck; // 운행시작 점검(승무사원 교육·요금세팅·BIS·카카오)
 }
 
 function parseRecipients(raw: string | undefined): string[] {
@@ -76,8 +78,9 @@ export async function POST(req: NextRequest) {
   }
 
   const notes = body.notes ?? "";
-  const text = formatReportText(report, notes);
-  const html = formatReportHtml(report, notes);
+  const check = body.check;
+  const text = formatReportText(report, notes, check);
+  const html = formatReportHtml(report, notes, check);
   const subject = `[인천버스 B820] 설치 완료 보고 (${report.label}, ${report.dow}) — ${report.dailyDone}대`;
 
   // 진행현황 엑셀 첨부 (실패해도 메일은 발송)
@@ -114,7 +117,7 @@ export async function POST(req: NextRequest) {
   // 팀즈 '설치 진행중' 공유방에도 완료보고 카드 전송 (실패해도 메일 발송 결과는 성공 유지)
   let teams = false;
   try {
-    await sendCompletionReportCard(report, notes);
+    await sendCompletionReportCard(report, notes, check);
     teams = true;
   } catch (e) {
     console.warn("[report/send] 팀즈 완료보고 카드 전송 실패:", e instanceof Error ? e.message : e);

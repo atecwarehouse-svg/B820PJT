@@ -33,6 +33,56 @@ export interface DailyReport {
 
 const DOW = ["일", "월", "화", "수", "목", "금", "토"];
 
+// 운행시작 점검(첫차 운행 전) — 금일완료 리포트에 함께 담는다.
+export interface ServiceCheck {
+  driverEdu?: boolean; // 승무사원 교육 완료
+  fareSetting?: boolean; // 단말기 요금세팅 확인
+  baseFare?: string; // 기본요금
+  bisStatus?: string; // BIS(인천) — "ok" | "issue"
+  bisSymptom?: string; // BIS 이상 증상
+  kakaoStatus?: string; // 카카오(초정밀) — "ok" | "issue"
+  kakaoSymptom?: string; // 카카오 이상 증상
+}
+
+// 점검 입력이 하나라도 있는지 (없으면 리포트에서 섹션 생략)
+export function hasServiceCheck(c?: ServiceCheck): boolean {
+  if (!c) return false;
+  return Boolean(
+    c.driverEdu ||
+      c.fareSetting ||
+      (c.baseFare ?? "").trim() ||
+      c.bisStatus ||
+      c.kakaoStatus,
+  );
+}
+
+function fareFmt(raw?: string): string {
+  const s = (raw ?? "").trim();
+  return /^\d+$/.test(s) ? `${Number(s).toLocaleString()}원` : s;
+}
+
+// 점검 항목 → 표기용 {제목, 값} 목록 (메일 텍스트·HTML·팀즈 카드 공유)
+export function serviceCheckRows(c?: ServiceCheck): { title: string; value: string }[] {
+  if (!hasServiceCheck(c)) return [];
+  const mark = (b?: boolean, done = "완료") => (b ? `✅ ${done}` : "⬜ 미확인");
+  const f = fareFmt(c!.baseFare);
+  const fareVal = c!.fareSetting ? (f ? `✅ 확인 (${f})` : "✅ 확인") : "⬜ 미확인";
+  const stat = (s?: string, sym?: string) =>
+    s === "ok"
+      ? "✅ 이상없음"
+      : s === "issue"
+        ? sym?.trim()
+          ? `⚠️ 이상 - ${sym.trim()}`
+          : "⚠️ 이상"
+        : "⬜ 미확인";
+  return [
+    { title: "승무사원 교육", value: mark(c!.driverEdu, "교육완료") },
+    { title: "요금세팅", value: fareVal },
+    { title: "BIS(인천)", value: stat(c!.bisStatus, c!.bisSymptom) },
+    { title: "카카오(초정밀)", value: stat(c!.kakaoStatus, c!.kakaoSymptom) },
+  ];
+}
+
 export function buildReport(input: ReportInput): DailyReport {
   const { date } = input;
   const [y, m, d] = date.split("-").map(Number);
@@ -97,7 +147,7 @@ function noteLines(notes: string): string[] {
 const HR = "━━━━━━━━━━━━━━━";
 
 // 메일/복사용 평문 카드
-export function formatReportText(r: DailyReport, notes: string): string {
+export function formatReportText(r: DailyReport, notes: string, check?: ServiceCheck): string {
   const lines: string[] = [];
   lines.push("[인천버스 B820 단말기 설치 프로젝트]");
   lines.push(`설치 완료 (${r.label}, ${r.dow})`);
@@ -115,6 +165,12 @@ export function formatReportText(r: DailyReport, notes: string): string {
   lines.push(`누적 설치 완료 : ${r.cumDone}대 ${r.cumPct.toFixed(1)}%`);
   lines.push(`잔여 : ${r.remaining}대`);
   lines.push(HR);
+  const checkRows = serviceCheckRows(check);
+  if (checkRows.length) {
+    lines.push("○ 운행시작 점검");
+    for (const row of checkRows) lines.push(`- ${row.title} : ${row.value}`);
+    lines.push(HR);
+  }
   lines.push("○ 특이사항");
   lines.push(...noteLines(notes));
   lines.push("");
@@ -123,7 +179,7 @@ export function formatReportText(r: DailyReport, notes: string): string {
 }
 
 // 메일용 HTML 카드 (이메일에서 카드처럼 보이게)
-export function formatReportHtml(r: DailyReport, notes: string): string {
+export function formatReportHtml(r: DailyReport, notes: string, check?: ServiceCheck): string {
   const esc = (s: string) =>
     s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   const rows =
@@ -133,6 +189,20 @@ export function formatReportHtml(r: DailyReport, notes: string): string {
           .map((g) => `<li>${esc(g.operator)}${g.route ? " " + esc(g.route) + "노선" : ""} : <b>${g.count}대</b></li>`)
           .join("");
   const notesHtml = noteLines(notes).map((l) => `<li>${esc(l.replace(/^-\s*/, ""))}</li>`).join("");
+
+  // 운행시작 점검 섹션 (있을 때만) — 이상 항목은 붉게
+  const checkRows = serviceCheckRows(check);
+  const checkHtml = checkRows.length
+    ? `<div style="border-top:1px dashed #d1d5db;margin:12px 0"></div>
+    <div style="font-weight:600;margin-bottom:4px">○ 운행시작 점검</div>
+    <ul style="margin:0 0 4px;padding-left:18px;line-height:1.7;color:#374151">${checkRows
+      .map(
+        (row) =>
+          `<li>${esc(row.title)} : <span style="${row.value.startsWith("⚠️") ? "color:#dc2626;font-weight:600" : ""}">${esc(row.value)}</span></li>`,
+      )
+      .join("")}</ul>`
+    : "";
+
   return `<div style="max-width:480px;margin:0 auto;border:1px solid #e5e7eb;border-radius:14px;overflow:hidden;font-family:'Apple SD Gothic Neo',Malgun Gothic,sans-serif">
   <div style="background:#1d4ed8;color:#fff;padding:14px 18px">
     <div style="font-size:13px;opacity:.85">[인천버스 B820 단말기 설치 프로젝트]</div>
@@ -145,6 +215,7 @@ export function formatReportHtml(r: DailyReport, notes: string): string {
     <div style="font-size:14px;color:#111827">누적 계획 : <b>${r.cumPlanned}대</b></div>
     <div style="font-size:14px;color:#111827;margin-top:3px">누적 설치 완료 : <b>${r.cumDone}대</b> <span style="color:#16a34a;font-weight:700">${r.cumPct.toFixed(1)}%</span></div>
     <div style="font-size:14px;color:#111827;margin-top:3px">잔여 : <b>${r.remaining}대</b></div>
+    ${checkHtml}
     <div style="border-top:1px dashed #d1d5db;margin:12px 0"></div>
     <div style="font-weight:600;margin-bottom:4px">○ 특이사항</div>
     <ul style="margin:0 0 4px;padding-left:18px;line-height:1.7;color:#374151">${notesHtml}</ul>
