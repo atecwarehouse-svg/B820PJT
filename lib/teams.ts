@@ -172,7 +172,7 @@ export async function sendServiceStartCard(d: {
   const fareFmt = /^\d+$/.test(fareRaw) ? `${Number(fareRaw).toLocaleString()}원` : fareRaw;
   const fareValue = d.fareSetting
     ? fareFmt
-      ? `✅ 확인 · 기본요금 ${fareFmt}`
+      ? `✅ 확인 (${fareFmt})`
       : "✅ 확인"
     : "⬜ 미확인";
 
@@ -213,10 +213,10 @@ export async function sendServiceStartCard(d: {
             {
               type: "FactSet",
               facts: [
-                { title: "첫차 운행시작 · 운전자 교육", value: mark(d.driverEdu) },
-                { title: "단말기 요금세팅(다인승 기본요금)", value: fareValue },
-                { title: "BIS(인천시 버스 도착정보)", value: mark(d.bisCheck) },
-                { title: "카카오 초정밀버스", value: mark(d.kakaoCheck) },
+                { title: "운전자 교육", value: mark(d.driverEdu) },
+                { title: "요금세팅", value: fareValue },
+                { title: "BIS", value: mark(d.bisCheck) },
+                { title: "카카오", value: mark(d.kakaoCheck) },
               ],
             },
             {
