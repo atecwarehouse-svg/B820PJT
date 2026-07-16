@@ -20,6 +20,7 @@ import ProgressDownloadButton from "@/components/ProgressDownloadButton";
 import ScheduleUploadModal from "@/components/ScheduleUploadModal";
 import ConsultationModal from "@/components/ConsultationModal";
 import PlanReportModal from "@/components/PlanReportModal";
+import ServiceStartModal from "@/components/ServiceStartModal";
 import TeamStatsModal from "@/components/TeamStatsModal";
 import ScheduleChart from "@/components/ScheduleChart";
 import InstallDateSearch from "@/components/InstallDateSearch";
@@ -157,6 +158,7 @@ export default async function DashboardPage() {
         </h2>
         <div className="flex flex-wrap items-center gap-2">
           <PlanReportModal today={todayWork} planGroups={todayPlanGroups} />
+          <ServiceStartModal />
           {ip && (
             <TeamsShareButton
               kind="start"
