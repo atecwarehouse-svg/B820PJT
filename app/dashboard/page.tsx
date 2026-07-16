@@ -19,14 +19,12 @@ import { workDateString } from "@/lib/work-day";
 import ProgressDownloadButton from "@/components/ProgressDownloadButton";
 import ScheduleUploadModal from "@/components/ScheduleUploadModal";
 import ConsultationModal from "@/components/ConsultationModal";
-import PlanReportModal from "@/components/PlanReportModal";
-import ServiceStartModal from "@/components/ServiceStartModal";
+import ReportHub from "@/components/ReportHub";
 import TeamStatsModal from "@/components/TeamStatsModal";
 import ScheduleChart from "@/components/ScheduleChart";
 import InstallDateSearch from "@/components/InstallDateSearch";
 import DailyReportModal from "@/components/DailyReportModal";
 import KpiCards from "@/components/KpiCards";
-import TeamsShareButton from "@/components/TeamsShareButton";
 import RefreshButton from "@/components/RefreshButton";
 
 export const runtime = "nodejs";
@@ -157,29 +155,16 @@ export default async function DashboardPage() {
           <span className="ml-1 font-normal text-gray-400">(완료 = 저장 + 설치 전·후 사진 완료)</span>
         </h2>
         <div className="flex flex-wrap items-center gap-2">
-          <PlanReportModal today={todayWork} planGroups={todayPlanGroups} />
-          <ServiceStartModal />
-          {ip && (
-            <TeamsShareButton
-              kind="start"
-              today={ip.today}
-              todayPlanned={sch?.days.find((d) => d.date === ip.today)?.planned ?? 0}
-              complete={s.complete}
-              inProgress={inProgressCount}
-              remain={remainCount}
-              planGroups={todayPlanGroups}
-            />
-          )}
-          {ip && (
-            <TeamsShareButton
-              today={ip.today}
-              todayPlanned={sch?.days.find((d) => d.date === ip.today)?.planned ?? 0}
-              todayDone={ip.todayComplete}
-              complete={s.complete}
-              inProgress={inProgressCount}
-              remain={remainCount}
-            />
-          )}
+          <ReportHub
+            planToday={todayWork}
+            shareToday={ip?.today ?? todayWork}
+            planGroups={todayPlanGroups}
+            todayPlanned={sch?.days.find((d) => d.date === (ip?.today ?? todayWork))?.planned ?? 0}
+            todayDone={ip?.todayComplete ?? 0}
+            complete={s.complete}
+            inProgress={inProgressCount}
+            remain={remainCount}
+          />
           {ip && (
             <DailyReportModal
               completedList={ip.completedList}
