@@ -269,6 +269,225 @@ export async function sendCompletionReportCard(
   }
 }
 
+// 특이사항 텍스트 → 카드 표기용 불릿 목록 (빈 값이면 "- 없음")
+function bulletText(notes?: string): string {
+  const s = notes?.trim();
+  if (!s) return "- 없음";
+  return s
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter(Boolean)
+    .map((l) => (l.startsWith("-") ? l : `- ${l}`))
+    .join("\n");
+}
+
+// 첫 운행시작 전 점검사항 공유 카드 — 설치 진행중 공유방(TEAMS_WEBHOOK_URL).
+// 금일완료 리포트의 운행시작 점검과 같은 ServiceCheck·serviceCheckRows를 쓴다.
+export async function sendServiceStartCard(d: {
+  check: ServiceCheck;
+  notes?: string;
+}): Promise<void> {
+  const url = process.env.TEAMS_WEBHOOK_URL;
+  if (!url) throw new Error("팀즈 웹후크가 설정되지 않았습니다. (TEAMS_WEBHOOK_URL)");
+
+  const rows = serviceCheckRows(d.check);
+  // 이상 항목 증상은 카드 하단에 붉게 별도 표기
+  const issues: string[] = [];
+  if (d.check.bisStatus === "issue") {
+    issues.push(`- BIS(인천): ${d.check.bisSymptom?.trim() || "증상 미기재"}`);
+  }
+  if (d.check.kakaoStatus === "issue") {
+    issues.push(`- 카카오(초정밀): ${d.check.kakaoSymptom?.trim() || "증상 미기재"}`);
+  }
+  const reportedAt = new Date().toLocaleString("ko-KR", {
+    timeZone: "Asia/Seoul",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+
+  const card = {
+    type: "message",
+    attachments: [
+      {
+        contentType: "application/vnd.microsoft.card.adaptive",
+        content: {
+          $schema: "http://adaptivecards.io/schemas/adaptive-card.json",
+          type: "AdaptiveCard",
+          version: "1.4",
+          body: [
+            {
+              type: "TextBlock",
+              size: "Large",
+              weight: "Bolder",
+              text: "첫 운행시작 전 점검사항 공유",
+              wrap: true,
+            },
+            {
+              type: "TextBlock",
+              text: `${reportedAt} 점검`,
+              isSubtle: true,
+              spacing: "None",
+              wrap: true,
+            },
+            ...(rows.length
+              ? [{ type: "FactSet", facts: rows.map((r) => ({ title: r.title, value: r.value })) }]
+              : []),
+            {
+              type: "TextBlock",
+              text: "※ 기본요금은 버스 문에 붙어있는 요금과 동일한지 확인",
+              isSubtle: true,
+              size: "Small",
+              spacing: "None",
+              wrap: true,
+            },
+            ...(issues.length
+              ? [
+                  {
+                    type: "TextBlock",
+                    weight: "Bolder",
+                    color: "Attention",
+                    text: "○ 이상 증상",
+                    spacing: "Medium",
+                    wrap: true,
+                  },
+                  {
+                    type: "TextBlock",
+                    color: "Attention",
+                    text: issues.join("\n"),
+                    spacing: "None",
+                    wrap: true,
+                  },
+                ]
+              : []),
+            {
+              type: "TextBlock",
+              weight: "Bolder",
+              text: "○ 특이사항",
+              spacing: "Medium",
+              wrap: true,
+            },
+            { type: "TextBlock", text: bulletText(d.notes), spacing: "None", wrap: true },
+          ],
+        },
+      },
+    ],
+  };
+
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(card),
+  });
+  if (!res.ok) {
+    const t = await res.text().catch(() => "");
+    throw new Error(`Teams 운행시작 응답 ${res.status} ${t.slice(0, 160)}`);
+  }
+}
+
+// 운수사 VOC 카드 — 설치 진행중 공유방(TEAMS_WEBHOOK_URL).
+// 차량별 VOC를 표기하고, 금일 휴차로 체크된 차량은 내용에서 제외한다.
+export interface VocCardData {
+  operator: string;
+  label: string; // 설치일 라벨 (예: "7/16 (목)")
+  items: { plate: string; route?: string; voc: string }[]; // 휴차 제외된 차량만
+  dayOff: string[]; // 금일 휴차 차량번호
+  notes?: string; // 전체 특이사항
+}
+
+export async function sendVocCard(d: VocCardData): Promise<void> {
+  const url = process.env.TEAMS_WEBHOOK_URL;
+  if (!url) throw new Error("팀즈 웹후크가 설정되지 않았습니다. (TEAMS_WEBHOOK_URL)");
+
+  const withVoc = d.items.filter((i) => i.voc.trim());
+  const total = d.items.length + d.dayOff.length; // 설치 대수 = VOC 대상 + 휴차
+
+  const card = {
+    type: "message",
+    attachments: [
+      {
+        contentType: "application/vnd.microsoft.card.adaptive",
+        content: {
+          $schema: "http://adaptivecards.io/schemas/adaptive-card.json",
+          type: "AdaptiveCard",
+          version: "1.4",
+          body: [
+            {
+              type: "TextBlock",
+              size: "Large",
+              weight: "Bolder",
+              text: "📣 운수사 VOC",
+              wrap: true,
+            },
+            {
+              type: "TextBlock",
+              text: `${d.operator} · ${d.label} 설치 ${total.toLocaleString()}대`,
+              isSubtle: true,
+              spacing: "None",
+              wrap: true,
+            },
+            {
+              type: "TextBlock",
+              weight: "Bolder",
+              text: `○ 차량별 VOC (${withVoc.length.toLocaleString()}건)`,
+              spacing: "Medium",
+              wrap: true,
+            },
+            withVoc.length
+              ? {
+                  type: "FactSet",
+                  spacing: "Small",
+                  facts: withVoc.map((i) => ({
+                    title: i.route ? `${i.plate} (${i.route})` : i.plate,
+                    value: i.voc.trim(),
+                  })),
+                }
+              : { type: "TextBlock", text: "- 접수된 VOC 없음", spacing: "None", wrap: true },
+            ...(d.dayOff.length
+              ? [
+                  {
+                    type: "TextBlock",
+                    weight: "Bolder",
+                    text: "○ 금일 휴차",
+                    spacing: "Medium",
+                    wrap: true,
+                  },
+                  {
+                    type: "TextBlock",
+                    text: d.dayOff.join(", "),
+                    spacing: "None",
+                    wrap: true,
+                  },
+                ]
+              : []),
+            ...(d.notes?.trim()
+              ? [
+                  {
+                    type: "TextBlock",
+                    weight: "Bolder",
+                    text: "○ 특이사항",
+                    spacing: "Medium",
+                    wrap: true,
+                  },
+                  { type: "TextBlock", text: bulletText(d.notes), spacing: "None", wrap: true },
+                ]
+              : []),
+          ],
+        },
+      },
+    ],
+  };
+
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(card),
+  });
+  if (!res.ok) {
+    const t = await res.text().catch(() => "");
+    throw new Error(`Teams VOC 응답 ${res.status} ${t.slice(0, 160)}`);
+  }
+}
+
 // 차량이상 비고·특이사항 블록 — 설치 시작/완료 카드가 공유.
 // 차량이상 비고는 결함 알림이므로 붉은색(Attention)으로 강조.
 function noteBlocks(d: { checkNote?: string; extraNote?: string }): unknown[] {
