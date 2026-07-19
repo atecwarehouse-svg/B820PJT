@@ -429,7 +429,7 @@ export default function DispatchButton() {
                       )}
                       <p className="mb-1 text-[11px] text-gray-400">
                         {visible.length}대 · 시간 입력 {timedCount}대
-                        {checkCount > 0 && ` · 체크리스트 ${checkCount}대`}
+                        {checkCount > 0 && ` · 검수완료 ${checkCount}대`}
                         {offCount > 0 && ` · 휴차 ${offCount}대`} — 시간을 고르면
                         이른 순서로 정렬됩니다
                       </p>
@@ -481,7 +481,7 @@ export default function DispatchButton() {
                                         : "text-gray-500"
                                     }`}
                                   >
-                                    체크리스트
+                                    검수완료
                                   </span>
                                 </label>
                                 <label className="flex cursor-pointer items-center gap-1">
