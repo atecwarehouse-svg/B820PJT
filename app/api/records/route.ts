@@ -21,6 +21,7 @@ interface UpsertBody {
   check_note?: string | null; // 차량 이상유무 비고
   extra_note?: string | null; // 설치 특이사항
   saved?: boolean; // true면 '저장'(목록 등록) 처리 → 최초 1회만 saved_at = now()
+  mid?: boolean; // 1·2단계 중간 저장 — 특이사항(3단계 입력란) 없이 저장 허용
   admin_pw?: string; // 팀명 변경용 관리자 비밀번호 (한번 저장된 팀명은 관리자만 변경)
   team_change?: boolean; // true = 사용자가 의도적으로 팀명을 바꾸는 요청 (잠금 검증 대상)
 }
@@ -46,7 +47,7 @@ export async function POST(req: NextRequest) {
         { status: 400 },
       );
     }
-    if (!(body.extra_note ?? "").trim()) {
+    if (!body.mid && !(body.extra_note ?? "").trim()) {
       return NextResponse.json(
         { error: "특이사항을 입력해야 저장할 수 있습니다. (없으면 '없음')" },
         { status: 400 },

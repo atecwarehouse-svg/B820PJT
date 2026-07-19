@@ -141,6 +141,7 @@ export default function RecordEditor({ plate, initial, teamOptions = [] }: Props
         check_note: string;
         extra_note: string;
         saved: boolean;
+        mid: boolean;
         team_change: boolean;
       }>,
     ) => {
@@ -162,6 +163,8 @@ export default function RecordEditor({ plate, initial, teamOptions = [] }: Props
             check_note: overrides?.check_note ?? checkNote,
             extra_note: overrides?.extra_note ?? extraNote,
             saved: overrides?.saved ?? false,
+            // 1·2단계 중간 저장 — 서버가 특이사항(3단계 입력란) 필수 검증을 건너뛴다
+            ...(overrides?.mid ? { mid: true } : {}),
             // 팀명 칸에서 직접 바꾼 경우에만 잠금 검증 대상으로 표시
             ...(overrides?.team_change ? { team_change: true } : {}),
             // 팀명 변경 잠금 해제용 관리자 비밀번호 (있을 때만)
@@ -285,7 +288,7 @@ export default function RecordEditor({ plate, initial, teamOptions = [] }: Props
       return;
     }
     setSubmitting(true);
-    const ok = await saveRecord({ saved: true });
+    const ok = await saveRecord({ saved: true, mid: true });
     setSubmitting(false);
     if (ok) {
       setMidSavedPopup(true);
