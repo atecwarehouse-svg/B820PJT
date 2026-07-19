@@ -252,6 +252,7 @@ export default function RecordEditor({ plate, initial, teamOptions = [] }: Props
 
   const [submitting, setSubmitting] = useState(false);
   const [savedPopup, setSavedPopup] = useState(false); // 저장 완료 팝업
+  const [midSavedPopup, setMidSavedPopup] = useState(false); // 중간 저장 완료 팝업
 
   // 1단계(이상유무) → 다음: 팀명·비고를 여기서 확인해 마지막에 몰아서 막히지 않게 한다
   function goNextFromCheck() {
@@ -267,6 +268,30 @@ export default function RecordEditor({ plate, initial, teamOptions = [] }: Props
       return;
     }
     setStep(1);
+  }
+
+  // 1·2단계 중간 저장 — 특이사항 없이도 여기까지 저장. 팀명·비고만 확인.
+  // saved:true라 서버가 saved_at 기록·팀즈 시작/완료 카드 판정까지 기존 로직대로 처리.
+  async function handleMidSave() {
+    if (!team.trim()) {
+      showToast(
+        teamOptions.length > 0 ? "팀을 선택해주세요" : "팀명을 입력해주세요",
+        "error",
+      );
+      return;
+    }
+    if (!checkNote.trim()) {
+      showToast("비고(차량 이상유무)를 입력해주세요. 없으면 '없음'", "error");
+      return;
+    }
+    setSubmitting(true);
+    const ok = await saveRecord({ saved: true });
+    setSubmitting(false);
+    if (ok) {
+      setMidSavedPopup(true);
+    } else {
+      showToast("저장에 실패했습니다. 다시 시도해주세요", "error");
+    }
   }
 
   async function handleSave() {
@@ -390,6 +415,36 @@ export default function RecordEditor({ plate, initial, teamOptions = [] }: Props
             >
               확인
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* 중간 저장 완료 팝업 — 이어서 촬영 안내 */}
+      {midSavedPopup && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4 no-print">
+          <div className="w-full max-w-xs rounded-2xl bg-white p-5 text-center shadow-xl">
+            <div className="text-4xl">✅</div>
+            <p className="mt-2 text-lg font-bold text-gray-800">
+              여기까지 저장되었습니다
+            </p>
+            <p className="mt-1 text-xs text-gray-500">
+              {plate} · 나중에 차량번호로 다시 들어오면 촬영 안 한 페이지부터
+              이어서 촬영할 수 있습니다.
+            </p>
+            <div className="mt-4 flex gap-2">
+              <button
+                onClick={() => setMidSavedPopup(false)}
+                className="flex-1 rounded-lg border border-gray-300 px-4 py-2.5 text-sm font-medium text-gray-600 active:bg-gray-100"
+              >
+                계속 촬영
+              </button>
+              <button
+                onClick={() => router.push("/list")}
+                className="flex-1 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white active:bg-blue-700"
+              >
+                목록으로
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -698,12 +753,21 @@ export default function RecordEditor({ plate, initial, teamOptions = [] }: Props
               ← 이전
             </button>
           )}
+          {step < 2 && (
+            <button
+              onClick={handleMidSave}
+              disabled={submitting}
+              className="flex-1 rounded-lg border border-blue-600 bg-white px-4 py-3 text-sm font-semibold text-blue-600 active:bg-blue-50 disabled:opacity-50"
+            >
+              {submitting ? "저장 중…" : "저장"}
+            </button>
+          )}
           {step === 0 && (
             <button
               onClick={goNextFromCheck}
               className="flex-1 rounded-lg bg-blue-600 px-4 py-3 text-sm font-semibold text-white active:bg-blue-700"
             >
-              다음 (설치 전 촬영) →
+              다음 (설치 전) →
             </button>
           )}
           {step === 1 && (
@@ -711,7 +775,7 @@ export default function RecordEditor({ plate, initial, teamOptions = [] }: Props
               onClick={() => setStep(2)}
               className="flex-1 rounded-lg bg-blue-600 px-4 py-3 text-sm font-semibold text-white active:bg-blue-700"
             >
-              다음 (설치 후 촬영) →
+              다음 (설치 후) →
             </button>
           )}
           {step === 2 && (
