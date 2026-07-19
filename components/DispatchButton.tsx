@@ -18,6 +18,8 @@ interface Entry {
   plate: string;
   route: string;
   outTime: string | null; // "HH:MM" 또는 "OFF"(휴차)
+  checklist: boolean; // 체크리스트 작성 완료
+  completed: boolean; // 설치완료(서버 판정 — 저장+설치전후 사진 충족)
 }
 
 // "2026-07-15" → "2026.07.15"
@@ -215,6 +217,14 @@ export default function DispatchButton() {
     setTime(plate, checked ? OFF : null);
   }
 
+  // 체크리스트 작성 토글
+  function toggleChecklist(plate: string, checked: boolean) {
+    setEntries((list) =>
+      list.map((e) => (e.plate === plate ? { ...e, checklist: checked } : e)),
+    );
+    setSaveMsg(null);
+  }
+
   async function handleSave() {
     if (saving) return;
     setSaving(true);
@@ -244,6 +254,7 @@ export default function DispatchButton() {
   );
   const timedCount = visible.filter((e) => e.outTime && e.outTime !== OFF).length;
   const offCount = visible.filter((e) => e.outTime === OFF).length;
+  const checkCount = visible.filter((e) => e.checklist).length;
 
   return (
     <>
@@ -418,6 +429,7 @@ export default function DispatchButton() {
                       )}
                       <p className="mb-1 text-[11px] text-gray-400">
                         {visible.length}대 · 시간 입력 {timedCount}대
+                        {checkCount > 0 && ` · 체크리스트 ${checkCount}대`}
                         {offCount > 0 && ` · 휴차 ${offCount}대`} — 시간을 고르면
                         이른 순서로 정렬됩니다
                       </p>
@@ -427,7 +439,7 @@ export default function DispatchButton() {
                           return (
                             <li
                               key={e.plate}
-                              className={`flex items-center justify-between gap-2 px-3 py-2 ${
+                              className={`flex flex-wrap items-center justify-between gap-x-2 gap-y-1 px-3 py-2 ${
                                 isOff ? "bg-red-50/60" : ""
                               }`}
                             >
@@ -440,6 +452,11 @@ export default function DispatchButton() {
                                   }`}
                                 >
                                   {e.plate}
+                                  {e.completed && (
+                                    <span className="ml-1.5 rounded bg-green-100 px-1.5 py-0.5 align-middle text-[10px] font-semibold text-green-700">
+                                      설치완료
+                                    </span>
+                                  )}
                                 </p>
                                 {!routeFilter && e.route && (
                                   <p className="text-[11px] text-gray-400">
@@ -447,7 +464,26 @@ export default function DispatchButton() {
                                   </p>
                                 )}
                               </div>
-                              <div className="flex shrink-0 items-center gap-2">
+                              <div className="ml-auto flex shrink-0 items-center gap-2">
+                                <label className="flex cursor-pointer items-center gap-1">
+                                  <input
+                                    type="checkbox"
+                                    checked={e.checklist}
+                                    onChange={(ev) =>
+                                      toggleChecklist(e.plate, ev.target.checked)
+                                    }
+                                    className="h-4 w-4 accent-green-600"
+                                  />
+                                  <span
+                                    className={`text-xs ${
+                                      e.checklist
+                                        ? "font-semibold text-green-700"
+                                        : "text-gray-500"
+                                    }`}
+                                  >
+                                    체크리스트
+                                  </span>
+                                </label>
                                 <label className="flex cursor-pointer items-center gap-1">
                                   <input
                                     type="checkbox"

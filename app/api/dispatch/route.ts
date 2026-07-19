@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
+import { BEFORE_SLOTS, AFTER_SLOTS } from "@/lib/slots";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 // 배차표 — 운수사·설치일별 차량 나가는 시간(공용 저장).
-// GET  ?operator=&date= : 해당일 차량 목록 + 저장된 시간 병합
+// GET  ?operator=&date= : 해당일 차량 목록 + 저장된 시간·체크리스트 + 설치완료 여부
 // POST { operator, date, entries } : (date, plate) 기준 upsert
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -30,19 +31,74 @@ export async function GET(req: NextRequest) {
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
+  const plates = (vehicles ?? []).map((v) => v.plate);
 
-  // 저장된 시간 — 테이블 미생성(마이그레이션 전) DB면 시간 없이 목록만 준다
+  // 저장된 시간·체크리스트 — checklist 컬럼 없는 DB(마이그레이션 전)면 시간만 재시도
   let dbReady = true;
   const times = new Map<string, string | null>();
+  const checks = new Set<string>();
+  type SavedRow = { plate: string; out_time: string | null; checklist?: boolean };
+  let savedRows: SavedRow[] | null = null;
   const saved = await supabase
     .from("dispatch_times")
-    .select("plate, out_time")
+    .select("plate, out_time, checklist")
     .eq("date", date)
     .range(0, 999);
-  if (saved.error) {
+  if (saved.error && /checklist/i.test(saved.error.message)) {
+    const retry = await supabase
+      .from("dispatch_times")
+      .select("plate, out_time")
+      .eq("date", date)
+      .range(0, 999);
+    if (!retry.error) savedRows = (retry.data ?? []) as SavedRow[];
+  } else if (!saved.error) {
+    savedRows = (saved.data ?? []) as SavedRow[];
+  }
+  if (savedRows === null) {
     dbReady = false;
   } else {
-    for (const r of saved.data ?? []) times.set(r.plate, r.out_time ?? null);
+    for (const r of savedRows) {
+      times.set(r.plate, r.out_time ?? null);
+      if (r.checklist) checks.add(r.plate);
+    }
+  }
+
+  // 설치완료 여부 — 대시보드 완료 판정과 동일(saved_at + 설치전7·설치후7 충족, fetchCompletedMap 로직)
+  // 조회 실패해도 배차표 자체는 동작해야 하므로 완료 표시만 생략한다.
+  const completedSet = new Set<string>();
+  try {
+    const stdSlots = [...BEFORE_SLOTS, ...AFTER_SLOTS].map((s) => s.slotKey);
+    const CH = 100; // 한글 plate 다수 in() 필터는 URL 길이 초과 방지를 위해 분할
+    for (let i = 0; i < plates.length; i += CH) {
+      const chunk = plates.slice(i, i + CH);
+      const [recRes, photoRes] = await Promise.all([
+        supabase
+          .from("records")
+          .select("plate, saved_at, na_slots")
+          .in("plate", chunk)
+          .not("saved_at", "is", null),
+        supabase
+          .from("photos")
+          .select("plate, slot_key")
+          .in("plate", chunk)
+          .in("slot_key", stdSlots)
+          .range(0, 9999),
+      ]);
+      if (recRes.error || photoRes.error) continue;
+      const bySlot = new Map<string, Set<string>>();
+      for (const p of photoRes.data ?? []) {
+        const s = bySlot.get(p.plate) ?? new Set<string>();
+        s.add(p.slot_key);
+        bySlot.set(p.plate, s);
+      }
+      for (const r of recRes.data ?? []) {
+        const have = bySlot.get(r.plate);
+        const na = new Set<string>(Array.isArray(r.na_slots) ? r.na_slots : []);
+        if (stdSlots.every((k) => have?.has(k) || na.has(k))) completedSet.add(r.plate);
+      }
+    }
+  } catch {
+    // 완료 표시는 부가 정보 — 실패해도 무시
   }
 
   return NextResponse.json({
@@ -50,6 +106,8 @@ export async function GET(req: NextRequest) {
       plate: v.plate,
       route: v.route ?? "",
       outTime: times.get(v.plate) ?? null,
+      checklist: checks.has(v.plate),
+      completed: completedSet.has(v.plate),
     })),
     dbReady,
   });
@@ -59,7 +117,12 @@ export async function POST(req: NextRequest) {
   let body: {
     operator?: string;
     date?: string;
-    entries?: { plate?: string; route?: string; outTime?: string | null }[];
+    entries?: {
+      plate?: string;
+      route?: string;
+      outTime?: string | null;
+      checklist?: boolean;
+    }[];
   };
   try {
     body = await req.json();
@@ -85,6 +148,7 @@ export async function POST(req: NextRequest) {
         typeof e.outTime === "string" && (TIME_RE.test(e.outTime) || e.outTime === "OFF")
           ? e.outTime
           : null,
+      checklist: e.checklist === true,
       updated_at: now,
     }))
     .filter((r) => r.plate);
@@ -93,11 +157,17 @@ export async function POST(req: NextRequest) {
   }
 
   const supabase = createServiceClient();
-  const { error } = await supabase
+  let { error } = await supabase
     .from("dispatch_times")
     .upsert(rows, { onConflict: "date,plate" });
+  // checklist 컬럼 없는 DB(마이그레이션 전) — 체크리스트만 빼고 재시도(시간·휴차는 저장)
+  if (error && /checklist/i.test(error.message)) {
+    const noCheck = rows.map(({ checklist: _c, ...rest }) => rest);
+    ({ error } = await supabase
+      .from("dispatch_times")
+      .upsert(noCheck, { onConflict: "date,plate" }));
+  }
   if (error) {
-    // 테이블 미생성(마이그레이션 전) DB — 실행 안내
     const msg = /dispatch_times/i.test(error.message)
       ? "저장 실패 — migration_dispatch.sql 실행이 필요합니다(관리자 문의)."
       : `저장 실패: ${error.message}`;
