@@ -85,6 +85,7 @@ export default function DispatchButton() {
   // 선택지(운수사·예정일·노선) — 모달 처음 열 때 1회 로드
   const [operators, setOperators] = useState<OperatorSchedule[] | null>(null);
   const [optError, setOptError] = useState(false);
+  const [today] = useState(() => workDateString(new Date())); // 금일(업무일)
 
   const [operator, setOperator] = useState("");
   const [date, setDate] = useState("");
@@ -104,17 +105,46 @@ export default function DispatchButton() {
       try {
         const res = await fetch("/api/dispatch/options");
         const j = await res.json();
-        const ops = (j.operators ?? []).filter(
+        const ops: OperatorSchedule[] = (j.operators ?? []).filter(
           (o: OperatorSchedule) => o.dates.length > 0,
         );
         setOperators(ops);
         setOptError(ops.length === 0);
+        // 금일 설치 일정이 있으면 첫 운수사를 자동 선택해 리스트까지 바로 표시
+        const todayOp = ops.find((o) => o.dates.some((d) => d.date === today));
+        if (todayOp) {
+          setOperator(todayOp.operator);
+          setDate(today);
+          loadList(todayOp.operator, today);
+        }
       } catch {
         setOperators([]);
         setOptError(true);
       }
     })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, operators]);
+
+  // 금일 설치 운수사들(노선·대수 포함) — 팝업 상단에 자동 표시
+  const todayOps = (operators ?? [])
+    .map((o) => ({
+      operator: o.operator,
+      todayDate: o.dates.find((d) => d.date === today),
+    }))
+    .filter(
+      (x): x is { operator: string; todayDate: OperatorSchedule["dates"][number] } =>
+        !!x.todayDate,
+    );
+
+  // 금일 카드 탭 → 그 운수사의 오늘 배차표로 바로 이동
+  function selectToday(op: string) {
+    if (operator === op && date === today) return;
+    setOperator(op);
+    setDate(today);
+    setRouteFilter("");
+    setSaveMsg(null);
+    loadList(op, today);
+  }
 
   const selectedOp = operators?.find((o) => o.operator === operator) ?? null;
   const selectedDate = selectedOp?.dates.find((d) => d.date === date) ?? null;
@@ -237,10 +267,55 @@ export default function DispatchButton() {
             </div>
 
             <div className="space-y-3 px-4 py-4">
-              {/* 운수사 */}
+              {/* 금일 설치 — 오늘 일정이 있는 운수사·노선 자동 표시 */}
+              {operators !== null && !optError && (
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-gray-500">
+                    금일 설치 ({fmtDot(today)})
+                  </label>
+                  {todayOps.length === 0 ? (
+                    <p className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-400">
+                      금일 설치 일정이 없습니다. 아래에서 직접 선택하세요.
+                    </p>
+                  ) : (
+                    <div className="space-y-1.5">
+                      {todayOps.map((t) => {
+                        const active = operator === t.operator && date === today;
+                        return (
+                          <button
+                            key={t.operator}
+                            type="button"
+                            onClick={() => selectToday(t.operator)}
+                            className={`flex w-full items-center justify-between gap-2 rounded-lg border px-3 py-2 text-left ${
+                              active
+                                ? "border-blue-500 bg-blue-50"
+                                : "border-gray-200 bg-white active:bg-gray-50"
+                            }`}
+                          >
+                            <span
+                              className={`text-sm font-semibold ${
+                                active ? "text-blue-700" : "text-gray-800"
+                              }`}
+                            >
+                              {t.operator}
+                            </span>
+                            <span className="shrink-0 text-[11px] text-gray-500">
+                              {t.todayDate.routes
+                                .map((r) => `${r.route} ${r.count}대`)
+                                .join(" · ")}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* 운수사 직접 선택 */}
               <div>
                 <label className="mb-1 block text-xs font-medium text-gray-500">
-                  운수사
+                  운수사 직접 선택
                 </label>
                 {operators === null ? (
                   <p className="text-sm text-gray-400">불러오는 중…</p>
