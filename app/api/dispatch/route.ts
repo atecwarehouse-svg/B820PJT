@@ -80,8 +80,11 @@ export async function POST(req: NextRequest) {
       date,
       route: (e.route ?? "").trim().slice(0, 100) || null,
       plate: (e.plate ?? "").trim().slice(0, 30),
+      // "HH:MM" 또는 "OFF"(휴차 체크) — 그 외 값은 미정(null)
       out_time:
-        typeof e.outTime === "string" && TIME_RE.test(e.outTime) ? e.outTime : null,
+        typeof e.outTime === "string" && (TIME_RE.test(e.outTime) || e.outTime === "OFF")
+          ? e.outTime
+          : null,
       updated_at: now,
     }))
     .filter((r) => r.plate);

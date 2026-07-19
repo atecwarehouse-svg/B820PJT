@@ -11,10 +11,13 @@ import { workDateString } from "@/lib/work-day";
 const HOURS = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, "0"));
 const MINUTES = Array.from({ length: 12 }, (_, i) => String(i * 5).padStart(2, "0")); // 5분 단위
 
+// 휴차는 out_time에 "OFF"로 저장 — 별도 컬럼 없이 기존 테이블 그대로 사용
+const OFF = "OFF";
+
 interface Entry {
   plate: string;
   route: string;
-  outTime: string | null; // "HH:MM"
+  outTime: string | null; // "HH:MM" 또는 "OFF"(휴차)
 }
 
 // "2026-07-15" → "2026.07.15"
@@ -22,11 +25,13 @@ function fmtDot(d: string): string {
   return d.replace(/-/g, ".");
 }
 
-// 나가는 시간순 정렬 — 미입력은 뒤, 같은 시간은 차량번호순
+// 나가는 시간순 정렬 — 미입력은 뒤, 휴차는 맨 뒤, 같은 시간은 차량번호순
 function sortEntries(list: Entry[]): Entry[] {
+  const key = (e: Entry) =>
+    e.outTime === OFF ? "ZZ:ZZ" : e.outTime ?? "99:99";
   return [...list].sort((a, b) => {
-    const ka = a.outTime ?? "99:99";
-    const kb = b.outTime ?? "99:99";
+    const ka = key(a);
+    const kb = key(b);
     if (ka !== kb) return ka < kb ? -1 : 1;
     return a.plate.localeCompare(b.plate, "ko");
   });
@@ -35,9 +40,11 @@ function sortEntries(list: Entry[]): Entry[] {
 // 행 우측 시/분 드롭다운 (ConsultationModal TimeField의 축약형)
 function RowTime({
   value,
+  disabled,
   onChange,
 }: {
   value: string | null;
+  disabled?: boolean;
   onChange: (v: string | null) => void;
 }) {
   const [h, m] = value ? value.split(":") : ["", "00"];
@@ -45,11 +52,12 @@ function RowTime({
     <div className="flex shrink-0 items-center gap-1">
       <select
         value={h}
+        disabled={disabled}
         onChange={(e) => {
           const nh = e.target.value;
           onChange(nh ? `${nh}:${m || "00"}` : null);
         }}
-        className="rounded-lg border border-gray-300 px-1.5 py-1.5 text-base focus:border-blue-500 focus:outline-none"
+        className="rounded-lg border border-gray-300 px-1.5 py-1.5 text-base focus:border-blue-500 focus:outline-none disabled:bg-gray-50 disabled:text-gray-400"
       >
         <option value="">--</option>
         {HOURS.map((x) => (
@@ -61,7 +69,7 @@ function RowTime({
       <span className="text-xs text-gray-500">시</span>
       <select
         value={h ? m : ""}
-        disabled={!h}
+        disabled={disabled || !h}
         onChange={(e) => {
           if (h) onChange(`${h}:${e.target.value}`);
         }}
@@ -202,6 +210,11 @@ export default function DispatchButton() {
     setSaveMsg(null);
   }
 
+  // 휴차 토글 — 체크하면 시간은 지워지고 맨 뒤로 정렬
+  function toggleOff(plate: string, checked: boolean) {
+    setTime(plate, checked ? OFF : null);
+  }
+
   async function handleSave() {
     if (saving) return;
     setSaving(true);
@@ -229,7 +242,8 @@ export default function DispatchButton() {
   const visible = sortEntries(
     routeFilter ? entries.filter((e) => e.route === routeFilter) : entries,
   );
-  const timedCount = visible.filter((e) => e.outTime).length;
+  const timedCount = visible.filter((e) => e.outTime && e.outTime !== OFF).length;
+  const offCount = visible.filter((e) => e.outTime === OFF).length;
 
   return (
     <>
@@ -403,29 +417,65 @@ export default function DispatchButton() {
                         </div>
                       )}
                       <p className="mb-1 text-[11px] text-gray-400">
-                        {visible.length}대 · 시간 입력 {timedCount}대 — 시간을
-                        고르면 이른 순서로 정렬됩니다
+                        {visible.length}대 · 시간 입력 {timedCount}대
+                        {offCount > 0 && ` · 휴차 ${offCount}대`} — 시간을 고르면
+                        이른 순서로 정렬됩니다
                       </p>
                       <ul className="divide-y divide-gray-100 rounded-lg border border-gray-200">
-                        {visible.map((e) => (
-                          <li
-                            key={e.plate}
-                            className="flex items-center justify-between gap-2 px-3 py-2"
-                          >
-                            <div className="min-w-0">
-                              <p className="truncate text-sm font-medium text-gray-800">
-                                {e.plate}
-                              </p>
-                              {!routeFilter && e.route && (
-                                <p className="text-[11px] text-gray-400">{e.route}</p>
-                              )}
-                            </div>
-                            <RowTime
-                              value={e.outTime}
-                              onChange={(v) => setTime(e.plate, v)}
-                            />
-                          </li>
-                        ))}
+                        {visible.map((e) => {
+                          const isOff = e.outTime === OFF;
+                          return (
+                            <li
+                              key={e.plate}
+                              className={`flex items-center justify-between gap-2 px-3 py-2 ${
+                                isOff ? "bg-red-50/60" : ""
+                              }`}
+                            >
+                              <div className="min-w-0">
+                                <p
+                                  className={`truncate text-sm font-medium ${
+                                    isOff
+                                      ? "text-red-400 line-through"
+                                      : "text-gray-800"
+                                  }`}
+                                >
+                                  {e.plate}
+                                </p>
+                                {!routeFilter && e.route && (
+                                  <p className="text-[11px] text-gray-400">
+                                    {e.route}
+                                  </p>
+                                )}
+                              </div>
+                              <div className="flex shrink-0 items-center gap-2">
+                                <label className="flex cursor-pointer items-center gap-1">
+                                  <input
+                                    type="checkbox"
+                                    checked={isOff}
+                                    onChange={(ev) =>
+                                      toggleOff(e.plate, ev.target.checked)
+                                    }
+                                    className="h-4 w-4 accent-red-600"
+                                  />
+                                  <span
+                                    className={`text-xs ${
+                                      isOff
+                                        ? "font-semibold text-red-600"
+                                        : "text-gray-500"
+                                    }`}
+                                  >
+                                    휴차
+                                  </span>
+                                </label>
+                                <RowTime
+                                  value={isOff ? null : e.outTime}
+                                  disabled={isOff}
+                                  onChange={(v) => setTime(e.plate, v)}
+                                />
+                              </div>
+                            </li>
+                          );
+                        })}
                       </ul>
                     </>
                   )}
