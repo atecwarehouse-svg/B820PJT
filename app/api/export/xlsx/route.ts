@@ -4,7 +4,6 @@ import { buildWorkbookMulti, type BuildInput } from "@/lib/export/xlsx-builder";
 import { uploadExport } from "@/lib/gdrive";
 import { kstStamp } from "@/lib/export/filename";
 import { EXPORT_MAX } from "@/lib/export/limits";
-import { isAdmin } from "@/lib/admin-auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -17,9 +16,6 @@ const XLSX_MIME =
 // POST /api/export/xlsx  body: { plates: string[], title?: string }
 // 선택 차량을 묶은 엑셀 1파일 → 드라이브 "인천B820 엑셀" 폴더에 업로드.
 export async function POST(req: NextRequest) {
-  if (!isAdmin()) {
-    return NextResponse.json({ error: "관리자 인증이 필요합니다." }, { status: 401 });
-  }
   const { plates, title } = (await req.json()) as { plates?: string[]; title?: string };
   if (!plates || plates.length === 0) {
     return NextResponse.json({ error: "선택된 차량이 없습니다." }, { status: 400 });

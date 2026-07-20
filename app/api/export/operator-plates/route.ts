@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
 import { fetchAll } from "@/lib/supabase/paginate";
-import { isAdmin } from "@/lib/admin-auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -9,9 +8,6 @@ export const dynamic = "force-dynamic";
 // GET /api/export/operator-plates?operator=...
 // 해당 운수사 차량 중 '사진이 1장이라도 있는' 차량번호 목록을 반환 (운수사별 내보내기용).
 export async function GET(req: NextRequest) {
-  if (!isAdmin()) {
-    return NextResponse.json({ error: "관리자 인증이 필요합니다." }, { status: 401 });
-  }
   const operator = req.nextUrl.searchParams.get("operator")?.trim();
   if (!operator) {
     return NextResponse.json({ error: "운수사명이 필요합니다." }, { status: 400 });

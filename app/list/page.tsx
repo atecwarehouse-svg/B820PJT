@@ -5,15 +5,11 @@ import { workDateString } from "@/lib/work-day";
 import { DEFAULT_PHOTO_COUNT } from "@/lib/slots";
 import type { RecordRow } from "@/lib/types";
 import ListClient, { type ListItem } from "@/components/ListClient";
-import { isAdmin } from "@/lib/admin-auth";
-import AdminLogin from "@/components/AdminLogin";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export default async function ListPage() {
-  if (!isAdmin()) return <AdminLogin />;
-
   const supabase = createServiceClient();
 
   // 1,000행 제한 회피 — 저장 레코드/사진을 전수 조회. 운수사 목록은 집계뷰에서.

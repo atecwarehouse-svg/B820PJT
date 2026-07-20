@@ -5,7 +5,6 @@ import { renderPdf } from "@/lib/export/pdf-render";
 import { uploadExport } from "@/lib/gdrive";
 import { kstStamp } from "@/lib/export/filename";
 import { EXPORT_MAX } from "@/lib/export/limits";
-import { isAdmin } from "@/lib/admin-auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -16,9 +15,6 @@ const PDF_FOLDER = "인천B820 PDF";
 // POST /api/export/pdf  body: { plates: string[], title?: string }
 // 선택한 차량들을 차량당 1페이지씩 묶은 PDF 1파일 → 드라이브 "인천B820 PDF" 폴더에 업로드.
 export async function POST(req: NextRequest) {
-  if (!isAdmin()) {
-    return NextResponse.json({ error: "관리자 인증이 필요합니다." }, { status: 401 });
-  }
   const { plates, title } = (await req.json()) as { plates?: string[]; title?: string };
   if (!plates || plates.length === 0) {
     return NextResponse.json({ error: "선택된 차량이 없습니다." }, { status: 400 });
