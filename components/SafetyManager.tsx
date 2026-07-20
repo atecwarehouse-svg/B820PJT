@@ -94,16 +94,17 @@ export default function SafetyManager({ sessions }: { sessions: PledgeSessionRow
   }
 
   async function endInstall(id: string) {
-    const password = window.prompt(
-      "설치를 종료하려면 관리자 비밀번호를 입력하세요.\n종료 후부터 작업자가 '설치 후' 서명을 할 수 있습니다.",
+    // 이 화면은 관리자 비밀번호로 잠겨 있어 별도 입력 없이 확인만 받는다.
+    const ok = window.confirm(
+      "설치를 종료할까요?\n종료 후부터 작업자가 '설치 후' 서명을 할 수 있습니다.",
     );
-    if (password == null || password === "") return; // 취소
+    if (!ok) return;
     setEndingId(id);
     try {
       const res = await fetch("/api/safety/session/end", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sessionId: id, password }),
+        body: JSON.stringify({ sessionId: id }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "설치 종료 실패");
@@ -116,16 +117,16 @@ export default function SafetyManager({ sessions }: { sessions: PledgeSessionRow
   }
 
   async function deleteSession(s: PledgeSessionRow) {
-    const password = window.prompt(
-      `서약서를 삭제하려면 관리자 비밀번호를 입력하세요.\n(${s.operator || "운수사 미지정"} · ${s.install_date} · 서명 ${s.signer_count}명 — 되돌릴 수 없음)`,
+    const ok = window.confirm(
+      `서약서를 삭제할까요?\n(${s.operator || "운수사 미지정"} · ${s.install_date} · 서명 ${s.signer_count}명 — 되돌릴 수 없음)`,
     );
-    if (password == null || password === "") return; // 취소
+    if (!ok) return;
     setDeletingId(s.id);
     try {
       const res = await fetch("/api/safety/session", {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sessionId: s.id, password }),
+        body: JSON.stringify({ sessionId: s.id }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "삭제 실패");

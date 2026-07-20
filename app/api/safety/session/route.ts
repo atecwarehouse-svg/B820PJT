@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
-import { adminPassword } from "@/lib/admin-auth";
+import { adminPassword, isAdmin } from "@/lib/admin-auth";
 import { deletePhoto } from "@/lib/gdrive";
 
 export const runtime = "nodejs";
@@ -20,6 +20,12 @@ interface CreateBody {
 // POST /api/safety/session  → 안전관리 서약서 세션 생성 (공유 링크용)
 // 안전관리자가 이름·운수사·장소·설치일자를 입력하면 세션 1개를 만들고 id를 반환한다.
 export async function POST(req: NextRequest) {
+  if (!isAdmin()) {
+    return NextResponse.json(
+      { error: "관리자 인증이 필요합니다." },
+      { status: 401 },
+    );
+  }
   const body = (await req.json()) as CreateBody;
   const manager = (body.manager_name ?? "").trim();
   if (!manager) {
@@ -67,7 +73,7 @@ export async function DELETE(req: NextRequest) {
     sessionId?: string;
     password?: string;
   };
-  if (!password || password !== adminPassword()) {
+  if (password !== adminPassword() && !isAdmin()) {
     return NextResponse.json(
       { error: "관리자 비밀번호가 올바르지 않습니다." },
       { status: 401 },

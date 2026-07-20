@@ -1,11 +1,16 @@
 import Link from "next/link";
 import { createServiceClient } from "@/lib/supabase/server";
+import { isAdmin } from "@/lib/admin-auth";
+import AdminLogin from "@/components/AdminLogin";
 import SafetyManager, { type PledgeSessionRow } from "@/components/SafetyManager";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export default async function SafetyPage() {
+  // 작업자 서명 링크(/safety/[id])는 게이트 없이 열리고, 관리 화면만 잠근다.
+  if (!isAdmin()) return <AdminLogin />;
+
   const supabase = createServiceClient();
 
   const { data: sessions } = await supabase
