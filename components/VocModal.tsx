@@ -33,8 +33,10 @@ const EMPTY: VocState = { ratings: {}, comment: "", dayOff: false };
 // 적는다. 저장하면 vocs 테이블에
 // 운수사+설치일 기준으로 upsert되고, 같은 조합으로 다시 열면 불러와 수정할 수 있다.
 // 팀즈(설치 진행중 공유방)에는 내용 없이 '등록되었습니다'만 알린다.
-export default function VocModal({ completedList }: { completedList: CompletedVehicle[] }) {
+export default function VocModal() {
   const [open, setOpen] = useState(false);
+  const [completedList, setCompletedList] = useState<CompletedVehicle[]>([]);
+  const [listLoading, setListLoading] = useState(false);
   const [step, setStep] = useState<"form" | "done">("form");
   const [operator, setOperator] = useState("");
   const [date, setDate] = useState("");
@@ -133,6 +135,23 @@ export default function VocModal({ completedList }: { completedList: CompletedVe
     });
   }
 
+  // 팝업을 열 때만 설치 완료 차량을 불러온다(홈 화면 초기 로딩과 분리).
+  async function openModal() {
+    setOpen(true);
+    setListLoading(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/voc/vehicles", { cache: "no-store" });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "차량 목록 조회 실패");
+      setCompletedList((json.list ?? []) as CompletedVehicle[]);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "차량 목록 조회 실패");
+    } finally {
+      setListLoading(false);
+    }
+  }
+
   function close() {
     setOpen(false);
     setStep("form");
@@ -143,6 +162,7 @@ export default function VocModal({ completedList }: { completedList: CompletedVe
     setBusy(false);
     setError(null);
     setLoaded(false);
+    setCompletedList([]);
   }
 
   const active = vehicles.filter((v) => !state[v.plate]?.dayOff);
@@ -191,10 +211,10 @@ export default function VocModal({ completedList }: { completedList: CompletedVe
     <>
       <button
         type="button"
-        onClick={() => setOpen(true)}
-        className="rounded-lg border border-green-300 bg-white px-3 py-1.5 text-xs font-semibold text-green-600 shadow-sm transition-colors hover:bg-green-50"
+        onClick={openModal}
+        className="mt-2 rounded-xl border border-green-300 bg-white px-4 py-3 text-center text-sm font-semibold text-green-700 shadow-sm active:bg-green-50"
       >
-        VOC 접수
+        📣 VOC 접수
       </button>
 
       {open && (
@@ -235,9 +255,11 @@ export default function VocModal({ completedList }: { completedList: CompletedVe
                     확인
                   </button>
                 </div>
+              ) : listLoading ? (
+                <p className="py-8 text-center text-sm text-gray-400">불러오는 중…</p>
               ) : operators.length === 0 ? (
                 <p className="py-8 text-center text-sm text-gray-400">
-                  설치 완료된 운수사가 아직 없습니다.
+                  {error ?? "설치 완료된 운수사가 아직 없습니다."}
                 </p>
               ) : (
                 <div className="space-y-3">

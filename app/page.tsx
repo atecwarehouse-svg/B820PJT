@@ -2,6 +2,7 @@ import Link from "next/link";
 import PlateSearch from "@/components/PlateSearch";
 import AdminCallButton from "@/components/AdminCallButton";
 import DispatchButton from "@/components/DispatchButton";
+import VocModal from "@/components/VocModal";
 
 export default function HomePage() {
   return (
@@ -16,6 +17,7 @@ export default function HomePage() {
       <p className="mt-6 text-center text-xs text-gray-400">예) 인천70바4005</p>
       <AdminCallButton />
       <DispatchButton />
+      <VocModal />
       <Link
         href="/dashboard"
         className="mt-2 rounded-xl border border-gray-300 bg-white px-4 py-3 text-center text-sm font-medium text-gray-700 shadow-sm active:bg-gray-100"
