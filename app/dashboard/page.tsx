@@ -180,7 +180,6 @@ export default async function DashboardPage() {
               inProgress={inProgressCount}
             />
           )}
-          {ip && <VocModal completedList={ip.completedList} />}
           <ProgressDownloadButton today={today} scheduleDays={scheduleDays} />
           <TeamStatsModal />
         </div>
@@ -227,6 +226,7 @@ export default async function DashboardPage() {
       <div className="mb-2 mt-6 flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-sm font-bold text-gray-700">상세 현황</h2>
         <div className="flex flex-wrap items-center gap-2">
+          {ip && <VocModal completedList={ip.completedList} />}
           <ConsultationModal operators={operatorSchedules} />
           <ScheduleUploadModal />
         </div>

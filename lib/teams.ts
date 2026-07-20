@@ -384,22 +384,16 @@ export async function sendServiceStartCard(d: {
   }
 }
 
-// 운수사 VOC 카드 — 설치 진행중 공유방(TEAMS_WEBHOOK_URL).
-// 차량별 VOC를 표기하고, 금일 휴차로 체크된 차량은 내용에서 제외한다.
+// 운수사 VOC 등록 알림 카드 — 설치 진행중 공유방(TEAMS_WEBHOOK_URL).
+// VOC 내용은 담지 않고 '등록되었습니다'만 알린다(내용은 관리자 페이지에서 확인).
 export interface VocCardData {
   operator: string;
   label: string; // 설치일 라벨 (예: "7/16 (목)")
-  items: { plate: string; route?: string; voc: string }[]; // 휴차 제외된 차량만
-  dayOff: string[]; // 금일 휴차 차량번호
-  notes?: string; // 전체 특이사항
 }
 
 export async function sendVocCard(d: VocCardData): Promise<void> {
   const url = process.env.TEAMS_WEBHOOK_URL;
   if (!url) throw new Error("팀즈 웹후크가 설정되지 않았습니다. (TEAMS_WEBHOOK_URL)");
-
-  const withVoc = d.items.filter((i) => i.voc.trim());
-  const total = d.items.length + d.dayOff.length; // 설치 대수 = VOC 대상 + 휴차
 
   const card = {
     type: "message",
@@ -415,62 +409,16 @@ export async function sendVocCard(d: VocCardData): Promise<void> {
               type: "TextBlock",
               size: "Large",
               weight: "Bolder",
-              text: "📣 운수사 VOC",
+              text: "VOC가 등록되었습니다",
               wrap: true,
             },
             {
               type: "TextBlock",
-              text: `${d.operator} · ${d.label} 설치 ${total.toLocaleString()}대`,
+              text: `${d.operator} · ${d.label}`,
               isSubtle: true,
               spacing: "None",
               wrap: true,
             },
-            {
-              type: "TextBlock",
-              weight: "Bolder",
-              text: `○ 차량별 VOC (${withVoc.length.toLocaleString()}건)`,
-              spacing: "Medium",
-              wrap: true,
-            },
-            withVoc.length
-              ? {
-                  type: "FactSet",
-                  spacing: "Small",
-                  facts: withVoc.map((i) => ({
-                    title: i.route ? `${i.plate} (${i.route})` : i.plate,
-                    value: i.voc.trim(),
-                  })),
-                }
-              : { type: "TextBlock", text: "- 접수된 VOC 없음", spacing: "None", wrap: true },
-            ...(d.dayOff.length
-              ? [
-                  {
-                    type: "TextBlock",
-                    weight: "Bolder",
-                    text: "○ 금일 휴차",
-                    spacing: "Medium",
-                    wrap: true,
-                  },
-                  {
-                    type: "TextBlock",
-                    text: d.dayOff.join(", "),
-                    spacing: "None",
-                    wrap: true,
-                  },
-                ]
-              : []),
-            ...(d.notes?.trim()
-              ? [
-                  {
-                    type: "TextBlock",
-                    weight: "Bolder",
-                    text: "○ 특이사항",
-                    spacing: "Medium",
-                    wrap: true,
-                  },
-                  { type: "TextBlock", text: bulletText(d.notes), spacing: "None", wrap: true },
-                ]
-              : []),
           ],
         },
       },

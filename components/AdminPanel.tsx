@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import ReportRecipientsManager from "@/components/ReportRecipientsManager";
 import TeamNamesManager from "@/components/TeamNamesManager";
 import ConsultationManager from "@/components/ConsultationManager";
+import VocManager from "@/components/VocManager";
 
 interface AdminRecord {
   plate: string;
@@ -104,6 +105,8 @@ export default function AdminPanel() {
 
       {/* 운수사 협의사항 관리 */}
       <ConsultationManager />
+
+      <VocManager />
 
       <h2 className="mb-2 text-sm font-semibold text-gray-700">차량 삭제</h2>
       <p className="mb-3 text-xs text-gray-500">

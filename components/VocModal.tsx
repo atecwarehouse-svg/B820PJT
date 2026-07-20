@@ -16,9 +16,10 @@ interface VocState {
   dayOff: boolean;
 }
 
-// '운수사 VOC' 버튼 → 팝업. 최근 설치 완료된 운수사를 고르면 그 운수사·설치일의
-// 차량번호가 자동으로 나열되고, 차량마다 VOC를 적는다. 금일 휴차로 체크한 차량은
-// 카드 내용에서 빠진다. 결과는 팀즈(설치 진행중 공유방) 카드로 전송.
+// 'VOC 접수' 버튼 → 팝업. 최근 설치 완료된 운수사를 고르면 그 운수사·설치일의
+// 차량번호가 자동으로 나열되고, 차량마다 VOC를 적는다. 저장하면 vocs 테이블에
+// 운수사+설치일 기준으로 upsert되고, 같은 조합으로 다시 열면 불러와 수정할 수 있다.
+// 팀즈(설치 진행중 공유방)에는 내용 없이 '등록되었습니다'만 알린다.
 export default function VocModal({ completedList }: { completedList: CompletedVehicle[] }) {
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState<"form" | "done">("form");
@@ -28,6 +29,7 @@ export default function VocModal({ completedList }: { completedList: CompletedVe
   const [notes, setNotes] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [loaded, setLoaded] = useState(false); // 저장된 VOC를 불러왔는지(= 수정 모드)
 
   // 운수사 → 완료 업무일 → 차량. completedList는 workDate 최신순으로 들어온다.
   const operators = useMemo(() => {
@@ -58,11 +60,41 @@ export default function VocModal({ completedList }: { completedList: CompletedVe
   const selectedDate = selectedOp?.dates.find((d) => d.date === date);
   const vehicles = selectedDate?.vehicles ?? [];
 
+  // 이미 저장된 VOC가 있으면 불러와 폼을 채운다 → 그대로 고쳐 다시 저장(수정)할 수 있다.
+  async function loadExisting(op: string, d: string) {
+    setState({});
+    setNotes("");
+    setLoaded(false);
+    if (!op || !d) return;
+    try {
+      const res = await fetch(
+        `/api/voc?operator=${encodeURIComponent(op)}&date=${encodeURIComponent(d)}`,
+        { cache: "no-store" },
+      );
+      const json = await res.json();
+      const saved = json.voc;
+      if (!saved) return;
+      const next: Record<string, VocState> = {};
+      for (const i of (saved.items ?? []) as { plate?: string; voc?: string }[]) {
+        if (i.plate) next[i.plate] = { voc: i.voc ?? "", dayOff: false };
+      }
+      for (const plate of (saved.day_off ?? []) as string[]) {
+        next[plate] = { voc: next[plate]?.voc ?? "", dayOff: true };
+      }
+      setState(next);
+      setNotes(saved.notes ?? "");
+      setLoaded(true);
+    } catch {
+      // 불러오기 실패해도 새로 입력하면 된다
+    }
+  }
+
   // 운수사를 고르면 가장 최근 설치일로 자동 선택 → 차량 목록이 바로 뜬다
   function pickOperator(op: string) {
+    const d = operators.find((o) => o.operator === op)?.dates[0]?.date ?? "";
     setOperator(op);
-    setDate(operators.find((o) => o.operator === op)?.dates[0]?.date ?? "");
-    setState({});
+    setDate(d);
+    void loadExisting(op, d);
   }
 
   function update(plate: string, patch: Partial<VocState>) {
@@ -78,6 +110,7 @@ export default function VocModal({ completedList }: { completedList: CompletedVe
     setNotes("");
     setBusy(false);
     setError(null);
+    setLoaded(false);
   }
 
   const active = vehicles.filter((v) => !state[v.plate]?.dayOff);
@@ -93,6 +126,7 @@ export default function VocModal({ completedList }: { completedList: CompletedVe
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           operator,
+          date,
           label: fmtLabel(date),
           items: active.map((v) => ({
             plate: v.plate,
@@ -104,10 +138,10 @@ export default function VocModal({ completedList }: { completedList: CompletedVe
         }),
       });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? "전송 실패");
+      if (!res.ok) throw new Error(json.error ?? "저장 실패");
       setStep("done");
     } catch (e) {
-      setError(e instanceof Error ? e.message : "전송 실패");
+      setError(e instanceof Error ? e.message : "저장 실패");
     } finally {
       setBusy(false);
     }
@@ -118,9 +152,9 @@ export default function VocModal({ completedList }: { completedList: CompletedVe
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="rounded-lg bg-purple-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-purple-700"
+        className="rounded-lg border border-green-300 bg-white px-3 py-1.5 text-xs font-semibold text-green-600 shadow-sm transition-colors hover:bg-green-50"
       >
-        📣 운수사 VOC
+        VOC 접수
       </button>
 
       {open && (
@@ -133,8 +167,8 @@ export default function VocModal({ completedList }: { completedList: CompletedVe
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
-              <h2 className="text-sm font-bold text-purple-700">
-                {step === "done" ? "전송 완료" : "📣 운수사 VOC"}
+              <h2 className="text-sm font-bold text-green-700">
+                {step === "done" ? "저장 완료" : "VOC 접수"}
               </h2>
               <button
                 onClick={close}
@@ -149,12 +183,14 @@ export default function VocModal({ completedList }: { completedList: CompletedVe
               {step === "done" ? (
                 <div className="py-6 text-center">
                   <p className="text-3xl">✅</p>
-                  <p className="mt-2 text-sm font-semibold text-gray-700">팀즈로 전송했습니다</p>
-                  <p className="mt-1 text-xs text-gray-400">설치 진행중 공유방으로 발송됨</p>
+                  <p className="mt-2 text-sm font-semibold text-gray-700">VOC를 저장했습니다</p>
+                  <p className="mt-1 text-xs text-gray-400">
+                    같은 운수사·설치일로 다시 열면 이어서 수정할 수 있습니다
+                  </p>
                   <button
                     type="button"
                     onClick={close}
-                    className="mt-4 w-full rounded-xl bg-purple-600 py-3 text-sm font-bold text-white active:bg-purple-700"
+                    className="mt-4 w-full rounded-xl bg-green-600 py-3 text-sm font-bold text-white active:bg-green-700"
                   >
                     확인
                   </button>
@@ -177,14 +213,14 @@ export default function VocModal({ completedList }: { completedList: CompletedVe
                           onClick={() => pickOperator(o.operator)}
                           className={`rounded-lg border px-2.5 py-1.5 text-xs font-semibold ${
                             operator === o.operator
-                              ? "border-purple-600 bg-purple-600 text-white"
+                              ? "border-green-600 bg-green-600 text-white"
                               : "border-gray-300 bg-white text-gray-600 hover:bg-gray-50"
                           }`}
                         >
                           {o.operator}
                           <span
                             className={`ml-1 font-normal ${
-                              operator === o.operator ? "text-purple-200" : "text-gray-400"
+                              operator === o.operator ? "text-green-200" : "text-gray-400"
                             }`}
                           >
                             {fmtLabel(o.dates[0]?.date ?? "")}
@@ -201,9 +237,9 @@ export default function VocModal({ completedList }: { completedList: CompletedVe
                         value={date}
                         onChange={(e) => {
                           setDate(e.target.value);
-                          setState({});
+                          void loadExisting(operator, e.target.value);
                         }}
-                        className="mt-1 w-full rounded-lg border border-gray-300 px-2 py-2 text-sm focus:border-purple-500 focus:outline-none"
+                        className="mt-1 w-full rounded-lg border border-gray-300 px-2 py-2 text-sm focus:border-green-500 focus:outline-none"
                       >
                         {selectedOp.dates.map((d) => (
                           <option key={d.date} value={d.date}>
@@ -220,9 +256,14 @@ export default function VocModal({ completedList }: { completedList: CompletedVe
                     </p>
                   ) : (
                     <>
-                      <p className="rounded-lg bg-purple-50 px-3 py-2 text-center text-xs font-semibold text-purple-700">
+                      <p className="rounded-lg bg-green-50 px-3 py-2 text-center text-xs font-semibold text-green-700">
                         {operator} · {fmtLabel(date)} 설치 {vehicles.length}대 · VOC {vocCount}건
                         {dayOff.length > 0 && ` · 휴차 ${dayOff.length}대`}
+                        {loaded && (
+                          <span className="ml-1 font-normal text-green-600">
+                            (저장된 내용 불러옴 — 수정 후 저장)
+                          </span>
+                        )}
                       </p>
 
                       <div className="space-y-2">
@@ -266,7 +307,7 @@ export default function VocModal({ completedList }: { completedList: CompletedVe
                                   value={s.voc}
                                   onChange={(e) => update(v.plate, { voc: e.target.value })}
                                   placeholder="VOC 내용 (없으면 비워두세요)"
-                                  className="mt-1.5 w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500"
+                                  className="mt-1.5 w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm focus:border-green-500 focus:outline-none focus:ring-1 focus:ring-green-500"
                                 />
                               )}
                             </div>
@@ -281,7 +322,7 @@ export default function VocModal({ completedList }: { completedList: CompletedVe
                           onChange={(e) => setNotes(e.target.value)}
                           rows={2}
                           placeholder="차량과 무관한 전체 특이사항"
-                          className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-base focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500"
+                          className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-base focus:border-green-500 focus:outline-none focus:ring-1 focus:ring-green-500"
                         />
                       </label>
 
@@ -295,9 +336,9 @@ export default function VocModal({ completedList }: { completedList: CompletedVe
                         type="button"
                         onClick={handleSend}
                         disabled={busy}
-                        className="w-full rounded-xl bg-purple-600 py-3 text-sm font-bold text-white active:bg-purple-700 disabled:opacity-50"
+                        className="w-full rounded-xl bg-green-600 py-3 text-sm font-bold text-white active:bg-green-700 disabled:opacity-50"
                       >
-                        {busy ? "전송 중..." : "팀즈로 보내기"}
+                        {busy ? "저장 중..." : loaded ? "수정 저장" : "저장"}
                       </button>
                     </>
                   )}
