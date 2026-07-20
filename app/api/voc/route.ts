@@ -103,7 +103,18 @@ export async function POST(req: NextRequest) {
   // 팀즈 알림 — 내용 없이 등록 사실만. 실패해도 저장은 유지하고 알림만 생략.
   let notified = false;
   try {
-    await sendVocCard({ operator, label: label || date });
+    // 노선별 대수 — 카드 부제 "영업소 00노선 날짜 (N대)"용. 휴차 차량은 노선 정보가
+    // 없으므로 평가 대상(items) 기준으로 센다.
+    const byRoute = new Map<string, number>();
+    for (const i of items) {
+      const key = i.route ?? "";
+      byRoute.set(key, (byRoute.get(key) ?? 0) + 1);
+    }
+    const groups = [...byRoute.entries()]
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "ko"))
+      .map(([route, count]) => ({ route: route || undefined, count }));
+
+    await sendVocCard({ operator, label: label || date, groups });
     notified = true;
   } catch {
     // 웹후크 미설정·전송 실패 — 저장은 완료

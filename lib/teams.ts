@@ -386,14 +386,22 @@ export async function sendServiceStartCard(d: {
 
 // 운수사 VOC 등록 알림 카드 — 설치 진행중 공유방(TEAMS_WEBHOOK_URL).
 // VOC 내용은 담지 않고 '등록되었습니다'만 알린다(내용은 관리자 페이지에서 확인).
+// 부제는 노선별로 "영업소 00노선 7/19 (일) (6대)" 형식.
 export interface VocCardData {
   operator: string;
-  label: string; // 설치일 라벨 (예: "7/16 (목)")
+  label: string; // 설치일 라벨 (예: "7/19 (일)")
+  groups: { route?: string; count: number }[]; // 노선별 대수
 }
 
 export async function sendVocCard(d: VocCardData): Promise<void> {
   const url = process.env.TEAMS_WEBHOOK_URL;
   if (!url) throw new Error("팀즈 웹후크가 설정되지 않았습니다. (TEAMS_WEBHOOK_URL)");
+
+  const lines = (d.groups.length ? d.groups : [{ count: 0 }]).map((g) =>
+    [d.operator, g.route ? `${g.route}노선` : "", d.label, `(${g.count}대)`]
+      .filter(Boolean)
+      .join(" "),
+  );
 
   const card = {
     type: "message",
@@ -412,13 +420,12 @@ export async function sendVocCard(d: VocCardData): Promise<void> {
               text: "VOC가 등록되었습니다",
               wrap: true,
             },
-            {
+            ...lines.map((text) => ({
               type: "TextBlock",
-              text: `${d.operator} · ${d.label}`,
-              isSubtle: true,
+              text,
               spacing: "None",
               wrap: true,
-            },
+            })),
           ],
         },
       },
@@ -427,7 +434,7 @@ export async function sendVocCard(d: VocCardData): Promise<void> {
 
   const res = await fetch(url, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json; charset=utf-8" },
     body: JSON.stringify(card),
   });
   if (!res.ok) {
