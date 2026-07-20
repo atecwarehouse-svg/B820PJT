@@ -6,6 +6,7 @@ import {
   VOC_RATINGS,
   averageRating,
   cleanRatings,
+  starBar,
   hasVocInput,
   type VocItem,
   type VocRatingKey,
@@ -176,7 +177,7 @@ export default function VocManager() {
                       평가 {rated.length}대 / 차량 {(v.items ?? []).length}대
                       {avg !== null && (
                         <span className="ml-1 font-semibold text-amber-500">
-                          평균 ★ {avg.toFixed(1)}
+                          {starBar(avg)}
                         </span>
                       )}
                       {(v.day_off ?? []).length > 0 && ` · 휴차 ${v.day_off.length}대`}
@@ -223,14 +224,15 @@ export default function VocManager() {
                               {i.route && <span className="text-gray-400"> {i.route}</span>}
                               {a !== null && (
                                 <span className="ml-1 font-semibold text-amber-500">
-                                  ★ {a.toFixed(1)}
+                                  {starBar(a)}
                                 </span>
                               )}
                             </p>
                             <p className="text-[11px] text-gray-500">
-                              {VOC_RATINGS.map((r) => `${r.label} ${i.ratings?.[r.key] ?? "-"}`).join(
-                                " · ",
-                              )}
+                              {VOC_RATINGS.map((r) => {
+                                const v = i.ratings?.[r.key];
+                                return `${r.label} ${v ? starBar(v) : "-"}`;
+                              }).join(" · ")}
                             </p>
                             {i.comment?.trim() && (
                               <p className="text-[11px] text-gray-700">의견: {i.comment}</p>

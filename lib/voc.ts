@@ -99,13 +99,21 @@ export function summarizeVocs(rows: VocRow[]): VocOperatorSummary[] {
     .sort((a, b) => a.operator.localeCompare(b.operator, "ko"));
 }
 
+// 평균 점수 → 별표 5칸. 숫자 대신 별로 보여달라는 요청(2026-07-20)에 따라
+// 메일·팀즈·관리자 화면이 모두 이 표기를 쓴다. 반올림해 채운 별(★)과 빈 별(☆)로만
+// 그린다 — 반쪽 별 기호는 클라이언트마다 렌더링이 달라서 쓰지 않는다.
+export function starBar(v: number): string {
+  const filled = Math.min(VOC_MAX_STARS, Math.max(0, Math.round(v)));
+  return "★".repeat(filled) + "☆".repeat(VOC_MAX_STARS - filled);
+}
+
 // 요약 → 표시용 줄 목록. 메일 평문·HTML·팀즈 카드가 같은 문구를 쓰도록 공용화.
 export function vocSummaryLines(s: VocOperatorSummary): string[] {
   const lines: string[] = [];
-  const head = s.avg !== null ? `평균 ★ ${s.avg.toFixed(1)}` : "평가 없음";
+  const head = s.avg !== null ? starBar(s.avg) : "평가 없음";
   lines.push(`${s.operator} : ${head} (${s.vehicles}대 중 ${s.rated}대 응답)`);
   const per = VOC_RATINGS.filter((r) => s.averages[r.key] !== undefined).map(
-    (r) => `${r.label} ${s.averages[r.key]!.toFixed(1)}`,
+    (r) => `${r.label} ${starBar(s.averages[r.key]!)}`,
   );
   if (per.length) lines.push(per.join(" · "));
   for (const c of s.comments) {
