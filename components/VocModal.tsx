@@ -2,6 +2,15 @@
 
 import { useMemo, useState } from "react";
 import type { CompletedVehicle } from "@/lib/stats";
+import StarRating from "./StarRating";
+import {
+  VOC_RATINGS,
+  averageRating,
+  cleanRatings,
+  hasVocInput,
+  type VocRatingKey,
+  type VocRatings,
+} from "@/lib/voc";
 
 const DOW = ["일", "월", "화", "수", "목", "금", "토"];
 function fmtLabel(date: string): string {
@@ -12,12 +21,16 @@ function fmtLabel(date: string): string {
 }
 
 interface VocState {
-  voc: string;
+  ratings: VocRatings; // 1~4번 항목 별점(5점 만점)
+  comment: string; // 5번 기타 의견
   dayOff: boolean;
 }
 
+const EMPTY: VocState = { ratings: {}, comment: "", dayOff: false };
+
 // 'VOC 접수' 버튼 → 팝업. 최근 설치 완료된 운수사를 고르면 그 운수사·설치일의
-// 차량번호가 자동으로 나열되고, 차량마다 VOC를 적는다. 저장하면 vocs 테이블에
+// 차량번호가 자동으로 나열되고, 차량마다 4개 항목을 별점(5점)으로 매기고 기타 의견을
+// 적는다. 저장하면 vocs 테이블에
 // 운수사+설치일 기준으로 upsert되고, 같은 조합으로 다시 열면 불러와 수정할 수 있다.
 // 팀즈(설치 진행중 공유방)에는 내용 없이 '등록되었습니다'만 알린다.
 export default function VocModal({ completedList }: { completedList: CompletedVehicle[] }) {
@@ -75,11 +88,20 @@ export default function VocModal({ completedList }: { completedList: CompletedVe
       const saved = json.voc;
       if (!saved) return;
       const next: Record<string, VocState> = {};
-      for (const i of (saved.items ?? []) as { plate?: string; voc?: string }[]) {
-        if (i.plate) next[i.plate] = { voc: i.voc ?? "", dayOff: false };
+      for (const i of (saved.items ?? []) as {
+        plate?: string;
+        ratings?: unknown;
+        comment?: string;
+      }[]) {
+        if (!i.plate) continue;
+        next[i.plate] = {
+          ratings: cleanRatings(i.ratings),
+          comment: i.comment ?? "",
+          dayOff: false,
+        };
       }
       for (const plate of (saved.day_off ?? []) as string[]) {
-        next[plate] = { voc: next[plate]?.voc ?? "", dayOff: true };
+        next[plate] = { ...(next[plate] ?? EMPTY), dayOff: true };
       }
       setState(next);
       setNotes(saved.notes ?? "");
@@ -98,7 +120,17 @@ export default function VocModal({ completedList }: { completedList: CompletedVe
   }
 
   function update(plate: string, patch: Partial<VocState>) {
-    setState((s) => ({ ...s, [plate]: { ...(s[plate] ?? { voc: "", dayOff: false }), ...patch } }));
+    setState((s) => ({ ...s, [plate]: { ...(s[plate] ?? EMPTY), ...patch } }));
+  }
+
+  function setStar(plate: string, key: VocRatingKey, v: number | undefined) {
+    setState((s) => {
+      const cur = s[plate] ?? EMPTY;
+      const ratings = { ...cur.ratings };
+      if (v === undefined) delete ratings[key];
+      else ratings[key] = v;
+      return { ...s, [plate]: { ...cur, ratings } };
+    });
   }
 
   function close() {
@@ -115,7 +147,14 @@ export default function VocModal({ completedList }: { completedList: CompletedVe
 
   const active = vehicles.filter((v) => !state[v.plate]?.dayOff);
   const dayOff = vehicles.filter((v) => state[v.plate]?.dayOff);
-  const vocCount = active.filter((v) => state[v.plate]?.voc.trim()).length;
+  const vocCount = active.filter((v) => hasVocInput(state[v.plate] ?? EMPTY)).length;
+  // 운수사 전체 평균 — 차량별 평균들의 평균
+  const overallAvg = (() => {
+    const avgs = active
+      .map((v) => averageRating((state[v.plate] ?? EMPTY).ratings))
+      .filter((a): a is number => a !== null);
+    return avgs.length ? avgs.reduce((x, y) => x + y, 0) / avgs.length : null;
+  })();
 
   async function handleSend() {
     setBusy(true);
@@ -131,7 +170,8 @@ export default function VocModal({ completedList }: { completedList: CompletedVe
           items: active.map((v) => ({
             plate: v.plate,
             route: v.route,
-            voc: state[v.plate]?.voc ?? "",
+            ratings: state[v.plate]?.ratings ?? {},
+            comment: state[v.plate]?.comment ?? "",
           })),
           dayOff: dayOff.map((v) => v.plate),
           notes,
@@ -252,12 +292,12 @@ export default function VocModal({ completedList }: { completedList: CompletedVe
 
                   {!selectedOp ? (
                     <p className="py-8 text-center text-sm text-gray-400">
-                      운수사를 선택하면 차량번호별 VOC 칸이 나옵니다.
+                      운수사를 선택하면 차량번호별 별점 칸이 나옵니다.
                     </p>
                   ) : (
                     <>
                       <p className="rounded-lg bg-green-50 px-3 py-2 text-center text-xs font-semibold text-green-700">
-                        {operator} · {fmtLabel(date)} 설치 {vehicles.length}대 · VOC {vocCount}건
+                        {operator} · {fmtLabel(date)} 설치 {vehicles.length}대 · 평가 {vocCount}대{overallAvg !== null && ` · 평균 ★ ${overallAvg.toFixed(1)}`}
                         {dayOff.length > 0 && ` · 휴차 ${dayOff.length}대`}
                         {loaded && (
                           <span className="ml-1 font-normal text-green-600">
@@ -268,7 +308,8 @@ export default function VocModal({ completedList }: { completedList: CompletedVe
 
                       <div className="space-y-2">
                         {vehicles.map((v) => {
-                          const s = state[v.plate] ?? { voc: "", dayOff: false };
+                          const s = state[v.plate] ?? EMPTY;
+                          const avg = averageRating(s.ratings);
                           return (
                             <div
                               key={v.plate}
@@ -282,6 +323,11 @@ export default function VocModal({ completedList }: { completedList: CompletedVe
                                   {v.route && (
                                     <span className="ml-1 text-xs font-normal text-gray-400">
                                       {v.route}
+                                    </span>
+                                  )}
+                                  {avg !== null && !s.dayOff && (
+                                    <span className="ml-1.5 text-xs font-semibold text-amber-500">
+                                      ★ {avg.toFixed(1)}
                                     </span>
                                   )}
                                 </p>
@@ -299,16 +345,26 @@ export default function VocModal({ completedList }: { completedList: CompletedVe
                               </div>
                               {s.dayOff ? (
                                 <p className="mt-1 text-[11px] text-gray-400">
-                                  휴차 — 카드에서 제외됩니다
+                                  휴차 — 평가에서 제외됩니다
                                 </p>
                               ) : (
-                                <input
-                                  type="text"
-                                  value={s.voc}
-                                  onChange={(e) => update(v.plate, { voc: e.target.value })}
-                                  placeholder="VOC 내용 (없으면 비워두세요)"
-                                  className="mt-1.5 w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm focus:border-green-500 focus:outline-none focus:ring-1 focus:ring-green-500"
-                                />
+                                <div className="mt-1.5 space-y-1">
+                                  {VOC_RATINGS.map((r) => (
+                                    <StarRating
+                                      key={r.key}
+                                      label={r.label}
+                                      value={s.ratings[r.key]}
+                                      onChange={(n) => setStar(v.plate, r.key, n)}
+                                    />
+                                  ))}
+                                  <input
+                                    type="text"
+                                    value={s.comment}
+                                    onChange={(e) => update(v.plate, { comment: e.target.value })}
+                                    placeholder="기타 의견 (없으면 비워두세요)"
+                                    className="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm focus:border-green-500 focus:outline-none focus:ring-1 focus:ring-green-500"
+                                  />
+                                </div>
                               )}
                             </div>
                           );

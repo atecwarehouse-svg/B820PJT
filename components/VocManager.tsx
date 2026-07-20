@@ -1,12 +1,15 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-
-interface VocItem {
-  plate: string;
-  route?: string;
-  voc: string;
-}
+import StarRating from "./StarRating";
+import {
+  VOC_RATINGS,
+  averageRating,
+  cleanRatings,
+  hasVocInput,
+  type VocItem,
+  type VocRatingKey,
+} from "@/lib/voc";
 
 interface VocRow {
   id: number;
@@ -61,8 +64,26 @@ export default function VocManager() {
     setEditId(v.id);
     setOpenId(v.id);
     setEditError(null);
-    setItems((v.items ?? []).map((i) => ({ ...i })));
+    setItems(
+      (v.items ?? []).map((i) => ({
+        ...i,
+        ratings: cleanRatings(i.ratings),
+        comment: i.comment ?? "",
+      })),
+    );
     setNotes(v.notes ?? "");
+  }
+
+  function setStar(idx: number, key: VocRatingKey, n: number | undefined) {
+    setItems((arr) =>
+      arr.map((x, k) => {
+        if (k !== idx) return x;
+        const ratings = { ...x.ratings };
+        if (n === undefined) delete ratings[key];
+        else ratings[key] = n;
+        return { ...x, ratings };
+      }),
+    );
   }
 
   function cancelEdit() {
@@ -134,7 +155,11 @@ export default function VocManager() {
       ) : (
         <ul className="divide-y divide-gray-100 overflow-hidden rounded-xl border border-gray-200 bg-white">
           {list.map((v) => {
-            const vocCount = (v.items ?? []).filter((i) => i.voc?.trim()).length;
+            const rated = (v.items ?? []).filter((i) => hasVocInput(i));
+            const avgs = (v.items ?? [])
+              .map((i) => averageRating(i.ratings ?? {}))
+              .filter((a): a is number => a !== null);
+            const avg = avgs.length ? avgs.reduce((x, y) => x + y, 0) / avgs.length : null;
             const editing = editId === v.id;
             return (
               <li key={v.id} className="px-3 py-2.5">
@@ -148,7 +173,12 @@ export default function VocManager() {
                       {v.operator} · {v.date}
                     </p>
                     <p className="mt-0.5 text-[11px] text-gray-500">
-                      VOC {vocCount}건 · 차량 {(v.items ?? []).length}대
+                      평가 {rated.length}대 / 차량 {(v.items ?? []).length}대
+                      {avg !== null && (
+                        <span className="ml-1 font-semibold text-amber-500">
+                          평균 ★ {avg.toFixed(1)}
+                        </span>
+                      )}
                       {(v.day_off ?? []).length > 0 && ` · 휴차 ${v.day_off.length}대`}
                     </p>
                   </button>
@@ -181,18 +211,33 @@ export default function VocManager() {
 
                 {openId === v.id && !editing && (
                   <div className="mt-2 space-y-1 rounded-lg bg-gray-50 px-3 py-2">
-                    {(v.items ?? []).filter((i) => i.voc?.trim()).length === 0 ? (
+                    {rated.length === 0 ? (
                       <p className="text-[11px] text-gray-400">접수된 VOC 없음</p>
                     ) : (
-                      (v.items ?? [])
-                        .filter((i) => i.voc?.trim())
-                        .map((i) => (
-                          <p key={i.plate} className="text-xs text-gray-700">
-                            <span className="font-medium">{i.plate}</span>
-                            {i.route && <span className="text-gray-400"> {i.route}</span>} :{" "}
-                            {i.voc}
-                          </p>
-                        ))
+                      rated.map((i) => {
+                        const a = averageRating(i.ratings ?? {});
+                        return (
+                          <div key={i.plate} className="border-b border-gray-200 pb-1 last:border-0">
+                            <p className="text-xs font-medium text-gray-800">
+                              {i.plate}
+                              {i.route && <span className="text-gray-400"> {i.route}</span>}
+                              {a !== null && (
+                                <span className="ml-1 font-semibold text-amber-500">
+                                  ★ {a.toFixed(1)}
+                                </span>
+                              )}
+                            </p>
+                            <p className="text-[11px] text-gray-500">
+                              {VOC_RATINGS.map((r) => `${r.label} ${i.ratings?.[r.key] ?? "-"}`).join(
+                                " · ",
+                              )}
+                            </p>
+                            {i.comment?.trim() && (
+                              <p className="text-[11px] text-gray-700">의견: {i.comment}</p>
+                            )}
+                          </div>
+                        );
+                      })
                     )}
                     {(v.day_off ?? []).length > 0 && (
                       <p className="text-[11px] text-gray-500">휴차: {v.day_off.join(", ")}</p>
@@ -204,22 +249,32 @@ export default function VocManager() {
                 {editing && (
                   <div className="mt-2 space-y-2 rounded-lg bg-green-50/60 px-3 py-2">
                     {items.map((i, idx) => (
-                      <label key={i.plate} className="block">
-                        <span className="text-[11px] font-medium text-gray-500">
+                      <div key={i.plate} className="rounded-lg border border-gray-200 bg-white p-2">
+                        <p className="text-[11px] font-medium text-gray-600">
                           {i.plate}
                           {i.route && <span className="text-gray-400"> {i.route}</span>}
-                        </span>
+                        </p>
+                        <div className="mt-1 space-y-0.5">
+                          {VOC_RATINGS.map((r) => (
+                            <StarRating
+                              key={r.key}
+                              label={r.label}
+                              value={i.ratings?.[r.key]}
+                              onChange={(n) => setStar(idx, r.key, n)}
+                            />
+                          ))}
+                        </div>
                         <input
-                          value={i.voc ?? ""}
+                          value={i.comment ?? ""}
                           onChange={(e) =>
                             setItems((arr) =>
-                              arr.map((x, k) => (k === idx ? { ...x, voc: e.target.value } : x)),
+                              arr.map((x, k) => (k === idx ? { ...x, comment: e.target.value } : x)),
                             )
                           }
-                          placeholder="VOC 내용 (없으면 비워두세요)"
+                          placeholder="기타 의견 (없으면 비워두세요)"
                           className={INPUT}
                         />
-                      </label>
+                      </div>
                     ))}
                     <label className="block">
                       <span className="text-[11px] font-medium text-gray-500">특이사항</span>

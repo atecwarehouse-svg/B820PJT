@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
 import { isAdmin } from "@/lib/admin-auth";
+import { cleanRatings } from "@/lib/voc";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -53,7 +54,8 @@ export async function PATCH(req: NextRequest) {
       return {
         plate: String(i.plate ?? "").trim().slice(0, 20),
         route: String(i.route ?? "").trim().slice(0, 30) || undefined,
-        voc: String(i.voc ?? "").trim().slice(0, 300),
+        ratings: cleanRatings(i.ratings),
+        comment: String(i.comment ?? "").trim().slice(0, 300),
       };
     });
   }
