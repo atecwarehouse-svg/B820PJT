@@ -28,6 +28,9 @@ interface VocState {
 
 const EMPTY: VocState = { ratings: {}, comment: "", dayOff: false };
 
+// 배차표의 '나가는 시간'이 붙은 완료 차량
+type VocVehicle = CompletedVehicle & { outTime?: string | null };
+
 // 'VOC 접수' 버튼 → 팝업. 최근 설치 완료된 운수사를 고르면 그 운수사·설치일의
 // 차량번호가 자동으로 나열되고, 차량마다 4개 항목을 별점(5점)으로 매기고 기타 의견을
 // 적는다. 저장하면 vocs 테이블에
@@ -35,7 +38,7 @@ const EMPTY: VocState = { ratings: {}, comment: "", dayOff: false };
 // 팀즈(설치 진행중 공유방)에는 내용 없이 '등록되었습니다'만 알린다.
 export default function VocModal() {
   const [open, setOpen] = useState(false);
-  const [completedList, setCompletedList] = useState<CompletedVehicle[]>([]);
+  const [completedList, setCompletedList] = useState<VocVehicle[]>([]);
   const [listLoading, setListLoading] = useState(false);
   const [step, setStep] = useState<"form" | "done">("form");
   const [operator, setOperator] = useState("");
@@ -48,9 +51,9 @@ export default function VocModal() {
 
   // 운수사 → 완료 업무일 → 차량. completedList는 workDate 최신순으로 들어온다.
   const operators = useMemo(() => {
-    const byOp = new Map<string, Map<string, CompletedVehicle[]>>();
+    const byOp = new Map<string, Map<string, VocVehicle[]>>();
     for (const v of completedList) {
-      const dates = byOp.get(v.operator) ?? new Map<string, CompletedVehicle[]>();
+      const dates = byOp.get(v.operator) ?? new Map<string, VocVehicle[]>();
       const list = dates.get(v.workDate) ?? [];
       list.push(v);
       dates.set(v.workDate, list);
@@ -62,9 +65,15 @@ export default function VocModal() {
         dates: [...dates.entries()]
           .map(([d, vehicles]) => ({
             date: d,
-            vehicles: [...vehicles].sort(
-              (a, b) => a.route.localeCompare(b.route, "ko") || a.plate.localeCompare(b.plate),
-            ),
+            // 배차표(나가는 시간) 순 — 시간 미입력 차량은 뒤로, 그 안에서 노선·차량번호 순
+            vehicles: [...vehicles].sort((a, b) => {
+              const ta = a.outTime ?? "";
+              const tb = b.outTime ?? "";
+              if (ta && tb && ta !== tb) return ta.localeCompare(tb);
+              if (ta && !tb) return -1;
+              if (!ta && tb) return 1;
+              return a.route.localeCompare(b.route, "ko") || a.plate.localeCompare(b.plate);
+            }),
           }))
           .sort((a, b) => b.date.localeCompare(a.date)), // 최근 설치일 먼저
       }))
@@ -144,7 +153,7 @@ export default function VocModal() {
       const res = await fetch("/api/voc/vehicles", { cache: "no-store" });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "차량 목록 조회 실패");
-      setCompletedList((json.list ?? []) as CompletedVehicle[]);
+      setCompletedList((json.list ?? []) as VocVehicle[]);
     } catch (e) {
       setError(e instanceof Error ? e.message : "차량 목록 조회 실패");
     } finally {
@@ -345,6 +354,11 @@ export default function VocModal() {
                                   {v.route && (
                                     <span className="ml-1 text-xs font-normal text-gray-400">
                                       {v.route}
+                                    </span>
+                                  )}
+                                  {v.outTime && (
+                                    <span className="ml-1 text-xs font-normal text-blue-500">
+                                      {v.outTime}
                                     </span>
                                   )}
                                   {avg !== null && !s.dayOff && (

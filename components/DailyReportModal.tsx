@@ -14,7 +14,9 @@ export default function DailyReportModal(props: {
   inProgress?: number;
 }) {
   const [open, setOpen] = useState(false);
+  const [stage, setStage] = useState<1 | 2>(1);
   const [sentTo, setSentTo] = useState<string[] | null>(null); // 발송 완료 팝업
+  const [sentStage, setSentStage] = useState<1 | 2>(1);
   const [teamsSent, setTeamsSent] = useState(false); // 팀즈 완료보고 카드 전송 여부
 
   return (
@@ -48,10 +50,30 @@ export default function DailyReportModal(props: {
               </button>
             </div>
             <div className="p-4">
+              {/* 1차 = 팀즈 알림만 · 2차 = VOC 포함 + 메일 발송 */}
+              <div className="mb-3 flex gap-1">
+                {([1, 2] as const).map((n) => (
+                  <button
+                    key={n}
+                    type="button"
+                    onClick={() => setStage(n)}
+                    className={`flex-1 rounded-lg px-3 py-2 text-xs font-bold transition-colors ${
+                      stage === n
+                        ? "bg-blue-600 text-white shadow-sm"
+                        : "bg-gray-100 text-gray-600 active:bg-gray-200"
+                    }`}
+                  >
+                    {n === 1 ? "1차 (팀즈 알림)" : "2차 (VOC + 메일)"}
+                  </button>
+                ))}
+              </div>
               <DailyReportCard
                 {...props}
+                key={stage}
+                stage={stage}
                 onSent={(to, teams) => {
                   setSentTo(to);
+                  setSentStage(stage);
                   setTeamsSent(teams === true);
                 }}
               />
@@ -65,14 +87,20 @@ export default function DailyReportModal(props: {
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4">
           <div className="w-full max-w-xs rounded-2xl bg-white p-5 text-center shadow-xl">
             <div className="text-3xl">✅</div>
-            <p className="mt-2 text-base font-bold text-gray-800">발송 완료</p>
-            <p className="mt-1 break-words text-xs text-gray-500">
-              {sentTo.length > 0 ? sentTo.join(", ") : "기본 수신자"}
+            <p className="mt-2 text-base font-bold text-gray-800">
+              {sentStage === 1 ? "1차 전송 완료" : "2차 발송 완료"}
             </p>
+            {sentStage === 2 && (
+              <p className="mt-1 break-words text-xs text-gray-500">
+                {sentTo.length > 0 ? sentTo.join(", ") : "기본 수신자"}
+              </p>
+            )}
             <p className={`mt-2 text-xs font-medium ${teamsSent ? "text-green-600" : "text-amber-600"}`}>
-              {teamsSent
-                ? "팀즈 '설치 진행중' 공유방에도 완료보고 카드를 보냈습니다."
-                : "⚠️ 팀즈 완료보고 카드 전송에 실패했습니다. (메일은 발송됨)"}
+              {sentStage === 1
+                ? "팀즈 '설치 진행중' 공유방으로 완료보고 카드를 보냈습니다. (메일 미발송)"
+                : teamsSent
+                  ? "메일과 함께 팀즈 공유방에도 VOC 포함 완료보고 카드를 보냈습니다."
+                  : "⚠️ 팀즈 완료보고 카드 전송에 실패했습니다. (메일은 발송됨)"}
             </p>
             <button
               onClick={() => {

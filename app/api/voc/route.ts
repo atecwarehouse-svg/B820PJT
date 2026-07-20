@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
 import { sendVocCard } from "@/lib/teams";
-import { cleanRatings } from "@/lib/voc";
+import { cleanRatings, summarizeVocs } from "@/lib/voc";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -30,8 +30,8 @@ export async function GET(req: NextRequest) {
 }
 
 // POST /api/voc — 대시보드 'VOC 접수' 폼 → DB 저장(운수사+설치일 upsert) + 팀즈 알림.
-// 협의사항처럼 비밀번호 없이 현장에서 바로 사용. 팀즈 카드에는 VOC 내용을 넣지 않고
-// 등록 사실만 알린다(내용은 관리자 페이지에서 확인·수정).
+// 협의사항처럼 비밀번호 없이 현장에서 바로 사용. 팀즈 카드에는 노선별 대수와
+// 요약(전체 평균·항목별 평균·개별 의견)을 담는다.
 export async function POST(req: NextRequest) {
   let body: Record<string, unknown>;
   try {
@@ -100,7 +100,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // 팀즈 알림 — 내용 없이 등록 사실만. 실패해도 저장은 유지하고 알림만 생략.
+  // 팀즈 알림 — 실패해도 저장은 유지하고 알림만 생략.
   let notified = false;
   try {
     // 노선별 대수 — 카드 부제 "영업소 00노선 날짜 (N대)"용. 휴차 차량은 노선 정보가
@@ -114,7 +114,8 @@ export async function POST(req: NextRequest) {
       .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "ko"))
       .map(([route, count]) => ({ route: route || undefined, count }));
 
-    await sendVocCard({ operator, label: label || date, groups });
+    const [summary] = summarizeVocs([{ operator, date, items, notes: notes || null }]);
+    await sendVocCard({ operator, label: label || date, groups, summary });
     notified = true;
   } catch {
     // 웹후크 미설정·전송 실패 — 저장은 완료

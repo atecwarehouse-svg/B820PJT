@@ -1,3 +1,6 @@
+import type { VocOperatorSummary } from "@/lib/voc";
+import { vocSummaryLines } from "@/lib/voc";
+
 // 금일 설치 완료 리포트(카드) 생성 — 화면 미리보기와 메일 발송이 공유하는 순수 로직.
 // 완료 = 저장(saved_at) + 설치 전·후 사진 전부 충족, 날짜는 업무일(20:00~익일 12:00) 기준.
 
@@ -147,7 +150,12 @@ function noteLines(notes: string): string[] {
 const HR = "━━━━━━━━━━━━━━━";
 
 // 메일/복사용 평문 카드
-export function formatReportText(r: DailyReport, notes: string, check?: ServiceCheck): string {
+export function formatReportText(
+  r: DailyReport,
+  notes: string,
+  check?: ServiceCheck,
+  vocs?: VocOperatorSummary[], // 2차 발송에서만 전달 — 운수사 VOC 섹션
+): string {
   const lines: string[] = [];
   lines.push("[인천버스 B820 단말기 설치 프로젝트]");
   lines.push(`설치 완료 (${r.label}, ${r.dow})`);
@@ -171,6 +179,15 @@ export function formatReportText(r: DailyReport, notes: string, check?: ServiceC
     for (const row of checkRows) lines.push(`- ${row.title} : ${row.value}`);
     lines.push(HR);
   }
+  if (vocs?.length) {
+    lines.push("○ 운수사 VOC");
+    for (const v of vocs) {
+      const [head, ...rest] = vocSummaryLines(v);
+      lines.push(`- ${head}`);
+      for (const r2 of rest) lines.push(`  · ${r2}`);
+    }
+    lines.push(HR);
+  }
   lines.push("○ 특이사항");
   lines.push(...noteLines(notes));
   lines.push("");
@@ -179,7 +196,12 @@ export function formatReportText(r: DailyReport, notes: string, check?: ServiceC
 }
 
 // 메일용 HTML 카드 (이메일에서 카드처럼 보이게)
-export function formatReportHtml(r: DailyReport, notes: string, check?: ServiceCheck): string {
+export function formatReportHtml(
+  r: DailyReport,
+  notes: string,
+  check?: ServiceCheck,
+  vocs?: VocOperatorSummary[],
+): string {
   const esc = (s: string) =>
     s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   const rows =
@@ -203,6 +225,23 @@ export function formatReportHtml(r: DailyReport, notes: string, check?: ServiceC
       .join("")}</ul>`
     : "";
 
+  // 운수사 VOC 섹션 (2차 발송에서만 전달됨)
+  const vocHtml = vocs?.length
+    ? `<div style="border-top:1px dashed #d1d5db;margin:12px 0"></div>
+    <div style="font-weight:600;margin-bottom:4px">○ 운수사 VOC</div>
+    <ul style="margin:0 0 4px;padding-left:18px;line-height:1.7;color:#374151">${vocs
+      .map((v) => {
+        const [head, ...rest] = vocSummaryLines(v);
+        const sub = rest.length
+          ? `<div style="font-size:12px;color:#6b7280;margin-top:2px">${rest
+              .map((l) => esc(l))
+              .join("<br/>")}</div>`
+          : "";
+        return `<li><b>${esc(head)}</b>${sub}</li>`;
+      })
+      .join("")}</ul>`
+    : "";
+
   return `<div style="max-width:480px;margin:0 auto;border:1px solid #e5e7eb;border-radius:14px;overflow:hidden;font-family:'Apple SD Gothic Neo',Malgun Gothic,sans-serif">
   <div style="background:#1d4ed8;color:#fff;padding:14px 18px">
     <div style="font-size:13px;opacity:.85">[인천버스 B820 단말기 설치 프로젝트]</div>
@@ -216,6 +255,7 @@ export function formatReportHtml(r: DailyReport, notes: string, check?: ServiceC
     <div style="font-size:14px;color:#111827;margin-top:3px">누적 설치 완료 : <b>${r.cumDone}대</b> <span style="color:#16a34a;font-weight:700">${r.cumPct.toFixed(1)}%</span></div>
     <div style="font-size:14px;color:#111827;margin-top:3px">잔여 : <b>${r.remaining}대</b></div>
     ${checkHtml}
+    ${vocHtml}
     <div style="border-top:1px dashed #d1d5db;margin:12px 0"></div>
     <div style="font-weight:600;margin-bottom:4px">○ 특이사항</div>
     <ul style="margin:0 0 4px;padding-left:18px;line-height:1.7;color:#374151">${notesHtml}</ul>

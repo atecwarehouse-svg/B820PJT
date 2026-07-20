@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { CompletedVehicle, ScheduleDay } from "@/lib/stats";
 import { buildReport, formatReportText } from "@/lib/report";
 import type { ServiceCheck } from "@/lib/report";
+import type { VocOperatorSummary } from "@/lib/voc";
 
 type Status = "" | "ok" | "issue";
 
@@ -100,6 +101,7 @@ export default function DailyReportCard({
   cumPlanned,
   today,
   inProgress = 0,
+  stage = 2,
   onSent,
 }: {
   completedList: CompletedVehicle[];
@@ -108,6 +110,7 @@ export default function DailyReportCard({
   cumPlanned: number;
   today: string;
   inProgress?: number; // 진행중(미완료) 차량 수 — 발송 전 경고용
+  stage?: 1 | 2; // 1차=팀즈 알림만, 2차=VOC 포함 + 메일 발송
   onSent?: (recipients: string[], teamsSent?: boolean) => void; // 발송 성공 시 부모가 완료 팝업 표시 (팀즈 카드 전송 여부 포함)
 }) {
   const [date, setDate] = useState(today);
@@ -126,6 +129,28 @@ export default function DailyReportCard({
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false); // 이중발송 방지
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [vocs, setVocs] = useState<VocOperatorSummary[]>([]);
+
+  // 2차 미리보기용 VOC 요약 — 선택한 날짜가 바뀌면 다시 불러온다.
+  // (발송 시에는 서버가 같은 날짜로 다시 조회하므로 여기 실패해도 내용은 빠지지 않는다.)
+  useEffect(() => {
+    if (stage !== 2) return;
+    let alive = true;
+    (async () => {
+      try {
+        const res = await fetch(`/api/voc/summary?date=${encodeURIComponent(date)}`, {
+          cache: "no-store",
+        });
+        const json = await res.json();
+        if (alive) setVocs((json.list ?? []) as VocOperatorSummary[]);
+      } catch {
+        if (alive) setVocs([]);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [stage, date]);
 
   // 입력값(숫자) 있으면 override, 없으면 null → 예정일 기준 자동 계산
   const plannedOverride =
@@ -159,7 +184,10 @@ export default function DailyReportCard({
     () => buildReport({ date, completedList, scheduleDays, cumDone, cumPlanned, plannedOverride }),
     [date, completedList, scheduleDays, cumDone, cumPlanned, plannedOverride],
   );
-  const text = useMemo(() => formatReportText(report, notes, check), [report, notes, check]);
+  const text = useMemo(
+    () => formatReportText(report, notes, check, stage === 2 ? vocs : undefined),
+    [report, notes, check, stage, vocs],
+  );
 
   async function send() {
     if (sending || sent || !pw) return; // 이중발송 방지 + 비밀번호 필수
@@ -172,14 +200,15 @@ export default function DailyReportCard({
       return;
     }
     const warn = inProgress > 0 ? `⚠️ 미완료(진행중) 차량이 ${inProgress}대 있습니다.\n\n` : "";
-    if (!window.confirm(`${warn}이 내용으로 메일 발송 + 팀즈 카드 전송할까요?`)) return;
+    const what = stage === 1 ? "팀즈 카드만 전송" : "메일 발송 + 팀즈 카드 전송";
+    if (!window.confirm(`${warn}[${stage}차] 이 내용으로 ${what}할까요?`)) return;
     setSending(true);
     setMsg(null);
     try {
       const res = await fetch("/api/report/send", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ date, notes, to, planned: plannedOverride, pw, check }),
+        body: JSON.stringify({ date, notes, to, planned: plannedOverride, pw, check, stage }),
       });
       const j = await res.json();
       if (!res.ok) throw new Error(j.error ?? "발송 실패");
@@ -293,17 +322,21 @@ export default function DailyReportCard({
         className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
       />
 
-      {/* 받는사람 */}
-      <label className="mt-2 block text-xs font-medium text-gray-600">
-        받는사람 (쉼표로 여러 명 · 비우면 관리자 페이지의 기본 수신자)
-      </label>
-      <input
-        type="text"
-        value={to}
-        onChange={(e) => setTo(e.target.value)}
-        placeholder="name@example.com, name2@example.com"
-        className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-      />
+      {/* 받는사람 — 메일을 보내는 2차에서만 */}
+      {stage === 2 && (
+        <>
+          <label className="mt-2 block text-xs font-medium text-gray-600">
+            받는사람 (쉼표로 여러 명 · 비우면 관리자 페이지의 기본 수신자)
+          </label>
+          <input
+            type="text"
+            value={to}
+            onChange={(e) => setTo(e.target.value)}
+            placeholder="name@example.com, name2@example.com"
+            className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+          />
+        </>
+      )}
 
       {/* 관리자 비밀번호 (발송 필수) */}
       <label className="mt-2 block text-xs font-medium text-gray-600">관리자 비밀번호</label>
@@ -334,7 +367,13 @@ export default function DailyReportCard({
           disabled={sending || sent || !pw}
           className="flex-1 rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
         >
-          {sending ? "발송 중…" : sent ? "발송됨 ✓" : "메일 발송 + 팀즈 전송"}
+          {sending
+            ? "발송 중…"
+            : sent
+              ? "발송됨 ✓"
+              : stage === 1
+                ? "팀즈 전송 (1차)"
+                : "메일 발송 + 팀즈 전송 (2차)"}
         </button>
       </div>
       {msg && (

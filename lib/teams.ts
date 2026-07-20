@@ -2,6 +2,8 @@
 
 import type { DailyReport, ServiceCheck } from "./report";
 import { serviceCheckRows } from "./report";
+import type { VocOperatorSummary } from "./voc";
+import { vocSummaryLines } from "./voc";
 
 export interface ProgressCardData {
   label: string; // 날짜 라벨 (예: "9/17 (수)")
@@ -152,6 +154,7 @@ export async function sendCompletionReportCard(
   r: DailyReport,
   notes: string,
   check?: ServiceCheck,
+  vocs?: VocOperatorSummary[], // 2차 발송에서만 전달 — 운수사 VOC 섹션
 ): Promise<void> {
   const url = process.env.TEAMS_WEBHOOK_URL;
   if (!url) throw new Error("팀즈 웹후크가 설정되지 않았습니다. (TEAMS_WEBHOOK_URL)");
@@ -182,6 +185,32 @@ export async function sendCompletionReportCard(
           spacing: "Small",
           facts: checkRows.map((row) => ({ title: row.title, value: row.value })),
         },
+      ]
+    : [];
+
+  // 운수사 VOC 섹션 (2차 발송에서만) — 운수사별 평균/항목별 평균/개별 의견
+  const vocBlocks: unknown[] = vocs?.length
+    ? [
+        {
+          type: "TextBlock",
+          weight: "Bolder",
+          text: "○ 운수사 VOC",
+          spacing: "Medium",
+          wrap: true,
+        },
+        ...vocs.flatMap((v) => {
+          const [head, ...rest] = vocSummaryLines(v);
+          return [
+            { type: "TextBlock", weight: "Bolder", text: head, spacing: "Small", wrap: true },
+            ...rest.map((l) => ({
+              type: "TextBlock",
+              text: l,
+              isSubtle: true,
+              spacing: "None",
+              wrap: true,
+            })),
+          ];
+        }),
       ]
     : [];
 
@@ -239,6 +268,7 @@ export async function sendCompletionReportCard(
               ],
             },
             ...checkBlocks,
+            ...vocBlocks,
             {
               type: "TextBlock",
               weight: "Bolder",
@@ -391,6 +421,7 @@ export interface VocCardData {
   operator: string;
   label: string; // 설치일 라벨 (예: "7/19 (일)")
   groups: { route?: string; count: number }[]; // 노선별 대수
+  summary?: VocOperatorSummary; // 평균 별점 등 요약
 }
 
 export async function sendVocCard(d: VocCardData): Promise<void> {
@@ -426,6 +457,28 @@ export async function sendVocCard(d: VocCardData): Promise<void> {
               spacing: "None",
               wrap: true,
             })),
+            // 요약 — 전체 평균과 항목별 평균, 개별 의견
+            ...(d.summary
+              ? (() => {
+                  const [head, ...rest] = vocSummaryLines(d.summary);
+                  return [
+                    {
+                      type: "TextBlock",
+                      weight: "Bolder",
+                      text: head,
+                      spacing: "Medium",
+                      wrap: true,
+                    },
+                    ...rest.map((l) => ({
+                      type: "TextBlock",
+                      text: l,
+                      isSubtle: true,
+                      spacing: "None",
+                      wrap: true,
+                    })),
+                  ];
+                })()
+              : []),
           ],
         },
       },

@@ -44,3 +44,73 @@ export function averageRating(r: VocRatings): number | null {
 export function hasVocInput(item: { ratings?: VocRatings; comment?: string }): boolean {
   return averageRating(item.ratings ?? {}) !== null || Boolean(item.comment?.trim());
 }
+
+// ── 리포트용 요약 ────────────────────────────────────────────────
+// 저장된 VOC 행(vocs)을 운수사별 요약으로 바꾼다. 금일완료 리포트 2차 발송에서
+// 메일·팀즈 카드가 공유한다.
+export interface VocRow {
+  operator: string;
+  date: string;
+  items?: { plate?: string; route?: string; ratings?: unknown; comment?: string }[] | null;
+  notes?: string | null;
+}
+
+export interface VocOperatorSummary {
+  operator: string;
+  vehicles: number; // 평가 대상 차량 수
+  rated: number; // 실제로 입력된 차량 수
+  averages: Partial<Record<VocRatingKey, number>>; // 항목별 평균
+  avg: number | null; // 전체 평균
+  comments: { plate: string; route?: string; comment: string }[];
+  notes?: string; // 운수사 전체 특이사항
+}
+
+export function summarizeVocs(rows: VocRow[]): VocOperatorSummary[] {
+  return rows
+    .map((row) => {
+      const items = (row.items ?? []).map((i) => ({
+        plate: String(i?.plate ?? ""),
+        route: i?.route ? String(i.route) : undefined,
+        ratings: cleanRatings(i?.ratings),
+        comment: String(i?.comment ?? "").trim(),
+      }));
+      const averages: Partial<Record<VocRatingKey, number>> = {};
+      for (const { key } of VOC_RATINGS) {
+        const vals = items
+          .map((i) => i.ratings[key])
+          .filter((v): v is number => typeof v === "number");
+        if (vals.length) averages[key] = vals.reduce((a, b) => a + b, 0) / vals.length;
+      }
+      const perVehicle = items
+        .map((i) => averageRating(i.ratings))
+        .filter((a): a is number => a !== null);
+      return {
+        operator: row.operator,
+        vehicles: items.length,
+        rated: items.filter((i) => hasVocInput(i)).length,
+        averages,
+        avg: perVehicle.length ? perVehicle.reduce((a, b) => a + b, 0) / perVehicle.length : null,
+        comments: items
+          .filter((i) => i.comment)
+          .map((i) => ({ plate: i.plate, route: i.route, comment: i.comment })),
+        notes: row.notes?.trim() || undefined,
+      };
+    })
+    .sort((a, b) => a.operator.localeCompare(b.operator, "ko"));
+}
+
+// 요약 → 표시용 줄 목록. 메일 평문·HTML·팀즈 카드가 같은 문구를 쓰도록 공용화.
+export function vocSummaryLines(s: VocOperatorSummary): string[] {
+  const lines: string[] = [];
+  const head = s.avg !== null ? `평균 ★ ${s.avg.toFixed(1)}` : "평가 없음";
+  lines.push(`${s.operator} : ${head} (${s.vehicles}대 중 ${s.rated}대 응답)`);
+  const per = VOC_RATINGS.filter((r) => s.averages[r.key] !== undefined).map(
+    (r) => `${r.label} ${s.averages[r.key]!.toFixed(1)}`,
+  );
+  if (per.length) lines.push(per.join(" · "));
+  for (const c of s.comments) {
+    lines.push(`${c.plate}${c.route ? ` (${c.route})` : ""} : ${c.comment}`);
+  }
+  if (s.notes) lines.push(`특이사항 : ${s.notes}`);
+  return lines;
+}

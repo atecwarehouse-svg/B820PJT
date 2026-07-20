@@ -7,6 +7,8 @@ import { buildProgressXlsx } from "@/lib/export/build-progress-xlsx";
 import { getSetting, REPORT_MAIL_KEY } from "@/lib/settings";
 import { sendCompletionReportCard } from "@/lib/teams";
 import { adminPassword, isAdmin } from "@/lib/admin-auth";
+import { createServiceClient } from "@/lib/supabase/server";
+import { summarizeVocs, type VocOperatorSummary, type VocRow } from "@/lib/voc";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -19,6 +21,7 @@ interface SendBody {
   planned?: number | null; // 금일 계획 수량 직접 입력값
   pw?: string; // 관리자 비밀번호 (관리자 페이지 로그인 쿠키로 대체 가능)
   check?: ServiceCheck; // 운행시작 점검(승무사원 교육·요금세팅·BIS·카카오)
+  stage?: 1 | 2; // 1차=팀즈 알림만, 2차=VOC 추가 + 메일까지 발송 (기본 2)
 }
 
 function parseRecipients(raw: string | undefined): string[] {
@@ -28,7 +31,26 @@ function parseRecipients(raw: string | undefined): string[] {
     .filter((s) => s.includes("@"));
 }
 
-// POST /api/report/send  → 금일 완료 리포트를 Gmail SMTP로 발송
+// 해당 업무일에 저장된 운수사 VOC → 리포트용 요약 (2차 발송에서만 사용).
+// 테이블 미생성·조회 실패는 빈 배열로 넘겨 리포트 발송 자체는 막지 않는다.
+async function loadVocSummaries(date: string): Promise<VocOperatorSummary[]> {
+  try {
+    const supabase = createServiceClient();
+    const { data, error } = await supabase
+      .from("vocs")
+      .select("operator, date, items, notes")
+      .eq("date", date);
+    if (error) throw error;
+    return summarizeVocs((data ?? []) as VocRow[]);
+  } catch (e) {
+    console.warn("[report/send] VOC 조회 실패(VOC 없이 발송):", e instanceof Error ? e.message : e);
+    return [];
+  }
+}
+
+// POST /api/report/send  → 금일 완료 리포트 발송
+//  - stage 1(1차): 팀즈 완료보고 카드만 전송 (메일 없음)
+//  - stage 2(2차): 운수사 VOC를 덧붙여 팀즈 카드 + 메일(엑셀 첨부) 발송
 export async function POST(req: NextRequest) {
   const body = (await req.json()) as SendBody;
 
@@ -79,9 +101,25 @@ export async function POST(req: NextRequest) {
 
   const notes = body.notes ?? "";
   const check = body.check;
-  const text = formatReportText(report, notes, check);
-  const html = formatReportHtml(report, notes, check);
+  const stage = body.stage === 1 ? 1 : 2;
+  // VOC는 2차에서만 붙인다.
+  const vocs = stage === 2 ? await loadVocSummaries(date) : [];
+  const text = formatReportText(report, notes, check, vocs);
+  const html = formatReportHtml(report, notes, check, vocs);
   const subject = `[인천버스 B820] 설치 완료 보고 (${report.label}, ${report.dow}) — ${report.dailyDone}대`;
+
+  // 1차 — 메일 없이 팀즈 완료보고 카드만 전송.
+  if (stage === 1) {
+    try {
+      await sendCompletionReportCard(report, notes, check);
+    } catch (e) {
+      return NextResponse.json(
+        { error: "팀즈 전송 실패: " + (e instanceof Error ? e.message : "알 수 없는 오류") },
+        { status: 500 },
+      );
+    }
+    return NextResponse.json({ ok: true, stage, to: [], teams: true, attached: false });
+  }
 
   // 진행현황 엑셀 첨부 (실패해도 메일은 발송)
   const attachments: { filename: string; content: Buffer }[] = [];
@@ -117,11 +155,19 @@ export async function POST(req: NextRequest) {
   // 팀즈 '설치 진행중' 공유방에도 완료보고 카드 전송 (실패해도 메일 발송 결과는 성공 유지)
   let teams = false;
   try {
-    await sendCompletionReportCard(report, notes, check);
+    await sendCompletionReportCard(report, notes, check, vocs);
     teams = true;
   } catch (e) {
     console.warn("[report/send] 팀즈 완료보고 카드 전송 실패:", e instanceof Error ? e.message : e);
   }
 
-  return NextResponse.json({ ok: true, to: recipients, subject, attached: attachments.length > 0, teams });
+  return NextResponse.json({
+    ok: true,
+    stage,
+    to: recipients,
+    subject,
+    attached: attachments.length > 0,
+    teams,
+    vocOperators: vocs.length,
+  });
 }
