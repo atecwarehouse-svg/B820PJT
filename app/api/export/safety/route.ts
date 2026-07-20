@@ -3,6 +3,7 @@ import { createServiceClient } from "@/lib/supabase/server";
 import { renderPdf } from "@/lib/export/pdf-render";
 import { buildPledgeHtml } from "@/lib/export/pledge-html";
 import { uploadExport, deletePhoto } from "@/lib/gdrive";
+import { isAdmin } from "@/lib/admin-auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -16,6 +17,9 @@ const PDF_MIME = "application/pdf";
 //  - 구글드라이브 "인천B820 서약서" 폴더에 업로드(보관) 하고
 //  - 동시에 attachment 로 스트림(다운로드) 한다. (사진첩 진행현황 다운로드와 동일 방식)
 export async function GET(req: Request) {
+  if (!isAdmin()) {
+    return NextResponse.json({ error: "관리자 인증이 필요합니다." }, { status: 401 });
+  }
   const sessionId = new URL(req.url).searchParams.get("session")?.trim();
   if (!sessionId) {
     return NextResponse.json({ error: "세션 정보가 없습니다." }, { status: 400 });
