@@ -27,6 +27,8 @@ import InstallDateSearch from "@/components/InstallDateSearch";
 import DailyReportModal from "@/components/DailyReportModal";
 import KpiCards from "@/components/KpiCards";
 import RefreshButton from "@/components/RefreshButton";
+import DashboardDetailTabs from "@/components/DashboardDetailTabs";
+import { isProgressUnlocked } from "@/lib/admin-auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -104,6 +106,8 @@ const getOperatorSchedules = unstable_cache(
 );
 
 export default async function DashboardPage() {
+  // 상세 섹션(설치 일정·운수사별·영업소별·날짜별)은 잠금 해제 전에는 서버가 아예 안 내려준다.
+  const detailUnlocked = isProgressUnlocked();
   const todayWork = workDateString(new Date()); // 현재 업무일
   const [s, ip, sch, inProgressList, todayPlanGroups, operatorSchedules] = await Promise.all([
     getStats(),
@@ -219,110 +223,124 @@ export default async function DashboardPage() {
         inProgressList={inProgressList}
       />
 
-      {/* ===== 설치 일정 ===== */}
+      {/* ===== 운수사 협의사항 · 설치일정 변경 업로드 (잠금과 무관하게 항상 노출) ===== */}
       <div className="mb-2 mt-6 flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-sm font-semibold text-gray-700">
-          설치 일정
-          <span className="ml-1 font-normal text-gray-400">(예정일 기준 계획 대비 실적)</span>
-        </h2>
+        <h2 className="text-sm font-bold text-gray-700">상세 현황</h2>
         <div className="flex flex-wrap items-center gap-2">
           <ConsultationModal operators={operatorSchedules} />
           <ScheduleUploadModal />
         </div>
       </div>
-      <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-        {sch === null ? (
-          <p className="py-8 text-center text-sm text-gray-400">
-            설치 일정 데이터가 없습니다. (예정일 임포트 필요)
-          </p>
-        ) : (
-          <ScheduleChart stats={sch} />
-        )}
-      </section>
 
-      {/* ===== 운수사별 진행 현황 (사진 기준) ===== */}
-      <h2 className="mb-2 mt-6 text-sm font-semibold text-gray-700">
-        운수사별 진행 현황
-        <span className="ml-1 font-normal text-gray-400">(작업 시작된 운수사)</span>
-      </h2>
-      {s.byOperator.length === 0 ? (
-        <p className="py-8 text-center text-sm text-gray-400">아직 시작된 운수사가 없습니다.</p>
-      ) : (
-        <ul className="divide-y divide-gray-100 overflow-hidden rounded-xl border border-gray-200 bg-white">
-          {s.byOperator.map((o) => {
-            const opct = o.total ? (o.complete / o.total) * 100 : 0;
-            const allDone = o.complete === o.total;
-            return (
-              <li key={o.operator} className="px-3 py-2.5">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="font-medium">{o.operator}</span>
-                  <span className="tabular-nums text-gray-500">
-                    {o.complete}/{o.total}대 · {opct.toFixed(1)}%
-                  </span>
-                </div>
-                <div className="mt-1.5 h-2 w-full overflow-hidden rounded-full bg-gray-100">
-                  <div
-                    className={`h-full rounded-full ${allDone ? "bg-green-500" : "bg-blue-500"}`}
-                    style={{ width: `${opct}%` }}
-                  />
-                </div>
-                {o.inProgress > 0 && (
-                  <p className="mt-1 text-[11px] text-amber-600">진행중 {o.inProgress}대</p>
+      {/* ===== 상세 4개 섹션 — 비밀번호 잠금 해제 후 탭으로 열람 ===== */}
+      <DashboardDetailTabs
+        unlocked={detailUnlocked}
+        schedule={
+          detailUnlocked ? (
+            <>
+              <p className="mb-2 text-sm font-bold text-gray-700">
+                설치 일정
+                <span className="ml-1 font-normal text-gray-400">(예정일 기준 계획 대비 실적)</span>
+              </p>
+              <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+                {sch === null ? (
+                  <p className="py-8 text-center text-sm text-gray-400">
+                    설치 일정 데이터가 없습니다. (예정일 임포트 필요)
+                  </p>
+                ) : (
+                  <ScheduleChart stats={sch} />
                 )}
-              </li>
-            );
-          })}
-        </ul>
-      )}
-
-      {/* ===== 날짜별 완료 검색 ===== */}
-      {ip && (
-        <div className="mt-6">
-          <InstallDateSearch completedList={ip.completedList} today={ip.today} />
-        </div>
-      )}
-
-      {/* ===== 영업소별 (운수사·노선) — 최하단 ===== */}
-      {ip && (
-        <>
-          <h2 className="mb-2 mt-8 text-sm font-semibold text-gray-700">
-            영업소별
-            <span className="ml-1 font-normal text-gray-400">(운수사·노선 / 저장 기준)</span>
-          </h2>
-          {ip.groups.length === 0 ? (
-            <p className="py-6 text-center text-sm text-gray-400">아직 저장 완료된 차량이 없습니다.</p>
-          ) : (
-            <ul className="divide-y divide-gray-100 overflow-hidden rounded-xl border border-gray-200 bg-white">
-              {ip.groups.map((g) => {
-                const gp = g.total ? (g.complete / g.total) * 100 : 0;
-                const allDone = g.complete === g.total;
-                return (
-                  <li key={`${g.operator}|${g.route}`} className="px-3 py-2.5">
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="font-medium">
-                        {g.operator}
-                        {g.route && <span className="ml-1 text-xs font-normal text-gray-400">{g.route}</span>}
-                      </span>
-                      <span className="tabular-nums text-gray-500">
-                        {g.complete}/{g.total}대 · {gp.toFixed(1)}%
-                      </span>
-                    </div>
-                    <div className="mt-1.5 h-2 w-full overflow-hidden rounded-full bg-gray-100">
-                      <div
-                        className={`h-full rounded-full ${allDone ? "bg-green-500" : "bg-blue-500"}`}
-                        style={{ width: `${gp}%` }}
-                      />
-                    </div>
-                    {g.todayComplete > 0 && (
-                      <p className="mt-1 text-[11px] text-green-600">오늘 완료 {g.todayComplete}대</p>
-                    )}
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </>
-      )}
+              </section>
+            </>
+          ) : undefined
+        }
+        operator={
+          detailUnlocked ? (
+            <>
+              <p className="mb-2 text-sm font-bold text-gray-700">
+                운수사별 진행 현황
+                <span className="ml-1 font-normal text-gray-400">(작업 시작된 운수사)</span>
+              </p>
+              {s.byOperator.length === 0 ? (
+                <p className="py-8 text-center text-sm text-gray-400">아직 시작된 운수사가 없습니다.</p>
+              ) : (
+                <ul className="divide-y divide-gray-100 overflow-hidden rounded-xl border border-gray-200 bg-white">
+                  {s.byOperator.map((o) => {
+                    const opct = o.total ? (o.complete / o.total) * 100 : 0;
+                    const allDone = o.complete === o.total;
+                    return (
+                      <li key={o.operator} className="px-3 py-2.5">
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="font-medium">{o.operator}</span>
+                          <span className="tabular-nums text-gray-500">
+                            {o.complete}/{o.total}대 · {opct.toFixed(1)}%
+                          </span>
+                        </div>
+                        <div className="mt-1.5 h-2 w-full overflow-hidden rounded-full bg-gray-100">
+                          <div
+                            className={`h-full rounded-full ${allDone ? "bg-green-500" : "bg-blue-500"}`}
+                            style={{ width: `${opct}%` }}
+                          />
+                        </div>
+                        {o.inProgress > 0 && (
+                          <p className="mt-1 text-[11px] text-amber-600">진행중 {o.inProgress}대</p>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </>
+          ) : undefined
+        }
+        branch={
+          detailUnlocked && ip ? (
+            <>
+              <p className="mb-2 text-sm font-bold text-gray-700">
+                영업소별
+                <span className="ml-1 font-normal text-gray-400">(운수사·노선 / 저장 기준)</span>
+              </p>
+              {ip.groups.length === 0 ? (
+                <p className="py-6 text-center text-sm text-gray-400">아직 저장 완료된 차량이 없습니다.</p>
+              ) : (
+                <ul className="divide-y divide-gray-100 overflow-hidden rounded-xl border border-gray-200 bg-white">
+                  {ip.groups.map((g) => {
+                    const gp = g.total ? (g.complete / g.total) * 100 : 0;
+                    const allDone = g.complete === g.total;
+                    return (
+                      <li key={`${g.operator}|${g.route}`} className="px-3 py-2.5">
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="font-medium">
+                            {g.operator}
+                            {g.route && <span className="ml-1 text-xs font-normal text-gray-400">{g.route}</span>}
+                          </span>
+                          <span className="tabular-nums text-gray-500">
+                            {g.complete}/{g.total}대 · {gp.toFixed(1)}%
+                          </span>
+                        </div>
+                        <div className="mt-1.5 h-2 w-full overflow-hidden rounded-full bg-gray-100">
+                          <div
+                            className={`h-full rounded-full ${allDone ? "bg-green-500" : "bg-blue-500"}`}
+                            style={{ width: `${gp}%` }}
+                          />
+                        </div>
+                        {g.todayComplete > 0 && (
+                          <p className="mt-1 text-[11px] text-green-600">오늘 완료 {g.todayComplete}대</p>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </>
+          ) : undefined
+        }
+        date={
+          detailUnlocked && ip ? (
+            <InstallDateSearch completedList={ip.completedList} today={ip.today} />
+          ) : undefined
+        }
+      />
     </main>
   );
 }

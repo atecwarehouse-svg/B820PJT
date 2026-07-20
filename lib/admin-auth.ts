@@ -14,6 +14,16 @@ export function progressDownloadPassword(): string {
   return process.env.PROGRESS_DOWNLOAD_PASSWORD || "wktks2020!!";
 }
 
+// 대시보드 상세(설치 일정·운수사별·영업소별·날짜별) 잠금 해제 쿠키.
+// 진행현황 다운로드와 같은 비밀번호를 쓴다.
+export const PROGRESS_COOKIE = "progress_unlock";
+export const PROGRESS_MAX_AGE = 60 * 60 * 12; // 12시간
+
+export function isProgressUnlocked(): boolean {
+  const v = cookies().get(PROGRESS_COOKIE)?.value;
+  return !!v && v === progressDownloadPassword();
+}
+
 // 서버 컴포넌트/route에서 현재 요청이 관리자 인증됐는지 확인.
 export function isAdmin(): boolean {
   const v = cookies().get(ADMIN_COOKIE)?.value;
