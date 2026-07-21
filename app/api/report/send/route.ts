@@ -4,7 +4,7 @@ import { loadInstallProgress, loadScheduleStats } from "@/lib/stats";
 import { buildReport, formatReportText, formatReportHtml } from "@/lib/report";
 import type { ServiceCheck } from "@/lib/report";
 import { buildProgressXlsx } from "@/lib/export/build-progress-xlsx";
-import { getSetting, REPORT_MAIL_KEY } from "@/lib/settings";
+import { getSetting, setSetting, REPORT_MAIL_KEY } from "@/lib/settings";
 import { sendCompletionReportCard } from "@/lib/teams";
 import { adminPassword, isAdmin } from "@/lib/admin-auth";
 import { createServiceClient } from "@/lib/supabase/server";
@@ -45,6 +45,25 @@ async function loadVocSummaries(date: string): Promise<VocOperatorSummary[]> {
   } catch (e) {
     console.warn("[report/send] VOC 조회 실패(VOC 없이 발송):", e instanceof Error ? e.message : e);
     return [];
+  }
+}
+
+// 1차 발송 내용 저장 키 — 2차 발송 폼이 특이사항·운행시작 점검·계획수량을 자동으로
+// 이어받기 위해 app_settings에 날짜별로 저장한다(마이그레이션 불필요).
+const stage1Key = (date: string) => `daily_report_stage1:${date}`;
+
+// GET /api/report/send?date=YYYY-MM-DD → 그 날짜의 1차 발송 내용(없으면 null).
+// 2차 폼 프리필용 — 조회 실패는 null로 넘겨 새로 입력하면 된다.
+export async function GET(req: NextRequest) {
+  const date = (req.nextUrl.searchParams.get("date") ?? "").trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    return NextResponse.json({ draft: null });
+  }
+  try {
+    const raw = await getSetting(stage1Key(date));
+    return NextResponse.json({ draft: raw ? JSON.parse(raw) : null });
+  } catch {
+    return NextResponse.json({ draft: null });
   }
 }
 
@@ -117,6 +136,19 @@ export async function POST(req: NextRequest) {
         { error: "팀즈 전송 실패: " + (e instanceof Error ? e.message : "알 수 없는 오류") },
         { status: 500 },
       );
+    }
+    // 1차 내용 저장 — 2차 폼이 자동으로 불러온다. 저장 실패해도 1차 발송은 성공 처리.
+    try {
+      await setSetting(
+        stage1Key(date),
+        JSON.stringify({
+          notes,
+          planned: typeof body.planned === "number" ? body.planned : null,
+          check: check ?? null,
+        }),
+      );
+    } catch (e) {
+      console.warn("[report/send] 1차 내용 저장 실패(2차 프리필 생략):", e instanceof Error ? e.message : e);
     }
     return NextResponse.json({ ok: true, stage, to: [], teams: true, attached: false });
   }

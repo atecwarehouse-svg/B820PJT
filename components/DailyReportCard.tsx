@@ -130,6 +130,53 @@ export default function DailyReportCard({
   const [sent, setSent] = useState(false); // 이중발송 방지
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [vocs, setVocs] = useState<VocOperatorSummary[]>([]);
+  const [prefilled, setPrefilled] = useState(false); // 1차 발송 내용을 불러왔는지
+
+  // 2차 폼 프리필 — 같은 날짜로 1차를 발송했으면 그때의 특이사항·운행시작 점검·계획수량을
+  // 자동으로 채운다. 이미 입력된 칸은 덮지 않는다(늦게 도착한 응답이 입력을 지우는 사고 방지).
+  useEffect(() => {
+    if (stage !== 2) return;
+    setPrefilled(false);
+    let alive = true;
+    (async () => {
+      try {
+        const res = await fetch(`/api/report/send?date=${encodeURIComponent(date)}`, {
+          cache: "no-store",
+        });
+        const json = await res.json();
+        const d = json.draft;
+        if (!alive || !d) return;
+        if (typeof d.notes === "string" && d.notes) {
+          setNotes((cur) => (cur === "" ? d.notes : cur));
+        }
+        if (typeof d.planned === "number") setPlanned(String(d.planned));
+        const c = (d.check ?? {}) as Partial<ServiceCheck>;
+        if (c.driverEdu) setDriverEdu(true);
+        if (c.fareSetting) setFareSetting(true);
+        if (typeof c.baseFare === "string" && c.baseFare) {
+          setBaseFare((cur) => (cur === "" ? (c.baseFare as string) : cur));
+        }
+        if (c.bisStatus === "ok" || c.bisStatus === "issue") {
+          setBisStatus((cur) => (cur === "" ? (c.bisStatus as Status) : cur));
+        }
+        if (typeof c.bisSymptom === "string" && c.bisSymptom) {
+          setBisSymptom((cur) => (cur === "" ? (c.bisSymptom as string) : cur));
+        }
+        if (c.kakaoStatus === "ok" || c.kakaoStatus === "issue") {
+          setKakaoStatus((cur) => (cur === "" ? (c.kakaoStatus as Status) : cur));
+        }
+        if (typeof c.kakaoSymptom === "string" && c.kakaoSymptom) {
+          setKakaoSymptom((cur) => (cur === "" ? (c.kakaoSymptom as string) : cur));
+        }
+        setPrefilled(true);
+      } catch {
+        // 불러오기 실패 — 새로 입력하면 된다
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [stage, date]);
 
   // 2차 미리보기용 VOC 요약 — 선택한 날짜가 바뀌면 다시 불러온다.
   // (발송 시에는 서버가 같은 날짜로 다시 조회하므로 여기 실패해도 내용은 빠지지 않는다.)
@@ -260,6 +307,12 @@ export default function DailyReportCard({
           <span className="text-xs text-gray-500">대</span>
         </div>
       </div>
+
+      {prefilled && (
+        <p className="mt-2 rounded-lg bg-blue-50 px-3 py-1.5 text-[11px] font-medium text-blue-600">
+          1차 보고 내용(특이사항·운행시작 점검·계획수량)을 불러왔습니다 — 수정 후 발송하세요
+        </p>
+      )}
 
       {/* 카드 미리보기 */}
       <pre className="mt-3 whitespace-pre-wrap break-words rounded-xl border border-gray-200 bg-gray-50 p-3 text-[13px] leading-relaxed text-gray-800">
