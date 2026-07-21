@@ -108,6 +108,7 @@ export default function DispatchButton() {
 
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [tableView, setTableView] = useState(false); // 캡쳐용 표 보기
 
   useEffect(() => {
     if (!open || operators !== null) return;
@@ -260,7 +261,10 @@ export default function DispatchButton() {
     <>
       <button
         type="button"
-        onClick={() => setOpen(true)}
+        onClick={() => {
+          setOpen(true);
+          setTableView(false);
+        }}
         className="mt-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-center text-sm font-semibold text-blue-700 shadow-sm active:bg-blue-100"
       >
         🚌 배차표
@@ -406,6 +410,17 @@ export default function DispatchButton() {
                 </div>
               )}
 
+              {/* 표로 보기 — 작성한 배차표를 모바일 캡쳐용 표로 표시 (노선 선택 아래) */}
+              {selectedDate && !listLoading && entries.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setTableView(true)}
+                  className="w-full rounded-lg border border-blue-300 bg-white px-4 py-2.5 text-sm font-semibold text-blue-700 active:bg-blue-50"
+                >
+                  📋 표로 보기 (캡쳐용)
+                </button>
+              )}
+
               {/* 차량 리스트 */}
               {date && (
                 <div>
@@ -541,6 +556,94 @@ export default function DispatchButton() {
               )}
             </div>
           </div>
+
+          {/* 캡쳐용 표 보기 — 흰 배경 전체화면. 상단 바(닫기)만 있고 나머지는
+              깔끔한 표라서 모바일 캡쳐 후 그대로 공유할 수 있다. */}
+          {tableView && (
+            <div
+              className="fixed inset-0 z-[60] overflow-y-auto bg-white"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="sticky top-0 flex items-center justify-between border-b border-gray-200 bg-white px-4 py-2.5">
+                <p className="text-sm font-bold text-gray-800">📋 배차표 (캡쳐용)</p>
+                <button
+                  type="button"
+                  onClick={() => setTableView(false)}
+                  className="rounded-lg bg-gray-100 px-3 py-1.5 text-sm font-semibold text-gray-600 active:bg-gray-200"
+                >
+                  ✕ 닫기
+                </button>
+              </div>
+              <div className="px-4 py-4">
+                <p className="text-base font-bold text-gray-900">
+                  {operator} 배차표
+                  {routeFilter && ` · ${routeFilter}`}
+                </p>
+                <p className="mt-0.5 text-xs text-gray-500">
+                  {fmtDot(date)} · {visible.length}대
+                  {timedCount > 0 && ` · 시간입력 ${timedCount}대`}
+                  {offCount > 0 && ` · 휴차 ${offCount}대`}
+                </p>
+                <table className="mt-3 w-full border-collapse text-sm">
+                  <thead>
+                    <tr className="bg-blue-600 text-white">
+                      <th className="w-9 border border-blue-700 px-1 py-1.5 text-center text-xs font-semibold">
+                        번호
+                      </th>
+                      <th className="border border-blue-700 px-2 py-1.5 text-center text-xs font-semibold">
+                        노선
+                      </th>
+                      <th className="border border-blue-700 px-2 py-1.5 text-center text-xs font-semibold">
+                        차량번호
+                      </th>
+                      <th className="border border-blue-700 px-2 py-1.5 text-center text-xs font-semibold">
+                        나가는 시간
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {visible.map((e, i) => {
+                      const isOff = e.outTime === OFF;
+                      return (
+                        <tr
+                          key={e.plate}
+                          className={isOff ? "bg-red-50" : i % 2 ? "bg-gray-50" : "bg-white"}
+                        >
+                          <td className="border border-gray-300 px-1 py-1.5 text-center text-xs text-gray-500">
+                            {i + 1}
+                          </td>
+                          <td className="border border-gray-300 px-2 py-1.5 text-center text-gray-700">
+                            {e.route || "-"}
+                          </td>
+                          <td
+                            className={`border border-gray-300 px-2 py-1.5 text-center font-medium ${
+                              isOff ? "text-red-500 line-through" : "text-gray-900"
+                            }`}
+                          >
+                            {e.plate}
+                          </td>
+                          <td
+                            className={`border border-gray-300 px-2 py-1.5 text-center font-semibold ${
+                              isOff
+                                ? "text-red-600"
+                                : e.outTime
+                                  ? "text-blue-700"
+                                  : "text-gray-300"
+                            }`}
+                          >
+                            {isOff ? "휴차" : e.outTime ?? "-"}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+                <p className="mt-3 text-center text-[11px] text-gray-400">
+                  이 화면을 캡쳐해 공유하세요 · ✕ 닫기를 누르면 입력 화면으로 돌아갑니다
+                </p>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </>
