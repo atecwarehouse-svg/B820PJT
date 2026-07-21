@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import type { SlotDef } from "@/lib/slots";
 import { compressImage } from "@/lib/image-compress";
+import { downloadUrl } from "@/lib/download";
 
 interface Props {
   plate: string;
@@ -39,7 +40,15 @@ export default function PhotoSlot({
   const cameraRef = useRef<HTMLInputElement>(null);
   const galleryRef = useRef<HTMLInputElement>(null);
 
-  async function handleFile(file: File) {
+  // 촬영으로 찍은 사진은 카메라 input이 임시파일만 넘겨줘 폰 갤러리에 안 남는다.
+  // → 업로드 성공 후 서버 URL을 attachment로 내려받아 휴대폰에도 저장(앨범 선택은 이미 폰에 있으므로 제외).
+  function saveToPhone(serverUrl: string) {
+    const name = `${plate}_${slot.label}`;
+    const sep = serverUrl.includes("?") ? "&" : "?";
+    downloadUrl(`${serverUrl}${sep}download=1&name=${encodeURIComponent(name)}`);
+  }
+
+  async function handleFile(file: File, fromCamera = false) {
     setBusy(true);
     setError(null);
     // 찍은 사진을 업로드 완료 전에 즉시 미리보기로 표시 (실패 시 원래대로 복구)
@@ -61,6 +70,7 @@ export default function PhotoSlot({
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "업로드 실패");
       onUploaded(slot.slotKey, json.url);
+      if (fromCamera) saveToPhone(json.url);
       // 서버 이미지를 미리 받아둔 뒤 교체(깜빡임 방지) — 그때까지는 로컬 미리보기 유지
       const server = new window.Image();
       server.onload = () => {
@@ -192,7 +202,7 @@ export default function PhotoSlot({
         className="hidden"
         onChange={(e) => {
           const f = e.target.files?.[0];
-          if (f) handleFile(f);
+          if (f) handleFile(f, true);
           e.target.value = "";
         }}
       />
