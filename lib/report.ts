@@ -30,7 +30,7 @@ export interface DailyReport {
   groups: ReportGroup[];
   cumDone: number; // 누적 완료(기준일까지)
   cumPlanned: number; // 누적 계획(기준일까지 설치예정)
-  cumPct: number; // 누적 달성률 = 완료/계획
+  cumPct: number; // 누적 달성률 = 누적 완료/전체 설치대상
   remaining: number; // 잔여 = 전체 설치대상 − 누적 완료
 }
 
@@ -110,16 +110,18 @@ export function buildReport(input: ReportInput): DailyReport {
       : input.scheduleDays.find((s) => s.date === date)?.planned ?? 0;
   const dailyPct = dailyPlanned ? (dailyDone / dailyPlanned) * 100 : 0;
 
-  // 누적(기준일까지): 설치예정일 누적 계획 vs 그 날짜까지 완료
+  // 누적(기준일까지): 설치예정일 누적 계획, 그 날짜까지 완료
   const cumPlanned = input.scheduleDays
     .filter((s) => s.date <= date)
     .reduce((sum, s) => sum + s.planned, 0);
   const cumDone = input.completedList.filter((c) => c.workDate <= date).length;
-  const cumPct = cumPlanned ? (cumDone / cumPlanned) * 100 : 0;
 
   // 잔여 = 전체 설치대상(전체 예정 대수) − 누적 완료
   const totalTarget = input.scheduleDays.reduce((sum, s) => sum + s.planned, 0);
   const remaining = Math.max(0, totalTarget - cumDone);
+
+  // 누적 달성률 = 누적 완료 / 전체 설치대상
+  const cumPct = totalTarget ? (cumDone / totalTarget) * 100 : 0;
 
   return {
     date,
