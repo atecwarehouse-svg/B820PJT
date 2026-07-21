@@ -37,15 +37,33 @@ export default function PhotoSlot({
   const [url, setUrl] = useState<string | null>(initialUrl ?? null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // 아이폰: 이번에 촬영한 원본 파일 — '휴대폰에 저장' 버튼(공유시트)용
+  const [shareFile, setShareFile] = useState<File | null>(null);
   const cameraRef = useRef<HTMLInputElement>(null);
   const galleryRef = useRef<HTMLInputElement>(null);
 
+  const isIOS =
+    typeof navigator !== "undefined" && /iPhone|iPad|iPod/.test(navigator.userAgent);
+
   // 촬영으로 찍은 사진은 카메라 input이 임시파일만 넘겨줘 폰 갤러리에 안 남는다.
-  // → 업로드 성공 후 서버 URL을 attachment로 내려받아 휴대폰에도 저장(앨범 선택은 이미 폰에 있으므로 제외).
+  // → 안드로이드/PC: 업로드 성공 후 서버 URL을 attachment로 내려받아 휴대폰에도 저장.
+  //   (앨범 선택은 이미 폰에 있으므로 제외)
   function saveToPhone(serverUrl: string) {
     const name = `${plate}_${slot.label}`;
     const sep = serverUrl.includes("?") ? "&" : "?";
     downloadUrl(`${serverUrl}${sep}download=1&name=${encodeURIComponent(name)}`);
+  }
+
+  // 아이폰: attachment 다운로드는 홈화면 앱에서 화면을 덮고 뒤로가기가 없어 불편
+  // → 공유시트('이미지 저장' 탭 시 사진 앱에 저장)로 대체. 원본 화질 그대로.
+  async function shareToPhone() {
+    if (!shareFile) return;
+    try {
+      await navigator.share({ files: [shareFile] });
+      setShareFile(null); // 저장(공유) 완료 → 버튼 숨김
+    } catch {
+      // 사용자가 공유시트를 닫은 경우 — 버튼 유지, 아무것도 안 함
+    }
   }
 
   async function handleFile(file: File, fromCamera = false) {
@@ -70,7 +88,16 @@ export default function PhotoSlot({
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "업로드 실패");
       onUploaded(slot.slotKey, json.url);
-      if (fromCamera) saveToPhone(json.url);
+      if (fromCamera) {
+        const named = new File([file], `${plate}_${slot.label}.jpg`, {
+          type: file.type || "image/jpeg",
+        });
+        if (isIOS && typeof navigator.canShare === "function" && navigator.canShare({ files: [named] })) {
+          setShareFile(named);
+        } else {
+          saveToPhone(json.url);
+        }
+      }
       // 서버 이미지를 미리 받아둔 뒤 교체(깜빡임 방지) — 그때까지는 로컬 미리보기 유지
       const server = new window.Image();
       server.onload = () => {
@@ -99,6 +126,7 @@ export default function PhotoSlot({
       );
       if (!res.ok) throw new Error("삭제 실패");
       setUrl(null);
+      setShareFile(null);
       onDeleted(slot.slotKey);
     } catch (e) {
       const msg = e instanceof Error ? e.message : "삭제 실패";
@@ -180,6 +208,16 @@ export default function PhotoSlot({
               앨범
             </button>
           </div>
+
+          {shareFile && (
+            <button
+              onClick={shareToPhone}
+              disabled={busy}
+              className="mt-1.5 w-full rounded bg-emerald-600 px-2 py-1.5 text-xs font-medium text-white active:bg-emerald-700 disabled:opacity-50"
+            >
+              📱 휴대폰에 저장
+            </button>
+          )}
 
           {url && (
             <button
