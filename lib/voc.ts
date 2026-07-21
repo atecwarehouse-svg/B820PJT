@@ -106,19 +106,3 @@ export function starBar(v: number): string {
   const filled = Math.min(VOC_MAX_STARS, Math.max(0, Math.round(v)));
   return "★".repeat(filled) + "☆".repeat(VOC_MAX_STARS - filled);
 }
-
-// 요약 → 표시용 줄 목록. 메일 평문·HTML·팀즈 카드가 같은 문구를 쓰도록 공용화.
-export function vocSummaryLines(s: VocOperatorSummary): string[] {
-  const lines: string[] = [];
-  const head = s.avg !== null ? starBar(s.avg) : "평가 없음";
-  lines.push(`${s.operator} : ${head} (${s.vehicles}대 중 ${s.rated}대 응답)`);
-  const per = VOC_RATINGS.filter((r) => s.averages[r.key] !== undefined).map(
-    (r) => `${r.label} ${starBar(s.averages[r.key]!)}`,
-  );
-  if (per.length) lines.push(per.join(" · "));
-  for (const c of s.comments) {
-    lines.push(`${c.plate}${c.route ? ` (${c.route})` : ""} : ${c.comment}`);
-  }
-  if (s.notes) lines.push(`특이사항 : ${s.notes}`);
-  return lines;
-}

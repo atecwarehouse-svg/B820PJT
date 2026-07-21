@@ -1,5 +1,5 @@
 import type { VocOperatorSummary } from "@/lib/voc";
-import { vocSummaryLines } from "@/lib/voc";
+import { VOC_RATINGS, starBar } from "@/lib/voc";
 
 // 금일 설치 완료 리포트(카드) 생성 — 화면 미리보기와 메일 발송이 공유하는 순수 로직.
 // 완료 = 저장(saved_at) + 설치 전·후 사진 전부 충족, 날짜는 업무일(20:00~익일 12:00) 기준.
@@ -182,9 +182,18 @@ export function formatReportText(
   if (vocs?.length) {
     lines.push("○ 운수사 VOC");
     for (const v of vocs) {
-      const [head, ...rest] = vocSummaryLines(v);
-      lines.push(`- ${head}`);
-      for (const r2 of rest) lines.push(`  · ${r2}`);
+      const head = v.avg !== null ? starBar(v.avg) : "평가 없음";
+      lines.push(`- ${v.operator} : ${head} (${v.vehicles}대 중 ${v.rated}대 응답)`);
+      // 항목별 평균 별점 — 한 줄에 하나씩(정렬)
+      for (const r2 of VOC_RATINGS) {
+        if (v.averages[r2.key] !== undefined) {
+          lines.push(`  · ${r2.label} : ${starBar(v.averages[r2.key]!)}`);
+        }
+      }
+      for (const c of v.comments) {
+        lines.push(`  · ${c.plate}${c.route ? ` (${c.route})` : ""} : ${c.comment}`);
+      }
+      if (v.notes) lines.push(`  · 특이사항 : ${v.notes}`);
     }
     lines.push(HR);
   }
@@ -225,19 +234,30 @@ export function formatReportHtml(
       .join("")}</ul>`
     : "";
 
-  // 운수사 VOC 섹션 (2차 발송에서만 전달됨)
+  // 운수사 VOC 섹션 (2차 발송에서만 전달됨) — 항목별 별점은 2열 표로 정렬
   const vocHtml = vocs?.length
     ? `<div style="border-top:1px dashed #d1d5db;margin:12px 0"></div>
     <div style="font-weight:600;margin-bottom:4px">○ 운수사 VOC</div>
     <ul style="margin:0 0 4px;padding-left:18px;line-height:1.7;color:#374151">${vocs
       .map((v) => {
-        const [head, ...rest] = vocSummaryLines(v);
-        const sub = rest.length
-          ? `<div style="font-size:12px;color:#6b7280;margin-top:2px">${rest
-              .map((l) => esc(l))
-              .join("<br/>")}</div>`
+        const head = `${esc(v.operator)} : ${v.avg !== null ? starBar(v.avg) : "평가 없음"} (${v.vehicles}대 중 ${v.rated}대 응답)`;
+        const ratingRows = VOC_RATINGS.filter((r) => v.averages[r.key] !== undefined)
+          .map(
+            (r) =>
+              `<tr><td style="padding:1px 10px 1px 0;white-space:nowrap">${esc(r.label)}</td><td>${starBar(v.averages[r.key]!)}</td></tr>`,
+          )
+          .join("");
+        const ratingTable = ratingRows
+          ? `<table style="margin-top:3px;border-collapse:collapse;font-size:12px;color:#6b7280">${ratingRows}</table>`
           : "";
-        return `<li><b>${esc(head)}</b>${sub}</li>`;
+        const commentLines = [
+          ...v.comments.map((c) => `${esc(c.plate)}${c.route ? ` (${esc(c.route)})` : ""} : ${esc(c.comment)}`),
+          ...(v.notes ? [`특이사항 : ${esc(v.notes)}`] : []),
+        ];
+        const commentHtml = commentLines.length
+          ? `<div style="font-size:12px;color:#6b7280;margin-top:2px">${commentLines.join("<br/>")}</div>`
+          : "";
+        return `<li><b>${head}</b>${ratingTable}${commentHtml}</li>`;
       })
       .join("")}</ul>`
     : "";
