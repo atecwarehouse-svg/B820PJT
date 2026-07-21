@@ -35,7 +35,8 @@ type VocVehicle = CompletedVehicle & { outTime?: string | null };
 // 차량번호가 자동으로 나열되고, 차량마다 4개 항목을 별점(5점)으로 매기고 기타 의견을
 // 적는다. 저장하면 vocs 테이블에
 // 운수사+설치일 기준으로 upsert되고, 같은 조합으로 다시 열면 불러와 수정할 수 있다.
-// 팀즈(설치 진행중 공유방)에는 내용 없이 '등록되었습니다'만 알린다.
+// 버스가 나가는 텀에 맞춰 한 대씩 저장해도 되고, 팀즈 알림은 전체 차량이
+// 입력(별점·의견 또는 휴차)됐을 때만 발송된다.
 export default function VocModal() {
   const [open, setOpen] = useState(false);
   const [completedList, setCompletedList] = useState<VocVehicle[]>([]);
@@ -46,6 +47,7 @@ export default function VocModal() {
   const [state, setState] = useState<Record<string, VocState>>({});
   const [notes, setNotes] = useState("");
   const [busy, setBusy] = useState(false);
+  const [doneComplete, setDoneComplete] = useState(false); // 전체 입력 완료로 저장됐는지(팀즈 알림 발송 여부)
   const [error, setError] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false); // 저장된 VOC를 불러왔는지(= 수정 모드)
 
@@ -169,6 +171,7 @@ export default function VocModal() {
     setState({});
     setNotes("");
     setBusy(false);
+    setDoneComplete(false);
     setError(null);
     setLoaded(false);
     setCompletedList([]);
@@ -208,6 +211,7 @@ export default function VocModal() {
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "저장 실패");
+      setDoneComplete(Boolean(json.complete));
       setStep("done");
     } catch (e) {
       setError(e instanceof Error ? e.message : "저장 실패");
@@ -251,8 +255,15 @@ export default function VocModal() {
             <div className="p-4">
               {step === "done" ? (
                 <div className="py-6 text-center">
-                  <p className="text-3xl">✅</p>
-                  <p className="mt-2 text-sm font-semibold text-gray-700">VOC를 저장했습니다</p>
+                  <p className="text-3xl">{doneComplete ? "✅" : "💾"}</p>
+                  <p className="mt-2 text-sm font-semibold text-gray-700">
+                    {doneComplete ? "VOC를 저장했습니다" : "중간 저장했습니다"}
+                  </p>
+                  <p className="mt-1 text-xs text-gray-400">
+                    {doneComplete
+                      ? "전체 차량 입력이 완료되어 팀즈 알림을 보냈습니다"
+                      : `아직 입력 안 된 차량 ${active.length - vocCount}대 — 전체 입력 후 저장하면 팀즈 알림이 발송됩니다`}
+                  </p>
                   <p className="mt-1 text-xs text-gray-400">
                     같은 운수사·설치일로 다시 열면 이어서 수정할 수 있습니다
                   </p>

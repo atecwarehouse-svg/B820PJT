@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
 import { sendVocCard } from "@/lib/teams";
-import { cleanRatings, summarizeVocs } from "@/lib/voc";
+import { cleanRatings, hasVocInput, summarizeVocs } from "@/lib/voc";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -30,6 +30,7 @@ export async function GET(req: NextRequest) {
 }
 
 // POST /api/voc — 대시보드 'VOC 접수' 폼 → DB 저장(운수사+설치일 upsert) + 팀즈 알림.
+// 알림은 전체 차량 입력 완료 시에만 발송(중간 저장은 저장만).
 // 협의사항처럼 비밀번호 없이 현장에서 바로 사용. 팀즈 카드에는 노선별 대수와
 // 요약(전체 평균·항목별 평균·개별 의견)을 담는다.
 export async function POST(req: NextRequest) {
@@ -100,8 +101,15 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // 팀즈 알림 — 실패해도 저장은 유지하고 알림만 생략.
+  // 팀즈 알림 — 전체 차량이 입력됐을 때만 보낸다. 현장에서는 버스가 나가는 텀에 맞춰
+  // 한 대씩 입력·저장하므로, 중간 저장마다 알림이 가면 같은 카드가 여러 번 울린다.
+  // '입력됨' = 별점·의견이 하나라도 있거나 휴차 체크. 알림 실패해도 저장은 유지.
+  const complete =
+    items.length + dayOff.length > 0 && items.every((i) => hasVocInput(i));
   let notified = false;
+  if (!complete) {
+    return NextResponse.json({ ok: true, notified, complete });
+  }
   try {
     // 노선별 대수 — 카드 부제 "영업소 00노선 날짜 (N대)"용. 휴차 차량은 노선 정보가
     // 없으므로 평가 대상(items) 기준으로 센다.
@@ -121,5 +129,5 @@ export async function POST(req: NextRequest) {
     // 웹후크 미설정·전송 실패 — 저장은 완료
   }
 
-  return NextResponse.json({ ok: true, notified });
+  return NextResponse.json({ ok: true, notified, complete });
 }
