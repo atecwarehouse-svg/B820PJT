@@ -3,7 +3,48 @@
 import type { DailyReport, ServiceCheck } from "./report";
 import { serviceCheckRows } from "./report";
 import type { VocOperatorSummary } from "./voc";
-import { vocSummaryLines } from "./voc";
+import { VOC_RATINGS, starBar } from "./voc";
+
+// 운수사 VOC 요약 → 팀즈 카드 블록. 항목별 평균 별점은 FactSet(라벨·별점 2열)로
+// 그려 별점 열이 세로로 정렬되게 한다. 개별 의견·특이사항은 자유 텍스트라 TextBlock.
+// VOC 등록 카드(sendVocCard)와 금일완료 2차 카드가 공유한다.
+function vocSummaryBlocks(s: VocOperatorSummary, headSpacing: "Small" | "Medium"): unknown[] {
+  const blocks: unknown[] = [
+    {
+      type: "TextBlock",
+      weight: "Bolder",
+      text: `${s.operator} : ${s.avg !== null ? starBar(s.avg) : "평가 없음"} (${s.vehicles}대 중 ${s.rated}대 응답)`,
+      spacing: headSpacing,
+      wrap: true,
+    },
+  ];
+  const facts = VOC_RATINGS.filter((r) => s.averages[r.key] !== undefined).map((r) => ({
+    title: r.label,
+    value: starBar(s.averages[r.key]!),
+  }));
+  if (facts.length) {
+    blocks.push({ type: "FactSet", spacing: "Small", facts });
+  }
+  for (const c of s.comments) {
+    blocks.push({
+      type: "TextBlock",
+      text: `${c.plate}${c.route ? ` (${c.route})` : ""} : ${c.comment}`,
+      isSubtle: true,
+      spacing: "None",
+      wrap: true,
+    });
+  }
+  if (s.notes) {
+    blocks.push({
+      type: "TextBlock",
+      text: `특이사항 : ${s.notes}`,
+      isSubtle: true,
+      spacing: "Small",
+      wrap: true,
+    });
+  }
+  return blocks;
+}
 
 export interface ProgressCardData {
   label: string; // 날짜 라벨 (예: "9/17 (수)")
@@ -198,19 +239,7 @@ export async function sendCompletionReportCard(
           spacing: "Medium",
           wrap: true,
         },
-        ...vocs.flatMap((v) => {
-          const [head, ...rest] = vocSummaryLines(v);
-          return [
-            { type: "TextBlock", weight: "Bolder", text: head, spacing: "Small", wrap: true },
-            ...rest.map((l) => ({
-              type: "TextBlock",
-              text: l,
-              isSubtle: true,
-              spacing: "None",
-              wrap: true,
-            })),
-          ];
-        }),
+        ...vocs.flatMap((v) => vocSummaryBlocks(v, "Small")),
       ]
     : [];
 
@@ -457,28 +486,8 @@ export async function sendVocCard(d: VocCardData): Promise<void> {
               spacing: "None",
               wrap: true,
             })),
-            // 요약 — 전체 평균과 항목별 평균, 개별 의견
-            ...(d.summary
-              ? (() => {
-                  const [head, ...rest] = vocSummaryLines(d.summary);
-                  return [
-                    {
-                      type: "TextBlock",
-                      weight: "Bolder",
-                      text: head,
-                      spacing: "Medium",
-                      wrap: true,
-                    },
-                    ...rest.map((l) => ({
-                      type: "TextBlock",
-                      text: l,
-                      isSubtle: true,
-                      spacing: "None",
-                      wrap: true,
-                    })),
-                  ];
-                })()
-              : []),
+            // 요약 — 전체 평균과 항목별 평균(FactSet 정렬), 개별 의견
+            ...(d.summary ? vocSummaryBlocks(d.summary, "Medium") : []),
           ],
         },
       },
