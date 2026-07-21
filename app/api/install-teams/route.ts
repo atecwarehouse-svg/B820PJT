@@ -25,6 +25,7 @@ export async function GET(req: NextRequest) {
         .select("plate, operator, team, saved_at")
         .not("saved_at", "is", null)
         .order("saved_at", { ascending: false })
+        .order("plate")
         .range(from, to),
     );
     const vehicles = rows
@@ -34,7 +35,12 @@ export async function GET(req: NextRequest) {
   }
 
   const rows = await fetchAll<{ team: string | null }>((from, to) =>
-    supabase.from("records").select("team").not("saved_at", "is", null).range(from, to),
+    supabase
+      .from("records")
+      .select("team")
+      .not("saved_at", "is", null)
+      .order("plate")
+      .range(from, to),
   );
   const byTeam = new Map<string, number>();
   for (const r of rows) {

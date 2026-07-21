@@ -21,7 +21,7 @@ export async function GET(req: NextRequest) {
 
   // 1) 운수사의 차량 plate들
   const vehicles = await fetchAll<{ plate: string }>((from, to) =>
-    supabase.from("vehicles").select("plate").eq("operator", operator).range(from, to),
+    supabase.from("vehicles").select("plate").eq("operator", operator).order("plate").range(from, to),
   );
   const opPlates = vehicles.map((v) => v.plate);
   if (opPlates.length === 0) {
@@ -30,7 +30,7 @@ export async function GET(req: NextRequest) {
 
   // 2) 그 중 사진이 있는 plate (중복 제거)
   const photoRows = await fetchAll<{ plate: string }>((from, to) =>
-    supabase.from("photos").select("plate").in("plate", opPlates).range(from, to),
+    supabase.from("photos").select("plate").in("plate", opPlates).order("id").range(from, to),
   );
   const plates = [...new Set(photoRows.map((p) => p.plate))].sort();
 

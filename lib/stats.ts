@@ -68,13 +68,13 @@ async function loadFromView(supabase: SB, target: number): Promise<DashboardStat
 async function loadByScan(supabase: SB, target: number): Promise<DashboardStats> {
   const [vehicles, photoRows, naRows] = await Promise.all([
     fetchAll<{ plate: string; operator: string | null }>((from, to) =>
-      supabase.from("vehicles").select("plate, operator").range(from, to),
+      supabase.from("vehicles").select("plate, operator").order("plate").range(from, to),
     ),
     fetchAll<{ plate: string }>((from, to) =>
-      supabase.from("photos").select("plate").range(from, to),
+      supabase.from("photos").select("plate").order("id").range(from, to),
     ),
     fetchAll<{ plate: string; na_slots: string[] | null }>((from, to) =>
-      supabase.from("records").select("plate, na_slots").range(from, to),
+      supabase.from("records").select("plate, na_slots").order("plate").range(from, to),
     ),
   ]);
 
@@ -123,10 +123,10 @@ export async function loadInProgressList(): Promise<InProgressVehicle[]> {
   // 시작된 차량 = records 존재. + plate별 사진 장수. '단말기 없음'은 사진 1장으로 간주.
   const [recRows, photoRows] = await Promise.all([
     fetchAll<{ plate: string; na_slots: string[] | null }>((from, to) =>
-      supabase.from("records").select("plate, na_slots").range(from, to),
+      supabase.from("records").select("plate, na_slots").order("plate").range(from, to),
     ),
     fetchAll<{ plate: string }>((from, to) =>
-      supabase.from("photos").select("plate").range(from, to),
+      supabase.from("photos").select("plate").order("id").range(from, to),
     ),
   ]);
   const photoCnt = new Map<string, number>();
@@ -188,6 +188,7 @@ export async function fetchCompletedMap(supabase: SB): Promise<Map<string, strin
         .from("records")
         .select("plate, saved_at, na_slots")
         .not("saved_at", "is", null)
+        .order("plate")
         .range(from, to),
     ),
     fetchAll<{ plate: string; slot_key: string }>((from, to) =>
@@ -195,6 +196,7 @@ export async function fetchCompletedMap(supabase: SB): Promise<Map<string, strin
         .from("photos")
         .select("plate, slot_key")
         .in("slot_key", stdSlots)
+        .order("id")
         .range(from, to),
     ),
   ]);
@@ -245,7 +247,7 @@ export async function loadInstallProgress(): Promise<InstallProgress> {
   const supabase = createServiceClient();
   const [vehicles, completed] = await Promise.all([
     fetchAll<{ plate: string; operator: string | null; route: string | null }>((from, to) =>
-      supabase.from("vehicles").select("plate, operator, route").range(from, to),
+      supabase.from("vehicles").select("plate, operator, route").order("plate").range(from, to),
     ),
     fetchCompletedMap(supabase),
   ]);
@@ -310,7 +312,7 @@ export async function loadTodayPlanGroups(date: string): Promise<TodayPlanGroup[
     operator: string | null;
     route: string | null;
   }>((from, to) =>
-    supabase.from("vehicles").select("planned_date, operator, route").range(from, to),
+    supabase.from("vehicles").select("planned_date, operator, route").order("plate").range(from, to),
   );
 
   const byGroup = new Map<string, TodayPlanGroup>();
@@ -349,7 +351,7 @@ export async function loadScheduleStats(): Promise<ScheduleStats> {
   const supabase = createServiceClient();
   const [vehicles, completed] = await Promise.all([
     fetchAll<{ plate: string; planned_date: string | null; is_pilot: boolean | null }>((from, to) =>
-      supabase.from("vehicles").select("plate, planned_date, is_pilot").range(from, to),
+      supabase.from("vehicles").select("plate, planned_date, is_pilot").order("plate").range(from, to),
     ),
     fetchCompletedMap(supabase),
   ]);
@@ -408,7 +410,7 @@ export async function loadOperatorSchedules(): Promise<OperatorSchedule[]> {
     route: string | null;
     planned_date: string | null;
   }>((from, to) =>
-    supabase.from("vehicles").select("operator, route, planned_date").range(from, to),
+    supabase.from("vehicles").select("operator, route, planned_date").order("plate").range(from, to),
   );
 
   // 운수사 → 날짜 → 노선 → 대수

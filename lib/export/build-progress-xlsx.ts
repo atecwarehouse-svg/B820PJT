@@ -43,7 +43,7 @@ export async function buildProgressXlsx(opts?: { asOfDate?: string }): Promise<{
       route: string | null;
       planned_date: string | null;
       list_no?: number | null;
-    }>((from, to) => supabase.from("vehicles").select("*").range(from, to)),
+    }>((from, to) => supabase.from("vehicles").select("*").order("plate").range(from, to)),
   ]);
 
   const vmap = new Map(vrows.map((v) => [v.plate, v]));

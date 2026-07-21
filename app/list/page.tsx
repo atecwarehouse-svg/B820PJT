@@ -24,10 +24,11 @@ export default async function ListPage() {
         .select("*")
         .not("saved_at", "is", null)
         .order("saved_at", { ascending: false })
+        .order("plate")
         .range(from, to),
     ),
     fetchAll<{ plate: string }>((from, to) =>
-      supabase.from("photos").select("plate").range(from, to),
+      supabase.from("photos").select("plate").order("id").range(from, to),
     ),
     supabase
       .from("operator_progress")

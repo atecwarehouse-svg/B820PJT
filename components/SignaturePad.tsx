@@ -21,17 +21,31 @@ const SignaturePad = forwardRef<SignaturePadHandle, { height?: number }>(
     const last = useRef<{ x: number; y: number } | null>(null);
     const [empty, setEmpty] = useState(true);
 
-    // 캔버스를 컨테이너 폭에 맞춰 고DPI로 초기화
+    // 캔버스를 컨테이너 폭에 맞춰 고DPI로 초기화.
+    // 주의: canvas.width/height 대입은 비트맵을 지운다 — 모바일에서 키보드 열림·회전으로
+    // resize가 오면 서명이 사라진 채 dirty만 남아 빈 서명이 제출되던 버그가 있었다.
+    // 크기가 그대로면 건드리지 않고, 바뀌면 스냅샷을 떠서 새 크기에 맞춰 복원한다.
     useEffect(() => {
       const canvas = canvasRef.current;
       if (!canvas) return;
       const setup = () => {
         const rect = canvas.getBoundingClientRect();
         const dpr = window.devicePixelRatio || 1;
-        canvas.width = Math.round(rect.width * dpr);
-        canvas.height = Math.round(rect.height * dpr);
+        const w = Math.round(rect.width * dpr);
+        const h = Math.round(rect.height * dpr);
+        if (w === canvas.width && h === canvas.height) return;
+        let snapshot: HTMLCanvasElement | null = null;
+        if (dirty.current && canvas.width > 0 && canvas.height > 0) {
+          snapshot = document.createElement("canvas");
+          snapshot.width = canvas.width;
+          snapshot.height = canvas.height;
+          snapshot.getContext("2d")?.drawImage(canvas, 0, 0);
+        }
+        canvas.width = w;
+        canvas.height = h;
         const ctx = canvas.getContext("2d");
         if (!ctx) return;
+        if (snapshot) ctx.drawImage(snapshot, 0, 0, w, h);
         ctx.scale(dpr, dpr);
         ctx.lineWidth = 2.5;
         ctx.lineCap = "round";

@@ -21,8 +21,11 @@ export async function GET(
     supabase.from("check_photos").select("*").eq("plate", plate).order("sort_order"),
   ]);
 
-  if (vehicleRes.error) {
-    return NextResponse.json({ error: vehicleRes.error.message }, { status: 500 });
+  // records/photos 조회 실패를 '기록 없음'으로 내리면 호출부가 새 기록으로 착각해
+  // 저장 시 기존 데이터를 덮어쓸 수 있다. check_photos만 마이그레이션 전 호환으로 허용.
+  const loadError = vehicleRes.error ?? recordRes.error ?? photosRes.error;
+  if (loadError) {
+    return NextResponse.json({ error: loadError.message }, { status: 500 });
   }
 
   const bundle: RecordBundle = {
