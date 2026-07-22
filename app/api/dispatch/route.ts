@@ -42,26 +42,36 @@ export async function GET(req: NextRequest) {
   const vehicles = (data ?? []) as unknown as VehicleRow[];
   const plates = vehicles.map((v) => v.plate);
 
-  // 저장된 시간·체크리스트 — checklist 컬럼 없는 DB(마이그레이션 전)면 시간만 재시도
+  // 저장된 시간·체크리스트·타코확인·설치제외 — 없는 컬럼(마이그레이션 전)은 단계적으로 빼고 재시도
   let dbReady = true;
   const times = new Map<string, string | null>();
   const checks = new Set<string>();
-  type SavedRow = { plate: string; out_time: string | null; checklist?: boolean };
+  const tachoDones = new Set<string>();
+  const excludes = new Set<string>();
+  type SavedRow = {
+    plate: string;
+    out_time: string | null;
+    checklist?: boolean;
+    tacho_checked?: boolean;
+    excluded?: boolean;
+  };
   let savedRows: SavedRow[] | null = null;
-  const saved = await supabase
-    .from("dispatch_times")
-    .select("plate, out_time, checklist")
-    .eq("date", date)
-    .range(0, 999);
-  if (saved.error && /checklist/i.test(saved.error.message)) {
-    const retry = await supabase
+  const SELECTS = [
+    "plate, out_time, checklist, tacho_checked, excluded",
+    "plate, out_time, checklist",
+    "plate, out_time",
+  ];
+  for (const cols of SELECTS) {
+    const res = await supabase
       .from("dispatch_times")
-      .select("plate, out_time")
+      .select(cols)
       .eq("date", date)
       .range(0, 999);
-    if (!retry.error) savedRows = (retry.data ?? []) as SavedRow[];
-  } else if (!saved.error) {
-    savedRows = (saved.data ?? []) as SavedRow[];
+    if (!res.error) {
+      savedRows = (res.data ?? []) as unknown as SavedRow[];
+      break;
+    }
+    if (!/checklist|tacho_checked|excluded/i.test(res.error.message)) break;
   }
   if (savedRows === null) {
     dbReady = false;
@@ -69,6 +79,8 @@ export async function GET(req: NextRequest) {
     for (const r of savedRows) {
       times.set(r.plate, r.out_time ?? null);
       if (r.checklist) checks.add(r.plate);
+      if (r.tacho_checked) tachoDones.add(r.plate);
+      if (r.excluded) excludes.add(r.plate);
     }
   }
 
@@ -118,6 +130,8 @@ export async function GET(req: NextRequest) {
       checklist: checks.has(v.plate),
       completed: completedSet.has(v.plate),
       tachoCheck: isTachoCheck(v.tacho), // 조영 DT-202 → 배차표에 '타코확인' 표시
+      tachoDone: tachoDones.has(v.plate), // 타코확인 완료(체크 시 녹색)
+      excluded: excludes.has(v.plate), // 설치제외(나중에 설치 — 리스트에는 유지)
     })),
     dbReady,
   });
@@ -132,6 +146,8 @@ export async function POST(req: NextRequest) {
       route?: string;
       outTime?: string | null;
       checklist?: boolean;
+      tachoDone?: boolean;
+      excluded?: boolean;
     }[];
   };
   try {
@@ -159,6 +175,8 @@ export async function POST(req: NextRequest) {
           ? e.outTime
           : null,
       checklist: e.checklist === true,
+      tacho_checked: e.tachoDone === true,
+      excluded: e.excluded === true,
       updated_at: now,
     }))
     .filter((r) => r.plate);
@@ -170,9 +188,21 @@ export async function POST(req: NextRequest) {
   let { error } = await supabase
     .from("dispatch_times")
     .upsert(rows, { onConflict: "date,plate" });
-  // checklist 컬럼 없는 DB(마이그레이션 전) — 체크리스트만 빼고 재시도(시간·휴차는 저장)
-  if (error && /checklist/i.test(error.message)) {
-    const noCheck = rows.map(({ checklist: _c, ...rest }) => rest);
+  // 타코확인·설치제외 컬럼 없는 DB(migration_dispatch_tacho_excl.sql 전) — 빼고 재시도
+  if (error && /tacho_checked|excluded/i.test(error.message)) {
+    const stripped = rows.map(({ tacho_checked: _t, excluded: _e, ...rest }) => rest);
+    ({ error } = await supabase
+      .from("dispatch_times")
+      .upsert(stripped, { onConflict: "date,plate" }));
+    // checklist 컬럼도 없는 더 옛 DB — 체크리스트까지 빼고 재시도(시간·휴차는 저장)
+    if (error && /checklist/i.test(error.message)) {
+      const noCheck = stripped.map(({ checklist: _c, ...rest }) => rest);
+      ({ error } = await supabase
+        .from("dispatch_times")
+        .upsert(noCheck, { onConflict: "date,plate" }));
+    }
+  } else if (error && /checklist/i.test(error.message)) {
+    const noCheck = rows.map(({ checklist: _c, tacho_checked: _t, excluded: _e, ...rest }) => rest);
     ({ error } = await supabase
       .from("dispatch_times")
       .upsert(noCheck, { onConflict: "date,plate" }));
