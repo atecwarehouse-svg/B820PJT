@@ -119,6 +119,7 @@ export async function sendStartReportCard(d: {
   complete: number;
   remain: number;
   groups: { operator: string; route: string; planned: number }[];
+  note?: string; // 특이사항 — 있을 때만 카드 하단에 표시
 }): Promise<void> {
   const url = process.env.TEAMS_WEBHOOK_URL;
   if (!url) throw new Error("팀즈 웹후크가 설정되지 않았습니다. (TEAMS_WEBHOOK_URL)");
@@ -172,6 +173,22 @@ export async function sendStartReportCard(d: {
                 { title: "잔여(설치대상)", value: `${d.remain.toLocaleString()}대` },
               ],
             },
+            ...(d.note
+              ? [
+                  {
+                    type: "TextBlock",
+                    weight: "Bolder",
+                    text: "📝 특이사항",
+                    wrap: true,
+                  },
+                  {
+                    type: "TextBlock",
+                    spacing: "Small",
+                    text: d.note,
+                    wrap: true,
+                  },
+                ]
+              : []),
           ],
         },
       },

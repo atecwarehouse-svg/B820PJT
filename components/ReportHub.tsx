@@ -312,6 +312,7 @@ function ShareStatPanel({
   const label = fmtLabel(today);
   const isStart = kind === "start";
   const [sharing, setSharing] = useState(false);
+  const [note, setNote] = useState(""); // 설치시작 보고 특이사항 — 카드에 함께 표시
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
   async function share() {
@@ -330,7 +331,7 @@ function ShareStatPanel({
           complete,
           inProgress,
           remain,
-          ...(isStart ? { groups: planGroups } : {}),
+          ...(isStart ? { groups: planGroups, note: note.trim() } : {}),
         }),
       });
       const j = await res.json();
@@ -390,6 +391,21 @@ function ShareStatPanel({
           </li>
         ))}
       </ul>
+      {isStart && (
+        <div className="mt-2">
+          <label className="mb-1 block text-[11px] font-medium text-gray-500">
+            특이사항 <span className="font-normal text-gray-400">(선택 — 카드에 함께 표시)</span>
+          </label>
+          <textarea
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            maxLength={500}
+            rows={3}
+            placeholder="예) 우천으로 작업 지연 예상, ○○차량 입고 지연 등"
+            className="w-full resize-none rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-800 placeholder:text-gray-300 focus:border-orange-400 focus:outline-none"
+          />
+        </div>
+      )}
       <div className="mt-3 flex gap-2">
         <button
           onClick={onClose}
