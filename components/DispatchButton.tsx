@@ -123,6 +123,7 @@ export default function DispatchButton() {
   const [autoM, setAutoM] = useState("00"); // 첫차 분
   const [autoGap, setAutoGap] = useState(5); // 분 간격
   const [seqMap, setSeqMap] = useState<Record<string, string>>({}); // plate → 순번
+  const [autoAlert, setAutoAlert] = useState<string | null>(null); // 자동 입력 페이지 경고 팝업
 
   useEffect(() => {
     if (!open || operators !== null) return;
@@ -260,9 +261,9 @@ export default function DispatchButton() {
     setSaveMsg(null);
   }
 
-  // 자동 입력 대상 — 노선 필터 적용, 휴차·설치제외는 제외. 노선·차량번호순(API 원본 순서).
+  // 자동 입력 대상 — 노선 필터 적용, 설치제외만 제외(휴차는 목록에서 직접 체크 가능).
   const autoTargets = (routeFilter ? entries.filter((e) => e.route === routeFilter) : entries).filter(
-    (e) => e.outTime !== OFF && !e.excluded,
+    (e) => !e.excluded,
   );
 
   // 자동 입력 적용 — 순번 n 차량의 시간 = 첫차 + (n−1)×간격. 순번 없는 차량은 그대로.
@@ -270,6 +271,7 @@ export default function DispatchButton() {
     const base = Number(autoH) * 60 + Number(autoM);
     const timeByPlate = new Map<string, string>();
     for (const e of autoTargets) {
+      if (e.outTime === OFF) continue; // 휴차는 건너뜀
       const raw = (seqMap[e.plate] ?? "").trim();
       if (!/^\d+$/.test(raw) || Number(raw) < 1) continue;
       const t = (base + (Number(raw) - 1) * autoGap) % (24 * 60);
@@ -279,8 +281,8 @@ export default function DispatchButton() {
       );
     }
     if (timeByPlate.size === 0) {
-      setSaveMsg({ ok: false, text: "순번을 입력한 차량이 없습니다." });
-      setAutoView(false);
+      // 페이지를 닫지 않고 그 자리에서 안내 팝업
+      setAutoAlert("순번이 입력되지 않았습니다.\n차량별 나가는 순번을 입력해주세요.");
       return;
     }
     setEntries((list) =>
@@ -489,6 +491,7 @@ export default function DispatchButton() {
                     type="button"
                     onClick={() => {
                       setSeqMap({});
+                      setAutoAlert(null);
                       setAutoView(true);
                     }}
                     className="rounded-lg border border-orange-300 bg-white px-4 py-2.5 text-sm font-semibold text-orange-600 active:bg-orange-50"
@@ -788,13 +791,14 @@ export default function DispatchButton() {
 
                 {/* 차량별 순번 입력 */}
                 <p className="mb-1 mt-4 text-[11px] text-gray-400">
-                  나가는 순번 (1 = 첫차 · 빈칸은 건너뜀 · 휴차/설치제외 차량은 목록에서
-                  제외)
+                  나가는 순번 (1 = 첫차 · 빈칸은 건너뜀 · 설치제외 차량은 목록에서 제외 ·
+                  휴차는 체크)
                 </p>
                 <ul className="divide-y divide-gray-100 rounded-lg border border-gray-200">
                   {autoTargets.map((e) => {
+                    const isOff = e.outTime === OFF;
                     const raw = (seqMap[e.plate] ?? "").trim();
-                    const valid = /^\d+$/.test(raw) && Number(raw) >= 1;
+                    const valid = !isOff && /^\d+$/.test(raw) && Number(raw) >= 1;
                     const t = valid
                       ? (Number(autoH) * 60 +
                           Number(autoM) +
@@ -804,10 +808,16 @@ export default function DispatchButton() {
                     return (
                       <li
                         key={e.plate}
-                        className="flex items-center justify-between gap-2 px-3 py-2"
+                        className={`flex items-center justify-between gap-2 px-3 py-2 ${
+                          isOff ? "bg-red-50/60" : ""
+                        }`}
                       >
                         <div className="min-w-0">
-                          <p className="truncate text-sm font-medium text-gray-800">
+                          <p
+                            className={`truncate text-sm font-medium ${
+                              isOff ? "text-red-400 line-through" : "text-gray-800"
+                            }`}
+                          >
                             {e.plate}
                           </p>
                           {!routeFilter && e.route && (
@@ -821,19 +831,35 @@ export default function DispatchButton() {
                               {String(t % 60).padStart(2, "0")}
                             </span>
                           )}
+                          <label className="flex cursor-pointer items-center gap-1">
+                            <input
+                              type="checkbox"
+                              checked={isOff}
+                              onChange={(ev) => toggleOff(e.plate, ev.target.checked)}
+                              className="h-4 w-4 accent-red-600"
+                            />
+                            <span
+                              className={`text-xs ${
+                                isOff ? "font-semibold text-red-600" : "text-gray-500"
+                              }`}
+                            >
+                              휴차
+                            </span>
+                          </label>
                           <input
                             type="text"
                             inputMode="numeric"
                             pattern="[0-9]*"
-                            value={seqMap[e.plate] ?? ""}
+                            value={isOff ? "" : seqMap[e.plate] ?? ""}
+                            disabled={isOff}
                             onChange={(ev) =>
                               setSeqMap((m) => ({
                                 ...m,
                                 [e.plate]: ev.target.value.replace(/[^0-9]/g, ""),
                               }))
                             }
-                            placeholder="순번"
-                            className="w-16 rounded-lg border border-gray-300 px-2 py-1.5 text-center text-base tabular-nums focus:border-orange-500 focus:outline-none"
+                            placeholder={isOff ? "휴차" : "순번"}
+                            className="w-16 rounded-lg border border-gray-300 px-2 py-1.5 text-center text-base tabular-nums focus:border-orange-500 focus:outline-none disabled:bg-gray-50 disabled:text-gray-300"
                           />
                         </div>
                       </li>
@@ -841,6 +867,31 @@ export default function DispatchButton() {
                   })}
                 </ul>
               </div>
+
+              {/* 미입력 경고 팝업 — 자동 입력 페이지 안에서 표시 */}
+              {autoAlert && (
+                <div
+                  className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 p-4"
+                  onClick={() => setAutoAlert(null)}
+                >
+                  <div
+                    className="w-full max-w-xs rounded-2xl bg-white p-5 text-center shadow-xl"
+                    onClick={(ev) => ev.stopPropagation()}
+                  >
+                    <div className="text-4xl">⚠️</div>
+                    <p className="mt-2 whitespace-pre-line text-sm font-semibold text-gray-800">
+                      {autoAlert}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setAutoAlert(null)}
+                      className="mt-4 w-full rounded-lg bg-orange-600 px-4 py-2.5 text-sm font-semibold text-white active:bg-orange-700"
+                    >
+                      확인
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {/* 적용 버튼 — 하단 고정 */}
               <div className="fixed inset-x-0 bottom-0 z-10 border-t border-gray-200 bg-white/95 p-3 backdrop-blur">
