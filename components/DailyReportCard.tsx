@@ -131,12 +131,17 @@ export default function DailyReportCard({
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [vocs, setVocs] = useState<VocOperatorSummary[]>([]);
   const [prefilled, setPrefilled] = useState(false); // 1차 발송 내용을 불러왔는지
+  // 배차표 '설치제외' 차량 — 특이사항에 자동 입력하고 사유를 적게 한다.
+  // 2차는 1차 프리필(사유가 이미 적힌 내용)을 먼저 반영한 뒤에 자동 입력을 판단.
+  const [exclPlates, setExclPlates] = useState<string[]>([]);
+  const [prefillDone, setPrefillDone] = useState(stage !== 2);
 
   // 2차 폼 프리필 — 같은 날짜로 1차를 발송했으면 그때의 특이사항·운행시작 점검·계획수량을
   // 자동으로 채운다. 이미 입력된 칸은 덮지 않는다(늦게 도착한 응답이 입력을 지우는 사고 방지).
   useEffect(() => {
     if (stage !== 2) return;
     setPrefilled(false);
+    setPrefillDone(false);
     let alive = true;
     (async () => {
       try {
@@ -145,7 +150,11 @@ export default function DailyReportCard({
         });
         const json = await res.json();
         const d = json.draft;
-        if (!alive || !d) return;
+        if (!alive) return;
+        if (!d) {
+          setPrefillDone(true);
+          return;
+        }
         if (typeof d.notes === "string" && d.notes) {
           setNotes((cur) => (cur === "" ? d.notes : cur));
         }
@@ -169,14 +178,46 @@ export default function DailyReportCard({
           setKakaoSymptom((cur) => (cur === "" ? (c.kakaoSymptom as string) : cur));
         }
         setPrefilled(true);
+        setPrefillDone(true);
       } catch {
         // 불러오기 실패 — 새로 입력하면 된다
+        if (alive) setPrefillDone(true);
       }
     })();
     return () => {
       alive = false;
     };
   }, [stage, date]);
+
+  // 배차표 설치제외 차량 조회 — 날짜 바뀌면 다시.
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const res = await fetch(`/api/dispatch/excluded?date=${encodeURIComponent(date)}`, {
+          cache: "no-store",
+        });
+        const json = await res.json();
+        if (alive) setExclPlates((json.plates ?? []) as string[]);
+      } catch {
+        if (alive) setExclPlates([]);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [date]);
+
+  // 설치제외가 있으면 특이사항에 자동 입력(사유 칸 포함).
+  // 이미 '설치제외' 내용이 적혀 있으면(1차 프리필 포함) 덮지 않는다.
+  useEffect(() => {
+    if (!prefillDone || exclPlates.length === 0) return;
+    setNotes((cur) =>
+      cur.includes("설치제외")
+        ? cur
+        : `${cur ? cur + "\n" : ""}[설치제외 ${exclPlates.length}대] ${exclPlates.join(", ")}\n└ 제외 사유: `,
+    );
+  }, [prefillDone, exclPlates]);
 
   // 2차 미리보기용 VOC 요약 — 선택한 날짜가 바뀌면 다시 불러온다.
   // (발송 시에는 서버가 같은 날짜로 다시 조회하므로 여기 실패해도 내용은 빠지지 않는다.)
@@ -367,6 +408,12 @@ export default function DailyReportCard({
 
       {/* 특이사항 */}
       <label className="mt-3 block text-xs font-medium text-gray-600">특이사항 (선택)</label>
+      {exclPlates.length > 0 && (
+        <p className="mt-1 rounded-lg bg-amber-50 px-3 py-1.5 text-[11px] font-medium text-amber-700">
+          ⚠️ 배차표 설치제외 {exclPlates.length}대가 특이사항에 자동 입력되었습니다 —
+          제외 사유를 적어주세요
+        </p>
+      )}
       <textarea
         value={notes}
         onChange={(e) => setNotes(e.target.value)}
