@@ -9,6 +9,10 @@ export interface ReportInput {
   completedList: { operator: string; route: string; workDate: string }[];
   scheduleDays: { date: string; planned: number }[];
   plannedOverride?: number | null; // 금일 계획 수량 직접 입력값(있으면 우선)
+  // 전체 설치대상(전체 차량 수, 예: 2,739대) — 누적 달성률·잔여의 분모.
+  // 완료 목록에는 예정일 없는 차량(증차 등)도 포함되므로, 분모도 예정일 유무와
+  // 무관한 전체 차량 수여야 100% 초과·잔여 0 오표시가 없다. 없으면 예정일 합계로 폴백.
+  totalVehicles?: number;
   // 누적(계획/완료)은 기준일까지 scheduleDays·completedList에서 계산하므로 아래 값은 쓰지 않음(하위호환용).
   cumDone?: number;
   cumPlanned?: number;
@@ -116,8 +120,11 @@ export function buildReport(input: ReportInput): DailyReport {
     .reduce((sum, s) => sum + s.planned, 0);
   const cumDone = input.completedList.filter((c) => c.workDate <= date).length;
 
-  // 잔여 = 전체 설치대상(전체 예정 대수) − 누적 완료
-  const totalTarget = input.scheduleDays.reduce((sum, s) => sum + s.planned, 0);
+  // 잔여 = 전체 설치대상(전체 차량 수, 폴백은 전체 예정 대수) − 누적 완료
+  const totalTarget =
+    typeof input.totalVehicles === "number" && input.totalVehicles > 0
+      ? input.totalVehicles
+      : input.scheduleDays.reduce((sum, s) => sum + s.planned, 0);
   const remaining = Math.max(0, totalTarget - cumDone);
 
   // 누적 달성률 = 누적 완료 / 전체 설치대상

@@ -6,7 +6,7 @@ import {
   loadScheduleStats,
   loadInProgressList,
   loadTodayPlanGroups,
-  loadTodayExcludedCount,
+  loadTodayExcludedPlates,
   loadOperatorSchedules,
 } from "@/lib/stats";
 import type {
@@ -92,13 +92,14 @@ const getTodayPlan = unstable_cache(
   { revalidate: 60, tags: ["dashboard"] },
 );
 
-// 배차표 '설치제외' 금일 대수 — 금일 설치현황 타일에서 설치대상 차감용.
+// 배차표 '설치제외' 금일 차량 목록 — 금일 설치현황 타일에서 설치대상 차감용.
+// (그날 예정 차량과 교집합만 — 일정 변경·삭제된 차량의 옛 제외 기록은 무시)
 const getTodayExcluded = unstable_cache(
-  async (date: string): Promise<number> => {
+  async (date: string): Promise<string[]> => {
     try {
-      return await loadTodayExcludedCount(date);
+      return await loadTodayExcludedPlates(date);
     } catch {
-      return 0;
+      return [];
     }
   },
   ["dashboard-today-excluded"],
@@ -122,7 +123,7 @@ export default async function DashboardPage() {
   // 상세 섹션(설치 일정·운수사별·영업소별·날짜별)은 잠금 해제 전에는 서버가 아예 안 내려준다.
   const detailUnlocked = isProgressUnlocked();
   const todayWork = workDateString(new Date()); // 현재 업무일
-  const [s, ip, sch, inProgressList, todayPlanGroups, operatorSchedules, todayExcluded] =
+  const [s, ip, sch, inProgressList, todayPlanGroups, operatorSchedules, excludedPlates] =
     await Promise.all([
       getStats(),
       getInstall(),
@@ -152,6 +153,12 @@ export default async function DashboardPage() {
   // 금일 설치현황 — 설치대상(예정일=금일 − 배차표 설치제외)·설치완료(금일 저장 완료)
   const todayPlanned = sch?.days.find((d) => d.date === today)?.planned ?? 0;
   const todayDone = ip?.todayComplete ?? 0;
+  // 설치제외인데 실제로 금일 완료된 차량은 차감하지 않는다 — 완료 수에는 잡히므로
+  // 그대로 빼면 달성률이 100%를 넘거나 '대상 < 완료' 모순이 생긴다.
+  const completedTodaySet = new Set(
+    (ip?.completedList ?? []).filter((c) => c.workDate === today).map((c) => c.plate),
+  );
+  const todayExcluded = excludedPlates.filter((p) => !completedTodaySet.has(p)).length;
   const todayTarget = Math.max(0, todayPlanned - todayExcluded);
 
   return (
@@ -193,6 +200,7 @@ export default async function DashboardPage() {
             <DailyReportModal
               completedList={ip.completedList}
               scheduleDays={sch?.days ?? []}
+              totalVehicles={ip.totalVehicles}
               cumDone={ip.complete}
               cumPlanned={sch?.totalPlanned ?? 0}
               today={ip.today}

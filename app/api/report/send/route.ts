@@ -107,6 +107,7 @@ export async function POST(req: NextRequest) {
       date,
       completedList: ip.completedList,
       scheduleDays: sch.days,
+      totalVehicles: ip.totalVehicles,
       cumDone: ip.complete,
       cumPlanned: sch.totalPlanned,
       plannedOverride: typeof body.planned === "number" ? body.planned : null,

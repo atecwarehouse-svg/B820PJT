@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { OperatorSchedule } from "@/lib/stats";
 import { workDateString } from "@/lib/work-day";
 
@@ -28,6 +28,12 @@ interface Entry {
 // "2026-07-15" → "2026.07.15"
 function fmtDot(d: string): string {
   return d.replace(/-/g, ".");
+}
+
+// 노선 비교 키 — 드롭다운 선택지(loadOperatorSchedules)와 같은 규칙(trim, 빈값="미지정")으로
+// 정규화해야 노선 없는 차량("미지정")이나 앞뒤 공백이 있는 노선도 필터에 정상 매칭된다.
+function routeKey(route: string): string {
+  return route.trim() || "미지정";
 }
 
 // 나가는 시간순 정렬 — 미입력은 뒤, 설치제외는 그 뒤, 휴차는 맨 뒤, 같은 시간은 차량번호순
@@ -109,6 +115,9 @@ export default function DispatchButton() {
   const [routeFilter, setRouteFilter] = useState(""); // "" = 전체
 
   const [entries, setEntries] = useState<Entry[]>([]);
+  // 이 기기에서 수정한 차량번호 — 저장 시 이 차량들만 서버로 보낸다.
+  // 전체를 보내면 다른 기기가 그 사이 저장한 값을 로드 시점의 옛 값으로 덮어쓴다.
+  const dirtyRef = useRef<Set<string>>(new Set());
   const [listLoading, setListLoading] = useState(false);
   const [listError, setListError] = useState("");
   const [dbReady, setDbReady] = useState(true);
@@ -217,11 +226,13 @@ export default function DispatchButton() {
       setListError(e instanceof Error ? e.message : "차량 목록을 불러오지 못했습니다.");
       setEntries([]);
     } finally {
+      dirtyRef.current = new Set();
       setListLoading(false);
     }
   }
 
   function setTime(plate: string, v: string | null) {
+    dirtyRef.current.add(plate);
     setEntries((list) =>
       list.map((e) => (e.plate === plate ? { ...e, outTime: v } : e)),
     );
@@ -235,6 +246,7 @@ export default function DispatchButton() {
 
   // 체크리스트 작성 토글
   function toggleChecklist(plate: string, checked: boolean) {
+    dirtyRef.current.add(plate);
     setEntries((list) =>
       list.map((e) => (e.plate === plate ? { ...e, checklist: checked } : e)),
     );
@@ -243,6 +255,7 @@ export default function DispatchButton() {
 
   // 타코확인 완료 토글 — 배지 탭. 저장하면 녹색 상태가 모든 기기에 공유된다.
   function toggleTachoDone(plate: string) {
+    dirtyRef.current.add(plate);
     setEntries((list) =>
       list.map((e) => (e.plate === plate ? { ...e, tachoDone: !e.tachoDone } : e)),
     );
@@ -251,6 +264,7 @@ export default function DispatchButton() {
 
   // 설치제외 토글 — 나중에 설치할 차량. 시간은 지우고 리스트에는 그대로 남는다.
   function toggleExcluded(plate: string, checked: boolean) {
+    dirtyRef.current.add(plate);
     setEntries((list) =>
       list.map((e) =>
         e.plate === plate
@@ -262,9 +276,9 @@ export default function DispatchButton() {
   }
 
   // 자동 입력 대상 — 노선 필터 적용, 설치제외만 제외(휴차는 목록에서 직접 체크 가능).
-  const autoTargets = (routeFilter ? entries.filter((e) => e.route === routeFilter) : entries).filter(
-    (e) => !e.excluded,
-  );
+  const autoTargets = (
+    routeFilter ? entries.filter((e) => routeKey(e.route) === routeFilter) : entries
+  ).filter((e) => !e.excluded);
 
   // 자동 입력 적용 — 순번 n 차량의 시간 = 첫차 + (n−1)×간격. 순번 없는 차량은 그대로.
   function applyAuto() {
@@ -285,6 +299,7 @@ export default function DispatchButton() {
       setAutoAlert("순번이 입력되지 않았습니다.\n차량별 나가는 순번을 입력해주세요.");
       return;
     }
+    for (const p of timeByPlate.keys()) dirtyRef.current.add(p);
     setEntries((list) =>
       list.map((e) =>
         timeByPlate.has(e.plate) ? { ...e, outTime: timeByPlate.get(e.plate)! } : e,
@@ -299,16 +314,23 @@ export default function DispatchButton() {
 
   async function handleSave() {
     if (saving) return;
+    // 이 기기에서 바꾼 차량만 저장 — 다른 기기가 먼저 저장한 값을 덮어쓰지 않는다.
+    const changed = entries.filter((e) => dirtyRef.current.has(e.plate));
+    if (changed.length === 0) {
+      setSaveMsg({ ok: true, text: "변경된 내용이 없습니다." });
+      return;
+    }
     setSaving(true);
     setSaveMsg(null);
     try {
       const res = await fetch("/api/dispatch", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ operator, date, entries }),
+        body: JSON.stringify({ operator, date, entries: changed }),
       });
       const j = await res.json().catch(() => null);
       if (!res.ok) throw new Error(j?.error ?? "저장에 실패했습니다.");
+      dirtyRef.current = new Set();
       setSaveMsg({ ok: true, text: "저장됨 ✓ 모든 기기에서 같은 배차표가 보입니다." });
     } catch (e) {
       setSaveMsg({
@@ -320,9 +342,9 @@ export default function DispatchButton() {
     }
   }
 
-  // 표시 목록 — 노선 필터 적용 후 시간순 정렬 (저장은 항상 entries 전체)
+  // 표시 목록 — 노선 필터 적용 후 시간순 정렬
   const visible = sortEntries(
-    routeFilter ? entries.filter((e) => e.route === routeFilter) : entries,
+    routeFilter ? entries.filter((e) => routeKey(e.route) === routeFilter) : entries,
   );
   const timedCount = visible.filter((e) => e.outTime && e.outTime !== OFF).length;
   const offCount = visible.filter((e) => e.outTime === OFF).length;

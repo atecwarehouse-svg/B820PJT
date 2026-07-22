@@ -97,6 +97,7 @@ function StatRow({
 export default function DailyReportCard({
   completedList,
   scheduleDays,
+  totalVehicles,
   cumDone,
   cumPlanned,
   today,
@@ -106,6 +107,7 @@ export default function DailyReportCard({
 }: {
   completedList: CompletedVehicle[];
   scheduleDays: ScheduleDay[];
+  totalVehicles?: number; // 전체 설치대상(전체 차량 수) — 누적 달성률·잔여 분모
   cumDone: number;
   cumPlanned: number;
   today: string;
@@ -273,8 +275,9 @@ export default function DailyReportCard({
   }, [date, mergedNotes, to, planned, check]);
 
   const report = useMemo(
-    () => buildReport({ date, completedList, scheduleDays, cumDone, cumPlanned, plannedOverride }),
-    [date, completedList, scheduleDays, cumDone, cumPlanned, plannedOverride],
+    () =>
+      buildReport({ date, completedList, scheduleDays, totalVehicles, cumDone, cumPlanned, plannedOverride }),
+    [date, completedList, scheduleDays, totalVehicles, cumDone, cumPlanned, plannedOverride],
   );
   const text = useMemo(
     () => formatReportText(report, mergedNotes, check, stage === 2 ? vocs : undefined),

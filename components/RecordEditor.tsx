@@ -296,7 +296,8 @@ export default function RecordEditor({ plate, initial, teamOptions = [] }: Props
   }
 
   // 1·2단계 중간 저장 — 특이사항 없이도 여기까지 저장. 팀명·비고만 확인.
-  // saved:true라 서버가 saved_at 기록·팀즈 시작/완료 카드 판정까지 기존 로직대로 처리.
+  // saved:true지만 mid:true라 서버가 완료일(saved_at)은 찍지 않는다(3단계 최종 저장 때 기록).
+  // 팀즈 시작/완료 카드 판정은 기존 로직대로 처리.
   async function handleMidSave() {
     if (!team.trim()) {
       showToast(

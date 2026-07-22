@@ -132,7 +132,9 @@ export async function POST(req: NextRequest) {
     payload.install_date = existing.install_date;
   }
   // 최초 저장 시각만 기록 — 이후 수정 저장해도 완료일(saved_at)은 바뀌지 않는다.
-  if (body.saved && !existing?.saved_at) {
+  // 1·2단계 중간 저장(mid)은 설치 완료 전이므로 찍지 않는다 — 완료일이 실제보다
+  // 이른 날짜로 기록되어 금일 설치완료·S커브 집계가 어긋나는 것을 방지.
+  if (body.saved && !body.mid && !existing?.saved_at) {
     payload.saved_at = new Date().toISOString();
   }
 

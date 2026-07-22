@@ -330,18 +330,30 @@ export async function loadTodayPlanGroups(date: string): Promise<TodayPlanGroup[
   );
 }
 
-// 배차표에서 '설치제외' 체크된 금일 차량 수 — 대시보드 금일 설치현황 타일용.
+// 배차표에서 '설치제외' 체크된 금일 차량 목록 — 대시보드 금일 설치현황 타일용.
 // dispatch_times는 배차표 저장 시에만 행이 생김. excluded 컬럼 없는 DB(마이그레이션 전)나
-// 조회 실패 시 0(타일 차감만 생략, 대시보드는 정상 동작).
-export async function loadTodayExcludedCount(date: string): Promise<number> {
+// 조회 실패 시 빈 목록(타일 차감만 생략, 대시보드는 정상 동작).
+// 일정 재업로드로 예정일이 바뀌었거나 삭제된 차량의 옛 배차표 행이 남아 있어도
+// 차감되지 않도록, 그날 예정(planned_date=date)인 차량과 교집합만 돌려준다.
+export async function loadTodayExcludedPlates(date: string): Promise<string[]> {
   const supabase = createServiceClient();
-  const { count, error } = await supabase
+  const { data, error } = await supabase
     .from("dispatch_times")
-    .select("plate", { count: "exact", head: true })
+    .select("plate")
     .eq("date", date)
-    .eq("excluded", true);
-  if (error) return 0;
-  return count ?? 0;
+    .eq("excluded", true)
+    .order("plate")
+    .range(0, 999);
+  if (error || !data?.length) return [];
+  const plates = data.map((r) => r.plate).filter(Boolean);
+  const { data: veh, error: vehError } = await supabase
+    .from("vehicles")
+    .select("plate")
+    .eq("planned_date", date)
+    .in("plate", plates.slice(0, 500));
+  if (vehError) return [];
+  const planned = new Set((veh ?? []).map((v) => v.plate));
+  return plates.filter((p) => planned.has(p));
 }
 
 export interface ScheduleDay {
