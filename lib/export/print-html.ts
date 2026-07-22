@@ -8,6 +8,7 @@ import { PRETENDARD_WOFF2_BASE64 } from "./pretendard-font";
 export interface PrintSlot {
   label: string;
   url: string | null;
+  mark?: string | null; // 사진 대신 칸 가운데 표시할 텍스트 (예: 증차차량)
 }
 export interface PrintSection {
   title: string;
@@ -54,6 +55,7 @@ export const PRINT_CSS = `
   /* 엑셀 양식과 동일하게: 사진을 칸에 맞춰 늘려 전체가 보이게 (잘림·여백 없음) */
   .cell-photo img { width:100%; height:100%; object-fit:fill; }
   .cell-photo .empty { color:#999; font-size:10px; }
+  .cell-photo .mark { color:#000; font-size:12px; font-weight:700; }
   .grid, .cell { break-inside: avoid; }
 `;
 
@@ -85,7 +87,9 @@ function bodyInner(data: PrintData): string {
           <div class="cell-photo">${
             s.url
               ? `<img src="${esc(s.url)}" alt="${esc(s.label)}" />`
-              : `<span class="empty">사진 없음</span>`
+              : s.mark
+                ? `<span class="mark">${esc(s.mark)}</span>`
+                : `<span class="empty">사진 없음</span>`
           }</div>
         </div>`,
         )

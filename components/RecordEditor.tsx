@@ -51,6 +51,11 @@ export default function RecordEditor({ plate, initial, teamOptions = [] }: Props
   );
   // 단말기 없음으로 표시한 슬롯키(하차 등) — 사진 없이도 충족 처리
   const [naSlots, setNaSlots] = useState<string[]>(initial.record?.na_slots ?? []);
+  // 폐차 후 증차차량 — 설치전 칸 전체를 사진 없이 충족 처리(na_slots에 함께 기록),
+  // PDF/엑셀 설치전 사진칸에는 '증차차량' 텍스트 표시
+  const [addedVehicle, setAddedVehicle] = useState(
+    initial.record?.added_vehicle ?? false,
+  );
   // 차량 이상유무 '없음' 체크(장비 미장착) — 사진 없이 충족 처리
   const [checkNaSlots, setCheckNaSlots] = useState<string[]>(
     initial.record?.check_na_slots ?? [],
@@ -140,6 +145,7 @@ export default function RecordEditor({ plate, initial, teamOptions = [] }: Props
         check_na_slots: string[];
         check_note: string;
         extra_note: string;
+        added_vehicle: boolean;
         saved: boolean;
         mid: boolean;
         team_change: boolean;
@@ -162,6 +168,7 @@ export default function RecordEditor({ plate, initial, teamOptions = [] }: Props
             check_na_slots: overrides?.check_na_slots ?? checkNaSlots,
             check_note: overrides?.check_note ?? checkNote,
             extra_note: overrides?.extra_note ?? extraNote,
+            added_vehicle: overrides?.added_vehicle ?? addedVehicle,
             saved: overrides?.saved ?? false,
             // 1·2단계 중간 저장 — 서버가 특이사항(3단계 입력란) 필수 검증을 건너뛴다
             ...(overrides?.mid ? { mid: true } : {}),
@@ -198,6 +205,7 @@ export default function RecordEditor({ plate, initial, teamOptions = [] }: Props
       checkNaSlots,
       checkNote,
       extraNote,
+      addedVehicle,
       showToast,
     ],
   );
@@ -209,6 +217,20 @@ export default function RecordEditor({ plate, initial, teamOptions = [] }: Props
       : naSlots.filter((k) => k !== slotKey);
     setNaSlots(next);
     saveRecord({ na_slots: next });
+  }
+
+  // '증차차량' 토글 — 설치전 칸 전체(사진 있는 칸 제외)를 na_slots로 충족 처리.
+  // 해제하면 설치전 칸의 없음 표시를 모두 걷어내 다시 촬영할 수 있게 한다.
+  function toggleAddedVehicle(value: boolean) {
+    const beforeKeys = beforeSlots.map((s) => s.slotKey);
+    const next = value
+      ? Array.from(
+          new Set([...naSlots, ...beforeKeys.filter((k) => !urls[k])]),
+        )
+      : naSlots.filter((k) => !beforeKeys.includes(k));
+    setAddedVehicle(value);
+    setNaSlots(next);
+    saveRecord({ added_vehicle: value, na_slots: next });
   }
 
   // 팀명 변경 — 선택 즉시 저장. 성공하면 잠금(이후 변경은 관리자 비밀번호 필요).
@@ -669,6 +691,18 @@ export default function RecordEditor({ plate, initial, teamOptions = [] }: Props
         /* ── 2단계: 설치 전 ── */
         <>
           <SectionHeader title="설치 전" />
+          {/* 폐차 후 증차차량 — 설치전 사진이 없어 칸 전체를 사진 없이 충족 처리 */}
+          <label className="mb-2 flex cursor-pointer items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2.5">
+            <input
+              type="checkbox"
+              checked={addedVehicle}
+              onChange={(e) => toggleAddedVehicle(e.target.checked)}
+              className="h-4 w-4 accent-amber-600"
+            />
+            <span className="text-sm font-medium text-amber-800">
+              증차차량 (폐차 후 증차 — 설치 전 사진 없음)
+            </span>
+          </label>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
             {beforeSlots.map((slot, i) => (
               <PhotoSlot
@@ -684,6 +718,7 @@ export default function RecordEditor({ plate, initial, teamOptions = [] }: Props
                 allowNoTerminal={slot.slotKey.includes("alight")}
                 noTerminal={naSlots.includes(slot.slotKey)}
                 onToggleNoTerminal={toggleNoTerminal}
+                naLabel={addedVehicle ? "증차차량" : "단말기 없음"}
               />
             ))}
             <button

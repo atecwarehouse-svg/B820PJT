@@ -40,9 +40,14 @@ export async function loadPrintData(plate: string): Promise<PrintData | null> {
 
   const customSlots: CustomSlot[] = record?.custom_slots ?? [];
   const beforeSlots = buildBeforeSlots(customSlots);
+  // 증차차량(폐차 후 증차) — 설치전 사진이 없는 칸은 '증차차량' 텍스트로 표시
+  const addedVehicle = record?.added_vehicle === true;
 
-  const toSlots = (slots: typeof beforeSlots) =>
-    slots.map((s) => ({ label: s.label, url: urlBySlot.get(s.slotKey) ?? null }));
+  const toSlots = (slots: typeof beforeSlots, mark?: string) =>
+    slots.map((s) => {
+      const url = urlBySlot.get(s.slotKey) ?? null;
+      return { label: s.label, url, mark: !url && mark ? mark : null };
+    });
 
   return {
     plate,
@@ -52,7 +57,7 @@ export async function loadPrintData(plate: string): Promise<PrintData | null> {
     year: record?.year ?? "",
     model: record?.model ?? "",
     sections: [
-      { title: "설치 전", slots: toSlots(beforeSlots) },
+      { title: "설치 전", slots: toSlots(beforeSlots, addedVehicle ? "증차차량" : undefined) },
       { title: "설치 후", slots: toSlots(AFTER_SLOTS) },
     ],
   };

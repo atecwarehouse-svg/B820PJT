@@ -34,6 +34,7 @@ export interface BuildInput {
   beforeSlots: SlotDef[];
   afterSlots: SlotDef[];
   images: Map<string, SlotImage>; // slotKey -> 이미지
+  marks?: Map<string, string>; // slotKey -> 사진 대신 칸 가운데 표시할 텍스트 (예: 증차차량)
 }
 
 const IMAGE_ROW_HEIGHT = 15.75;
@@ -113,6 +114,14 @@ function writeVehicleBlock(
           br: { col: sl.anchorBr.col, row: sl.anchorBr.row } as any,
           editAs: "oneCell",
         });
+      } else {
+        const mark = input.marks?.get(sl.slot.slotKey);
+        if (mark) {
+          const cell = ws.getCell(cellRef(sl.imageCell.top, sl.imageCell.left));
+          cell.value = mark;
+          cell.font = { bold: true, size: 11 };
+          cell.alignment = CENTER;
+        }
       }
     }
 

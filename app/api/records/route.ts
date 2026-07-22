@@ -20,6 +20,7 @@ interface UpsertBody {
   check_na_slots?: string[]; // 차량 이상유무 '없음' 표시 슬롯키
   check_note?: string | null; // 차량 이상유무 비고
   extra_note?: string | null; // 설치 특이사항
+  added_vehicle?: boolean; // 폐차 후 증차차량 (설치전 사진 없음 — PDF/엑셀에 '증차차량' 표시)
   saved?: boolean; // true면 '저장'(목록 등록) 처리 → 최초 1회만 saved_at = now()
   mid?: boolean; // 1·2단계 중간 저장 — 특이사항(3단계 입력란) 없이 저장 허용
   admin_pw?: string; // 팀명 변경용 관리자 비밀번호 (한번 저장된 팀명은 관리자만 변경)
@@ -124,6 +125,9 @@ export async function POST(req: NextRequest) {
   if (body.extra_note !== undefined) {
     payload.extra_note = (body.extra_note ?? "").trim() || null;
   }
+  if (body.added_vehicle !== undefined) {
+    payload.added_vehicle = body.added_vehicle === true;
+  }
   if (existing?.install_date) {
     payload.install_date = existing.install_date;
   }
@@ -136,6 +140,13 @@ export async function POST(req: NextRequest) {
     supabase.from("records").upsert(p, { onConflict: "plate" }).select("*").single();
 
   let { data, error } = await upsert(payload);
+  // added_vehicle 컬럼 없는 DB(migration_added_vehicle.sql 미실행) 폴백 —
+  // 플래그만 빼고 재시도(na_slots는 저장되므로 충족 처리는 유지, PDF 표시만 생략).
+  if (error && payload.added_vehicle !== undefined && /added_vehicle/i.test(error.message)) {
+    const stripped = { ...payload };
+    delete stripped.added_vehicle;
+    ({ data, error } = await upsert(stripped));
+  }
   // 이상유무 컬럼이 아직 없는 DB(migration_inspection.sql 미실행) 폴백:
   //  - 컬럼 누락 에러(schema/column 문구)일 때만 발동.
   //  - 최종 '저장'이고 필수 비고/특이사항이 들어 있으면 조용히 버리지 않고 실패 처리

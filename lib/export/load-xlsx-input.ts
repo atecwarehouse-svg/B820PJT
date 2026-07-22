@@ -40,6 +40,14 @@ export async function loadBuildInput(plate: string): Promise<BuildInput | null> 
     }),
   );
 
+  // 증차차량(폐차 후 증차) — 설치전 사진이 없는 칸은 '증차차량' 텍스트로 표시
+  const marks = new Map<string, string>();
+  if (record?.added_vehicle === true) {
+    for (const s of beforeSlots) {
+      if (!images.has(s.slotKey)) marks.set(s.slotKey, "증차차량");
+    }
+  }
+
   return {
     plate,
     installDate: record?.install_date ?? todayStr(),
@@ -50,5 +58,6 @@ export async function loadBuildInput(plate: string): Promise<BuildInput | null> 
     beforeSlots,
     afterSlots: AFTER_SLOTS,
     images,
+    marks,
   };
 }

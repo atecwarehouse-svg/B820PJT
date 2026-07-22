@@ -44,6 +44,7 @@ export interface RecordRow {
   check_na_slots?: string[]; // 차량 이상유무 '없음' 표시 슬롯키 (장비 미장착 차량)
   check_note?: string | null; // 차량 이상유무 비고
   extra_note?: string | null; // 설치 특이사항
+  added_vehicle?: boolean; // 폐차 후 증차차량 — 설치전 사진 없이 충족, PDF/엑셀에 '증차차량' 표시
   saved_at?: string | null;
   updated_at?: string;
 }
