@@ -220,14 +220,22 @@ export default function RecordEditor({ plate, initial, teamOptions = [] }: Props
   }
 
   // '증차차량' 토글 — 설치전 칸 전체(사진 있는 칸 제외)를 na_slots로 충족 처리.
-  // 해제하면 설치전 칸의 없음 표시를 모두 걷어내 다시 촬영할 수 있게 한다.
+  // 해제하면 이 토글이 추가한 없음 표시만 걷어낸다 — 사용자가 따로 체크해 둔
+  // '단말기 없음'(하차 등)까지 지우지 않도록 추가분을 기억해 둔다.
+  // (재접속 등으로 기억이 없으면 예전처럼 설치전 칸 전체를 걷어낸다.)
+  const addedNaRef = useRef<string[] | null>(null);
   function toggleAddedVehicle(value: boolean) {
     const beforeKeys = beforeSlots.map((s) => s.slotKey);
-    const next = value
-      ? Array.from(
-          new Set([...naSlots, ...beforeKeys.filter((k) => !urls[k])]),
-        )
-      : naSlots.filter((k) => !beforeKeys.includes(k));
+    let next: string[];
+    if (value) {
+      const added = beforeKeys.filter((k) => !urls[k] && !naSlots.includes(k));
+      addedNaRef.current = added;
+      next = Array.from(new Set([...naSlots, ...added]));
+    } else {
+      const toRemove = new Set(addedNaRef.current ?? beforeKeys);
+      addedNaRef.current = null;
+      next = naSlots.filter((k) => !toRemove.has(k));
+    }
     setAddedVehicle(value);
     setNaSlots(next);
     saveRecord({ added_vehicle: value, na_slots: next });

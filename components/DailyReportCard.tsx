@@ -93,6 +93,25 @@ function StatRow({
   );
 }
 
+// 특이사항 텍스트에서 [설치제외 N대] 블록을 떼어내고 차량별 사유를 복원한다.
+// 2차 프리필이 1차의 블록을 그대로 상속하면 그 사이 바뀐 제외 목록이 갱신되지
+// 않으므로, 블록은 버리고(현재 목록으로 재생성) 사유만 입력칸에 되살리는 용도.
+function splitExclBlock(notes: string): { rest: string; reasons: Record<string, string> } {
+  const lines = notes.split(/\r?\n/);
+  const start = lines.findIndex((l) => /^\[설치제외 \d+대\]/.test(l.trim()));
+  if (start < 0) return { rest: notes, reasons: {} };
+  const reasons: Record<string, string> = {};
+  let end = start + 1;
+  while (end < lines.length) {
+    const m = lines[end].match(/^\s*\d+\.\s*(\S+)(?:\s+—\s*(.*))?$/);
+    if (!m) break;
+    if (m[2]?.trim()) reasons[m[1]] = m[2].trim();
+    end++;
+  }
+  const rest = [...lines.slice(0, start), ...lines.slice(end)].join("\n").trim();
+  return { rest, reasons };
+}
+
 // 금일 설치 완료 리포트 카드 — 미리보기 + Gmail 발송.
 export default function DailyReportCard({
   completedList,
@@ -154,9 +173,22 @@ export default function DailyReportCard({
         const d = json.draft;
         if (!alive || !d) return;
         if (typeof d.notes === "string" && d.notes) {
-          setNotes((cur) => (cur === "" ? d.notes : cur));
+          // 1차의 [설치제외] 블록은 그대로 상속하지 않는다 — 1차와 2차 사이에 배차표
+          // 제외 목록이 바뀌면 옛 목록이 굳어버리므로, 블록은 떼어내고(현재 목록으로
+          // 다시 생성됨) 차량별 사유만 입력칸에 복원한다.
+          const { rest, reasons } = splitExclBlock(d.notes);
+          setNotes((cur) => (cur === "" ? rest : cur));
+          if (Object.keys(reasons).length > 0) {
+            setExclReasons((cur) => ({ ...reasons, ...cur }));
+          }
         }
-        if (typeof d.planned === "number") setPlanned(String(d.planned));
+        if (typeof d.planned === "number") {
+          // 사용자가 이미 계획 수량을 직접 고쳤으면(자동 채움값과 다르면) 덮지 않는다
+          setPlanned((cur) => {
+            const auto = String(scheduleDays.find((s) => s.date === date)?.planned ?? 0);
+            return cur === "" || cur === auto ? String(d.planned) : cur;
+          });
+        }
         const c = (d.check ?? {}) as Partial<ServiceCheck>;
         if (c.driverEdu) setDriverEdu(true);
         if (c.fareSetting) setFareSetting(true);
@@ -183,7 +215,7 @@ export default function DailyReportCard({
     return () => {
       alive = false;
     };
-  }, [stage, date]);
+  }, [stage, date, scheduleDays]);
 
   // 배차표 설치제외 차량 조회 — 날짜 바뀌면 다시(사유 입력도 초기화).
   useEffect(() => {

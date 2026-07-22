@@ -148,7 +148,13 @@ function sortVehicleRows(
 
   const blocks = body.match(/<row r="\d+"[^>]*(?:\/>|>[\s\S]*?<\/row>)/g);
   if (!blocks || blocks.length < 3) return { xml, removed: 0 };
-  if (blocks.join("") !== body) return { xml, removed: 0 }; // 행 사이에 예상 밖 내용 → 정렬 포기
+  // 행 사이 공백/개행은 무시하고 비교 — 공백만으로 정렬(삭제 차량 제거 포함)이 통째로
+  // 건너뛰어지면 전개일정 대상수량 델타와 어긋나 총대수 불일치가 생긴다.
+  const normalized = body
+    .replace(/(<\/row>|\/>)\s+(?=<row )/g, "$1")
+    .replace(/^\s+/, "")
+    .replace(/\s+$/, "");
+  if (blocks.join("") !== normalized) return { xml, removed: 0 }; // 행 사이에 예상 밖 내용 → 정렬 포기
   if (!blocks[0].startsWith('<row r="1"')) return { xml, removed: 0 }; // 1행=헤더 전제
 
   const keyed = blocks.slice(1).map((block, idx) => {

@@ -288,7 +288,8 @@ export default function DispatchButton() {
       if (e.outTime === OFF) continue; // 휴차는 건너뜀
       const raw = (seqMap[e.plate] ?? "").trim();
       if (!/^\d+$/.test(raw) || Number(raw) < 1) continue;
-      const t = (base + (Number(raw) - 1) * autoGap) % (24 * 60);
+      // 자정을 넘어가면 00:xx로 wrap되어 첫차보다 앞으로 정렬되므로 23:59에서 멈춘다
+      const t = Math.min(base + (Number(raw) - 1) * autoGap, 24 * 60 - 1);
       timeByPlate.set(
         e.plate,
         `${String(Math.floor(t / 60)).padStart(2, "0")}:${String(t % 60).padStart(2, "0")}`,
@@ -348,9 +349,11 @@ export default function DispatchButton() {
   );
   const timedCount = visible.filter((e) => e.outTime && e.outTime !== OFF).length;
   const offCount = visible.filter((e) => e.outTime === OFF).length;
-  const checkCount = visible.filter((e) => e.checklist).length;
-  const tachoCount = visible.filter((e) => e.tachoCheck).length;
-  const tachoDoneCount = visible.filter((e) => e.tachoCheck && e.tachoDone).length;
+  // 검수완료·타코 집계는 설치대상(설치제외 아님)만 — 제외 차량을 세면 '검수완료 > 설치대상' 모순
+  const active = visible.filter((e) => !e.excluded);
+  const checkCount = active.filter((e) => e.checklist).length;
+  const tachoCount = active.filter((e) => e.tachoCheck).length;
+  const tachoDoneCount = active.filter((e) => e.tachoCheck && e.tachoDone).length;
   const exclCount = visible.filter((e) => e.excluded).length;
 
   return (
@@ -679,10 +682,15 @@ export default function DispatchButton() {
                                     설치제외
                                   </span>
                                 </label>
-                                <label className="flex cursor-pointer items-center gap-1">
+                                <label
+                                  className={`flex items-center gap-1 ${
+                                    e.excluded ? "opacity-40" : "cursor-pointer"
+                                  }`}
+                                >
                                   <input
                                     type="checkbox"
                                     checked={isOff}
+                                    disabled={e.excluded}
                                     onChange={(ev) =>
                                       toggleOff(e.plate, ev.target.checked)
                                     }
@@ -822,10 +830,10 @@ export default function DispatchButton() {
                     const raw = (seqMap[e.plate] ?? "").trim();
                     const valid = !isOff && /^\d+$/.test(raw) && Number(raw) >= 1;
                     const t = valid
-                      ? (Number(autoH) * 60 +
-                          Number(autoM) +
-                          (Number(raw) - 1) * autoGap) %
-                        (24 * 60)
+                      ? Math.min(
+                          Number(autoH) * 60 + Number(autoM) + (Number(raw) - 1) * autoGap,
+                          24 * 60 - 1,
+                        )
                       : null;
                     return (
                       <li

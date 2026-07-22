@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
+import { fetchAll } from "@/lib/supabase/paginate";
 import { BEFORE_SLOTS, AFTER_SLOTS } from "@/lib/slots";
 import { isTachoCheck } from "@/lib/tacho";
 
@@ -92,22 +93,27 @@ export async function GET(req: NextRequest) {
     const CH = 100; // 한글 plate 다수 in() 필터는 URL 길이 초과 방지를 위해 분할
     for (let i = 0; i < plates.length; i += CH) {
       const chunk = plates.slice(i, i + CH);
-      const [recRes, photoRes] = await Promise.all([
+      // 사진은 fetchAll 페이지네이션으로 — Supabase Max Rows 설정값에 의존해
+      // 조용히 잘리면 일부 완료 차량의 배지가 빠진다.
+      const [recRes, photoRows] = await Promise.all([
         supabase
           .from("records")
           .select("plate, saved_at, na_slots")
           .in("plate", chunk)
           .not("saved_at", "is", null),
-        supabase
-          .from("photos")
-          .select("plate, slot_key")
-          .in("plate", chunk)
-          .in("slot_key", stdSlots)
-          .range(0, 9999),
+        fetchAll<{ plate: string; slot_key: string }>((from, to) =>
+          supabase
+            .from("photos")
+            .select("plate, slot_key")
+            .in("plate", chunk)
+            .in("slot_key", stdSlots)
+            .order("id")
+            .range(from, to),
+        ).catch(() => null),
       ]);
-      if (recRes.error || photoRes.error) continue;
+      if (recRes.error || photoRows === null) continue;
       const bySlot = new Map<string, Set<string>>();
-      for (const p of photoRes.data ?? []) {
+      for (const p of photoRows) {
         const s = bySlot.get(p.plate) ?? new Set<string>();
         s.add(p.slot_key);
         bySlot.set(p.plate, s);

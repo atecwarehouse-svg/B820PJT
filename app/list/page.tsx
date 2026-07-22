@@ -2,7 +2,7 @@ import Link from "next/link";
 import { createServiceClient } from "@/lib/supabase/server";
 import { fetchAll } from "@/lib/supabase/paginate";
 import { workDateString } from "@/lib/work-day";
-import { DEFAULT_PHOTO_COUNT } from "@/lib/slots";
+import { AFTER_SLOTS, BEFORE_SLOTS, DEFAULT_PHOTO_COUNT } from "@/lib/slots";
 import type { RecordRow } from "@/lib/types";
 import ListClient, { type ListItem } from "@/components/ListClient";
 import { isAdmin } from "@/lib/admin-auth";
@@ -41,10 +41,15 @@ export default async function ListPage() {
     photoCount.set(p.plate, (photoCount.get(p.plate) ?? 0) + 1);
   }
 
+  // 표준 14칸 슬롯키 — na_slots에 커스텀 칸(before_custom_*)이 섞여 있어도
+  // 총수량(14)에서는 표준 칸만 차감해야 필요 사진 수가 과도하게 줄지 않는다.
+  const stdKeys = new Set([...BEFORE_SLOTS, ...AFTER_SLOTS].map((s) => s.slotKey));
   const items: ListItem[] = records.map((r) => {
     // '단말기 없음'(하차 등) 체크 칸은 촬영 대상에서 빼서 그 차량의 총수량을 줄인다.
     // 예) 하차 4칸 없음 → 10장/10장 완료.
-    const naCount = Array.isArray(r.na_slots) ? r.na_slots.length : 0;
+    const naCount = Array.isArray(r.na_slots)
+      ? r.na_slots.filter((k) => stdKeys.has(k)).length
+      : 0;
     return {
       plate: r.plate,
       operator: r.operator ?? "",

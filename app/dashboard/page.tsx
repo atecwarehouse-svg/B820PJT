@@ -123,16 +123,20 @@ export default async function DashboardPage() {
   // 상세 섹션(설치 일정·운수사별·영업소별·날짜별)은 잠금 해제 전에는 서버가 아예 안 내려준다.
   const detailUnlocked = isProgressUnlocked();
   const todayWork = workDateString(new Date()); // 현재 업무일
-  const [s, ip, sch, inProgressList, todayPlanGroups, operatorSchedules, excludedPlates] =
-    await Promise.all([
-      getStats(),
-      getInstall(),
-      getSchedule(),
-      getInProgress(),
-      getTodayPlan(todayWork),
-      getOperatorSchedules(),
-      getTodayExcluded(todayWork),
-    ]);
+  const [s, ip, sch, inProgressList, operatorSchedules] = await Promise.all([
+    getStats(),
+    getInstall(),
+    getSchedule(),
+    getInProgress(),
+    getOperatorSchedules(),
+  ]);
+  // '금일'은 진행현황 캐시(ip.today)와 같은 날짜로 통일 — 업무일 경계(정오) 직후
+  // 60초 캐시가 남아 있는 동안 대상·완료·제외가 서로 다른 날짜로 집계되는 것을 방지.
+  const todayKey = ip?.today ?? todayWork;
+  const [todayPlanGroups, excludedPlates] = await Promise.all([
+    getTodayPlan(todayKey),
+    getTodayExcluded(todayKey),
+  ]);
   // 렌더 시각(KST) — 새로고침할 때마다 갱신되어 데이터 최신 여부를 바로 알 수 있다.
   const updatedAt = new Intl.DateTimeFormat("ko-KR", {
     timeZone: "Asia/Seoul",
@@ -148,7 +152,7 @@ export default async function DashboardPage() {
 
   // 진행현황 다운로드 기준일 기본값 = 현재 업무일. 팝업에서 날짜를 바꾸면
   // 그 날짜까지의 스냅샷(계획·기준일·완료)으로 받는다. 계획수량은 예정일(planned_date)에서 파생.
-  const today = ip?.today ?? todayWork;
+  const today = todayKey;
   const scheduleDays = sch?.days.map((d) => ({ date: d.date, planned: d.planned })) ?? [];
   // 금일 설치현황 — 설치대상(예정일=금일 − 배차표 설치제외)·설치완료(금일 저장 완료)
   const todayPlanned = sch?.days.find((d) => d.date === today)?.planned ?? 0;
@@ -187,8 +191,8 @@ export default async function DashboardPage() {
         </h2>
         <div className="flex flex-wrap items-center gap-2">
           <ReportHub
-            planToday={todayWork}
-            shareToday={ip?.today ?? todayWork}
+            planToday={todayKey}
+            shareToday={todayKey}
             planGroups={todayPlanGroups}
             todayPlanned={todayPlanned}
             todayDone={todayDone}

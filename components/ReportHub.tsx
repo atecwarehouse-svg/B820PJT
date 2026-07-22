@@ -312,11 +312,12 @@ function ShareStatPanel({
   const label = fmtLabel(today);
   const isStart = kind === "start";
   const [sharing, setSharing] = useState(false);
+  const [sent, setSent] = useState(false); // 전송 성공 — 버튼을 잠가 중복 카드 방지
   const [note, setNote] = useState(""); // 설치시작 보고 특이사항 — 카드에 함께 표시
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
   async function share() {
-    if (sharing) return;
+    if (sharing || sent) return;
     setSharing(true);
     setMsg(null);
     try {
@@ -336,6 +337,7 @@ function ShareStatPanel({
       });
       const j = await res.json();
       if (!res.ok) throw new Error(j.error ?? "전송 실패");
+      setSent(true);
       setMsg({ ok: true, text: "팀즈로 전송되었습니다." });
     } catch (e) {
       setMsg({ ok: false, text: e instanceof Error ? e.message : "전송 실패" });
@@ -415,10 +417,10 @@ function ShareStatPanel({
         </button>
         <button
           onClick={share}
-          disabled={sharing}
+          disabled={sharing || sent}
           className={`flex-1 rounded-lg px-3 py-2.5 text-sm font-semibold text-white disabled:opacity-50 ${sendBtn}`}
         >
-          {sharing ? "전송 중…" : isStart ? "팀즈로 보고" : "팀즈로 공유"}
+          {sharing ? "전송 중…" : sent ? "전송 완료 ✓" : isStart ? "팀즈로 보고" : "팀즈로 공유"}
         </button>
       </div>
       {msg && (
