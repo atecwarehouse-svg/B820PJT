@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
 import { BEFORE_SLOTS, AFTER_SLOTS } from "@/lib/slots";
+import { isTachoCheck } from "@/lib/tacho";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -20,18 +21,26 @@ export async function GET(req: NextRequest) {
   }
 
   const supabase = createServiceClient();
-  const { data: vehicles, error } = await supabase
-    .from("vehicles")
-    .select("plate, route")
-    .eq("operator", operator)
-    .eq("planned_date", date)
-    .order("route")
-    .order("plate")
-    .range(0, 999);
+  // tacho(타코 제조사) 컬럼 없는 DB(migration_tacho.sql 미실행)면 빼고 재시도(타코확인 표시만 생략)
+  type VehicleRow = { plate: string; route: string | null; tacho?: string | null };
+  const selectVehicles = (cols: string) =>
+    supabase
+      .from("vehicles")
+      .select(cols)
+      .eq("operator", operator)
+      .eq("planned_date", date)
+      .order("route")
+      .order("plate")
+      .range(0, 999);
+  let { data, error } = await selectVehicles("plate, route, tacho");
+  if (error && /tacho/i.test(error.message)) {
+    ({ data, error } = await selectVehicles("plate, route"));
+  }
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
-  const plates = (vehicles ?? []).map((v) => v.plate);
+  const vehicles = (data ?? []) as unknown as VehicleRow[];
+  const plates = vehicles.map((v) => v.plate);
 
   // 저장된 시간·체크리스트 — checklist 컬럼 없는 DB(마이그레이션 전)면 시간만 재시도
   let dbReady = true;
@@ -102,12 +111,13 @@ export async function GET(req: NextRequest) {
   }
 
   return NextResponse.json({
-    vehicles: (vehicles ?? []).map((v) => ({
+    vehicles: vehicles.map((v) => ({
       plate: v.plate,
       route: v.route ?? "",
       outTime: times.get(v.plate) ?? null,
       checklist: checks.has(v.plate),
       completed: completedSet.has(v.plate),
+      tachoCheck: isTachoCheck(v.tacho), // 조영 DT-202 → 배차표에 '타코확인' 표시
     })),
     dbReady,
   });

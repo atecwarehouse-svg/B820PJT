@@ -11,6 +11,7 @@
     "import:vehicles:xlsx": "tsx scripts/import-vehicles-xlsx.ts",
     "import:schedule": "tsx scripts/import-schedule.ts",
     "delete:vehicle": "tsx scripts/delete-vehicle.ts",
+    "backfill:tacho": "tsx scripts/backfill-tacho.ts",
     "upload:template": "tsx scripts/upload-template.ts",
     "gdrive:setup": "tsx scripts/gdrive-setup.ts"
   },

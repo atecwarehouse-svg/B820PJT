@@ -186,21 +186,26 @@ export async function POST(req: NextRequest) {
   }
 
   // 적용(apply=true): 실제 반영(upsert).
-  // list_no 컬럼이 아직 없는 DB(migration_list_no.sql 미실행)면 빼고 재시도(폴백).
+  // 마이그레이션 전 DB에 아직 없을 수 있는 컬럼(list_no·tacho)은 에러 시 빼고 재시도(폴백).
   let done = 0;
-  let includeListNo = true;
-  const stripListNo = (rows: typeof parsed.rows) =>
-    rows.map(({ list_no: _list_no, ...rest }) => rest);
+  const optional = { list_no: true, tacho: true };
+  const shape = (rows: typeof parsed.rows) =>
+    rows.map(({ list_no, tacho, ...rest }) => ({
+      ...rest,
+      ...(optional.list_no ? { list_no } : {}),
+      ...(optional.tacho ? { tacho } : {}),
+    }));
   for (let i = 0; i < parsed.rows.length; i += CHUNK) {
     const chunk = parsed.rows.slice(i, i + CHUNK);
-    let { error } = await supabase
-      .from("vehicles")
-      .upsert(includeListNo ? chunk : stripListNo(chunk), { onConflict: "plate" });
-    if (error && includeListNo && /list_no/i.test(error.message)) {
-      includeListNo = false;
-      ({ error } = await supabase
-        .from("vehicles")
-        .upsert(stripListNo(chunk), { onConflict: "plate" }));
+    let { error } = await supabase.from("vehicles").upsert(shape(chunk), { onConflict: "plate" });
+    // 없는 컬럼이 여러 개일 수 있어 컬럼당 1회씩 재시도
+    for (const key of ["list_no", "tacho"] as const) {
+      if (error && optional[key] && new RegExp(key, "i").test(error.message)) {
+        optional[key] = false;
+        ({ error } = await supabase
+          .from("vehicles")
+          .upsert(shape(chunk), { onConflict: "plate" }));
+      }
     }
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });

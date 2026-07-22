@@ -20,6 +20,7 @@ interface Entry {
   outTime: string | null; // "HH:MM" 또는 "OFF"(휴차)
   checklist: boolean; // 체크리스트 작성 완료
   completed: boolean; // 설치완료(서버 판정 — 저장+설치전후 사진 충족)
+  tachoCheck: boolean; // 타코확인 대상(타코 제조사 = 조영 DT-202, 서버 판정)
 }
 
 // "2026-07-15" → "2026.07.15"
@@ -256,6 +257,7 @@ export default function DispatchButton() {
   const timedCount = visible.filter((e) => e.outTime && e.outTime !== OFF).length;
   const offCount = visible.filter((e) => e.outTime === OFF).length;
   const checkCount = visible.filter((e) => e.checklist).length;
+  const tachoCount = visible.filter((e) => e.tachoCheck).length;
 
   return (
     <>
@@ -445,6 +447,7 @@ export default function DispatchButton() {
                       <p className="mb-1 text-[11px] text-gray-400">
                         {visible.length}대 · 시간 입력 {timedCount}대
                         {checkCount > 0 && ` · 검수완료 ${checkCount}대`}
+                        {tachoCount > 0 && ` · 타코확인 ${tachoCount}대`}
                         {offCount > 0 && ` · 휴차 ${offCount}대`} — 시간을 고르면
                         이른 순서로 정렬됩니다
                       </p>
@@ -470,6 +473,11 @@ export default function DispatchButton() {
                                   {e.completed && (
                                     <span className="ml-1.5 rounded bg-green-100 px-1.5 py-0.5 align-middle text-[10px] font-semibold text-green-700">
                                       설치완료
+                                    </span>
+                                  )}
+                                  {e.tachoCheck && (
+                                    <span className="ml-1.5 rounded bg-amber-100 px-1.5 py-0.5 align-middle text-[10px] font-semibold text-amber-700">
+                                      ✔ 타코확인
                                     </span>
                                   )}
                                 </p>
@@ -582,6 +590,7 @@ export default function DispatchButton() {
                 <p className="mt-0.5 text-xs text-gray-500">
                   {fmtDot(date)} · {visible.length}대
                   {timedCount > 0 && ` · 시간입력 ${timedCount}대`}
+                  {tachoCount > 0 && ` · 타코확인 ${tachoCount}대`}
                   {offCount > 0 && ` · 휴차 ${offCount}대`}
                 </p>
                 <table className="mt-3 w-full border-collapse text-sm">
@@ -621,6 +630,11 @@ export default function DispatchButton() {
                             }`}
                           >
                             {e.plate}
+                            {e.tachoCheck && (
+                              <span className="ml-1 rounded bg-amber-100 px-1 py-0.5 align-middle text-[10px] font-semibold text-amber-700">
+                                ✔ 타코확인
+                              </span>
+                            )}
                           </td>
                           <td
                             className={`border border-gray-300 px-2 py-1.5 text-center font-semibold ${

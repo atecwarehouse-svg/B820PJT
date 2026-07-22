@@ -2,7 +2,7 @@
  * 진행현황 양식(xlsx)에서 차량별 설치 예정일(planned_date) + 시범설치(is_pilot)를 파싱.
  *
  *   - 차량리스트 시트: A=번호(list_no), F=차량번호, B=운수사, C=노선,
- *     I=설치 예정일(planned_date), J=연식(year), L=모델명(model)
+ *     I=설치 예정일(planned_date), J=연식(year), L=모델명(model), U=타코 제조사(tacho)
  *   - 시범설치: 예정일(I열)이 PILOT_CUTOFF(2026-07-30) 이전이면 is_pilot=true
  *     (2026-07-10 기준 변경 — 이전의 진행현황 시트 비고란 "시범설치" 글자 판정은 폐기)
  *
@@ -26,6 +26,7 @@ export interface ScheduleRow {
   year: string | null; // 연식 (차량리스트 J열)
   model: string | null; // 모델명 (차량리스트 L열)
   list_no: number | null; // 번호 (차량리스트 A열)
+  tacho: string | null; // 타코 제조사 (차량리스트 U열) — 배차표 '타코확인' 표시용
 }
 
 export interface ParseResult {
@@ -87,9 +88,10 @@ async function parseWorkbook(wb: ExcelJS.Workbook): Promise<ParseResult> {
     const model = txt(row.getCell("L").value) || null;
     const listRaw = txt(row.getCell("A").value);
     const list_no = /^\d+$/.test(listRaw) ? Number(listRaw) : null;
+    const tacho = txt(row.getCell("U").value) || null;
     const is_pilot = planned_date !== null && planned_date < PILOT_CUTOFF;
     if (is_pilot) pilotCount++;
-    map.set(plate, { plate, operator, route, planned_date, is_pilot, year, model, list_no });
+    map.set(plate, { plate, operator, route, planned_date, is_pilot, year, model, list_no, tacho });
   }
 
   return { rows: [...map.values()], pilotCount, skipped };
