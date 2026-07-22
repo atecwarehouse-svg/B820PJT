@@ -23,7 +23,6 @@ if (!SUPABASE_URL || !SERVICE_ROLE_KEY) {
 
 const TEMPLATE_BUCKET = process.env.TEMPLATE_BUCKET ?? "templates";
 const TEMPLATE_OBJECT = process.env.TEMPLATE_OBJECT ?? "progress-template.xlsx";
-const CHUNK = 500;
 const PAGE = 1000;
 
 async function main() {
@@ -60,22 +59,33 @@ async function main() {
   }
   const targets = withTacho
     .filter((r) => existing.has(r.plate))
-    .map((r) => ({ plate: r.plate, tacho: r.tacho }));
+    .map((r) => ({ plate: r.plate, tacho: r.tacho as string }));
   console.log(`갱신 대상(DB 존재): ${targets.length}대`);
 
+  // 부분 컬럼 upsert는 operator 등 not-null 컬럼 때문에 실패 → 타코 값별로 묶어 update.
+  // in() 필터는 한글 plate 다수 시 URL 길이 초과 방지를 위해 100대씩 분할.
+  const byTacho = new Map<string, string[]>();
+  for (const t of targets) {
+    const list = byTacho.get(t.tacho) ?? [];
+    list.push(t.plate);
+    byTacho.set(t.tacho, list);
+  }
+  const IN_CHUNK = 100;
   let done = 0;
-  for (let i = 0; i < targets.length; i += CHUNK) {
-    const chunk = targets.slice(i, i + CHUNK);
-    const { error } = await supabase.from("vehicles").upsert(chunk, { onConflict: "plate" });
-    if (error) {
-      console.error(`갱신 실패 (offset ${i}):`, error.message);
-      if (/tacho/i.test(error.message)) {
-        console.error("→ migration_tacho.sql을 Supabase SQL Editor에서 먼저 실행해주세요.");
+  for (const [tacho, plates] of byTacho) {
+    for (let i = 0; i < plates.length; i += IN_CHUNK) {
+      const chunk = plates.slice(i, i + IN_CHUNK);
+      const { error } = await supabase.from("vehicles").update({ tacho }).in("plate", chunk);
+      if (error) {
+        console.error(`갱신 실패 (${tacho}, offset ${i}):`, error.message);
+        if (/tacho/i.test(error.message)) {
+          console.error("→ migration_tacho.sql을 Supabase SQL Editor에서 먼저 실행해주세요.");
+        }
+        process.exit(1);
       }
-      process.exit(1);
+      done += chunk.length;
     }
-    done += chunk.length;
-    console.log(`  ${done}/${targets.length} 완료`);
+    console.log(`  ${tacho}: ${plates.length}대 완료 (누적 ${done}/${targets.length})`);
   }
 
   const { count } = await supabase
