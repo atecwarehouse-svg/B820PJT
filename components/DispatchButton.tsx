@@ -468,13 +468,43 @@ export default function DispatchButton() {
                           필요합니다. 관리자에게 문의하세요.
                         </div>
                       )}
+                      {/* 관리자용 한눈 요약 — 수량 타일 */}
+                      <div className="mb-2 grid grid-cols-5 divide-x divide-gray-100 rounded-xl border border-gray-200 bg-gray-50 py-2 text-center">
+                        <div>
+                          <p className="text-[10px] text-gray-500">설치대상</p>
+                          <p className="text-base font-bold tabular-nums text-gray-900">
+                            {visible.length}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] text-gray-500">검수완료</p>
+                          <p className="text-base font-bold tabular-nums text-green-600">
+                            {checkCount}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] text-gray-500">타코대상</p>
+                          <p className="text-base font-bold tabular-nums text-amber-600">
+                            {tachoCount}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] text-gray-500">타코확인</p>
+                          <p className="text-base font-bold tabular-nums text-emerald-700">
+                            {tachoDoneCount}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] text-gray-500">설치제외</p>
+                          <p className="text-base font-bold tabular-nums text-gray-500">
+                            {exclCount}
+                          </p>
+                        </div>
+                      </div>
                       <p className="mb-1 text-[11px] text-gray-400">
-                        {visible.length}대 · 시간 입력 {timedCount}대
-                        {checkCount > 0 && ` · 검수완료 ${checkCount}대`}
-                        {tachoCount > 0 && ` · 타코확인 ${tachoDoneCount}/${tachoCount}대`}
-                        {exclCount > 0 && ` · 설치제외 ${exclCount}대`}
-                        {offCount > 0 && ` · 휴차 ${offCount}대`} — 시간을 고르면
-                        이른 순서로 정렬됩니다
+                        시간 입력 {timedCount}대
+                        {offCount > 0 && ` · 휴차 ${offCount}대`} — 시간을 고르면 이른
+                        순서로 정렬됩니다
                       </p>
                       <ul className="divide-y divide-gray-100 rounded-lg border border-gray-200">
                         {visible.map((e) => {
