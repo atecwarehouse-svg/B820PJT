@@ -43,6 +43,7 @@ function sortEntries(list: Entry[]): Entry[] {
 }
 
 // 행 우측 시/분 드롭다운 (ConsultationModal TimeField의 축약형)
+// 자동 입력(간격 계산)으로 5분 단위가 아닌 분이 들어와도 표시되도록 현재 값을 선택지에 포함
 function RowTime({
   value,
   disabled,
@@ -53,6 +54,9 @@ function RowTime({
   onChange: (v: string | null) => void;
 }) {
   const [h, m] = value ? value.split(":") : ["", "00"];
+  const minuteOptions = MINUTES.includes(m)
+    ? MINUTES
+    : [...MINUTES, m].sort((a, b) => Number(a) - Number(b));
   return (
     <div className="flex shrink-0 items-center gap-1">
       <select
@@ -81,7 +85,7 @@ function RowTime({
         className="rounded-lg border border-gray-300 px-1.5 py-1.5 text-base focus:border-blue-500 focus:outline-none disabled:bg-gray-50 disabled:text-gray-400"
       >
         {!h && <option value="">--</option>}
-        {MINUTES.map((x) => (
+        {minuteOptions.map((x) => (
           <option key={x} value={x}>
             {x}
           </option>
@@ -112,6 +116,13 @@ export default function DispatchButton() {
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [tableView, setTableView] = useState(false); // 캡쳐용 표 보기
+
+  // 자동 입력 — 첫차 출발시간 + 분 간격 + 차량별 순번으로 시간 일괄 계산
+  const [autoView, setAutoView] = useState(false);
+  const [autoH, setAutoH] = useState("06"); // 첫차 시
+  const [autoM, setAutoM] = useState("00"); // 첫차 분
+  const [autoGap, setAutoGap] = useState(5); // 분 간격
+  const [seqMap, setSeqMap] = useState<Record<string, string>>({}); // plate → 순번
 
   useEffect(() => {
     if (!open || operators !== null) return;
@@ -247,6 +258,41 @@ export default function DispatchButton() {
       ),
     );
     setSaveMsg(null);
+  }
+
+  // 자동 입력 대상 — 노선 필터 적용, 휴차·설치제외는 제외. 노선·차량번호순(API 원본 순서).
+  const autoTargets = (routeFilter ? entries.filter((e) => e.route === routeFilter) : entries).filter(
+    (e) => e.outTime !== OFF && !e.excluded,
+  );
+
+  // 자동 입력 적용 — 순번 n 차량의 시간 = 첫차 + (n−1)×간격. 순번 없는 차량은 그대로.
+  function applyAuto() {
+    const base = Number(autoH) * 60 + Number(autoM);
+    const timeByPlate = new Map<string, string>();
+    for (const e of autoTargets) {
+      const raw = (seqMap[e.plate] ?? "").trim();
+      if (!/^\d+$/.test(raw) || Number(raw) < 1) continue;
+      const t = (base + (Number(raw) - 1) * autoGap) % (24 * 60);
+      timeByPlate.set(
+        e.plate,
+        `${String(Math.floor(t / 60)).padStart(2, "0")}:${String(t % 60).padStart(2, "0")}`,
+      );
+    }
+    if (timeByPlate.size === 0) {
+      setSaveMsg({ ok: false, text: "순번을 입력한 차량이 없습니다." });
+      setAutoView(false);
+      return;
+    }
+    setEntries((list) =>
+      list.map((e) =>
+        timeByPlate.has(e.plate) ? { ...e, outTime: timeByPlate.get(e.plate)! } : e,
+      ),
+    );
+    setSaveMsg({
+      ok: true,
+      text: `${timeByPlate.size}대 시간이 자동 입력되었습니다 — 저장을 눌러야 반영됩니다.`,
+    });
+    setAutoView(false);
   }
 
   async function handleSave() {
@@ -436,15 +482,27 @@ export default function DispatchButton() {
                 </div>
               )}
 
-              {/* 표로 보기 — 작성한 배차표를 모바일 캡쳐용 표로 표시 (노선 선택 아래) */}
+              {/* 자동 입력 · 표로 보기 (노선 선택 아래) */}
               {selectedDate && !listLoading && entries.length > 0 && (
-                <button
-                  type="button"
-                  onClick={() => setTableView(true)}
-                  className="w-full rounded-lg border border-blue-300 bg-white px-4 py-2.5 text-sm font-semibold text-blue-700 active:bg-blue-50"
-                >
-                  📋 표로 보기 (캡쳐용)
-                </button>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSeqMap({});
+                      setAutoView(true);
+                    }}
+                    className="rounded-lg border border-orange-300 bg-white px-4 py-2.5 text-sm font-semibold text-orange-600 active:bg-orange-50"
+                  >
+                    ⚡ 배차표 자동 입력
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setTableView(true)}
+                    className="rounded-lg border border-blue-300 bg-white px-4 py-2.5 text-sm font-semibold text-blue-700 active:bg-blue-50"
+                  >
+                    📋 표로 보기 (캡쳐용)
+                  </button>
+                </div>
               )}
 
               {/* 차량 리스트 */}
@@ -653,6 +711,149 @@ export default function DispatchButton() {
               )}
             </div>
           </div>
+
+          {/* 자동 입력 — 첫차 출발시간·분 간격을 정하고 차량별 순번만 쓰면
+              나가는 시간이 일괄 계산된다. 적용 후 저장을 눌러야 DB 반영. */}
+          {autoView && (
+            <div
+              className="fixed inset-0 z-[60] overflow-y-auto bg-white pb-24"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="sticky top-0 z-10 flex items-center justify-between border-b border-gray-200 bg-white px-4 py-2.5">
+                <p className="text-sm font-bold text-gray-800">⚡ 배차표 자동 입력</p>
+                <button
+                  type="button"
+                  onClick={() => setAutoView(false)}
+                  className="rounded-lg bg-gray-100 px-3 py-1.5 text-sm font-semibold text-gray-600 active:bg-gray-200"
+                >
+                  ✕ 닫기
+                </button>
+              </div>
+              <div className="px-4 py-4">
+                <p className="text-xs text-gray-500">
+                  {operator} · {fmtDot(date)}
+                  {routeFilter && ` · ${routeFilter}`} — 첫차 시간과 간격을 정하고,
+                  차량마다 나가는 순번을 적으면 시간이 자동 계산됩니다.
+                </p>
+
+                {/* 첫차 출발시간 + 분 간격 */}
+                <div className="mt-3 flex flex-wrap items-end gap-4 rounded-xl border border-orange-200 bg-orange-50 px-3 py-3">
+                  <div>
+                    <p className="mb-1 text-[11px] font-medium text-gray-600">첫차 출발시간</p>
+                    <div className="flex items-center gap-1">
+                      <select
+                        value={autoH}
+                        onChange={(e) => setAutoH(e.target.value)}
+                        className="rounded-lg border border-gray-300 bg-white px-1.5 py-1.5 text-base focus:border-orange-500 focus:outline-none"
+                      >
+                        {HOURS.map((x) => (
+                          <option key={x} value={x}>
+                            {x}
+                          </option>
+                        ))}
+                      </select>
+                      <span className="text-xs text-gray-500">시</span>
+                      <select
+                        value={autoM}
+                        onChange={(e) => setAutoM(e.target.value)}
+                        className="rounded-lg border border-gray-300 bg-white px-1.5 py-1.5 text-base focus:border-orange-500 focus:outline-none"
+                      >
+                        {MINUTES.map((x) => (
+                          <option key={x} value={x}>
+                            {x}
+                          </option>
+                        ))}
+                      </select>
+                      <span className="text-xs text-gray-500">분</span>
+                    </div>
+                  </div>
+                  <div>
+                    <p className="mb-1 text-[11px] font-medium text-gray-600">배차 간격</p>
+                    <div className="flex items-center gap-1">
+                      <select
+                        value={autoGap}
+                        onChange={(e) => setAutoGap(Number(e.target.value))}
+                        className="rounded-lg border border-gray-300 bg-white px-1.5 py-1.5 text-base focus:border-orange-500 focus:outline-none"
+                      >
+                        {Array.from({ length: 30 }, (_, i) => i + 1).map((n) => (
+                          <option key={n} value={n}>
+                            {n}
+                          </option>
+                        ))}
+                      </select>
+                      <span className="text-xs text-gray-500">분 간격</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 차량별 순번 입력 */}
+                <p className="mb-1 mt-4 text-[11px] text-gray-400">
+                  나가는 순번 (1 = 첫차 · 빈칸은 건너뜀 · 휴차/설치제외 차량은 목록에서
+                  제외)
+                </p>
+                <ul className="divide-y divide-gray-100 rounded-lg border border-gray-200">
+                  {autoTargets.map((e) => {
+                    const raw = (seqMap[e.plate] ?? "").trim();
+                    const valid = /^\d+$/.test(raw) && Number(raw) >= 1;
+                    const t = valid
+                      ? (Number(autoH) * 60 +
+                          Number(autoM) +
+                          (Number(raw) - 1) * autoGap) %
+                        (24 * 60)
+                      : null;
+                    return (
+                      <li
+                        key={e.plate}
+                        className="flex items-center justify-between gap-2 px-3 py-2"
+                      >
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-medium text-gray-800">
+                            {e.plate}
+                          </p>
+                          {!routeFilter && e.route && (
+                            <p className="text-[11px] text-gray-400">{e.route}</p>
+                          )}
+                        </div>
+                        <div className="flex shrink-0 items-center gap-2">
+                          {t !== null && (
+                            <span className="text-xs font-semibold tabular-nums text-orange-600">
+                              {String(Math.floor(t / 60)).padStart(2, "0")}:
+                              {String(t % 60).padStart(2, "0")}
+                            </span>
+                          )}
+                          <input
+                            type="text"
+                            inputMode="numeric"
+                            pattern="[0-9]*"
+                            value={seqMap[e.plate] ?? ""}
+                            onChange={(ev) =>
+                              setSeqMap((m) => ({
+                                ...m,
+                                [e.plate]: ev.target.value.replace(/[^0-9]/g, ""),
+                              }))
+                            }
+                            placeholder="순번"
+                            className="w-16 rounded-lg border border-gray-300 px-2 py-1.5 text-center text-base tabular-nums focus:border-orange-500 focus:outline-none"
+                          />
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+
+              {/* 적용 버튼 — 하단 고정 */}
+              <div className="fixed inset-x-0 bottom-0 z-10 border-t border-gray-200 bg-white/95 p-3 backdrop-blur">
+                <button
+                  type="button"
+                  onClick={applyAuto}
+                  className="mx-auto block w-full max-w-md rounded-lg bg-orange-600 px-4 py-3 text-sm font-semibold text-white active:bg-orange-700"
+                >
+                  ⚡ 시간 자동 입력
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* 캡쳐용 표 보기 — 흰 배경 전체화면. 상단 바(닫기)만 있고 나머지는
               깔끔한 표라서 모바일 캡쳐 후 그대로 공유할 수 있다. */}
