@@ -473,7 +473,7 @@ export default function DispatchButton() {
                         <div>
                           <p className="text-[10px] text-gray-500">설치대상</p>
                           <p className="text-base font-bold tabular-nums text-gray-900">
-                            {visible.length}
+                            {visible.length - exclCount}
                           </p>
                         </div>
                         <div>
