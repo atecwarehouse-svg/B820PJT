@@ -131,17 +131,17 @@ export default function DailyReportCard({
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [vocs, setVocs] = useState<VocOperatorSummary[]>([]);
   const [prefilled, setPrefilled] = useState(false); // 1차 발송 내용을 불러왔는지
-  // 배차표 '설치제외' 차량 — 특이사항에 자동 입력하고 사유를 적게 한다.
-  // 2차는 1차 프리필(사유가 이미 적힌 내용)을 먼저 반영한 뒤에 자동 입력을 판단.
+  // 배차표 '설치제외' 차량 — 차량별 사유 입력칸을 만들고, 리포트 특이사항에
+  // 번호 매긴 목록으로 자동 포함한다. (1차 발송분을 2차가 프리필해 특이사항에
+  // 이미 [설치제외 블록이 있으면 입력칸을 숨기고 중복 포함하지 않음)
   const [exclPlates, setExclPlates] = useState<string[]>([]);
-  const [prefillDone, setPrefillDone] = useState(stage !== 2);
+  const [exclReasons, setExclReasons] = useState<Record<string, string>>({});
 
   // 2차 폼 프리필 — 같은 날짜로 1차를 발송했으면 그때의 특이사항·운행시작 점검·계획수량을
   // 자동으로 채운다. 이미 입력된 칸은 덮지 않는다(늦게 도착한 응답이 입력을 지우는 사고 방지).
   useEffect(() => {
     if (stage !== 2) return;
     setPrefilled(false);
-    setPrefillDone(false);
     let alive = true;
     (async () => {
       try {
@@ -150,11 +150,7 @@ export default function DailyReportCard({
         });
         const json = await res.json();
         const d = json.draft;
-        if (!alive) return;
-        if (!d) {
-          setPrefillDone(true);
-          return;
-        }
+        if (!alive || !d) return;
         if (typeof d.notes === "string" && d.notes) {
           setNotes((cur) => (cur === "" ? d.notes : cur));
         }
@@ -178,10 +174,8 @@ export default function DailyReportCard({
           setKakaoSymptom((cur) => (cur === "" ? (c.kakaoSymptom as string) : cur));
         }
         setPrefilled(true);
-        setPrefillDone(true);
       } catch {
         // 불러오기 실패 — 새로 입력하면 된다
-        if (alive) setPrefillDone(true);
       }
     })();
     return () => {
@@ -189,9 +183,10 @@ export default function DailyReportCard({
     };
   }, [stage, date]);
 
-  // 배차표 설치제외 차량 조회 — 날짜 바뀌면 다시.
+  // 배차표 설치제외 차량 조회 — 날짜 바뀌면 다시(사유 입력도 초기화).
   useEffect(() => {
     let alive = true;
+    setExclReasons({});
     (async () => {
       try {
         const res = await fetch(`/api/dispatch/excluded?date=${encodeURIComponent(date)}`, {
@@ -208,16 +203,25 @@ export default function DailyReportCard({
     };
   }, [date]);
 
-  // 설치제외가 있으면 특이사항에 자동 입력(사유 칸 포함).
-  // 이미 '설치제외' 내용이 적혀 있으면(1차 프리필 포함) 덮지 않는다.
-  useEffect(() => {
-    if (!prefillDone || exclPlates.length === 0) return;
-    setNotes((cur) =>
-      cur.includes("설치제외")
-        ? cur
-        : `${cur ? cur + "\n" : ""}[설치제외 ${exclPlates.length}대] ${exclPlates.join(", ")}\n└ 제외 사유: `,
-    );
-  }, [prefillDone, exclPlates]);
+  // 특이사항에 이미 [설치제외 블록이 있으면(2차 프리필 등) 입력칸·자동 포함을 끈다.
+  const exclInNotes = notes.includes("[설치제외");
+  const showExclInputs = exclPlates.length > 0 && !exclInNotes;
+
+  // 리포트에 들어갈 설치제외 블록 — 번호를 매겨 줄을 맞춘다.
+  const exclBlock = useMemo(() => {
+    if (!showExclInputs) return "";
+    const lines = exclPlates.map((p, i) => {
+      const reason = (exclReasons[p] ?? "").trim();
+      return ` ${i + 1}. ${p}${reason ? ` — ${reason}` : ""}`;
+    });
+    return `[설치제외 ${exclPlates.length}대]\n${lines.join("\n")}`;
+  }, [showExclInputs, exclPlates, exclReasons]);
+
+  // 발송·미리보기용 특이사항 = 직접 입력 + 설치제외 블록
+  const mergedNotes = useMemo(
+    () => (exclBlock ? `${notes.trim() ? notes.trim() + "\n" : ""}${exclBlock}` : notes),
+    [notes, exclBlock],
+  );
 
   // 2차 미리보기용 VOC 요약 — 선택한 날짜가 바뀌면 다시 불러온다.
   // (발송 시에는 서버가 같은 날짜로 다시 조회하므로 여기 실패해도 내용은 빠지지 않는다.)
@@ -266,15 +270,15 @@ export default function DailyReportCard({
   // 내용을 바꾸면 다시 발송 가능
   useEffect(() => {
     setSent(false);
-  }, [date, notes, to, planned, check]);
+  }, [date, mergedNotes, to, planned, check]);
 
   const report = useMemo(
     () => buildReport({ date, completedList, scheduleDays, cumDone, cumPlanned, plannedOverride }),
     [date, completedList, scheduleDays, cumDone, cumPlanned, plannedOverride],
   );
   const text = useMemo(
-    () => formatReportText(report, notes, check, stage === 2 ? vocs : undefined),
-    [report, notes, check, stage, vocs],
+    () => formatReportText(report, mergedNotes, check, stage === 2 ? vocs : undefined),
+    [report, mergedNotes, check, stage, vocs],
   );
 
   async function send() {
@@ -296,7 +300,7 @@ export default function DailyReportCard({
       const res = await fetch("/api/report/send", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ date, notes, to, planned: plannedOverride, pw, check, stage }),
+        body: JSON.stringify({ date, notes: mergedNotes, to, planned: plannedOverride, pw, check, stage }),
       });
       const j = await res.json();
       if (!res.ok) throw new Error(j.error ?? "발송 실패");
@@ -406,14 +410,41 @@ export default function DailyReportCard({
         />
       </div>
 
+      {/* 설치제외 차량별 사유 — 리포트 특이사항에 번호 목록으로 자동 포함 */}
+      {showExclInputs && (
+        <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50/60 p-3">
+          <p className="text-xs font-semibold text-amber-800">
+            ⚠️ 설치제외 {exclPlates.length}대 — 차량별 제외 사유를 적어주세요
+          </p>
+          <p className="mt-0.5 text-[11px] text-amber-600">
+            특이사항에 자동으로 포함됩니다 (미리보기 확인)
+          </p>
+          <ul className="mt-2 space-y-1.5">
+            {exclPlates.map((p, i) => (
+              <li key={p} className="flex items-center gap-2">
+                <span className="w-5 shrink-0 text-right text-xs tabular-nums text-gray-500">
+                  {i + 1}.
+                </span>
+                <span className="w-28 shrink-0 truncate text-sm font-medium text-gray-800">
+                  {p}
+                </span>
+                <input
+                  type="text"
+                  value={exclReasons[p] ?? ""}
+                  onChange={(e) =>
+                    setExclReasons((m) => ({ ...m, [p]: e.target.value }))
+                  }
+                  placeholder="제외 사유 (예: 배차시간 부족)"
+                  className="min-w-0 flex-1 rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-sm focus:border-amber-500 focus:outline-none"
+                />
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       {/* 특이사항 */}
       <label className="mt-3 block text-xs font-medium text-gray-600">특이사항 (선택)</label>
-      {exclPlates.length > 0 && (
-        <p className="mt-1 rounded-lg bg-amber-50 px-3 py-1.5 text-[11px] font-medium text-amber-700">
-          ⚠️ 배차표 설치제외 {exclPlates.length}대가 특이사항에 자동 입력되었습니다 —
-          제외 사유를 적어주세요
-        </p>
-      )}
       <textarea
         value={notes}
         onChange={(e) => setNotes(e.target.value)}
