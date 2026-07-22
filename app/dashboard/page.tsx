@@ -6,6 +6,7 @@ import {
   loadScheduleStats,
   loadInProgressList,
   loadTodayPlanGroups,
+  loadTodayExcludedCount,
   loadOperatorSchedules,
 } from "@/lib/stats";
 import type {
@@ -91,6 +92,19 @@ const getTodayPlan = unstable_cache(
   { revalidate: 60, tags: ["dashboard"] },
 );
 
+// 배차표 '설치제외' 금일 대수 — 금일 설치현황 타일에서 설치대상 차감용.
+const getTodayExcluded = unstable_cache(
+  async (date: string): Promise<number> => {
+    try {
+      return await loadTodayExcludedCount(date);
+    } catch {
+      return 0;
+    }
+  },
+  ["dashboard-today-excluded"],
+  { revalidate: 60, tags: ["dashboard"] },
+);
+
 // 운수사별 설치 예정일·대수 — 운수사 협의사항 폼(운수사 검색 → 날짜 선택)용.
 const getOperatorSchedules = unstable_cache(
   async (): Promise<OperatorSchedule[]> => {
@@ -108,14 +122,16 @@ export default async function DashboardPage() {
   // 상세 섹션(설치 일정·운수사별·영업소별·날짜별)은 잠금 해제 전에는 서버가 아예 안 내려준다.
   const detailUnlocked = isProgressUnlocked();
   const todayWork = workDateString(new Date()); // 현재 업무일
-  const [s, ip, sch, inProgressList, todayPlanGroups, operatorSchedules] = await Promise.all([
-    getStats(),
-    getInstall(),
-    getSchedule(),
-    getInProgress(),
-    getTodayPlan(todayWork),
-    getOperatorSchedules(),
-  ]);
+  const [s, ip, sch, inProgressList, todayPlanGroups, operatorSchedules, todayExcluded] =
+    await Promise.all([
+      getStats(),
+      getInstall(),
+      getSchedule(),
+      getInProgress(),
+      getTodayPlan(todayWork),
+      getOperatorSchedules(),
+      getTodayExcluded(todayWork),
+    ]);
   // 렌더 시각(KST) — 새로고침할 때마다 갱신되어 데이터 최신 여부를 바로 알 수 있다.
   const updatedAt = new Intl.DateTimeFormat("ko-KR", {
     timeZone: "Asia/Seoul",
@@ -133,9 +149,10 @@ export default async function DashboardPage() {
   // 그 날짜까지의 스냅샷(계획·기준일·완료)으로 받는다. 계획수량은 예정일(planned_date)에서 파생.
   const today = ip?.today ?? todayWork;
   const scheduleDays = sch?.days.map((d) => ({ date: d.date, planned: d.planned })) ?? [];
-  // 금일 설치현황 — 설치대상(예정일=금일)·설치완료(금일 저장 완료)
+  // 금일 설치현황 — 설치대상(예정일=금일 − 배차표 설치제외)·설치완료(금일 저장 완료)
   const todayPlanned = sch?.days.find((d) => d.date === today)?.planned ?? 0;
   const todayDone = ip?.todayComplete ?? 0;
+  const todayTarget = Math.max(0, todayPlanned - todayExcluded);
 
   return (
     <main className="mx-auto max-w-3xl px-3 pb-16 pt-4">
@@ -229,10 +246,10 @@ export default async function DashboardPage() {
         금일 설치현황
         <span className="ml-1 font-normal text-gray-400">({today.replace(/-/g, ".")})</span>
       </h2>
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-3 gap-2">
         <div className="rounded-2xl border border-blue-100 bg-blue-50 p-4 text-center">
           <p className="text-3xl font-bold tabular-nums text-blue-700">
-            {todayPlanned.toLocaleString()}
+            {todayTarget.toLocaleString()}
           </p>
           <p className="mt-1 text-xs font-medium text-blue-700">금일 설치대상</p>
         </div>
@@ -242,12 +259,17 @@ export default async function DashboardPage() {
           </p>
           <p className="mt-1 text-xs font-medium text-green-700">설치완료</p>
         </div>
+        <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4 text-center">
+          <p className="text-3xl font-bold tabular-nums text-gray-600">
+            {todayExcluded.toLocaleString()}
+          </p>
+          <p className="mt-1 text-xs font-medium text-gray-600">설치제외</p>
+        </div>
       </div>
-      {todayPlanned > 0 && (
-        <p className="mt-1 text-right text-[11px] text-gray-400">
-          금일 달성률 {((todayDone / todayPlanned) * 100).toFixed(1)}%
-        </p>
-      )}
+      <p className="mt-1 text-right text-[11px] text-gray-400">
+        {todayTarget > 0 && `금일 달성률 ${((todayDone / todayTarget) * 100).toFixed(1)}% · `}
+        설치대상 = 예정 − 배차표 설치제외
+      </p>
 
       {/* ===== 운수사 협의사항 · 설치일정 변경 업로드 (잠금과 무관하게 항상 노출) ===== */}
       <div className="mb-2 mt-6 flex flex-wrap items-center justify-between gap-2">

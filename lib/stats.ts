@@ -330,6 +330,20 @@ export async function loadTodayPlanGroups(date: string): Promise<TodayPlanGroup[
   );
 }
 
+// 배차표에서 '설치제외' 체크된 금일 차량 수 — 대시보드 금일 설치현황 타일용.
+// dispatch_times는 배차표 저장 시에만 행이 생김. excluded 컬럼 없는 DB(마이그레이션 전)나
+// 조회 실패 시 0(타일 차감만 생략, 대시보드는 정상 동작).
+export async function loadTodayExcludedCount(date: string): Promise<number> {
+  const supabase = createServiceClient();
+  const { count, error } = await supabase
+    .from("dispatch_times")
+    .select("plate", { count: "exact", head: true })
+    .eq("date", date)
+    .eq("excluded", true);
+  if (error) return 0;
+  return count ?? 0;
+}
+
 export interface ScheduleDay {
   date: string; // YYYY-MM-DD (설치 예정일)
   planned: number; // 그 날 예정 대수
