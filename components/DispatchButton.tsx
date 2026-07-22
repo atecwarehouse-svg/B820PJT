@@ -590,7 +590,6 @@ export default function DispatchButton() {
                 <p className="mt-0.5 text-xs text-gray-500">
                   {fmtDot(date)} · {visible.length}대
                   {timedCount > 0 && ` · 시간입력 ${timedCount}대`}
-                  {tachoCount > 0 && ` · 타코확인 ${tachoCount}대`}
                   {offCount > 0 && ` · 휴차 ${offCount}대`}
                 </p>
                 <table className="mt-3 w-full border-collapse text-sm">
@@ -630,11 +629,6 @@ export default function DispatchButton() {
                             }`}
                           >
                             {e.plate}
-                            {e.tachoCheck && (
-                              <span className="ml-1 rounded bg-amber-100 px-1 py-0.5 align-middle text-[10px] font-semibold text-amber-700">
-                                ✔ 타코확인
-                              </span>
-                            )}
                           </td>
                           <td
                             className={`border border-gray-300 px-2 py-1.5 text-center font-semibold ${
