@@ -133,6 +133,9 @@ export default async function DashboardPage() {
   // 그 날짜까지의 스냅샷(계획·기준일·완료)으로 받는다. 계획수량은 예정일(planned_date)에서 파생.
   const today = ip?.today ?? todayWork;
   const scheduleDays = sch?.days.map((d) => ({ date: d.date, planned: d.planned })) ?? [];
+  // 금일 설치현황 — 설치대상(예정일=금일)·설치완료(금일 저장 완료)
+  const todayPlanned = sch?.days.find((d) => d.date === today)?.planned ?? 0;
+  const todayDone = ip?.todayComplete ?? 0;
 
   return (
     <main className="mx-auto max-w-3xl px-3 pb-16 pt-4">
@@ -163,8 +166,8 @@ export default async function DashboardPage() {
             planToday={todayWork}
             shareToday={ip?.today ?? todayWork}
             planGroups={todayPlanGroups}
-            todayPlanned={sch?.days.find((d) => d.date === (ip?.today ?? todayWork))?.planned ?? 0}
-            todayDone={ip?.todayComplete ?? 0}
+            todayPlanned={todayPlanned}
+            todayDone={todayDone}
             complete={s.complete}
             inProgress={inProgressCount}
             remain={remainCount}
@@ -220,6 +223,31 @@ export default async function DashboardPage() {
         target={s.target}
         inProgressList={inProgressList}
       />
+
+      {/* ===== 금일 설치현황 — 금일 설치대상(예정일 기준) vs 설치완료(저장 기준) ===== */}
+      <h2 className="mb-2 mt-5 text-sm font-semibold text-gray-700">
+        금일 설치현황
+        <span className="ml-1 font-normal text-gray-400">({today.replace(/-/g, ".")})</span>
+      </h2>
+      <div className="grid grid-cols-2 gap-2">
+        <div className="rounded-2xl border border-blue-100 bg-blue-50 p-4 text-center">
+          <p className="text-3xl font-bold tabular-nums text-blue-700">
+            {todayPlanned.toLocaleString()}
+          </p>
+          <p className="mt-1 text-xs font-medium text-blue-700">금일 설치대상</p>
+        </div>
+        <div className="rounded-2xl border border-green-100 bg-green-50 p-4 text-center">
+          <p className="text-3xl font-bold tabular-nums text-green-700">
+            {todayDone.toLocaleString()}
+          </p>
+          <p className="mt-1 text-xs font-medium text-green-700">설치완료</p>
+        </div>
+      </div>
+      {todayPlanned > 0 && (
+        <p className="mt-1 text-right text-[11px] text-gray-400">
+          금일 달성률 {((todayDone / todayPlanned) * 100).toFixed(1)}%
+        </p>
+      )}
 
       {/* ===== 운수사 협의사항 · 설치일정 변경 업로드 (잠금과 무관하게 항상 노출) ===== */}
       <div className="mb-2 mt-6 flex flex-wrap items-center justify-between gap-2">
