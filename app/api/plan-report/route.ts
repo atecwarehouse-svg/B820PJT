@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
-import { sendPlanReportCard, type PlanReportGroup } from "@/lib/teams";
+import {
+  sendPlanReportCard,
+  type PlanReportGroup,
+  type PlanReportRoom,
+} from "@/lib/teams";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -9,7 +13,7 @@ export const dynamic = "force-dynamic";
 // 금일 계획(운수사·노선·대수)+집합시간·설치장소를 시작보고/협의사항 두 채팅방에 전송.
 // 협의사항방 카드에는 consultations 저장 데이터(휴차·도착시간·협조확인·설치위치·특이사항)를 병합.
 export async function POST(req: NextRequest) {
-  let body: { label?: unknown; date?: unknown; groups?: unknown };
+  let body: { label?: unknown; date?: unknown; groups?: unknown; rooms?: unknown };
   try {
     body = await req.json();
   } catch {
@@ -95,11 +99,19 @@ export async function POST(req: NextRequest) {
 
   const total = groups.reduce((s, g) => s + g.count, 0);
 
-  try {
-    await sendPlanReportCard({ label, total, groups });
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : "알 수 없는 오류";
-    return NextResponse.json({ error: `팀즈 전송 실패: ${msg}` }, { status: 500 });
+  // rooms 지정 시 그 방에만 전송 — 한 방만 실패한 재시도가 성공한 방에 중복 발송하지 않게.
+  const roomsIn = Array.isArray(body.rooms)
+    ? (body.rooms.filter((r) => r === "start" || r === "consult") as PlanReportRoom[])
+    : [];
+  const rooms: PlanReportRoom[] = roomsIn.length > 0 ? roomsIn : ["start", "consult"];
+
+  const result = await sendPlanReportCard({ label, total, groups }, rooms);
+  if (result.errors.length > 0) {
+    // 성공한 방 목록을 함께 돌려줘 클라이언트가 실패한 방에만 재시도하게 한다
+    return NextResponse.json(
+      { error: `팀즈 전송 실패: ${result.errors.join(" / ")}`, sent: result.sent },
+      { status: 500 },
+    );
   }
 
   return NextResponse.json({ ok: true });

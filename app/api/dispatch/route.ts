@@ -175,55 +175,76 @@ export async function POST(req: NextRequest) {
   }
 
   const now = new Date().toISOString();
+  // 요청에 실제로 담긴 항목만 컬럼으로 만든다 — upsert는 보낸 컬럼만 갱신하므로,
+  // 기기 A가 저장한 검수완료를 기기 B의 시간 저장이 옛 값으로 덮어쓰지 않는다.
   const rows = entries
-    .map((e) => ({
-      operator,
-      date,
-      route: (e.route ?? "").trim().slice(0, 100) || null,
-      plate: (e.plate ?? "").trim().slice(0, 30),
+    .map((e) => {
+      const row: Record<string, unknown> = {
+        operator,
+        date,
+        route: (e.route ?? "").trim().slice(0, 100) || null,
+        plate: (e.plate ?? "").trim().slice(0, 30),
+        updated_at: now,
+      };
       // "HH:MM" 또는 "OFF"(휴차 체크) — 그 외 값은 미정(null)
-      out_time:
-        typeof e.outTime === "string" && (TIME_RE.test(e.outTime) || e.outTime === "OFF")
-          ? e.outTime
-          : null,
-      checklist: e.checklist === true,
-      tacho_checked: e.tachoDone === true,
-      excluded: e.excluded === true,
-      updated_at: now,
-    }))
+      if ("outTime" in e) {
+        row.out_time =
+          typeof e.outTime === "string" && (TIME_RE.test(e.outTime) || e.outTime === "OFF")
+            ? e.outTime
+            : null;
+      }
+      if ("checklist" in e) row.checklist = e.checklist === true;
+      if ("tachoDone" in e) row.tacho_checked = e.tachoDone === true;
+      if ("excluded" in e) row.excluded = e.excluded === true;
+      return row;
+    })
     .filter((r) => r.plate);
   if (rows.length === 0) {
     return NextResponse.json({ error: "저장할 차량이 없습니다." }, { status: 400 });
   }
 
   const supabase = createServiceClient();
-  let { error } = await supabase
-    .from("dispatch_times")
-    .upsert(rows, { onConflict: "date,plate" });
-  // 타코확인·설치제외 컬럼 없는 DB(migration_dispatch_tacho_excl.sql 전) — 빼고 재시도
-  if (error && /tacho_checked|excluded/i.test(error.message)) {
-    const stripped = rows.map(({ tacho_checked: _t, excluded: _e, ...rest }) => rest);
-    ({ error } = await supabase
+
+  // 같은 upsert 안의 행은 컬럼 구성이 같아야 하므로, 컬럼 구성별로 묶어 저장
+  const groups = new Map<string, Record<string, unknown>[]>();
+  for (const r of rows) {
+    const key = Object.keys(r).sort().join(",");
+    const g = groups.get(key) ?? [];
+    g.push(r);
+    groups.set(key, g);
+  }
+
+  for (const g of groups.values()) {
+    let { error } = await supabase
       .from("dispatch_times")
-      .upsert(stripped, { onConflict: "date,plate" }));
-    // checklist 컬럼도 없는 더 옛 DB — 체크리스트까지 빼고 재시도(시간·휴차는 저장)
-    if (error && /checklist/i.test(error.message)) {
-      const noCheck = stripped.map(({ checklist: _c, ...rest }) => rest);
+      .upsert(g, { onConflict: "date,plate" });
+    // 타코확인·설치제외 컬럼 없는 DB(migration_dispatch_tacho_excl.sql 전) — 빼고 재시도
+    if (error && /tacho_checked|excluded/i.test(error.message)) {
+      const stripped = g.map(({ tacho_checked: _t, excluded: _e, ...rest }) => rest);
+      ({ error } = await supabase
+        .from("dispatch_times")
+        .upsert(stripped, { onConflict: "date,plate" }));
+      // checklist 컬럼도 없는 더 옛 DB — 체크리스트까지 빼고 재시도(시간·휴차는 저장)
+      if (error && /checklist/i.test(error.message)) {
+        const noCheck = stripped.map(({ checklist: _c, ...rest }) => rest);
+        ({ error } = await supabase
+          .from("dispatch_times")
+          .upsert(noCheck, { onConflict: "date,plate" }));
+      }
+    } else if (error && /checklist/i.test(error.message)) {
+      const noCheck = g.map(
+        ({ checklist: _c, tacho_checked: _t, excluded: _e, ...rest }) => rest,
+      );
       ({ error } = await supabase
         .from("dispatch_times")
         .upsert(noCheck, { onConflict: "date,plate" }));
     }
-  } else if (error && /checklist/i.test(error.message)) {
-    const noCheck = rows.map(({ checklist: _c, tacho_checked: _t, excluded: _e, ...rest }) => rest);
-    ({ error } = await supabase
-      .from("dispatch_times")
-      .upsert(noCheck, { onConflict: "date,plate" }));
-  }
-  if (error) {
-    const msg = /dispatch_times/i.test(error.message)
-      ? "저장 실패 — migration_dispatch.sql 실행이 필요합니다(관리자 문의)."
-      : `저장 실패: ${error.message}`;
-    return NextResponse.json({ error: msg }, { status: 500 });
+    if (error) {
+      const msg = /dispatch_times/i.test(error.message)
+        ? "저장 실패 — migration_dispatch.sql 실행이 필요합니다(관리자 문의)."
+        : `저장 실패: ${error.message}`;
+      return NextResponse.json({ error: msg }, { status: 500 });
+    }
   }
 
   return NextResponse.json({ ok: true });

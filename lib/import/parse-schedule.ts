@@ -59,6 +59,12 @@ export function toDate(v: unknown): string | null {
     return new Date(ms).toISOString().slice(0, 10);
   }
   const s = String(v).trim();
+  // "2026.7.30" · "2026/07/30" 같은 텍스트 날짜는 시간대 변환 없이 숫자 그대로 조합 —
+  // new Date(문자열)는 실행 컴퓨터의 로컬 자정으로 읽혀 KST에서 하루 밀린다.
+  const m = /^(\d{4})[.\-/]\s*(\d{1,2})[.\-/]\s*(\d{1,2})\.?$/.exec(s);
+  if (m) {
+    return `${m[1]}-${m[2].padStart(2, "0")}-${m[3].padStart(2, "0")}`;
+  }
   const d = new Date(s);
   return isNaN(d.getTime()) ? null : d.toISOString().slice(0, 10);
 }

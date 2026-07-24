@@ -77,6 +77,24 @@ export async function POST(req: NextRequest) {
 
   // 저장이 본체 — 실패하면 에러로 알린다(팀즈 알림은 그 다음).
   const supabase = createServiceClient();
+  // 저장 전 기존 내용 확인 — 내용이 그대로인 재저장('수정 저장'만 다시 탭)에는
+  // 팀즈 카드를 다시 보내지 않는다(같은 카드가 저장할 때마다 반복 발송되는 문제).
+  let unchanged = false;
+  try {
+    const { data: prev } = await supabase
+      .from("vocs")
+      .select("items, day_off, notes")
+      .eq("operator", operator)
+      .eq("date", date)
+      .maybeSingle();
+    if (prev) {
+      unchanged =
+        JSON.stringify({ i: prev.items, d: prev.day_off, n: prev.notes ?? null }) ===
+        JSON.stringify({ i: items, d: dayOff, n: notes || null });
+    }
+  } catch {
+    // 비교 실패 시 기존 동작(발송)으로
+  }
   const { error } = await supabase.from("vocs").upsert(
     {
       operator,
@@ -107,7 +125,7 @@ export async function POST(req: NextRequest) {
   const complete =
     items.length + dayOff.length > 0 && items.every((i) => hasVocInput(i));
   let notified = false;
-  if (!complete) {
+  if (!complete || unchanged) {
     return NextResponse.json({ ok: true, notified, complete });
   }
   try {

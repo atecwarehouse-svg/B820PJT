@@ -86,18 +86,32 @@ export async function POST(req: NextRequest) {
       { status: 400 },
     );
   }
+  // 이미 서명된 행은 덮어쓰지 않는다 — 두 사람이 같은 이름 행을 골라 서명하면
+  // (동명이인·오래된 목록) 먼저 한 서명이 소리 없이 사라진다.
   const { data, error } = await supabase
     .from("pledge_signatures")
     .update({ sig_after: signature, after_at: now })
     .eq("id", sigId)
     .eq("session_id", sessionId)
+    .is("sig_after", null)
     .select("id")
     .maybeSingle();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   if (!data) {
+    // 행이 없거나, 그 사이 다른 사람이 이미 서명을 완료한 경우
+    const { data: row } = await supabase
+      .from("pledge_signatures")
+      .select("sig_after")
+      .eq("id", sigId)
+      .eq("session_id", sessionId)
+      .maybeSingle();
     return NextResponse.json(
-      { error: "대상 서명을 찾을 수 없습니다." },
-      { status: 404 },
+      {
+        error: row?.sig_after
+          ? "이미 서명이 완료된 이름입니다. 목록을 새로고침해 본인 이름을 다시 선택해주세요."
+          : "대상 서명을 찾을 수 없습니다.",
+      },
+      { status: 409 },
     );
   }
   return NextResponse.json({ id: data.id });

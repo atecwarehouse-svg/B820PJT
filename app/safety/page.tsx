@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { createServiceClient } from "@/lib/supabase/server";
+import { fetchAll } from "@/lib/supabase/paginate";
 import { isAdmin } from "@/lib/admin-auth";
 import AdminLogin from "@/components/AdminLogin";
 import SafetyManager, { type PledgeSessionRow } from "@/components/SafetyManager";
@@ -18,10 +19,11 @@ export default async function SafetyPage() {
     .select("id, manager_name, operator, location, install_date, end_time, ended_at")
     .order("created_at", { ascending: false });
 
-  // 세션별 서명자 수 집계 (저용량이라 전체 조회 후 JS 집계)
-  const { data: sigs } = await supabase
-    .from("pledge_signatures")
-    .select("session_id");
+  // 세션별 서명자 수 집계 — 누적 서명이 1000행을 넘으면 1회 요청 상한에
+  // 조용히 잘려 서명자 수가 줄어 보이므로 전수 페이지네이션으로 조회
+  const sigs = await fetchAll<{ session_id: string }>((from, to) =>
+    supabase.from("pledge_signatures").select("session_id").order("id").range(from, to),
+  ).catch(() => [] as { session_id: string }[]);
   const counts = new Map<string, number>();
   for (const row of sigs ?? []) {
     const k = row.session_id as string;

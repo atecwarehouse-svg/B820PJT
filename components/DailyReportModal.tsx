@@ -68,9 +68,11 @@ export default function DailyReportModal(props: {
                   </button>
                 ))}
               </div>
+              {/* key={stage}로 리마운트하면 탭을 오갈 때 입력 중이던 특이사항·점검
+                  내용이 전부 사라진다 — 같은 인스턴스를 유지하고 카드가 stage 변화에
+                  맞춰 발송 상태만 초기화한다 */}
               <DailyReportCard
                 {...props}
-                key={stage}
                 stage={stage}
                 onSent={(to, teams) => {
                   setSentTo(to);

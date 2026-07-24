@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { CompletedVehicle, ScheduleDay } from "@/lib/stats";
 import { buildReport, formatReportText } from "@/lib/report";
 import type { ServiceCheck } from "@/lib/report";
@@ -158,6 +158,13 @@ export default function DailyReportCard({
   const [exclPlates, setExclPlates] = useState<string[]>([]);
   const [exclReasons, setExclReasons] = useState<Record<string, string>>({});
 
+  // 1차/2차 탭 전환 — 발송 잠금·결과 메시지만 초기화(입력값은 유지).
+  // (리마운트 없이 같은 인스턴스를 쓰므로, 1차 발송 후 2차 탭의 발송이 잠기지 않게)
+  useEffect(() => {
+    setSent(false);
+    setMsg(null);
+  }, [stage]);
+
   // 2차 폼 프리필 — 같은 날짜로 1차를 발송했으면 그때의 특이사항·운행시작 점검·계획수량을
   // 자동으로 채운다. 이미 입력된 칸은 덮지 않는다(늦게 도착한 응답이 입력을 지우는 사고 방지).
   useEffect(() => {
@@ -282,10 +289,19 @@ export default function DailyReportCard({
   const plannedOverride =
     planned.trim() !== "" && !isNaN(Number(planned)) ? Number(planned) : null;
 
-  // 날짜가 바뀌면 그 날짜의 예정 수량으로 계획 입력칸 자동 채움(이후 수정 가능)
+  // 날짜가 바뀌면 그 날짜의 예정 수량으로 계획 입력칸 자동 채움(이후 수정 가능).
+  // scheduleDays는 서버 새로고침마다 새 배열이라 이 효과가 다시 돌 수 있는데,
+  // 그때 사용자가 직접 고친 값을 자동값으로 되돌리면 안 된다 — 직전 자동값과
+  // 같을 때(=안 고쳤을 때)만 갱신한다.
+  const plannedAutoRef = useRef<{ date: string; auto: string } | null>(null);
   useEffect(() => {
-    const sd = scheduleDays.find((d) => d.date === date)?.planned ?? 0;
-    setPlanned(String(sd));
+    const sd = String(scheduleDays.find((d) => d.date === date)?.planned ?? 0);
+    const prev = plannedAutoRef.current;
+    plannedAutoRef.current = { date, auto: sd };
+    setPlanned((cur) => {
+      if (!prev || prev.date !== date) return sd; // 최초·날짜 변경 — 자동 채움
+      return cur === "" || cur === prev.auto ? sd : cur; // 직접 고친 값은 유지
+    });
   }, [date, scheduleDays]);
 
   const check: ServiceCheck = useMemo(

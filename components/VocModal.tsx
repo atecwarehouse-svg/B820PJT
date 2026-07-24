@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import type { CompletedVehicle } from "@/lib/stats";
 import StarRating from "./StarRating";
 import {
@@ -87,7 +87,11 @@ export default function VocModal() {
   const vehicles = selectedDate?.vehicles ?? [];
 
   // 이미 저장된 VOC가 있으면 불러와 폼을 채운다 → 그대로 고쳐 다시 저장(수정)할 수 있다.
+  // 요청 순번 — 운수사를 빠르게 바꾸면 이전 요청이 늦게 도착해 다른 운수사의
+  // 저장 내용(별점·의견)이 현재 폼에 섞이므로, 최신 요청의 응답만 반영한다.
+  const loadSeqRef = useRef(0);
   async function loadExisting(op: string, d: string) {
+    const seq = ++loadSeqRef.current;
     setState({});
     setNotes("");
     setLoaded(false);
@@ -98,6 +102,7 @@ export default function VocModal() {
         { cache: "no-store" },
       );
       const json = await res.json();
+      if (seq !== loadSeqRef.current) return; // 늦게 도착한 이전 요청 — 무시
       const saved = json.voc;
       if (!saved) return;
       const next: Record<string, VocState> = {};

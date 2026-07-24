@@ -87,6 +87,11 @@ function PlanReportPanel({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [entries, setEntries] = useState<Record<string, EntryState>>({});
+  // 아직 전송 안 된 채팅방 — 한 방만 실패하면 재시도는 그 방에만 보낸다(중복 발송 방지)
+  const [pendingRooms, setPendingRooms] = useState<("start" | "consult")[]>([
+    "start",
+    "consult",
+  ]);
 
   // 열릴 때 협의사항(설치장소·휴차)으로 프리필
   useEffect(() => {
@@ -114,7 +119,16 @@ function PlanReportPanel({
       } catch {
         // 실패 시 빈 값
       }
-      if (alive) setEntries(init);
+      // 응답이 오는 사이 사용자가 입력한 값은 프리필로 덮지 않는다
+      if (alive) {
+        setEntries((cur) => {
+          const merged: Record<string, EntryState> = { ...init };
+          for (const [op, v] of Object.entries(cur)) {
+            merged[op] = { ...(init[op] ?? {}), ...v };
+          }
+          return merged;
+        });
+      }
     })();
     return () => {
       alive = false;
@@ -145,10 +159,16 @@ function PlanReportPanel({
       const res = await fetch("/api/plan-report", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ label, date: today, groups }),
+        body: JSON.stringify({ label, date: today, groups, rooms: pendingRooms }),
       });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? "전송 실패");
+      if (!res.ok) {
+        // 일부 방만 성공했으면 남은 방만 재시도 대상으로 남긴다
+        if (Array.isArray(json.sent) && json.sent.length > 0) {
+          setPendingRooms((prev) => prev.filter((r) => !json.sent.includes(r)));
+        }
+        throw new Error(json.error ?? "전송 실패");
+      }
       setStep("done");
     } catch (e) {
       setError(e instanceof Error ? e.message : "전송 실패");

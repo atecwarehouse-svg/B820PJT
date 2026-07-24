@@ -63,6 +63,11 @@ async function loadFromView(supabase: SB, target: number): Promise<DashboardStat
   return assemble(target, ops);
 }
 
+// 표준 슬롯(설치전 7 + 설치후 7) 키 — 완료 판정은 이 14칸만 센다.
+// photos 테이블에는 사용자가 추가한 커스텀 칸(before_custom_*)도 함께 저장되므로
+// 필터 없이 세면 표준 칸이 비어도 완료로 잘못 집계된다.
+const STD_SLOT_KEYS = [...BEFORE_SLOTS, ...AFTER_SLOTS].map((s) => s.slotKey);
+
 // 폴백: 차량/사진 전수 조회 후 앱에서 집계 (뷰가 아직 없을 때).
 // '단말기 없음'(records.na_slots) 칸은 사진 1장으로 간주해 합산.
 async function loadByScan(supabase: SB, target: number): Promise<DashboardStats> {
@@ -71,7 +76,12 @@ async function loadByScan(supabase: SB, target: number): Promise<DashboardStats>
       supabase.from("vehicles").select("plate, operator").order("plate").range(from, to),
     ),
     fetchAll<{ plate: string }>((from, to) =>
-      supabase.from("photos").select("plate").order("id").range(from, to),
+      supabase
+        .from("photos")
+        .select("plate")
+        .in("slot_key", STD_SLOT_KEYS)
+        .order("id")
+        .range(from, to),
     ),
     fetchAll<{ plate: string; na_slots: string[] | null }>((from, to) =>
       supabase.from("records").select("plate, na_slots").order("plate").range(from, to),
@@ -126,7 +136,12 @@ export async function loadInProgressList(): Promise<InProgressVehicle[]> {
       supabase.from("records").select("plate, na_slots").order("plate").range(from, to),
     ),
     fetchAll<{ plate: string }>((from, to) =>
-      supabase.from("photos").select("plate").order("id").range(from, to),
+      supabase
+        .from("photos")
+        .select("plate")
+        .in("slot_key", STD_SLOT_KEYS)
+        .order("id")
+        .range(from, to),
     ),
   ]);
   const photoCnt = new Map<string, number>();
@@ -181,7 +196,7 @@ export async function loadInProgressList(): Promise<InProgressVehicle[]> {
 // 설치 시작 단계(설치전 사진만 올리고 저장 — 설치시작 카드 발송용)에서도 saved_at이
 // 찍히므로, 저장 여부만으로 완료로 집계하면 안 된다. 설치후 사진까지 모두 충족해야 완료.
 export async function fetchCompletedMap(supabase: SB): Promise<Map<string, string>> {
-  const stdSlots = [...BEFORE_SLOTS, ...AFTER_SLOTS].map((s) => s.slotKey);
+  const stdSlots = STD_SLOT_KEYS;
   const [recs, photoRows] = await Promise.all([
     fetchAll<{ plate: string; saved_at: string; na_slots: string[] | null }>((from, to) =>
       supabase

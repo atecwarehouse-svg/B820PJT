@@ -4,6 +4,7 @@ import { uploadPhoto, deletePhoto } from "@/lib/gdrive";
 import { publicPhotoUrl } from "@/lib/photo-url";
 import { checkPhotoRotation } from "@/lib/gemini";
 import { runAfterResponse } from "@/lib/background";
+import { kstDateString } from "@/lib/work-day";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -32,6 +33,8 @@ async function ensureRecord(
       plate,
       operator: vehicle.operator,
       route: vehicle.route,
+      // DB 기본값(current_date)은 UTC라 KST 00~09시 시작이 전날로 기록됨 — KST로 명시
+      install_date: kstDateString(),
       updated_at: new Date().toISOString(),
     },
     { onConflict: "plate" },
@@ -187,7 +190,16 @@ export async function DELETE(req: NextRequest) {
   if (photo?.storage_path) {
     await deletePhoto(photo.storage_path).catch(() => {});
   }
-  await supabase.from(table).delete().eq("plate", plate).eq("slot_key", slotKey);
+  // DB 삭제 실패를 삼키면 사진 행이 남은 채 칸만 사라져, 같은 키가 재사용될 때
+  // 옛 사진이 새 칸에 되살아난다 — 실패를 그대로 돌려줘 클라이언트가 중단하게 한다.
+  const { error } = await supabase
+    .from(table)
+    .delete()
+    .eq("plate", plate)
+    .eq("slot_key", slotKey);
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
 
   return NextResponse.json({ ok: true });
 }

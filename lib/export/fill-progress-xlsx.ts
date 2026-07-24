@@ -252,20 +252,47 @@ export async function fillProgressXlsx(
 
   // 2) 기존 행 G/H 채움. 완료가 아닌 차량 행은 비운다 —
   //    템플릿(사용자 편집본)에 박혀 있던 완료 표기가 기준일 스냅샷을 오염시키지 않도록.
+  //    G/H 셀이 아예 없는 행(추가분이 템플릿이 된 뒤 엑셀 재저장으로 빈 셀이 사라진 경우)
+  //    에는 셀을 삽입한다 — 안 그러면 그 차량은 완료돼도 영영 표기되지 않는다.
   const seenG = new Set<number>();
+  const defaultStyleOf = (col: string) => (sheetXml.match(new RegExp(`<c r="${col}\\d+" s="(\\d+)"`)) || [])[1];
+  const defaultGH = { G: defaultStyleOf("G"), H: defaultStyleOf("H") } as Record<string, string | undefined>;
   sheetXml = sheetXml.replace(
-    /<c r="([GH])(\d+)"([^>]*?)(?:\/>|>[\s\S]*?<\/c>)/g,
-    (whole, col: string, rowStr: string, attrs: string) => {
+    /<row r="(\d+)"[^>]*>([\s\S]*?)<\/row>/g,
+    (whole, rowStr: string, inner: string) => {
       const row = Number(rowStr);
       if (!rowPlate.has(row)) return whole; // 차량 행이 아니면(헤더 등) 그대로
-      const sMatch = attrs.match(/\bs="(\d+)"/);
-      const s = sMatch ? ` s="${sMatch[1]}"` : "";
-      if (!rowSerial.has(row)) return `<c r="${col}${row}"${s}/>`;
-      if (col === "G") {
-        seenG.add(row);
-        return `<c r="G${row}"${s} t="inlineStr"><is><t>완료</t></is></c>`;
+      const serial = rowSerial.get(row);
+      if (serial != null) seenG.add(row);
+      let newInner = inner;
+      for (const col of ["G", "H"] as const) {
+        const re = new RegExp(`<c r="${col}${row}"([^>]*?)(?:/>|>[\\s\\S]*?</c>)`);
+        const m = newInner.match(re);
+        const s = m ? (m[1].match(/\bs="(\d+)"/) || [])[1] : defaultGH[col];
+        const sAttr = s ? ` s="${s}"` : "";
+        const cell =
+          serial == null
+            ? `<c r="${col}${row}"${sAttr}/>`
+            : col === "G"
+              ? `<c r="G${row}"${sAttr} t="inlineStr"><is><t>완료</t></is></c>`
+              : `<c r="H${row}"${sAttr}><v>${serial}</v></c>`;
+        if (m) {
+          newInner = newInner.replace(re, cell);
+        } else {
+          // 셀은 열 순서대로: 이 열보다 뒤 열의 첫 셀 앞에 삽입, 없으면 행 끝에
+          let insertAt = -1;
+          for (const cm of newInner.matchAll(/<c r="([A-Z]+)\d+"/g)) {
+            const c = cm[1];
+            if (c.length > 1 || c > col) {
+              insertAt = cm.index!;
+              break;
+            }
+          }
+          newInner =
+            insertAt >= 0 ? newInner.slice(0, insertAt) + cell + newInner.slice(insertAt) : newInner + cell;
+        }
       }
-      return `<c r="H${row}"${s}><v>${rowSerial.get(row)}</v></c>`;
+      return newInner === inner ? whole : whole.replace(inner, () => newInner);
     },
   );
   const filled = seenG.size;
@@ -407,7 +434,9 @@ export async function fillProgressXlsx(
         (a.doneSerial != null
           ? `<c r="G${rn}"${styles.G} t="inlineStr"><is><t>완료</t></is></c>` +
             `<c r="H${rn}"${styles.H}><v>${a.doneSerial}</v></c>`
-          : "") +
+          : // 미완료라도 빈 G/H 셀(스타일 포함)을 넣어 둔다 — 이 파일이 템플릿이 된 뒤
+            // 완료됐을 때 채울 자리를 남기기 위해(스타일 있는 빈 셀은 엑셀 재저장에도 유지)
+            `<c r="G${rn}"${styles.G}/><c r="H${rn}"${styles.H}/>`) +
         (a.planSerial != null ? `<c r="I${rn}"${styles.I}><v>${a.planSerial}</v></c>` : "") +
         `</row>`;
     }

@@ -29,10 +29,17 @@ export async function GET(req: NextRequest) {
   }
 
   // 2) 그 중 사진이 있는 plate (중복 제거)
-  const photoRows = await fetchAll<{ plate: string }>((from, to) =>
-    supabase.from("photos").select("plate").in("plate", opPlates).order("id").range(from, to),
-  );
-  const plates = [...new Set(photoRows.map((p) => p.plate))].sort();
+  // 한글 plate 수백 개를 in()에 한 번에 넣으면 URL 길이 초과로 실패 — 100개씩 분할
+  const withPhoto = new Set<string>();
+  const CH = 100;
+  for (let i = 0; i < opPlates.length; i += CH) {
+    const chunk = opPlates.slice(i, i + CH);
+    const photoRows = await fetchAll<{ plate: string }>((from, to) =>
+      supabase.from("photos").select("plate").in("plate", chunk).order("id").range(from, to),
+    );
+    for (const p of photoRows) withPhoto.add(p.plate);
+  }
+  const plates = [...withPhoto].sort();
 
   return NextResponse.json({ plates });
 }

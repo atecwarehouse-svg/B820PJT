@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { loadInstallProgress } from "@/lib/stats";
 import { createServiceClient } from "@/lib/supabase/server";
+import { fetchAll } from "@/lib/supabase/paginate";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -17,10 +18,16 @@ export async function GET() {
     const outTimes = new Map<string, string>();
     try {
       const supabase = createServiceClient();
-      const { data } = await supabase
-        .from("dispatch_times")
-        .select("date, plate, out_time")
-        .range(0, 4999);
+      // 행이 쌓이면 1회 요청 상한(1000행)에 조용히 잘리므로 전수 페이지네이션으로.
+      const data = await fetchAll<{ date: string; plate: string; out_time: string | null }>(
+        (from, to) =>
+          supabase
+            .from("dispatch_times")
+            .select("date, plate, out_time")
+            .order("date")
+            .order("plate")
+            .range(from, to),
+      );
       for (const r of data ?? []) {
         const t = (r.out_time as string | null) ?? "";
         if (t) outTimes.set(`${r.date as string}|${r.plate as string}`, t);

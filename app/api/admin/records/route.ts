@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
+import { fetchAll } from "@/lib/supabase/paginate";
 import { isAdmin } from "@/lib/admin-auth";
 
 export const runtime = "nodejs";
@@ -24,18 +25,21 @@ export async function GET(req: NextRequest) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   const plates = (recs ?? []).map((r) => r.plate);
-  // 사진 수·증차 여부를 한번에 조회 후 plate별 집계
-  const [photosRes, vehRes] = await Promise.all([
+  // 사진 수·증차 여부 조회 후 plate별 집계
+  // (100대 × 14장 ≈ 1,400행이라 1회 요청 상한 1000행에 잘림 → 페이지네이션 필수)
+  const [photoRows, vehRes] = await Promise.all([
     plates.length
-      ? supabase.from("photos").select("plate").in("plate", plates)
-      : Promise.resolve({ data: [] as { plate: string }[], error: null }),
+      ? fetchAll<{ plate: string }>((from, to) =>
+          supabase.from("photos").select("plate").in("plate", plates).order("id").range(from, to),
+        )
+      : Promise.resolve([] as { plate: string }[]),
     plates.length
       ? supabase.from("vehicles").select("plate, is_added").in("plate", plates)
       : Promise.resolve({ data: [] as { plate: string; is_added: boolean }[], error: null }),
   ]);
 
   const photoCount = new Map<string, number>();
-  for (const p of photosRes.data ?? []) {
+  for (const p of photoRows) {
     photoCount.set(p.plate, (photoCount.get(p.plate) ?? 0) + 1);
   }
   const addedSet = new Set((vehRes.data ?? []).filter((v) => v.is_added).map((v) => v.plate));

@@ -120,14 +120,6 @@ export default function RecordEditor({ plate, initial, teamOptions = [] }: Props
     },
     [],
   );
-  // 커스텀 슬롯 번호 — 설치전(before_custom_N)·이상유무(check_custom_N) 공용 시퀀스
-  const seqRef = useRef<number>(
-    customSlots.reduce((max, c) => {
-      const m = /_custom_(\d+)$/.exec(c.slot_key);
-      return m ? Math.max(max, Number(m[1])) : max;
-    }, 0),
-  );
-
   const router = useRouter();
   const beforeSlots = useMemo(() => buildBeforeSlots(customSlots), [customSlots]);
   const checkSlots = useMemo(() => buildCheckSlots(customSlots), [customSlots]);
@@ -153,22 +145,38 @@ export default function RecordEditor({ plate, initial, teamOptions = [] }: Props
     ) => {
       setSaveState("saving");
       try {
+        // 자동저장(blur·토글)은 바뀐 필드만 보낸다 — 전체 상태를 보내면 낡은 탭이
+        // 다른 기기에서 이미 저장된 비고·없음체크·커스텀 칸을 옛 값으로 덮어쓴다.
+        // '저장' 버튼(saved=true, 중간 저장 포함)은 화면 전체 상태를 그대로 보낸다.
+        const full = overrides?.saved === true;
+        const fields: Record<string, unknown> = full
+          ? {
+              operator,
+              route,
+              year,
+              model,
+              team,
+              custom_slots: customSlots,
+              na_slots: naSlots,
+              check_na_slots: checkNaSlots,
+              check_note: checkNote,
+              extra_note: extraNote,
+              added_vehicle: addedVehicle,
+            }
+          : {};
+        if (overrides) {
+          for (const [k, v] of Object.entries(overrides)) {
+            if (v !== undefined && !["saved", "mid", "team_change"].includes(k)) {
+              fields[k] = v;
+            }
+          }
+        }
         const res = await fetch("/api/records", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             plate,
-            operator: overrides?.operator ?? operator,
-            route: overrides?.route ?? route,
-            year: overrides?.year ?? year,
-            model: overrides?.model ?? model,
-            team: overrides?.team ?? team,
-            custom_slots: overrides?.custom_slots ?? customSlots,
-            na_slots: overrides?.na_slots ?? naSlots,
-            check_na_slots: overrides?.check_na_slots ?? checkNaSlots,
-            check_note: overrides?.check_note ?? checkNote,
-            extra_note: overrides?.extra_note ?? extraNote,
-            added_vehicle: overrides?.added_vehicle ?? addedVehicle,
+            ...fields,
             saved: overrides?.saved ?? false,
             // 1·2단계 중간 저장 — 서버가 특이사항(3단계 입력란) 필수 검증을 건너뛴다
             ...(overrides?.mid ? { mid: true } : {}),
@@ -241,18 +249,24 @@ export default function RecordEditor({ plate, initial, teamOptions = [] }: Props
     saveRecord({ added_vehicle: value, na_slots: next });
   }
 
+  // 마지막으로 서버에 저장된 팀명 — 실패 시 복구용.
+  // (직접입력 칸은 blur 시점에 state가 이미 새 값이라 state로는 복구할 수 없다)
+  const savedTeamRef = useRef((initial.record?.team ?? "").trim());
+
   // 팀명 변경 — 선택 즉시 저장. 성공하면 잠금(이후 변경은 관리자 비밀번호 필요).
   async function changeTeam(v: string) {
-    const prev = team;
+    const prev = savedTeamRef.current;
+    if (v.trim() === prev) return; // 변경 없음 — 저장/잠금 처리 불필요
     setTeam(v);
     const ok = await saveRecord({ team: v, team_change: true });
     if (ok) {
+      savedTeamRef.current = v.trim();
       if (v.trim()) {
         setTeamLocked(true);
         adminPwRef.current = null;
       }
     } else {
-      setTeam(prev); // 실패(비밀번호 오류 등) → 원래 값으로 복구
+      setTeam(prev); // 실패(비밀번호 오류 등) → 서버에 저장돼 있는 값으로 복구
       if (prev.trim()) setTeamLocked(true);
       adminPwRef.current = null;
     }
@@ -277,8 +291,8 @@ export default function RecordEditor({ plate, initial, teamOptions = [] }: Props
 
   function toggleEditInfo() {
     if (editInfo) {
-      // 완료 → 저장
-      saveRecord();
+      // 완료 → 수정한 운수사/노선만 저장
+      saveRecord({ operator, route });
     }
     setEditInfo((v) => !v);
   }
@@ -354,17 +368,17 @@ export default function RecordEditor({ plate, initial, teamOptions = [] }: Props
     }
   }
 
-  // 항목(칸) 추가 — 설치전(before)·차량 이상유무(check) 공용
+  // 항목(칸) 추가 — 설치전(before)·차량 이상유무(check) 공용.
+  // 키는 타임스탬프로 발급 — 순번으로 매기면 두 기기가 같은 차량을 열어 두고
+  // 각자 항목을 추가할 때 같은 키가 생겨 사진이 다른 라벨 칸에 붙는다.
   function addCustomSlot(section: "before" | "check") {
     const label = prompt("추가할 항목(칸) 이름을 입력하세요");
     if (!label || !label.trim()) return;
-    seqRef.current += 1;
+    const seq = Date.now();
     const prefix = section === "check" ? "check_custom_" : "before_custom_";
     const next: CustomSlot = {
       slot_key:
-        section === "check"
-          ? makeCheckCustomSlotKey(seqRef.current)
-          : makeCustomSlotKey(seqRef.current),
+        section === "check" ? makeCheckCustomSlotKey(seq) : makeCustomSlotKey(seq),
       label: label.trim(),
       sort_order: customSlots.filter((c) => c.slot_key.startsWith(prefix)).length,
     };
@@ -375,11 +389,18 @@ export default function RecordEditor({ plate, initial, teamOptions = [] }: Props
 
   async function removeCustomSlot(slotKey: string) {
     if (!confirm("이 항목(칸)을 삭제할까요? 사진도 함께 삭제됩니다.")) return;
-    // 사진 먼저 삭제
-    await fetch(
-      `/api/photos?plate=${encodeURIComponent(plate)}&slot_key=${encodeURIComponent(slotKey)}`,
-      { method: "DELETE" },
-    ).catch(() => {});
+    // 사진 먼저 삭제 — 실패하면 칸을 지우지 않는다. 사진 행이 남은 채 칸만 지우면
+    // 나중에 같은 키가 재사용될 때 옛 사진이 새 칸에 되살아난다.
+    try {
+      const res = await fetch(
+        `/api/photos?plate=${encodeURIComponent(plate)}&slot_key=${encodeURIComponent(slotKey)}`,
+        { method: "DELETE" },
+      );
+      if (!res.ok) throw new Error();
+    } catch {
+      showToast("사진 삭제에 실패했습니다. 다시 시도해주세요", "error");
+      return;
+    }
     const updated = customSlots.filter((c) => c.slot_key !== slotKey);
     setCustomSlots(updated);
     setUrls((u) => {
@@ -542,7 +563,7 @@ export default function RecordEditor({ plate, initial, teamOptions = [] }: Props
                   value={operator}
                   placeholder="운수사"
                   onChange={setOperator}
-                  onBlur={() => saveRecord()}
+                  onBlur={() => saveRecord({ operator })}
                 />
               ) : (
                 <Field label="운수사" value={operator} />
@@ -553,7 +574,7 @@ export default function RecordEditor({ plate, initial, teamOptions = [] }: Props
                   value={route}
                   placeholder="노선"
                   onChange={setRoute}
-                  onBlur={() => saveRecord()}
+                  onBlur={() => saveRecord({ route })}
                 />
               ) : (
                 <Field label="노선" value={route} />
@@ -563,14 +584,14 @@ export default function RecordEditor({ plate, initial, teamOptions = [] }: Props
                 value={year}
                 placeholder="예: 2021"
                 onChange={setYear}
-                onBlur={() => saveRecord()}
+                onBlur={() => saveRecord({ year })}
               />
               <EditField
                 label="차종"
                 value={model}
                 placeholder="예: 일렉시티"
                 onChange={setModel}
-                onBlur={() => saveRecord()}
+                onBlur={() => saveRecord({ model })}
               />
               <label className="col-span-2 flex flex-col">
                 <span className="text-xs text-gray-400">
@@ -671,7 +692,7 @@ export default function RecordEditor({ plate, initial, teamOptions = [] }: Props
               value={checkNote}
               placeholder="차량 이상 내용을 적어주세요 (예: 전광판 화면 깨짐 · 이상 없으면 '없음')"
               onChange={(e) => setCheckNote(e.target.value)}
-              onBlur={() => saveRecord()}
+              onBlur={() => saveRecord({ check_note: checkNote })}
               rows={2}
               className={`mt-1 rounded-lg border px-3 py-2 text-sm outline-none focus:border-blue-500 ${
                 checkNote.trim() ? "border-gray-300 bg-white" : "border-red-300 bg-red-50"
@@ -768,7 +789,7 @@ export default function RecordEditor({ plate, initial, teamOptions = [] }: Props
             value={extraNote}
             placeholder="설치 중 특이사항을 적어주세요 (없으면 '없음')"
             onChange={(e) => setExtraNote(e.target.value)}
-            onBlur={() => saveRecord()}
+            onBlur={() => saveRecord({ extra_note: extraNote })}
             rows={3}
             className={`w-full rounded-lg border px-3 py-2 text-sm outline-none focus:border-blue-500 ${
               extraNote.trim() ? "border-gray-300 bg-white" : "border-red-300 bg-red-50"

@@ -1073,18 +1073,19 @@ export interface PlanReportGroup {
 // 설치계획 보고 카드 — 대시보드 '설치계획 보고' 버튼. 채팅방별로 내용이 다르다:
 //   시작보고 채팅방(TEAMS_WEBHOOK_URL): 노선·집합시간·설치 장소만 (휴차 없음)
 //   협의사항 채팅방(TEAMS_COMPLETE_WEBHOOK_URL): + 휴차·도착시간·협조확인·설치위치·특이사항
-// 둘 중 하나라도 미설정이면 throw(사용자가 명시적으로 보내는 것).
-export async function sendPlanReportCard(d: {
-  label: string; // 날짜 라벨 (예: "7/10 (금)")
-  total: number; // 금일 설치계획 합계
-  groups: PlanReportGroup[];
-}): Promise<void> {
+// 방별 성공/실패를 돌려준다 — 한 방만 실패했을 때 재시도가 성공한 방에
+// 같은 카드를 또 보내지 않도록, 호출부가 실패한 방에만 다시 보낼 수 있게 한다.
+export type PlanReportRoom = "start" | "consult";
+export async function sendPlanReportCard(
+  d: {
+    label: string; // 날짜 라벨 (예: "7/10 (금)")
+    total: number; // 금일 설치계획 합계
+    groups: PlanReportGroup[];
+  },
+  rooms: PlanReportRoom[] = ["start", "consult"],
+): Promise<{ sent: PlanReportRoom[]; errors: string[] }> {
   const startUrl = process.env.TEAMS_WEBHOOK_URL;
   const consultUrl = process.env.TEAMS_COMPLETE_WEBHOOK_URL;
-  if (!startUrl) throw new Error("시작보고 채팅방 웹후크가 설정되지 않았습니다. (TEAMS_WEBHOOK_URL)");
-  if (!consultUrl) {
-    throw new Error("협의사항 채팅방 웹후크가 설정되지 않았습니다. (TEAMS_COMPLETE_WEBHOOK_URL)");
-  }
 
   const v = (s?: string) => s?.trim() || "-";
   // 제목은 채팅방별로 다름 — 시작보고방은 '설치계획 보고', 협의사항방은 '집합시간 및 특이사항 공지'
@@ -1193,19 +1194,37 @@ export async function sendPlanReportCard(d: {
     ]),
   ]);
 
-  const targets = [
-    { name: "시작보고 채팅방", url: startUrl, card: startCard },
-    { name: "협의사항 채팅방", url: consultUrl, card: consultCard },
+  const allTargets: { room: PlanReportRoom; name: string; url: string | undefined; card: unknown }[] = [
+    { room: "start", name: "시작보고 채팅방", url: startUrl, card: startCard },
+    { room: "consult", name: "협의사항 채팅방", url: consultUrl, card: consultCard },
   ];
+  const targets = allTargets.filter((t) => rooms.includes(t.room));
+
+  const sent: PlanReportRoom[] = [];
+  const errors: string[] = [];
   for (const t of targets) {
-    const res = await fetch(t.url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(t.card),
-    });
-    if (!res.ok) {
-      const txt = await res.text().catch(() => "");
-      throw new Error(`Teams 설치계획 응답(${t.name}) ${res.status} ${txt.slice(0, 160)}`);
+    if (!t.url) {
+      errors.push(
+        `${t.name} 웹후크가 설정되지 않았습니다. (${
+          t.room === "start" ? "TEAMS_WEBHOOK_URL" : "TEAMS_COMPLETE_WEBHOOK_URL"
+        })`,
+      );
+      continue;
+    }
+    try {
+      const res = await fetch(t.url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(t.card),
+      });
+      if (!res.ok) {
+        const txt = await res.text().catch(() => "");
+        throw new Error(`Teams 설치계획 응답(${t.name}) ${res.status} ${txt.slice(0, 160)}`);
+      }
+      sent.push(t.room);
+    } catch (e) {
+      errors.push(e instanceof Error ? e.message : `${t.name} 전송 실패`);
     }
   }
+  return { sent, errors };
 }

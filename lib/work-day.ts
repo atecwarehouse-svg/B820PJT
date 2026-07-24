@@ -30,6 +30,19 @@ export function workDateString(value: string | Date): string {
   return `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
 }
 
+/** KST 달력 날짜 "YYYY-MM-DD" (업무일 시프트 없음 — 설치일자 등 표기용).
+ *  서버는 UTC라 DB current_date/new Date()를 그대로 쓰면 KST 00~09시에 전날이 된다. */
+export function kstDateString(value: string | Date = new Date()): string {
+  const t = typeof value === "string" ? new Date(value) : value;
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Seoul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(t);
+  return parts; // en-CA = "YYYY-MM-DD"
+}
+
 /** 업무일의 Excel 날짜 직렬값 (다운로드 양식 H열용). */
 export function workDateExcelSerial(value: string | Date): number {
   const { y, m, d } = shiftedKstYmd(value);

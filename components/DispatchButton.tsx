@@ -26,6 +26,9 @@ interface Entry {
   excluded: boolean; // 설치제외 — 나중에 설치(리스트에는 유지)
 }
 
+// 저장 대상 항목 — 이 기기에서 실제로 바꾼 항목만 서버로 보낸다(기기 간 덮어쓰기 방지)
+type DirtyField = "outTime" | "checklist" | "tachoDone" | "excluded";
+
 // "2026-07-15" → "2026.07.15"
 function fmtDot(d: string): string {
   return d.replace(/-/g, ".");
@@ -109,21 +112,28 @@ export default function DispatchButton() {
   // 선택지(운수사·예정일·노선) — 모달 처음 열 때 1회 로드
   const [operators, setOperators] = useState<OperatorSchedule[] | null>(null);
   const [optError, setOptError] = useState(false);
-  const [today] = useState(() => workDateString(new Date())); // 금일(업무일)
+  // 금일(업무일) — 팝업을 열 때마다 다시 계산. 페이지를 계속 켜두면(PWA)
+  // 다음 업무일에도 어제 날짜가 '금일'로 남는 문제 방지.
+  const [today, setToday] = useState(() => workDateString(new Date()));
 
   const [operator, setOperator] = useState("");
   const [date, setDate] = useState("");
   const [routeFilter, setRouteFilter] = useState(""); // "" = 전체
 
   const [entries, setEntries] = useState<Entry[]>([]);
-  // 이 기기에서 수정한 차량번호 — 저장 시 이 차량들만 서버로 보낸다.
-  // 전체를 보내면 다른 기기가 그 사이 저장한 값을 로드 시점의 옛 값으로 덮어쓴다.
-  const dirtyRef = useRef<Set<string>>(new Set());
+  // 이 기기에서 수정한 차량번호 → 수정한 항목들. 저장 시 이 차량의 이 항목들만 보낸다.
+  // 차량 전체나 항목 전체를 보내면 다른 기기가 그 사이 저장한 값(예: 검수완료)을
+  // 로드 시점의 옛 값으로 덮어쓴다.
+  const dirtyRef = useRef<Map<string, Set<DirtyField>>>(new Map());
+  // 목록 요청 순번 — 늦게 도착한 이전 응답이 최신 화면을 덮어쓰지 않게 한다.
+  const loadSeqRef = useRef(0);
   const [listLoading, setListLoading] = useState(false);
   const [listError, setListError] = useState("");
   const [dbReady, setDbReady] = useState(true);
 
   const [saving, setSaving] = useState(false);
+  const savingRef = useRef(false); // 저장 요청 진행 중 표시(markDirty에서 참조)
+  const reDirtiedRef = useRef<Map<string, Set<DirtyField>>>(new Map()); // 저장 중 재수정된 항목
   const [saveMsg, setSaveMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [tableView, setTableView] = useState(false); // 캡쳐용 표 보기
 
@@ -136,7 +146,20 @@ export default function DispatchButton() {
   const [autoAlert, setAutoAlert] = useState<string | null>(null); // 자동 입력 페이지 경고 팝업
 
   useEffect(() => {
-    if (!open || operators !== null) return;
+    if (!open) return;
+    const t = workDateString(new Date());
+    const dayChanged = t !== today;
+    if (dayChanged) {
+      // 업무일이 바뀐 채 다시 연 팝업 — 어제 선택·목록을 비우고 오늘 기준으로 다시
+      setToday(t);
+      setOperator("");
+      setDate("");
+      setEntries([]);
+      setSaveMsg(null);
+      dirtyRef.current = new Map();
+    } else if (operators !== null) {
+      return; // 같은 업무일에 다시 연 것 — 이미 불러온 일정·선택 유지
+    }
     (async () => {
       try {
         const res = await fetch("/api/dispatch/options");
@@ -147,11 +170,11 @@ export default function DispatchButton() {
         setOperators(ops);
         setOptError(ops.length === 0);
         // 금일 설치 일정이 있으면 첫 운수사를 자동 선택해 리스트까지 바로 표시
-        const todayOp = ops.find((o) => o.dates.some((d) => d.date === today));
+        const todayOp = ops.find((o) => o.dates.some((d) => d.date === t));
         if (todayOp) {
           setOperator(todayOp.operator);
-          setDate(today);
-          loadList(todayOp.operator, today);
+          setDate(t);
+          loadList(todayOp.operator, t);
         }
       } catch {
         setOperators([]);
@@ -159,7 +182,7 @@ export default function DispatchButton() {
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, operators]);
+  }, [open]);
 
   // 금일 설치 운수사들(노선·대수 포함) — 팝업 상단에 자동 표시
   const todayOps = (operators ?? [])
@@ -173,8 +196,9 @@ export default function DispatchButton() {
     );
 
   // 금일 카드 탭 → 그 운수사의 오늘 배차표로 바로 이동
+  // (직전 로드가 실패했으면 같은 카드를 다시 탭해 재시도할 수 있어야 한다)
   function selectToday(op: string) {
-    if (operator === op && date === today) return;
+    if (operator === op && date === today && !listError) return;
     setOperator(op);
     setDate(today);
     setRouteFilter("");
@@ -213,6 +237,7 @@ export default function DispatchButton() {
   }
 
   async function loadList(op: string, d: string) {
+    const seq = ++loadSeqRef.current;
     setListLoading(true);
     setListError("");
     try {
@@ -220,20 +245,40 @@ export default function DispatchButton() {
         `/api/dispatch?operator=${encodeURIComponent(op)}&date=${encodeURIComponent(d)}`,
       );
       const j = await res.json();
+      // 운수사를 빠르게 바꾸면 이전 요청이 늦게 도착할 수 있다 — 최신 요청만 반영.
+      // (이전 응답이 화면을 덮어쓰면 다른 운수사 이름으로 저장되는 사고가 난다)
+      if (seq !== loadSeqRef.current) return;
       if (!res.ok) throw new Error(j?.error ?? "차량 목록을 불러오지 못했습니다.");
       setEntries(j.vehicles ?? []);
       setDbReady(j.dbReady !== false);
     } catch (e) {
+      if (seq !== loadSeqRef.current) return;
       setListError(e instanceof Error ? e.message : "차량 목록을 불러오지 못했습니다.");
       setEntries([]);
     } finally {
-      dirtyRef.current = new Set();
-      setListLoading(false);
+      if (seq === loadSeqRef.current) {
+        dirtyRef.current = new Map();
+        setListLoading(false);
+      }
+    }
+  }
+
+  // 이 기기에서 바꾼 항목 표시 — plate별로 바꾼 필드를 기록.
+  // 저장 요청이 날아가 있는 동안 바꾼 항목은 따로 표시해 두었다가,
+  // 저장 성공 후에도 dirty로 남겨 다음 저장에 반영한다.
+  function markDirty(plate: string, field: DirtyField) {
+    const set = dirtyRef.current.get(plate) ?? new Set<DirtyField>();
+    set.add(field);
+    dirtyRef.current.set(plate, set);
+    if (savingRef.current) {
+      const s = reDirtiedRef.current.get(plate) ?? new Set<DirtyField>();
+      s.add(field);
+      reDirtiedRef.current.set(plate, s);
     }
   }
 
   function setTime(plate: string, v: string | null) {
-    dirtyRef.current.add(plate);
+    markDirty(plate, "outTime");
     setEntries((list) =>
       list.map((e) => (e.plate === plate ? { ...e, outTime: v } : e)),
     );
@@ -247,7 +292,7 @@ export default function DispatchButton() {
 
   // 체크리스트 작성 토글
   function toggleChecklist(plate: string, checked: boolean) {
-    dirtyRef.current.add(plate);
+    markDirty(plate, "checklist");
     setEntries((list) =>
       list.map((e) => (e.plate === plate ? { ...e, checklist: checked } : e)),
     );
@@ -256,7 +301,7 @@ export default function DispatchButton() {
 
   // 타코확인 완료 토글 — 배지 탭. 저장하면 녹색 상태가 모든 기기에 공유된다.
   function toggleTachoDone(plate: string) {
-    dirtyRef.current.add(plate);
+    markDirty(plate, "tachoDone");
     setEntries((list) =>
       list.map((e) => (e.plate === plate ? { ...e, tachoDone: !e.tachoDone } : e)),
     );
@@ -265,7 +310,8 @@ export default function DispatchButton() {
 
   // 설치제외 토글 — 나중에 설치할 차량. 시간은 지우고 리스트에는 그대로 남는다.
   function toggleExcluded(plate: string, checked: boolean) {
-    dirtyRef.current.add(plate);
+    markDirty(plate, "excluded");
+    if (checked) markDirty(plate, "outTime"); // 체크 시 시간도 지워 저장
     setEntries((list) =>
       list.map((e) =>
         e.plate === plate
@@ -301,7 +347,7 @@ export default function DispatchButton() {
       setAutoAlert("순번이 입력되지 않았습니다.\n차량별 나가는 순번을 입력해주세요.");
       return;
     }
-    for (const p of timeByPlate.keys()) dirtyRef.current.add(p);
+    for (const p of timeByPlate.keys()) markDirty(p, "outTime");
     setEntries((list) =>
       list.map((e) =>
         timeByPlate.has(e.plate) ? { ...e, outTime: timeByPlate.get(e.plate)! } : e,
@@ -316,13 +362,31 @@ export default function DispatchButton() {
 
   async function handleSave() {
     if (saving) return;
-    // 이 기기에서 바꾼 차량만 저장 — 다른 기기가 먼저 저장한 값을 덮어쓰지 않는다.
-    const changed = entries.filter((e) => dirtyRef.current.has(e.plate));
+    // 이 기기에서 바꾼 차량의 바꾼 항목만 저장 — 다른 기기가 먼저 저장한 값을
+    // (다른 항목이라도) 로드 시점의 옛 값으로 덮어쓰지 않는다.
+    const snapshot = new Map(
+      [...dirtyRef.current].map(([p, s]) => [p, new Set(s)] as const),
+    );
+    const changed = entries
+      .filter((e) => snapshot.has(e.plate))
+      .map((e) => {
+        const fields = snapshot.get(e.plate)!;
+        return {
+          plate: e.plate,
+          route: e.route,
+          ...(fields.has("outTime") ? { outTime: e.outTime } : {}),
+          ...(fields.has("checklist") ? { checklist: e.checklist } : {}),
+          ...(fields.has("tachoDone") ? { tachoDone: e.tachoDone } : {}),
+          ...(fields.has("excluded") ? { excluded: e.excluded } : {}),
+        };
+      });
     if (changed.length === 0) {
       setSaveMsg({ ok: true, text: "변경된 내용이 없습니다." });
       return;
     }
     setSaving(true);
+    savingRef.current = true;
+    reDirtiedRef.current = new Map();
     setSaveMsg(null);
     try {
       const res = await fetch("/api/dispatch", {
@@ -332,7 +396,17 @@ export default function DispatchButton() {
       });
       const j = await res.json().catch(() => null);
       if (!res.ok) throw new Error(j?.error ?? "저장에 실패했습니다.");
-      dirtyRef.current = new Set();
+      // 방금 보낸 항목만 dirty 해제 — 저장 요청 중에 새로/다시 바꾼 항목은 남겨서
+      // 다음 저장 때 반영되게 한다(요청 중 수정 유실 방지).
+      for (const [plate, sentFields] of snapshot) {
+        const cur = dirtyRef.current.get(plate);
+        if (!cur) continue;
+        const redone = reDirtiedRef.current.get(plate);
+        for (const f of sentFields) {
+          if (!redone?.has(f)) cur.delete(f);
+        }
+        if (cur.size === 0) dirtyRef.current.delete(plate);
+      }
       setSaveMsg({ ok: true, text: "저장됨 ✓ 모든 기기에서 같은 배차표가 보입니다." });
     } catch (e) {
       setSaveMsg({
@@ -340,6 +414,7 @@ export default function DispatchButton() {
         text: e instanceof Error ? e.message : "저장에 실패했습니다.",
       });
     } finally {
+      savingRef.current = false;
       setSaving(false);
     }
   }

@@ -4,6 +4,7 @@ import type { CustomSlot } from "@/lib/slots";
 import { notifyInstallProgress, originFromRequest } from "@/lib/install-status";
 import { runAfterResponse } from "@/lib/background";
 import { adminPassword, isAdmin } from "@/lib/admin-auth";
+import { kstDateString } from "@/lib/work-day";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -100,16 +101,25 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "팀명을 입력해야 저장할 수 있습니다." }, { status: 400 });
   }
 
+  // 요청에 담긴 필드만 갱신 — 낡은 탭의 부분 저장이 다른 기기가 저장한
+  // 나머지 필드(비고·없음체크·커스텀 칸 등)를 옛 값으로 덮어쓰지 않게 한다.
   const payload: Record<string, unknown> = {
     plate,
-    // 수정값이 오면 그대로, 없으면 차량 마스터값으로
-    operator: body.operator ?? vehicle.operator,
-    route: body.route ?? vehicle.route,
-    year: body.year ?? null,
-    model: body.model ?? null,
-    custom_slots: body.custom_slots ?? [],
     updated_at: new Date().toISOString(),
   };
+  if (body.operator !== undefined) payload.operator = body.operator;
+  if (body.route !== undefined) payload.route = body.route;
+  if (body.year !== undefined) payload.year = body.year || null;
+  if (body.model !== undefined) payload.model = body.model || null;
+  if (body.custom_slots !== undefined) payload.custom_slots = body.custom_slots;
+  if (!existingRes.data) {
+    // 최초 생성 — 운수사/노선 스냅샷과 설치일자를 서버에서 채운다.
+    // 설치일자는 KST 달력 날짜로: DB 기본값(current_date)은 UTC라
+    // 새벽~오전(00~09시 KST) 작업 시작이 전날로 기록된다.
+    payload.operator = body.operator ?? vehicle.operator;
+    payload.route = body.route ?? vehicle.route;
+    payload.install_date = kstDateString();
+  }
   if (effectiveTeam !== undefined) {
     payload.team = effectiveTeam || null;
   }
@@ -127,9 +137,6 @@ export async function POST(req: NextRequest) {
   }
   if (body.added_vehicle !== undefined) {
     payload.added_vehicle = body.added_vehicle === true;
-  }
-  if (existing?.install_date) {
-    payload.install_date = existing.install_date;
   }
   // 최초 저장 시각만 기록 — 이후 수정 저장해도 완료일(saved_at)은 바뀌지 않는다.
   // 1·2단계 중간 저장(mid)은 설치 완료 전이므로 찍지 않는다 — 완료일이 실제보다

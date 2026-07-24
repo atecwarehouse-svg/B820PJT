@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
+import { fetchAll } from "@/lib/supabase/paginate";
 import { parseScheduleBuffer } from "@/lib/import/parse-schedule";
 import { prepareTemplateBuffer } from "@/lib/import/prepare-template";
 import { adminPassword, isAdmin } from "@/lib/admin-auth";
@@ -69,12 +70,15 @@ export async function POST(req: NextRequest) {
   >();
   let hasIsAdded = true;
   for (let from = 0; ; from += PAGE) {
+    // 페이지마다 별도 쿼리라 고유 컬럼 정렬이 없으면 페이지 사이에 행이 겹치거나
+    // 빠져 신규/삭제 판정이 어긋난다 (lib/supabase/paginate.ts와 같은 규칙).
     const select = () =>
       supabase
         .from("vehicles")
         .select(
           hasIsAdded ? "plate, planned_date, operator, is_added" : "plate, planned_date, operator",
         )
+        .order("plate")
         .range(from, from + PAGE - 1);
     let { data, error } = await select();
     if (error && hasIsAdded && /is_added/i.test(error.message)) {
@@ -137,11 +141,21 @@ export async function POST(req: NextRequest) {
     for (let i = 0; i < candPlates.length; i += IN_CHUNK) {
       const slice = candPlates.slice(i, i + IN_CHUNK);
       for (const table of ["records", "photos"] as const) {
-        const { data, error } = await supabase.from(table).select("plate").in("plate", slice);
-        if (error) {
-          return NextResponse.json({ error: error.message }, { status: 500 });
+        // 사진은 100대만 돼도 1,000행을 넘어 1회 요청 상한에 조용히 잘린다 —
+        // 잘리면 사진 있는 차량이 보호 대상에서 빠져 삭제될 수 있으므로 전수 페이지네이션.
+        try {
+          // records는 plate가 PK(id 없음), photos는 id가 PK — 고유 컬럼으로 정렬
+          const orderCol = table === "records" ? "plate" : "id";
+          const rows = await fetchAll<{ plate: string }>((from, to) =>
+            supabase.from(table).select("plate").in("plate", slice).order(orderCol).range(from, to),
+          );
+          for (const r of rows) started.add(r.plate);
+        } catch (e) {
+          return NextResponse.json(
+            { error: e instanceof Error ? e.message : "조회 실패" },
+            { status: 500 },
+          );
         }
-        for (const r of data ?? []) started.add(r.plate);
       }
     }
     for (const v of candidates) {

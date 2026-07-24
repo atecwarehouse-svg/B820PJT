@@ -6,11 +6,11 @@ import { downloadPhoto } from "@/lib/gdrive";
 import { AFTER_SLOTS, buildBeforeSlots, type CustomSlot } from "@/lib/slots";
 import type { PhotoRow, RecordRow } from "@/lib/types";
 import type { BuildInput, SlotImage } from "@/lib/export/xlsx-builder";
+import { kstDateString } from "@/lib/work-day";
 
-function todayStr() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
+// 설치일자 없는 레코드의 대체값 — 서버는 UTC라 new Date() 필드를 그대로 읽으면
+// KST 00~09시에 전날이 된다. KST 달력 날짜로.
+const todayStr = () => kstDateString();
 
 export async function loadBuildInput(plate: string): Promise<BuildInput | null> {
   const supabase = createServiceClient();
