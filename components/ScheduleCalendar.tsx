@@ -201,17 +201,29 @@ export default function ScheduleCalendar({ days }: { days: ScheduleDay[] }) {
                 ✕
               </button>
             </div>
-            <ul className="max-h-60 space-y-1 overflow-y-auto">
+            <ul className="max-h-80 space-y-1.5 overflow-y-auto">
               {(popup.ops ?? []).map((o) => (
-                <li
-                  key={o.operator}
-                  className="flex items-center justify-between rounded-lg bg-gray-50 px-3 py-1.5 text-sm"
-                >
-                  <span className="mr-2 truncate font-medium text-gray-800">{o.operator}</span>
-                  <span className="shrink-0 tabular-nums text-gray-500">
-                    {o.done > 0 && <b className="text-green-600">{o.done}/</b>}
-                    {o.count}대
-                  </span>
+                <li key={o.operator} className="rounded-lg bg-gray-50 px-3 py-2">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="mr-2 truncate font-semibold text-gray-800">
+                      {o.operator}
+                    </span>
+                    <span className="shrink-0 tabular-nums text-gray-500">
+                      {o.done > 0 && <b className="text-green-600">{o.done}/</b>}
+                      {o.count}대
+                    </span>
+                  </div>
+                  {(o.routes ?? []).length > 0 && (
+                    <p className="mt-0.5 text-xs text-gray-600">
+                      <span className="text-gray-400">노선 </span>
+                      {o.routes!.map((r) => `${r.route} ${r.count}대`).join(" · ")}
+                    </p>
+                  )}
+                  {o.address && (
+                    <p className="mt-0.5 text-[11px] leading-4 text-gray-400">
+                      📍 {o.address}
+                    </p>
+                  )}
                 </li>
               ))}
               {(popup.ops ?? []).length === 0 && (

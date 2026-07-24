@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 import { unstable_cache } from "next/cache";
-import ExcelJS from "exceljs";
 import { createServiceClient } from "@/lib/supabase/server";
 import { fetchAll } from "@/lib/supabase/paginate";
 import { workDateString } from "@/lib/work-day";
+import { loadOperatorAddresses } from "@/lib/operator-address";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -45,43 +45,16 @@ function parseAddress(addr: string): { gu: string; dong: string | null } | null 
   return { gu, dong };
 }
 
-// 템플릿에서 운수사 → 구/동 맵 (1시간 캐시 — 템플릿은 일정 업로드 때만 바뀜)
-const loadOperatorLoc = unstable_cache(
-  async (): Promise<Record<string, { gu: string; dong: string | null }>> => {
-    const supabase = createServiceClient();
-    const bucket = process.env.TEMPLATE_BUCKET ?? "templates";
-    const object = process.env.TEMPLATE_OBJECT ?? "progress-template.xlsx";
-    const { data, error } = await supabase.storage.from(bucket).download(object);
-    if (error || !data) return {};
-    const wb = new ExcelJS.Workbook();
-    await wb.xlsx.load(Buffer.from(await data.arrayBuffer()) as unknown as ArrayBuffer);
-    const ws = wb.getWorksheet("차량리스트");
-    if (!ws) return {};
-    const txt = (v: unknown): string => {
-      if (v == null) return "";
-      if (typeof v === "object") {
-        const o = v as Record<string, unknown>;
-        if (Array.isArray(o.richText)) {
-          return (o.richText as { text: string }[]).map((t) => t.text).join("");
-        }
-        if ("text" in o) return String(o.text);
-        if ("result" in o) return String(o.result);
-      }
-      return String(v);
-    };
-    const map: Record<string, { gu: string; dong: string | null }> = {};
-    for (let r = 2; r <= ws.rowCount; r++) {
-      const row = ws.getRow(r);
-      const op = txt(row.getCell("B").value).trim();
-      if (!op || map[op]) continue;
-      const loc = parseAddress(txt(row.getCell("E").value).trim());
-      if (loc) map[op] = loc;
-    }
-    return map;
-  },
-  ["weather-operator-loc"],
-  { revalidate: 3600 },
-);
+// 운수사 → 구/동 맵 — 공용 주소 로더(템플릿 E열, 1시간 캐시)에서 파싱
+async function loadOperatorLoc(): Promise<Record<string, { gu: string; dong: string | null }>> {
+  const addrs = await loadOperatorAddresses();
+  const map: Record<string, { gu: string; dong: string | null }> = {};
+  for (const [op, addr] of Object.entries(addrs)) {
+    const loc = parseAddress(addr);
+    if (loc) map[op] = loc;
+  }
+  return map;
+}
 
 // 동 이름 → 좌표 (무료 지오코딩, 시도·구 일치 확인). 실패 시 null → 구 좌표 폴백.
 // 동 좌표는 변하지 않으므로 1일 캐시(인자별 키).
