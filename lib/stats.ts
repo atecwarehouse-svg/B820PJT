@@ -371,11 +371,18 @@ export async function loadTodayExcludedPlates(date: string): Promise<string[]> {
   return plates.filter((p) => planned.has(p));
 }
 
+export interface ScheduleDayOp {
+  operator: string;
+  count: number; // 그 날 이 운수사 예정 대수
+  done: number; // 그 중 완료
+}
+
 export interface ScheduleDay {
   date: string; // YYYY-MM-DD (설치 예정일)
   planned: number; // 그 날 예정 대수
   pilot: number; // 그 중 시범설치 대수
   done: number; // 그 중 완료(저장)된 대수
+  ops?: ScheduleDayOp[]; // 운수사별 내역 (대수 내림차순 — 달력 표시·팝업용)
 }
 
 export interface ScheduleStats {
@@ -391,13 +398,23 @@ export interface ScheduleStats {
 export async function loadScheduleStats(): Promise<ScheduleStats> {
   const supabase = createServiceClient();
   const [vehicles, completed] = await Promise.all([
-    fetchAll<{ plate: string; planned_date: string | null; is_pilot: boolean | null }>((from, to) =>
-      supabase.from("vehicles").select("plate, planned_date, is_pilot").order("plate").range(from, to),
+    fetchAll<{
+      plate: string;
+      operator: string | null;
+      planned_date: string | null;
+      is_pilot: boolean | null;
+    }>((from, to) =>
+      supabase
+        .from("vehicles")
+        .select("plate, operator, planned_date, is_pilot")
+        .order("plate")
+        .range(from, to),
     ),
     fetchCompletedMap(supabase),
   ]);
 
   const byDate = new Map<string, ScheduleDay>();
+  const opsByDate = new Map<string, Map<string, ScheduleDayOp>>();
   let pilotTotal = 0;
   let pilotDone = 0;
 
@@ -414,6 +431,23 @@ export async function loadScheduleStats(): Promise<ScheduleStats> {
     }
     if (isDone) d.done++;
     byDate.set(date, d);
+
+    const op = v.operator?.trim() || "미지정";
+    const ops = opsByDate.get(date) ?? new Map<string, ScheduleDayOp>();
+    const o = ops.get(op) ?? { operator: op, count: 0, done: 0 };
+    o.count++;
+    if (isDone) o.done++;
+    ops.set(op, o);
+    opsByDate.set(date, ops);
+  }
+
+  for (const [date, ops] of opsByDate) {
+    const d = byDate.get(date);
+    if (d) {
+      d.ops = [...ops.values()].sort(
+        (a, b) => b.count - a.count || a.operator.localeCompare(b.operator, "ko"),
+      );
+    }
   }
 
   const days = [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date));
