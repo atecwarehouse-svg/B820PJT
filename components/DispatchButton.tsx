@@ -20,6 +20,7 @@ interface Entry {
   outTime: string | null; // "HH:MM" 또는 "OFF"(휴차)
   checklist: boolean; // 체크리스트 작성 완료
   completed: boolean; // 설치완료(서버 판정 — 저장+설치전후 사진 충족)
+  installing: boolean; // 설치중(서버 판정 — 시작했으나 아직 미완료)
   tachoCheck: boolean; // 타코확인 대상(타코 제조사 = 조영 DT-202, 서버 판정)
   tachoDone: boolean; // 타코확인 완료 — 배지 탭으로 토글, 저장 시 녹색 유지
   excluded: boolean; // 설치제외 — 나중에 설치(리스트에는 유지)
@@ -351,6 +352,7 @@ export default function DispatchButton() {
   const offCount = visible.filter((e) => e.outTime === OFF).length;
   // 검수완료·타코 집계는 설치대상(설치제외 아님)만 — 제외 차량을 세면 '검수완료 > 설치대상' 모순
   const active = visible.filter((e) => !e.excluded);
+  const installingCount = active.filter((e) => e.installing).length;
   const checkCount = active.filter((e) => e.checklist).length;
   const tachoCount = active.filter((e) => e.tachoCheck).length;
   const tachoDoneCount = active.filter((e) => e.tachoCheck && e.tachoDone).length;
@@ -555,11 +557,17 @@ export default function DispatchButton() {
                         </div>
                       )}
                       {/* 관리자용 한눈 요약 — 수량 타일 */}
-                      <div className="mb-2 grid grid-cols-5 divide-x divide-gray-100 rounded-xl border border-gray-200 bg-gray-50 py-2 text-center">
+                      <div className="mb-2 grid grid-cols-6 divide-x divide-gray-100 rounded-xl border border-gray-200 bg-gray-50 py-2 text-center">
                         <div>
                           <p className="text-[10px] text-gray-500">설치대상</p>
                           <p className="text-base font-bold tabular-nums text-gray-900">
                             {visible.length - exclCount}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] text-gray-500">설치중</p>
+                          <p className="text-base font-bold tabular-nums text-blue-600">
+                            {installingCount}
                           </p>
                         </div>
                         <div>
@@ -616,6 +624,11 @@ export default function DispatchButton() {
                                   {e.completed && (
                                     <span className="ml-1.5 rounded bg-green-100 px-1.5 py-0.5 align-middle text-[10px] font-semibold text-green-700">
                                       설치완료
+                                    </span>
+                                  )}
+                                  {!e.completed && e.installing && (
+                                    <span className="ml-1.5 rounded bg-blue-100 px-1.5 py-0.5 align-middle text-[10px] font-semibold text-blue-700">
+                                      설치중
                                     </span>
                                   )}
                                   {e.tachoCheck && (

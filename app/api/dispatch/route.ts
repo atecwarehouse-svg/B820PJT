@@ -86,8 +86,10 @@ export async function GET(req: NextRequest) {
   }
 
   // 설치완료 여부 — 대시보드 완료 판정과 동일(saved_at + 설치전7·설치후7 충족, fetchCompletedMap 로직)
-  // 조회 실패해도 배차표 자체는 동작해야 하므로 완료 표시만 생략한다.
+  // 설치중 = 기록이 있고 사진(또는 '단말기 없음')을 1칸 이상 채웠지만 아직 완료 아님
+  // (대시보드 진행중 판정과 동일 기준). 조회 실패해도 배차표 자체는 동작해야 하므로 표시만 생략.
   const completedSet = new Set<string>();
+  const installingSet = new Set<string>();
   try {
     const stdSlots = [...BEFORE_SLOTS, ...AFTER_SLOTS].map((s) => s.slotKey);
     const CH = 100; // 한글 plate 다수 in() 필터는 URL 길이 초과 방지를 위해 분할
@@ -99,8 +101,7 @@ export async function GET(req: NextRequest) {
         supabase
           .from("records")
           .select("plate, saved_at, na_slots")
-          .in("plate", chunk)
-          .not("saved_at", "is", null),
+          .in("plate", chunk),
         fetchAll<{ plate: string; slot_key: string }>((from, to) =>
           supabase
             .from("photos")
@@ -121,11 +122,15 @@ export async function GET(req: NextRequest) {
       for (const r of recRes.data ?? []) {
         const have = bySlot.get(r.plate);
         const na = new Set<string>(Array.isArray(r.na_slots) ? r.na_slots : []);
-        if (stdSlots.every((k) => have?.has(k) || na.has(k))) completedSet.add(r.plate);
+        if (r.saved_at && stdSlots.every((k) => have?.has(k) || na.has(k))) {
+          completedSet.add(r.plate);
+        } else if ((have?.size ?? 0) + na.size >= 1) {
+          installingSet.add(r.plate);
+        }
       }
     }
   } catch {
-    // 완료 표시는 부가 정보 — 실패해도 무시
+    // 완료·설치중 표시는 부가 정보 — 실패해도 무시
   }
 
   return NextResponse.json({
@@ -135,6 +140,7 @@ export async function GET(req: NextRequest) {
       outTime: times.get(v.plate) ?? null,
       checklist: checks.has(v.plate),
       completed: completedSet.has(v.plate),
+      installing: installingSet.has(v.plate), // 설치중(시작했으나 미완료 — 서버 판정)
       tachoCheck: isTachoCheck(v.tacho), // 조영 DT-202 → 배차표에 '타코확인' 표시
       tachoDone: tachoDones.has(v.plate), // 타코확인 완료(체크 시 녹색)
       excluded: excludes.has(v.plate), // 설치제외(나중에 설치 — 리스트에는 유지)
