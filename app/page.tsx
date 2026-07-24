@@ -4,10 +4,12 @@ import AdminCallButton from "@/components/AdminCallButton";
 import DispatchButton from "@/components/DispatchButton";
 import VocModal from "@/components/VocModal";
 import ReloadButton from "@/components/ReloadButton";
+import WeatherWidget from "@/components/WeatherWidget";
 
 export default function HomePage() {
   return (
-    <main className="mx-auto flex min-h-screen max-w-md flex-col px-4 pt-10">
+    <main className="relative mx-auto flex min-h-screen max-w-md flex-col px-4 pt-10">
+      <WeatherWidget />
       <div className="mb-2 flex justify-center">
         <ReloadButton />
       </div>
