@@ -3,15 +3,17 @@
 import { useEffect, useState } from "react";
 
 interface WeatherItem {
-  label: string; // 예: "인천 서구"
+  label: string; // 예: "서구 석남동"
   icon: string;
   text: string;
-  temp: number;
-  operators: string[]; // 그 구에서 금일 설치하는 운수사들
+  tempMin: number;
+  tempMax: number;
+  rainProb: number; // 작업 시간대 최대 강수확률(%)
+  operators: string[]; // 그 위치에서 금일 설치하는 운수사들
 }
 
-// 홈 화면 우측 상단 날씨 위젯 — 금일(업무일) 설치 예정 운수사 차고지(구/군)별 날씨.
-// 계획이 없거나 조회 실패 시 아무것도 표시하지 않는다.
+// 홈 화면 우측 상단 날씨 위젯 — 금일(업무일) 설치 예정 운수사 차고지(동 단위)의
+// 작업 시간대(20시~익일 12시) 예보. 계획이 없거나 조회 실패 시 표시하지 않는다.
 export default function WeatherWidget() {
   const [items, setItems] = useState<WeatherItem[]>([]);
 
@@ -43,9 +45,15 @@ export default function WeatherWidget() {
         >
           <span className="font-medium">{w.label}</span>
           <span>{w.icon}</span>
-          <span className="tabular-nums">{w.temp}°</span>
+          <span className="tabular-nums">
+            {w.tempMin === w.tempMax ? `${w.tempMin}°` : `${w.tempMin}~${w.tempMax}°`}
+          </span>
+          {w.rainProb >= 10 && (
+            <span className="font-medium text-blue-600">비{w.rainProb}%</span>
+          )}
         </div>
       ))}
+      <span className="text-[10px] text-gray-400">작업시간(20시~익일12시) 예보</span>
     </div>
   );
 }
