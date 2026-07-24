@@ -3,10 +3,14 @@ import PlateSearch from "@/components/PlateSearch";
 import AdminCallButton from "@/components/AdminCallButton";
 import DispatchButton from "@/components/DispatchButton";
 import VocModal from "@/components/VocModal";
+import ReloadButton from "@/components/ReloadButton";
 
 export default function HomePage() {
   return (
     <main className="mx-auto flex min-h-screen max-w-md flex-col px-4 pt-10">
+      <div className="mb-2 flex justify-end">
+        <ReloadButton />
+      </div>
       <header className="mb-8 text-center">
         <h1 className="text-2xl font-bold text-blue-700">B820 설치 사진첩</h1>
         <p className="mt-2 text-sm text-gray-500">
