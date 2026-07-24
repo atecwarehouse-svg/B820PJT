@@ -169,13 +169,25 @@ export async function notifyInstallProgress(opts: {
         url: `${origin}/api/photo/${encodeURIComponent(p.storage_path)}`,
         label: (p.label as string) ?? "",
       }));
+    // 종료시간 = 최초 완료 카드 발송 시각(재발송에도 유지), 소요시간 = 시작~종료
+    const completedAt = rec.complete_notified_at ?? new Date().toISOString();
     try {
-      await sendCompletionCard({ operator, plate, route, team, checkNote, extraNote, photos });
+      await sendCompletionCard({
+        operator,
+        plate,
+        route,
+        team,
+        checkNote,
+        extraNote,
+        startedAt: rec.start_notified_at,
+        completedAt,
+        photos,
+      });
     } catch {
       return; // 발송 실패 시 지문 미기록 → 다음 저장 때 재시도
     }
     await stamp({
-      complete_notified_at: new Date().toISOString(),
+      complete_notified_at: completedAt,
       complete_notified_sig: completeSig,
     });
     return;
@@ -193,13 +205,15 @@ export async function notifyInstallProgress(opts: {
       }
       return;
     }
+    // 시작시간 = 최초 시작 카드 발송 시각(수정 재발송에도 유지 — 소요시간 계산 기준)
+    const startedAt = rec.start_notified_at ?? new Date().toISOString();
     try {
-      await sendStartCard({ operator, plate, route, team, checkNote, extraNote });
+      await sendStartCard({ operator, plate, route, team, checkNote, extraNote, startedAt });
     } catch {
       return; // 발송 실패 시 지문 미기록 → 다음 저장 때 재시도
     }
     await stamp({
-      start_notified_at: new Date().toISOString(),
+      start_notified_at: startedAt,
       start_notified_sig: startSig,
     });
   }

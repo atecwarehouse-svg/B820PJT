@@ -522,6 +522,24 @@ export async function sendVocCard(d: VocCardData): Promise<void> {
   }
 }
 
+// ISO 시각 → KST "HH:MM" — 설치 시작/완료 카드의 시간 표기용
+function kstHM(iso: string): string {
+  return new Date(iso).toLocaleTimeString("ko-KR", {
+    timeZone: "Asia/Seoul",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+}
+
+// 시작~종료 소요시간 → "00시간00분"
+function elapsedLabel(startIso: string, endIso: string): string {
+  const min = Math.max(0, Math.round((+new Date(endIso) - +new Date(startIso)) / 60000));
+  const h = String(Math.floor(min / 60)).padStart(2, "0");
+  const m = String(min % 60).padStart(2, "0");
+  return `${h}시간${m}분`;
+}
+
 // 차량이상 비고·특이사항 블록 — 설치 시작/완료 카드가 공유.
 // 차량이상 비고는 결함 알림이므로 붉은색(Attention)으로 강조.
 function noteBlocks(d: { checkNote?: string; extraNote?: string }): unknown[] {
@@ -573,6 +591,7 @@ export async function sendStartCard(d: {
   team?: string;
   checkNote?: string; // 차량이상 비고 (records.check_note)
   extraNote?: string; // 특이사항 (records.extra_note)
+  startedAt?: string; // 설치 시작 시각(ISO) — 카드에 "시작시간 HH:MM" 표기
 }): Promise<void> {
   const url = process.env.TEAMS_COMPLETE_WEBHOOK_URL;
   if (!url) return;
@@ -621,6 +640,17 @@ export async function sendStartCard(d: {
                     text: `노선 ${d.route}`,
                     isSubtle: true,
                     spacing: "None",
+                    wrap: true,
+                  },
+                ]
+              : []),
+            ...(d.startedAt
+              ? [
+                  {
+                    type: "TextBlock",
+                    text: `⏱ 시작시간 ${kstHM(d.startedAt)}`,
+                    weight: "Bolder",
+                    spacing: "Small",
                     wrap: true,
                   },
                 ]
@@ -743,10 +773,19 @@ export async function sendCompletionCard(d: {
   team?: string;
   checkNote?: string; // 차량이상 비고 (records.check_note)
   extraNote?: string; // 특이사항 (records.extra_note)
+  startedAt?: string | null; // 설치 시작 시각(ISO) — 있으면 소요시간 계산
+  completedAt?: string; // 설치 종료 시각(ISO) — "종료시간 HH:MM" 표기
   photos?: { url: string; label: string }[];
 }): Promise<void> {
   const url = process.env.TEAMS_COMPLETE_WEBHOOK_URL;
   if (!url) return; // 웹후크 미설정 → 발송 생략
+
+  // 종료시간 + 소요시간(시작 시각이 있을 때만) — "⏱ 종료시간 14:05 · 소요시간 01시간23분"
+  const timeText = d.completedAt
+    ? `⏱ 종료시간 ${kstHM(d.completedAt)}${
+        d.startedAt ? ` · 소요시간 ${elapsedLabel(d.startedAt, d.completedAt)}` : ""
+      }`
+    : "";
 
   const photos = d.photos ?? [];
   const card = {
@@ -793,6 +832,17 @@ export async function sendCompletionCard(d: {
                     text: `노선 ${d.route}`,
                     isSubtle: true,
                     spacing: "None",
+                    wrap: true,
+                  },
+                ]
+              : []),
+            ...(timeText
+              ? [
+                  {
+                    type: "TextBlock",
+                    text: timeText,
+                    weight: "Bolder",
+                    spacing: "Small",
                     wrap: true,
                   },
                 ]
