@@ -131,6 +131,9 @@ export default function DispatchButton() {
   const [listError, setListError] = useState("");
   const [dbReady, setDbReady] = useState(true);
 
+  // 검수항목 보기 — 검수자가 차량 검수 중 참고하는 고정 체크리스트(저장 없음)
+  const [checklistView, setChecklistView] = useState(false);
+
   const [saving, setSaving] = useState(false);
   const savingRef = useRef(false); // 저장 요청 진행 중 표시(markDirty에서 참조)
   const reDirtiedRef = useRef<Map<string, Set<DirtyField>>>(new Map()); // 저장 중 재수정된 항목
@@ -472,6 +475,15 @@ export default function DispatchButton() {
             </div>
 
             <div className="space-y-3 px-4 py-4">
+              {/* 검수항목 — 검수자가 보면서 확인하는 고정 리스트 */}
+              <button
+                type="button"
+                onClick={() => setChecklistView(true)}
+                className="w-full rounded-lg border border-emerald-300 bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-700 active:bg-emerald-100"
+              >
+                ✅ 검수항목 보기
+              </button>
+
               {/* 금일 설치 — 오늘 일정이 있는 운수사·노선 자동 표시 */}
               {operators !== null && !optError && (
                 <div>
@@ -832,6 +844,83 @@ export default function DispatchButton() {
               )}
             </div>
           </div>
+
+          {/* 검수항목 — 검수자가 차량 옆에서 보면서 확인하는 고정 리스트 (저장 없음) */}
+          {checklistView && (
+            <div
+              className="fixed inset-0 z-[60] overflow-y-auto bg-white pb-16"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="sticky top-0 z-10 flex items-center justify-between border-b border-gray-200 bg-white px-4 py-2.5">
+                <p className="text-sm font-bold text-gray-800">✅ 검수항목</p>
+                <button
+                  type="button"
+                  onClick={() => setChecklistView(false)}
+                  className="rounded-lg bg-gray-100 px-3 py-1.5 text-sm font-semibold text-gray-600 active:bg-gray-200"
+                >
+                  ✕ 닫기
+                </button>
+              </div>
+              <div className="space-y-4 px-4 py-4">
+                {/* 1. 차량 이상유무 */}
+                <section className="rounded-xl border border-emerald-200 bg-white shadow-sm">
+                  <h3 className="rounded-t-xl bg-emerald-600 px-3 py-2 text-sm font-bold text-white">
+                    1. 차량 이상유무
+                  </h3>
+                  <ol className="divide-y divide-gray-100 px-3 text-sm text-gray-800">
+                    {[
+                      ["CCTV 모니터·셋톱", "분할화면·전환화면 포함"],
+                      ["전광판", ""],
+                      ["계기판 경고등", ""],
+                      ["도어 작동 유무", ""],
+                      ["라디오", "안테나 신호·음성"],
+                      ["차량 파손 유무", "마감제 분실"],
+                    ].map(([title, sub], i) => (
+                      <li key={title} className="flex items-baseline gap-2 py-2">
+                        <span className="w-5 shrink-0 text-right text-xs font-bold text-emerald-600">
+                          {i + 1}.
+                        </span>
+                        <span className="font-medium">{title}</span>
+                        {sub && <span className="text-xs text-gray-500">({sub})</span>}
+                      </li>
+                    ))}
+                  </ol>
+                </section>
+
+                {/* 2. 단말기 설치 상태 */}
+                <section className="rounded-xl border border-blue-200 bg-white shadow-sm">
+                  <h3 className="rounded-t-xl bg-blue-600 px-3 py-2 text-sm font-bold text-white">
+                    2. 단말기 설치 상태
+                  </h3>
+                  <ol className="divide-y divide-gray-100 px-3 text-sm text-gray-800">
+                    {[
+                      ["승하차 위치", "1번 → 3번 → 2번 순서 (다인승 테스트)"],
+                      ["비닐 제거", ""],
+                      ["카드 태그 시 음성·화면 이상유무", ""],
+                      ["전원 2차전원", "상시·ACC는 재작업"],
+                      ["표출기 흔들림·운전자 간섭 유무", "기어 변속 등"],
+                      ["구멍 마감", ""],
+                      ["연동장비 확인", "타코 · 전자노선도 · 빈좌석"],
+                      ["피스구멍 테이핑 상태", ""],
+                      ["하차벨 테스트", ""],
+                    ].map(([title, sub], i) => (
+                      <li key={title} className="flex items-baseline gap-2 py-2">
+                        <span className="w-5 shrink-0 text-right text-xs font-bold text-blue-600">
+                          {i + 1}.
+                        </span>
+                        <span className="font-medium">{title}</span>
+                        {sub && <span className="text-xs text-gray-500">({sub})</span>}
+                      </li>
+                    ))}
+                  </ol>
+                </section>
+
+                <p className="text-center text-[11px] text-gray-400">
+                  검수 완료 후 배차표 리스트에서 차량별 &lsquo;검수완료&rsquo;를 체크해주세요.
+                </p>
+              </div>
+            </div>
+          )}
 
           {/* 자동 입력 — 첫차 출발시간·분 간격을 정하고 차량별 순번만 쓰면
               나가는 시간이 일괄 계산된다. 적용 후 저장을 눌러야 DB 반영. */}
