@@ -8,7 +8,7 @@ import ReloadButton from "@/components/ReloadButton";
 export default function HomePage() {
   return (
     <main className="mx-auto flex min-h-screen max-w-md flex-col px-4 pt-10">
-      <div className="mb-2 flex justify-end">
+      <div className="mb-2 flex justify-center">
         <ReloadButton />
       </div>
       <header className="mb-8 text-center">
