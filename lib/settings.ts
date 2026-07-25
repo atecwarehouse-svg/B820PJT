@@ -5,6 +5,7 @@ import { createServiceClient } from "@/lib/supabase/server";
 
 export const REPORT_MAIL_KEY = "report_mail_to";
 export const INSTALL_TEAMS_KEY = "install_teams"; // 설치팀 목록 (JSON 배열 문자열)
+export const INSTALL_TEAM_PHONES_KEY = "install_team_phones"; // 설치팀 연락처 (JSON [{name,phone}])
 export const INSPECT_CHECKLIST_KEY = "inspect_checklist"; // 배차표 검수항목 (JSON {vehicle,device})
 
 // 설치팀 목록 읽기 — 미설정/테이블 미생성이면 빈 배열 (기록 페이지는 자유입력으로 폴백)
@@ -14,6 +15,29 @@ export async function getInstallTeams(): Promise<string[]> {
   try {
     const arr = JSON.parse(raw);
     return Array.isArray(arr) ? arr.map((v) => String(v).trim()).filter(Boolean) : [];
+  } catch {
+    return [];
+  }
+}
+
+export interface TeamPhone {
+  name: string;
+  phone: string;
+}
+
+// 설치팀 연락처 읽기 — 미설정이면 빈 배열 (목록 페이지 전화 버튼은 숨김)
+export async function getInstallTeamPhones(): Promise<TeamPhone[]> {
+  const raw = await getSetting(INSTALL_TEAM_PHONES_KEY);
+  if (!raw) return [];
+  try {
+    const arr = JSON.parse(raw);
+    if (!Array.isArray(arr)) return [];
+    return arr
+      .map((v) => ({
+        name: String(v?.name ?? "").trim(),
+        phone: String(v?.phone ?? "").trim(),
+      }))
+      .filter((v) => v.name && v.phone);
   } catch {
     return [];
   }
