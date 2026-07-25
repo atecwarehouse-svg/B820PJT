@@ -214,10 +214,17 @@ export default function ScheduleCalendar({ days }: { days: ScheduleDay[] }) {
                     </span>
                   </div>
                   {(o.routes ?? []).length > 0 && (
-                    <p className="mt-0.5 text-xs text-gray-600">
-                      <span className="text-gray-400">노선 </span>
-                      {o.routes!.map((r) => `${r.route} ${r.count}대`).join(" · ")}
-                    </p>
+                    <div className="mt-0.5 text-xs text-gray-600">
+                      <span className="text-gray-400">노선</span>
+                      <div className="mt-0.5 grid grid-cols-[1fr_auto] gap-x-3 gap-y-0.5">
+                        {o.routes!.map((r) => (
+                          <Fragment key={r.route}>
+                            <span className="truncate">{r.route}</span>
+                            <span className="text-right tabular-nums">{r.count}대</span>
+                          </Fragment>
+                        ))}
+                      </div>
+                    </div>
                   )}
                   {(o.models ?? []).length > 0 && (
                     <div className="mt-0.5 text-xs text-gray-600">
