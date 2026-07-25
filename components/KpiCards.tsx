@@ -2,32 +2,41 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import type { InProgressVehicle } from "@/lib/stats";
+import type { InProgressVehicle, CompletedVehicle } from "@/lib/stats";
+import CompletedListModal from "@/components/CompletedListModal";
 
 // 완료/진행중/미시작 KPI 카드 (사진 13장 기준).
-// 진행중 카드를 누르면 사진 미완료 차량 목록 팝업.
+// 완료 카드 → 운수사별 설치완료 목록 팝업, 진행중 카드 → 사진 미완료 차량 목록 팝업.
 export default function KpiCards({
   complete,
   inProgress,
   notStarted,
   target,
   inProgressList,
+  completedList,
 }: {
   complete: number;
   inProgress: number;
   notStarted: number;
   target: number;
   inProgressList: InProgressVehicle[];
+  completedList: CompletedVehicle[];
 }) {
   const [open, setOpen] = useState(false);
 
   return (
     <>
       <div className="mt-3 grid grid-cols-3 gap-2">
-        <div className="rounded-2xl border border-green-100 bg-green-50 p-4 text-center">
+        <CompletedListModal
+          list={completedList}
+          title="설치완료 차량"
+          cardClassName="rounded-2xl border border-green-100 bg-green-50 p-4 text-center hover:bg-green-100"
+        >
           <p className="text-3xl font-bold tabular-nums text-green-700">{complete.toLocaleString()}</p>
-          <p className="mt-1 text-xs font-medium text-green-700">완료</p>
-        </div>
+          <p className="mt-1 text-xs font-medium text-green-700">
+            완료 {completedList.length > 0 && <span className="text-green-500">▸</span>}
+          </p>
+        </CompletedListModal>
 
         <button
           type="button"

@@ -26,6 +26,7 @@ import ScheduleChart from "@/components/ScheduleChart";
 import InstallDateSearch from "@/components/InstallDateSearch";
 import DailyReportModal from "@/components/DailyReportModal";
 import KpiCards from "@/components/KpiCards";
+import CompletedListModal from "@/components/CompletedListModal";
 import RefreshButton from "@/components/RefreshButton";
 import DashboardDetailTabs from "@/components/DashboardDetailTabs";
 import { isProgressUnlocked } from "@/lib/admin-auth";
@@ -251,6 +252,7 @@ export default async function DashboardPage() {
         notStarted={remainCount}
         target={s.target}
         inProgressList={inProgressList}
+        completedList={ip?.completedList ?? []}
       />
 
       {/* ===== 금일 설치현황 — 금일 설치대상(예정일 기준) vs 설치완료(저장 기준) ===== */}
@@ -265,12 +267,18 @@ export default async function DashboardPage() {
           </p>
           <p className="mt-1 text-xs font-medium text-blue-700">금일 설치대상</p>
         </div>
-        <div className="rounded-2xl border border-green-100 bg-green-50 p-4 text-center">
+        <CompletedListModal
+          list={(ip?.completedList ?? []).filter((c) => c.workDate === today)}
+          title="금일 설치완료 차량"
+          cardClassName="rounded-2xl border border-green-100 bg-green-50 p-4 text-center hover:bg-green-100"
+        >
           <p className="text-3xl font-bold tabular-nums text-green-700">
             {todayDone.toLocaleString()}
           </p>
-          <p className="mt-1 text-xs font-medium text-green-700">설치완료</p>
-        </div>
+          <p className="mt-1 text-xs font-medium text-green-700">
+            설치완료 {todayDone > 0 && <span className="text-green-500">▸</span>}
+          </p>
+        </CompletedListModal>
         <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4 text-center">
           <p className="text-3xl font-bold tabular-nums text-gray-600">
             {todayExcluded.toLocaleString()}

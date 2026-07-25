@@ -17,7 +17,11 @@ interface AdminRecord {
   is_added: boolean;
 }
 
+const TABS = ["설치팀", "메일 수신자", "협의사항", "VOC", "차량 삭제"] as const;
+type Tab = (typeof TABS)[number];
+
 export default function AdminPanel() {
+  const [tab, setTab] = useState<Tab>("설치팀");
   const [q, setQ] = useState("");
   const [list, setList] = useState<AdminRecord[]>([]);
   const [loading, setLoading] = useState(false);
@@ -97,75 +101,88 @@ export default function AdminPanel() {
         <span className="text-gray-400">→</span>
       </Link>
 
-      {/* 설치팀 목록 관리 (기록 페이지 팀명 드롭다운) */}
-      <TeamNamesManager />
-
-      {/* 완료리포트 메일 수신자 관리 */}
-      <ReportRecipientsManager />
-
-      {/* 운수사 협의사항 관리 */}
-      <ConsultationManager />
-
-      <VocManager />
-
-      <h2 className="mb-2 text-sm font-semibold text-gray-700">차량 삭제</h2>
-      <p className="mb-3 text-xs text-gray-500">
-        잘못 업로드했거나 테스트한 차량의 사진·기록을 삭제합니다. (Drive 파일 포함)
-      </p>
-
-      <div className="mb-3 flex gap-2">
-        <input
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && load(q)}
-          placeholder="차량번호 검색 (예: 인천70바)"
-          className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-500"
-        />
-        <button
-          onClick={() => load(q)}
-          className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white active:bg-blue-700"
-        >
-          검색
-        </button>
+      {/* 섹션별 탭 */}
+      <div className="mb-5 flex gap-1 overflow-x-auto rounded-xl border border-gray-200 bg-gray-50 p-1">
+        {TABS.map((t) => (
+          <button
+            key={t}
+            onClick={() => setTab(t)}
+            className={`shrink-0 flex-1 whitespace-nowrap rounded-lg px-3 py-2 text-xs font-semibold transition-colors ${
+              tab === t ? "bg-white text-blue-700 shadow-sm" : "text-gray-500"
+            }`}
+          >
+            {t}
+          </button>
+        ))}
       </div>
 
-      {error && <p className="mb-2 text-xs text-red-500">{error}</p>}
-      {loading ? (
-        <p className="py-8 text-center text-sm text-gray-400">불러오는 중…</p>
-      ) : list.length === 0 ? (
-        <p className="py-8 text-center text-sm text-gray-400">업로드된 차량이 없습니다.</p>
-      ) : (
-        <ul className="divide-y divide-gray-100 overflow-hidden rounded-xl border border-gray-200 bg-white">
-          {list.map((r) => (
-            <li key={r.plate} className="flex items-center justify-between gap-2 px-3 py-2.5">
-              <div className="min-w-0">
-                <p className="truncate text-sm font-medium text-gray-800">
-                  {r.plate}
-                  {r.is_added && (
-                    <span className="ml-1 rounded bg-amber-100 px-1 text-[10px] font-semibold text-amber-700">
-                      증차
-                    </span>
-                  )}
-                  {r.saved_at && (
-                    <span className="ml-1 rounded bg-green-100 px-1 text-[10px] font-semibold text-green-700">
-                      저장됨
-                    </span>
-                  )}
-                </p>
-                <p className="truncate text-xs text-gray-400">
-                  {r.operator ?? ""} {r.route ?? ""} · 사진 {r.photoCount}장
-                </p>
-              </div>
-              <button
-                onClick={() => handleDelete(r)}
-                disabled={deleting === r.plate}
-                className="shrink-0 rounded-lg border border-red-300 px-3 py-1.5 text-xs font-semibold text-red-600 active:bg-red-50 disabled:opacity-50"
-              >
-                {deleting === r.plate ? "삭제 중…" : "삭제"}
-              </button>
-            </li>
-          ))}
-        </ul>
+      {tab === "설치팀" && <TeamNamesManager />}
+      {tab === "메일 수신자" && <ReportRecipientsManager />}
+      {tab === "협의사항" && <ConsultationManager />}
+      {tab === "VOC" && <VocManager />}
+
+      {tab === "차량 삭제" && (
+        <>
+          <h2 className="mb-2 text-sm font-semibold text-gray-700">차량 삭제</h2>
+          <p className="mb-3 text-xs text-gray-500">
+            잘못 업로드했거나 테스트한 차량의 사진·기록을 삭제합니다. (Drive 파일 포함)
+          </p>
+
+          <div className="mb-3 flex gap-2">
+            <input
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && load(q)}
+              placeholder="차량번호 검색 (예: 인천70바)"
+              className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-500"
+            />
+            <button
+              onClick={() => load(q)}
+              className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white active:bg-blue-700"
+            >
+              검색
+            </button>
+          </div>
+
+          {error && <p className="mb-2 text-xs text-red-500">{error}</p>}
+          {loading ? (
+            <p className="py-8 text-center text-sm text-gray-400">불러오는 중…</p>
+          ) : list.length === 0 ? (
+            <p className="py-8 text-center text-sm text-gray-400">업로드된 차량이 없습니다.</p>
+          ) : (
+            <ul className="divide-y divide-gray-100 overflow-hidden rounded-xl border border-gray-200 bg-white">
+              {list.map((r) => (
+                <li key={r.plate} className="flex items-center justify-between gap-2 px-3 py-2.5">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium text-gray-800">
+                      {r.plate}
+                      {r.is_added && (
+                        <span className="ml-1 rounded bg-amber-100 px-1 text-[10px] font-semibold text-amber-700">
+                          증차
+                        </span>
+                      )}
+                      {r.saved_at && (
+                        <span className="ml-1 rounded bg-green-100 px-1 text-[10px] font-semibold text-green-700">
+                          저장됨
+                        </span>
+                      )}
+                    </p>
+                    <p className="truncate text-xs text-gray-400">
+                      {r.operator ?? ""} {r.route ?? ""} · 사진 {r.photoCount}장
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => handleDelete(r)}
+                    disabled={deleting === r.plate}
+                    className="shrink-0 rounded-lg border border-red-300 px-3 py-1.5 text-xs font-semibold text-red-600 active:bg-red-50 disabled:opacity-50"
+                  >
+                    {deleting === r.plate ? "삭제 중…" : "삭제"}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </>
       )}
     </main>
   );
