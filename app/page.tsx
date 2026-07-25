@@ -8,7 +8,7 @@ import WeatherWidget from "@/components/WeatherWidget";
 
 export default function HomePage() {
   return (
-    <main className="relative mx-auto flex min-h-screen max-w-md flex-col px-4 pt-10">
+    <main className="relative mx-auto flex min-h-screen max-w-md flex-col px-4 pt-24">
       <WeatherWidget />
       <div className="absolute left-4 top-3">
         <ReloadButton />
