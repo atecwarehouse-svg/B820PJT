@@ -11,11 +11,13 @@ export default function CompletedListModal({
   title,
   cardClassName,
   children,
+  defaultAll = false,
 }: {
   list: CompletedVehicle[];
   title: string;
   cardClassName: string;
   children: React.ReactNode;
+  defaultAll?: boolean; // true면 열 때 전체(운수사 1곳뿐이면 그 운수사)를 바로 표시
 }) {
   const [open, setOpen] = useState(false);
   const [operator, setOperator] = useState("");
@@ -26,13 +28,19 @@ export default function CompletedListModal({
     return [...m.entries()].sort((a, b) => a[0].localeCompare(b[0], "ko"));
   }, [list]);
 
+  function openModal() {
+    if (list.length === 0) return;
+    if (defaultAll) setOperator(operators.length === 1 ? operators[0][0] : "전체");
+    setOpen(true);
+  }
+
   const filtered = operator === "전체" ? list : list.filter((v) => v.operator === operator);
 
   return (
     <>
       <button
         type="button"
-        onClick={() => list.length > 0 && setOpen(true)}
+        onClick={openModal}
         disabled={list.length === 0}
         className={`${cardClassName} transition-colors disabled:opacity-60`}
       >
@@ -67,7 +75,7 @@ export default function CompletedListModal({
                 onChange={(e) => setOperator(e.target.value)}
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-green-500"
               >
-                <option value="">운수사를 선택하세요</option>
+                {!defaultAll && <option value="">운수사를 선택하세요</option>}
                 <option value="전체">전체 ({list.length}대)</option>
                 {operators.map(([op, n]) => (
                   <option key={op} value={op}>

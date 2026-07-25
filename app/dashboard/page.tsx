@@ -270,6 +270,7 @@ export default async function DashboardPage() {
         <CompletedListModal
           list={(ip?.completedList ?? []).filter((c) => c.workDate === today)}
           title="금일 설치완료 차량"
+          defaultAll
           cardClassName="rounded-2xl border border-green-100 bg-green-50 p-4 text-center hover:bg-green-100"
         >
           <p className="text-3xl font-bold tabular-nums text-green-700">
