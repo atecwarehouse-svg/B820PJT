@@ -10,7 +10,7 @@ export default function HomePage() {
   return (
     <main className="relative mx-auto flex min-h-screen max-w-md flex-col px-4 pt-10">
       <WeatherWidget />
-      <div className="mb-2 flex justify-center">
+      <div className="absolute left-4 top-3">
         <ReloadButton />
       </div>
       <header className="mb-8 text-center">

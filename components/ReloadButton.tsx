@@ -16,7 +16,7 @@ export default function ReloadButton() {
   }, []);
 
   return (
-    <div className="flex flex-col items-center gap-1">
+    <div className="flex flex-col items-start gap-1">
       <button
         type="button"
         onClick={() => {
@@ -24,7 +24,7 @@ export default function ReloadButton() {
           window.location.reload();
         }}
         disabled={pending}
-        className="inline-flex items-center gap-1 rounded-full bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition-colors active:bg-blue-700 disabled:opacity-50"
+        className="inline-flex items-center gap-1 rounded-full bg-blue-600 px-2.5 py-1 text-[11px] font-semibold text-white shadow-sm transition-colors active:bg-blue-700 disabled:opacity-50"
       >
         <span className={pending ? "inline-block animate-spin" : "inline-block"}>↻</span>
         {pending ? "새로고침 중…" : "새로고침"}
