@@ -985,7 +985,7 @@ export default function DispatchButton() {
                         onChange={(e) => setAutoGap(Number(e.target.value))}
                         className="rounded-lg border border-gray-300 bg-white px-1.5 py-1.5 text-base focus:border-orange-500 focus:outline-none"
                       >
-                        {Array.from({ length: 30 }, (_, i) => i + 1).map((n) => (
+                        {Array.from({ length: 90 }, (_, i) => i + 1).map((n) => (
                           <option key={n} value={n}>
                             {n}
                           </option>
