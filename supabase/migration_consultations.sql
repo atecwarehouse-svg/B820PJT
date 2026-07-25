@@ -25,6 +25,7 @@ create table if not exists consultations (
   mount_main text,                 -- 통합단말기 위치
   mount_board text,                -- 승차 단말기 위치
   handle_removal text,             -- 격벽 손잡이(얇은봉) 탈거 유무
+  terminal_storage text,           -- 단말기 보관 위치 (기존 DB는 migration_consultation_storage.sql)
   notes text,                      -- 특이사항
   consulter text,                  -- 협의자
   created_at timestamptz not null default now(),

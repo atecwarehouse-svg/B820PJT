@@ -85,6 +85,7 @@ export async function POST(req: NextRequest) {
     mountMain: text("mountMain"),
     mountBoard: text("mountBoard"),
     handleRemoval: text("handleRemoval", 50),
+    terminalStorage: text("terminalStorage"),
     notes: text("notes", 500),
     consulter: text("consulter"),
   };
@@ -101,8 +102,7 @@ export async function POST(req: NextRequest) {
   let saved = false;
   try {
     const supabase = createServiceClient();
-    const { error } = await supabase.from("consultations").upsert(
-      {
+    const row: Record<string, unknown> = {
         operator: card.operator,
         date: card.date,
         count: card.count,
@@ -125,12 +125,21 @@ export async function POST(req: NextRequest) {
         mount_main: card.mountMain ?? null,
         mount_board: card.mountBoard ?? null,
         handle_removal: card.handleRemoval ?? null,
+        terminal_storage: card.terminalStorage ?? null,
         notes: card.notes ?? null,
         consulter: card.consulter ?? null,
         updated_at: new Date().toISOString(),
-      },
-      { onConflict: "operator,date" },
-    );
+      };
+    let { error } = await supabase
+      .from("consultations")
+      .upsert(row, { onConflict: "operator,date" });
+    // terminal_storage 컬럼 마이그레이션 전 DB — 그 컬럼만 빼고 재시도(기존 저장 유지)
+    if (error && /terminal_storage/.test(error.message)) {
+      delete row.terminal_storage;
+      ({ error } = await supabase
+        .from("consultations")
+        .upsert(row, { onConflict: "operator,date" }));
+    }
     saved = !error;
   } catch {
     // 저장 실패해도 전송은 완료 — saved=false로 알림

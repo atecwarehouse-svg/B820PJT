@@ -235,6 +235,7 @@ export default function ConsultationModal({ operators }: { operators: OperatorSc
   const [mountBoardOpt, setMountBoardOpt] = useState("");
   const [mountBoardCustom, setMountBoardCustom] = useState("");
   const [handleRemoval, setHandleRemoval] = useState("");
+  const [terminalStorage, setTerminalStorage] = useState(""); // 15. 단말기 보관 위치
   const [listCheck, setListCheck] = useState(""); // 차량리스트·수량 확인 (이상 없음/변동 있음)
   const [listChange, setListChange] = useState(""); // 변동 있음일 때 변동사항
   const [notes, setNotes] = useState("");
@@ -276,6 +277,7 @@ export default function ConsultationModal({ operators }: { operators: OperatorSc
     setMountBoardOpt("");
     setMountBoardCustom("");
     setHandleRemoval("");
+    setTerminalStorage("");
     setListCheck("");
     setListChange("");
     setNotes("");
@@ -366,6 +368,7 @@ export default function ConsultationModal({ operators }: { operators: OperatorSc
           mountMain: mountMainOpt === "직접입력" ? mountMainCustom : mountMainOpt,
           mountBoard: mountBoardOpt === "직접입력" ? mountBoardCustom : mountBoardOpt,
           handleRemoval,
+          terminalStorage,
           notes,
           consulter,
         }),
@@ -689,7 +692,18 @@ export default function ConsultationModal({ operators }: { operators: OperatorSc
                   </div>
 
                   <label className="block">
-                    <span className={LABEL}>15. 특이사항</span>
+                    <span className={LABEL}>15. 단말기 보관 위치</span>
+                    <input
+                      type="text"
+                      value={terminalStorage}
+                      onChange={(e) => setTerminalStorage(e.target.value)}
+                      placeholder="예: 배차실, 차고지 창고"
+                      className={INPUT}
+                    />
+                  </label>
+
+                  <label className="block">
+                    <span className={LABEL}>16. 특이사항</span>
                     <textarea
                       value={notes}
                       onChange={(e) => setNotes(e.target.value)}
@@ -700,7 +714,7 @@ export default function ConsultationModal({ operators }: { operators: OperatorSc
                   </label>
 
                   <label className="block">
-                    <span className={LABEL}>16. 협의자</span>
+                    <span className={LABEL}>17. 협의자</span>
                     <input
                       type="text"
                       value={consulter}
@@ -794,6 +808,7 @@ export default function ConsultationModal({ operators }: { operators: OperatorSc
                       value={(mountBoardOpt === "직접입력" ? mountBoardCustom : mountBoardOpt).trim() || "-"}
                     />
                     <PreviewRow title="격벽 손잡이 탈거" value={handleRemoval.trim() || "-"} />
+                    <PreviewRow title="단말기 보관 위치" value={terminalStorage.trim() || "-"} />
                     <PreviewSub text="○ 특이사항" />
                     <div className="text-gray-800">
                       {(notes.trim()

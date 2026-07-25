@@ -53,6 +53,7 @@ const EDITABLE_TEXT = [
   "mount_main",
   "mount_board",
   "handle_removal",
+  "terminal_storage",
   "notes",
   "consulter",
 ] as const;

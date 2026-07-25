@@ -26,6 +26,7 @@ interface Consultation {
   mount_main: string | null;
   mount_board: string | null;
   handle_removal: string | null;
+  terminal_storage: string | null;
   notes: string | null;
   consulter: string | null;
   updated_at: string;
@@ -52,6 +53,7 @@ const FIELDS: [keyof Consultation, string][] = [
   ["mount_main", "통합단말기"],
   ["mount_board", "승차"],
   ["handle_removal", "격벽 손잡이 탈거"],
+  ["terminal_storage", "단말기 보관 위치"],
   ["notes", "특이사항"],
   ["consulter", "협의자"],
 ];
