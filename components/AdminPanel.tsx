@@ -5,7 +5,6 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import ReportRecipientsManager from "@/components/ReportRecipientsManager";
 import TeamNamesManager from "@/components/TeamNamesManager";
-import TeamPhonesManager from "@/components/TeamPhonesManager";
 import ChecklistManager from "@/components/ChecklistManager";
 import ConsultationManager from "@/components/ConsultationManager";
 import VocManager from "@/components/VocManager";
@@ -118,12 +117,7 @@ export default function AdminPanel() {
         ))}
       </div>
 
-      {tab === "설치팀" && (
-        <>
-          <TeamNamesManager />
-          <TeamPhonesManager />
-        </>
-      )}
+      {tab === "설치팀" && <TeamNamesManager />}
       {tab === "검수항목" && <ChecklistManager />}
       {tab === "메일 수신자" && <ReportRecipientsManager />}
       {tab === "협의사항" && <ConsultationManager />}

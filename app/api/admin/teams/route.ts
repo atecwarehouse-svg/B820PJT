@@ -1,20 +1,25 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isAdmin } from "@/lib/admin-auth";
-import { getInstallTeams, setSetting, INSTALL_TEAMS_KEY } from "@/lib/settings";
+import {
+  getInstallTeamsFull,
+  setSetting,
+  INSTALL_TEAMS_KEY,
+  type InstallTeam,
+} from "@/lib/settings";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// GET → 설치팀 목록 (관리자 페이지 팀 관리 섹션용)
+// GET → 설치팀 목록(팀명·이름·전화) — 관리자 페이지 팀 관리 섹션용
 export async function GET() {
   if (!isAdmin()) {
     return NextResponse.json({ error: "관리자 인증이 필요합니다." }, { status: 401 });
   }
-  const list = await getInstallTeams();
+  const list = await getInstallTeamsFull();
   return NextResponse.json({ list });
 }
 
-// PUT { list: string[] } → 설치팀 목록 저장 (전체 교체)
+// PUT { list: {team,name,phone}[] } → 설치팀 목록 저장 (전체 교체)
 export async function PUT(req: NextRequest) {
   if (!isAdmin()) {
     return NextResponse.json({ error: "관리자 인증이 필요합니다." }, { status: 401 });
@@ -23,11 +28,21 @@ export async function PUT(req: NextRequest) {
   if (!body || !Array.isArray(body.list)) {
     return NextResponse.json({ error: "list(배열)가 필요합니다." }, { status: 400 });
   }
-  const list = [...new Set(body.list.map((v) => String(v).trim()).filter(Boolean))].slice(0, 50);
-  const tooLong = list.filter((s) => s.length > 40);
-  if (tooLong.length > 0) {
+  const list: InstallTeam[] = body.list
+    .map((v) => ({
+      team: String((v as InstallTeam)?.team ?? "").trim(),
+      name: String((v as InstallTeam)?.name ?? "").trim(),
+      phone: String((v as InstallTeam)?.phone ?? "").trim(),
+    }))
+    .filter((v) => v.team)
+    .slice(0, 50);
+  if (list.some((v) => v.team.length > 40 || v.name.length > 40)) {
+    return NextResponse.json({ error: "팀명·이름은 40자 이하로 입력하세요." }, { status: 400 });
+  }
+  const badPhone = list.find((v) => v.phone && !/^[0-9+\-() ]{7,20}$/.test(v.phone));
+  if (badPhone) {
     return NextResponse.json(
-      { error: `팀명이 너무 깁니다(40자 이하): ${tooLong.join(", ")}` },
+      { error: `전화번호 형식을 확인하세요: ${badPhone.phone}` },
       { status: 400 },
     );
   }

@@ -2,10 +2,17 @@
 
 import { useEffect, useState } from "react";
 
-// 설치팀 목록 관리 — 관리자 페이지 섹션.
-// 기록 페이지의 팀명 드롭다운 선택지가 된다. (app_settings.install_teams)
+interface Row {
+  team: string;
+  name: string;
+  phone: string;
+}
+
+// 설치팀 관리(팀명·이름·전화번호) — 관리자 페이지 섹션. (app_settings.install_teams)
+// 기록 페이지 드롭다운·팀즈 카드에는 "팀명 이름"까지만 표시되고,
+// 전화번호는 홈 '설치팀 호출' 버튼에서만 쓰인다.
 export default function TeamNamesManager() {
-  const [rows, setRows] = useState<string[] | null>(null); // null = 로딩 중
+  const [rows, setRows] = useState<Row[] | null>(null); // null = 로딩 중
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
@@ -16,7 +23,7 @@ export default function TeamNamesManager() {
         const res = await fetch("/api/admin/teams", { cache: "no-store" });
         const j = await res.json();
         if (!res.ok) throw new Error(j.error ?? "불러오기 실패");
-        setRows(j.list as string[]);
+        setRows(j.list as Row[]);
       } catch (e) {
         setRows([]);
         setMsg({ ok: false, text: e instanceof Error ? e.message : "불러오기 실패" });
@@ -24,8 +31,8 @@ export default function TeamNamesManager() {
     })();
   }, []);
 
-  function update(i: number, v: string) {
-    setRows((r) => (r ? r.map((x, idx) => (idx === i ? v : x)) : r));
+  function update(i: number, patch: Partial<Row>) {
+    setRows((r) => (r ? r.map((x, idx) => (idx === i ? { ...x, ...patch } : x)) : r));
     setDirty(true);
     setMsg(null);
   }
@@ -37,14 +44,16 @@ export default function TeamNamesManager() {
   }
 
   function add() {
-    setRows((r) => [...(r ?? []), ""]);
+    setRows((r) => [...(r ?? []), { team: "", name: "", phone: "" }]);
     setDirty(true);
     setMsg(null);
   }
 
   async function save() {
     if (!rows || saving) return;
-    const list = rows.map((s) => s.trim()).filter(Boolean);
+    const list = rows
+      .map((r) => ({ team: r.team.trim(), name: r.name.trim(), phone: r.phone.trim() }))
+      .filter((r) => r.team);
     setSaving(true);
     setMsg(null);
     try {
@@ -55,7 +64,7 @@ export default function TeamNamesManager() {
       });
       const j = await res.json();
       if (!res.ok) throw new Error(j.error ?? "저장 실패");
-      setRows(j.list as string[]);
+      setRows(j.list as Row[]);
       setDirty(false);
       setMsg({ ok: true, text: "저장되었습니다." });
     } catch (e) {
@@ -69,8 +78,9 @@ export default function TeamNamesManager() {
     <section className="mb-6">
       <h2 className="mb-2 text-sm font-semibold text-gray-700">👷 설치팀 관리</h2>
       <p className="mb-3 text-xs text-gray-500">
-        기록 페이지의 팀명 선택지입니다. 팀명은 한번 저장되면 관리자 비밀번호로만 변경할 수
-        있습니다. (목록이 비어 있으면 기록 페이지는 직접 입력으로 동작)
+        기록 페이지 팀 선택지와 홈 &lsquo;설치팀 호출&rsquo; 버튼의 연락처입니다. 드롭다운·팀즈
+        카드에는 팀명+이름까지만 표시되고 전화번호는 호출 버튼에서만 쓰입니다. (목록이 비어
+        있으면 기록 페이지는 직접 입력으로 동작)
       </p>
 
       <div className="rounded-xl border border-gray-200 bg-white p-3">
@@ -84,18 +94,33 @@ export default function TeamNamesManager() {
               </p>
             )}
             <ul className="space-y-2">
-              {rows.map((name, i) => (
-                <li key={i} className="flex items-center gap-2">
+              {rows.map((row, i) => (
+                <li key={i} className="flex items-center gap-1.5">
                   <input
-                    value={name}
-                    onChange={(e) => update(i, e.target.value)}
-                    placeholder="예: 1팀"
+                    value={row.team}
+                    onChange={(e) => update(i, { team: e.target.value })}
+                    placeholder="팀명"
                     maxLength={40}
-                    className="min-w-0 flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-500"
+                    className="w-16 min-w-0 flex-1 rounded-lg border border-gray-300 px-2 py-2 text-sm outline-none focus:border-blue-500"
+                  />
+                  <input
+                    value={row.name}
+                    onChange={(e) => update(i, { name: e.target.value })}
+                    placeholder="이름"
+                    maxLength={40}
+                    className="w-16 min-w-0 flex-1 rounded-lg border border-gray-300 px-2 py-2 text-sm outline-none focus:border-blue-500"
+                  />
+                  <input
+                    value={row.phone}
+                    onChange={(e) => update(i, { phone: e.target.value })}
+                    placeholder="전화번호"
+                    type="tel"
+                    maxLength={20}
+                    className="w-32 shrink-0 rounded-lg border border-gray-300 px-2 py-2 text-sm outline-none focus:border-blue-500"
                   />
                   <button
                     onClick={() => remove(i)}
-                    className="shrink-0 rounded-lg border border-red-300 px-3 py-2 text-xs font-semibold text-red-600 active:bg-red-50"
+                    className="shrink-0 rounded-lg border border-red-300 px-2 py-2 text-xs font-semibold text-red-600 active:bg-red-50"
                   >
                     삭제
                   </button>

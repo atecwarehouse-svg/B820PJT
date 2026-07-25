@@ -4,43 +4,47 @@
 import { createServiceClient } from "@/lib/supabase/server";
 
 export const REPORT_MAIL_KEY = "report_mail_to";
-export const INSTALL_TEAMS_KEY = "install_teams"; // 설치팀 목록 (JSON 배열 문자열)
-export const INSTALL_TEAM_PHONES_KEY = "install_team_phones"; // 설치팀 연락처 (JSON [{name,phone}])
+export const INSTALL_TEAMS_KEY = "install_teams"; // 설치팀 목록 (JSON [{team,name,phone}], 구버전 문자열 배열 호환)
 export const INSPECT_CHECKLIST_KEY = "inspect_checklist"; // 배차표 검수항목 (JSON {vehicle,device})
 
-// 설치팀 목록 읽기 — 미설정/테이블 미생성이면 빈 배열 (기록 페이지는 자유입력으로 폴백)
-export async function getInstallTeams(): Promise<string[]> {
+export interface InstallTeam {
+  team: string; // 팀명 (예: 1팀)
+  name: string; // 이름
+  phone: string; // 전화번호 (설치팀 호출 버튼에서만 사용, 카드·드롭다운 미노출)
+}
+
+// 팀 표시 라벨 = "팀명 이름" — 기록 페이지 드롭다운·팀즈 카드에 쓰이는 문자열
+export function teamLabel(t: InstallTeam): string {
+  return [t.team, t.name].filter(Boolean).join(" ");
+}
+
+// 설치팀 전체(팀명·이름·전화) 읽기 — 미설정/테이블 미생성이면 빈 배열.
+// 구버전 문자열 배열(["1팀"])은 {team:"1팀", name:"", phone:""}로 변환.
+export async function getInstallTeamsFull(): Promise<InstallTeam[]> {
   const raw = await getSetting(INSTALL_TEAMS_KEY);
-  if (!raw) return [];
-  try {
-    const arr = JSON.parse(raw);
-    return Array.isArray(arr) ? arr.map((v) => String(v).trim()).filter(Boolean) : [];
-  } catch {
-    return [];
-  }
-}
-
-export interface TeamPhone {
-  name: string;
-  phone: string;
-}
-
-// 설치팀 연락처 읽기 — 미설정이면 빈 배열 (목록 페이지 전화 버튼은 숨김)
-export async function getInstallTeamPhones(): Promise<TeamPhone[]> {
-  const raw = await getSetting(INSTALL_TEAM_PHONES_KEY);
   if (!raw) return [];
   try {
     const arr = JSON.parse(raw);
     if (!Array.isArray(arr)) return [];
     return arr
-      .map((v) => ({
-        name: String(v?.name ?? "").trim(),
-        phone: String(v?.phone ?? "").trim(),
-      }))
-      .filter((v) => v.name && v.phone);
+      .map((v) =>
+        typeof v === "string"
+          ? { team: v.trim(), name: "", phone: "" }
+          : {
+              team: String(v?.team ?? "").trim(),
+              name: String(v?.name ?? "").trim(),
+              phone: String(v?.phone ?? "").trim(),
+            },
+      )
+      .filter((v) => v.team);
   } catch {
     return [];
   }
+}
+
+// 설치팀 드롭다운 선택지("팀명 이름") — 기록 페이지용 (비면 자유입력으로 폴백)
+export async function getInstallTeams(): Promise<string[]> {
+  return (await getInstallTeamsFull()).map(teamLabel);
 }
 
 // 값 읽기. 행 없음/테이블 미생성 등 오류 시 null → 호출측에서 env 폴백.
