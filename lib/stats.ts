@@ -377,6 +377,7 @@ export interface ScheduleDayOp {
   count: number; // 그 날 이 운수사 예정 대수
   done: number; // 그 중 완료
   routes?: { route: string; count: number }[]; // 노선별 대수 (내림차순 — 팝업용)
+  models?: { model: string; count: number }[]; // 모델별 대수 (내림차순 — 팝업용)
   address?: string; // 야간 박차지 주소 (템플릿 E열 — 팝업용)
 }
 
@@ -405,12 +406,13 @@ export async function loadScheduleStats(): Promise<ScheduleStats> {
       plate: string;
       operator: string | null;
       route: string | null;
+      model: string | null;
       planned_date: string | null;
       is_pilot: boolean | null;
     }>((from, to) =>
       supabase
         .from("vehicles")
-        .select("plate, operator, route, planned_date, is_pilot")
+        .select("plate, operator, route, model, planned_date, is_pilot")
         .order("plate")
         .range(from, to),
     ),
@@ -419,7 +421,7 @@ export async function loadScheduleStats(): Promise<ScheduleStats> {
     loadOperatorAddresses().catch(() => ({}) as Record<string, string>),
   ]);
 
-  type OpAcc = ScheduleDayOp & { routeCnt: Map<string, number> };
+  type OpAcc = ScheduleDayOp & { routeCnt: Map<string, number>; modelCnt: Map<string, number> };
   const byDate = new Map<string, ScheduleDay>();
   const opsByDate = new Map<string, Map<string, OpAcc>>();
   let pilotTotal = 0;
@@ -442,11 +444,19 @@ export async function loadScheduleStats(): Promise<ScheduleStats> {
     const op = v.operator?.trim() || "미지정";
     const ops = opsByDate.get(date) ?? new Map<string, OpAcc>();
     const o: OpAcc =
-      ops.get(op) ?? { operator: op, count: 0, done: 0, routeCnt: new Map<string, number>() };
+      ops.get(op) ?? {
+        operator: op,
+        count: 0,
+        done: 0,
+        routeCnt: new Map<string, number>(),
+        modelCnt: new Map<string, number>(),
+      };
     o.count++;
     if (isDone) o.done++;
     const rt = v.route?.trim() || "미지정";
     o.routeCnt.set(rt, (o.routeCnt.get(rt) ?? 0) + 1);
+    const md = v.model?.trim() || "정보없음";
+    o.modelCnt.set(md, (o.modelCnt.get(md) ?? 0) + 1);
     ops.set(op, o);
     opsByDate.set(date, ops);
   }
@@ -456,12 +466,15 @@ export async function loadScheduleStats(): Promise<ScheduleStats> {
     if (d) {
       d.ops = [...ops.values()]
         .map((o) => {
-          const { routeCnt, ...rest } = o;
+          const { routeCnt, modelCnt, ...rest } = o;
           return {
             ...rest,
             routes: [...routeCnt.entries()]
               .map(([route, count]) => ({ route, count }))
               .sort((a, b) => b.count - a.count || a.route.localeCompare(b.route, "ko")),
+            models: [...modelCnt.entries()]
+              .map(([model, count]) => ({ model, count }))
+              .sort((a, b) => b.count - a.count || a.model.localeCompare(b.model, "ko")),
             address: addresses[o.operator] || undefined,
           };
         })

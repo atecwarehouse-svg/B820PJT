@@ -219,6 +219,12 @@ export default function ScheduleCalendar({ days }: { days: ScheduleDay[] }) {
                       {o.routes!.map((r) => `${r.route} ${r.count}대`).join(" · ")}
                     </p>
                   )}
+                  {(o.models ?? []).length > 0 && (
+                    <p className="mt-0.5 text-xs text-gray-600">
+                      <span className="text-gray-400">모델 </span>
+                      {o.models!.map((m) => `${m.model} ${m.count}대`).join(" · ")}
+                    </p>
+                  )}
                   {o.address && (
                     <p className="mt-0.5 text-[11px] leading-4 text-gray-400">
                       📍 {o.address}
