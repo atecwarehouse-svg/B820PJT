@@ -3,6 +3,7 @@ import PlateSearch from "@/components/PlateSearch";
 import AdminCallButton from "@/components/AdminCallButton";
 import DispatchButton from "@/components/DispatchButton";
 import VocModal from "@/components/VocModal";
+import TeamCallButton from "@/components/TeamCallButton";
 import ReloadButton from "@/components/ReloadButton";
 import WeatherWidget from "@/components/WeatherWidget";
 
@@ -24,6 +25,7 @@ export default function HomePage() {
       <AdminCallButton />
       <DispatchButton />
       <VocModal />
+      <TeamCallButton />
       <Link
         href="/dashboard"
         className="mt-2 rounded-xl border border-gray-300 bg-white px-4 py-3 text-center text-sm font-medium text-gray-700 shadow-sm active:bg-gray-100"

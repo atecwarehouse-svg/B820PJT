@@ -5,8 +5,6 @@ import { workDateString } from "@/lib/work-day";
 import { AFTER_SLOTS, BEFORE_SLOTS, DEFAULT_PHOTO_COUNT } from "@/lib/slots";
 import type { RecordRow } from "@/lib/types";
 import ListClient, { type ListItem } from "@/components/ListClient";
-import TeamCallButton from "@/components/TeamCallButton";
-import { getInstallTeamPhones } from "@/lib/settings";
 import { isAdmin } from "@/lib/admin-auth";
 import AdminLogin from "@/components/AdminLogin";
 
@@ -19,7 +17,7 @@ export default async function ListPage() {
   const supabase = createServiceClient();
 
   // 1,000행 제한 회피 — 저장 레코드/사진을 전수 조회. 운수사 목록은 집계뷰에서.
-  const [records, photoRows, opRes, teamPhones] = await Promise.all([
+  const [records, photoRows, opRes] = await Promise.all([
     fetchAll<RecordRow>((from, to) =>
       supabase
         .from("records")
@@ -36,7 +34,6 @@ export default async function ListPage() {
       .from("operator_progress")
       .select("operator, complete, in_progress")
       .range(0, 9999),
-    getInstallTeamPhones(),
   ]);
 
   const photoCount = new Map<string, number>();
@@ -81,12 +78,6 @@ export default async function ListPage() {
         <h1 className="text-lg font-bold text-blue-700">저장 목록</h1>
         <span className="text-xs text-gray-400">{items.length}대</span>
       </div>
-
-      {teamPhones.length > 0 && (
-        <div className="mb-3">
-          <TeamCallButton contacts={teamPhones} />
-        </div>
-      )}
 
       <ListClient items={items} operators={operators} />
     </main>
