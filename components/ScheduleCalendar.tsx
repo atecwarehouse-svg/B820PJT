@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import type { ScheduleDay } from "@/lib/stats";
 import { workDateString } from "@/lib/work-day";
 
@@ -220,10 +220,17 @@ export default function ScheduleCalendar({ days }: { days: ScheduleDay[] }) {
                     </p>
                   )}
                   {(o.models ?? []).length > 0 && (
-                    <p className="mt-0.5 text-xs text-gray-600">
-                      <span className="text-gray-400">모델 </span>
-                      {o.models!.map((m) => `${m.model} ${m.count}대`).join(" · ")}
-                    </p>
+                    <div className="mt-0.5 text-xs text-gray-600">
+                      <span className="text-gray-400">모델</span>
+                      <div className="mt-0.5 grid grid-cols-[1fr_auto] gap-x-3 gap-y-0.5">
+                        {o.models!.map((m) => (
+                          <Fragment key={m.model}>
+                            <span className="truncate">{m.model}</span>
+                            <span className="text-right tabular-nums">{m.count}대</span>
+                          </Fragment>
+                        ))}
+                      </div>
+                    </div>
                   )}
                   {o.address && (
                     <p className="mt-0.5 text-[11px] leading-4 text-gray-400">
