@@ -1123,6 +1123,8 @@ export async function sendPlanReportCard(
     { title: "노선", value: g.routes.map((r) => `${r.route} ${r.count}대`).join(" · ") || "-" },
     { title: "집합시간", value: v(g.time) },
     { title: "설치 장소", value: v(g.place) },
+    // 특이사항은 입력된 운수사만 (시작보고방 카드는 간결 유지)
+    ...(g.notes?.trim() ? [{ title: "특이사항", value: g.notes.trim() }] : []),
   ];
   const mkCard = (body: unknown[]) => ({
     type: "message",

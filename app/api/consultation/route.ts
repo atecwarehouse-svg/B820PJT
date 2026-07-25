@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
     const supabase = createServiceClient();
     const { data, error } = await supabase
       .from("consultations")
-      .select("operator, place, day_off, next_day_off")
+      .select("operator, place, day_off, next_day_off, notes")
       .eq("date", date);
     if (error) throw error;
     return NextResponse.json({ list: data ?? [] });

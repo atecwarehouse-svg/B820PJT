@@ -55,6 +55,7 @@ interface EntryState {
   place: string;
   dayOff: string;
   nextDayOff: string;
+  notes: string; // 특이사항 — 협의사항 저장분 프리필, 수정 가능, 두 카드에 반영
 }
 
 function PlanReportPanel({
@@ -99,7 +100,14 @@ function PlanReportPanel({
     (async () => {
       const init: Record<string, EntryState> = {};
       for (const o of operators) {
-        init[o.operator] = { hour: "", minute: "00", place: "", dayOff: "", nextDayOff: "" };
+        init[o.operator] = {
+          hour: "",
+          minute: "00",
+          place: "",
+          dayOff: "",
+          nextDayOff: "",
+          notes: "",
+        };
       }
       try {
         const res = await fetch(`/api/consultation?date=${today}`, { cache: "no-store" });
@@ -109,11 +117,13 @@ function PlanReportPanel({
           place: string | null;
           day_off: string | null;
           next_day_off: string | null;
+          notes: string | null;
         }[]) {
           if (init[c.operator]) {
             init[c.operator].place = c.place ?? "";
             init[c.operator].dayOff = c.day_off ?? "";
             init[c.operator].nextDayOff = c.next_day_off ?? "";
+            init[c.operator].notes = c.notes ?? "";
           }
         }
       } catch {
@@ -154,6 +164,7 @@ function PlanReportPanel({
           place: e?.place ?? "",
           dayOff: e?.dayOff ?? "",
           nextDayOff: e?.nextDayOff ?? "",
+          notes: e?.notes ?? "",
         };
       });
       const res = await fetch("/api/plan-report", {
@@ -214,6 +225,7 @@ function PlanReportPanel({
           place: "",
           dayOff: "",
           nextDayOff: "",
+          notes: "",
         };
         return (
           <div key={o.operator} className="space-y-2 rounded-xl border border-gray-200 p-3">
@@ -287,6 +299,17 @@ function PlanReportPanel({
                 onChange={(ev) => update(o.operator, { nextDayOff: ev.target.value })}
                 placeholder="차량번호 입력"
                 className={INPUT}
+              />
+            </label>
+
+            <label className="block">
+              <span className={LABEL}>특이사항</span>
+              <textarea
+                value={e.notes}
+                onChange={(ev) => update(o.operator, { notes: ev.target.value })}
+                placeholder="예) 첫차 이후 순차 입고, 차고지 협소 주의 등 (없으면 비워두세요)"
+                rows={2}
+                className={`${INPUT} resize-none`}
               />
             </label>
           </div>

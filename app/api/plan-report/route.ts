@@ -39,6 +39,7 @@ export async function POST(req: NextRequest) {
   };
 
   const groups: PlanReportGroup[] = [];
+  const clientNotesOps = new Set<string>(); // 폼이 특이사항 칸을 보낸 운수사(빈 값 포함)
   for (const raw of body.groups as Record<string, unknown>[]) {
     const operator = str(raw.operator, 50);
     if (!operator) continue;
@@ -59,7 +60,11 @@ export async function POST(req: NextRequest) {
       place: str(raw.place),
       dayOff: str(raw.dayOff),
       nextDayOff: str(raw.nextDayOff),
+      // 폼의 특이사항 칸 값 — 협의사항 프리필을 사용자가 고친 최종본이므로
+      // 아래 협의사항 병합에서 덮어쓰지 않는다(키가 있으면 지운 것도 존중).
+      notes: "notes" in raw ? str(raw.notes, 500) : undefined,
     });
+    if ("notes" in raw) clientNotesOps.add(operator);
   }
   if (groups.length === 0) {
     return NextResponse.json({ error: "설치 계획이 없습니다." }, { status: 400 });
@@ -89,7 +94,8 @@ export async function POST(req: NextRequest) {
           g.mountMain = c.mount_main ?? undefined;
           g.mountBoard = c.mount_board ?? undefined;
           g.handleRemoval = c.handle_removal ?? undefined;
-          g.notes = c.notes ?? undefined;
+          // 특이사항은 폼이 보낸 값 우선 — 폼에 칸이 없던 옛 클라이언트만 협의사항으로 채움
+          if (!clientNotesOps.has(g.operator)) g.notes = c.notes ?? undefined;
         }
       }
     } catch {
