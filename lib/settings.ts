@@ -5,6 +5,7 @@ import { createServiceClient } from "@/lib/supabase/server";
 
 export const REPORT_MAIL_KEY = "report_mail_to";
 export const INSTALL_TEAMS_KEY = "install_teams"; // 설치팀 목록 (JSON 배열 문자열)
+export const INSPECT_CHECKLIST_KEY = "inspect_checklist"; // 배차표 검수항목 (JSON {vehicle,device})
 
 // 설치팀 목록 읽기 — 미설정/테이블 미생성이면 빈 배열 (기록 페이지는 자유입력으로 폴백)
 export async function getInstallTeams(): Promise<string[]> {

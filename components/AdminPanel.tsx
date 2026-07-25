@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import ReportRecipientsManager from "@/components/ReportRecipientsManager";
 import TeamNamesManager from "@/components/TeamNamesManager";
+import ChecklistManager from "@/components/ChecklistManager";
 import ConsultationManager from "@/components/ConsultationManager";
 import VocManager from "@/components/VocManager";
 
@@ -17,7 +18,7 @@ interface AdminRecord {
   is_added: boolean;
 }
 
-const TABS = ["설치팀", "메일 수신자", "협의사항", "VOC", "차량 삭제"] as const;
+const TABS = ["설치팀", "검수항목", "메일 수신자", "협의사항", "VOC", "차량 삭제"] as const;
 type Tab = (typeof TABS)[number];
 
 export default function AdminPanel() {
@@ -117,6 +118,7 @@ export default function AdminPanel() {
       </div>
 
       {tab === "설치팀" && <TeamNamesManager />}
+      {tab === "검수항목" && <ChecklistManager />}
       {tab === "메일 수신자" && <ReportRecipientsManager />}
       {tab === "협의사항" && <ConsultationManager />}
       {tab === "VOC" && <VocManager />}

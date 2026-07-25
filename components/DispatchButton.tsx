@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { OperatorSchedule } from "@/lib/stats";
 import { workDateString } from "@/lib/work-day";
+import { DEFAULT_CHECKLIST, type Checklist } from "@/lib/checklist";
 
 // 홈 화면 '배차표' 버튼 + 팝업 — 그날 설치할 운수사·노선을 골라 차량별
 // 나가는 시간을 입력한다. 시간은 DB(dispatch_times)에 공용 저장되어
@@ -131,8 +132,21 @@ export default function DispatchButton() {
   const [listError, setListError] = useState("");
   const [dbReady, setDbReady] = useState(true);
 
-  // 검수항목 보기 — 검수자가 차량 검수 중 참고하는 고정 체크리스트(저장 없음)
+  // 검수항목 보기 — 검수자가 차량 검수 중 참고하는 체크리스트(저장 없음).
+  // 목록은 관리자 페이지에서 수정 가능(app_settings) — 처음 열 때 1회 로드, 실패 시 기본값.
   const [checklistView, setChecklistView] = useState(false);
+  const [checklist, setChecklist] = useState<Checklist>(DEFAULT_CHECKLIST);
+  const checklistLoadedRef = useRef(false);
+  useEffect(() => {
+    if (!checklistView || checklistLoadedRef.current) return;
+    checklistLoadedRef.current = true;
+    fetch("/api/checklist")
+      .then((r) => r.json())
+      .then((j) => {
+        if (Array.isArray(j?.vehicle) && Array.isArray(j?.device)) setChecklist(j);
+      })
+      .catch(() => {});
+  }, [checklistView]);
 
   const [saving, setSaving] = useState(false);
   const savingRef = useRef(false); // 저장 요청 진행 중 표시(markDirty에서 참조)
@@ -868,20 +882,13 @@ export default function DispatchButton() {
                     1. 차량 이상유무
                   </h3>
                   <ol className="divide-y divide-gray-100 px-3 text-sm text-gray-800">
-                    {[
-                      ["CCTV 모니터·셋톱", "분할화면·전환화면 포함"],
-                      ["전광판", ""],
-                      ["계기판 경고등", ""],
-                      ["도어 작동 유무", ""],
-                      ["라디오", "안테나 신호·음성"],
-                      ["차량 파손 유무", "마감제 분실"],
-                    ].map(([title, sub], i) => (
-                      <li key={title} className="flex items-baseline gap-2 py-2">
+                    {checklist.vehicle.map(({ t, s }, i) => (
+                      <li key={i} className="flex items-baseline gap-2 py-2">
                         <span className="w-5 shrink-0 text-right text-xs font-bold text-emerald-600">
                           {i + 1}.
                         </span>
-                        <span className="font-medium">{title}</span>
-                        {sub && <span className="text-xs text-gray-500">({sub})</span>}
+                        <span className="font-medium">{t}</span>
+                        {s && <span className="text-xs text-gray-500">({s})</span>}
                       </li>
                     ))}
                   </ol>
@@ -893,23 +900,13 @@ export default function DispatchButton() {
                     2. 단말기 설치 상태
                   </h3>
                   <ol className="divide-y divide-gray-100 px-3 text-sm text-gray-800">
-                    {[
-                      ["승하차 위치", "1번 → 3번 → 2번 순서 (다인승 테스트)"],
-                      ["비닐 제거", ""],
-                      ["카드 태그 시 음성·화면 이상유무", ""],
-                      ["전원 2차전원", "상시·ACC는 재작업"],
-                      ["표출기 흔들림·운전자 간섭 유무", "기어 변속 등"],
-                      ["구멍 마감", ""],
-                      ["연동장비 확인", "타코 · 전자노선도 · 빈좌석"],
-                      ["피스구멍 테이핑 상태", ""],
-                      ["하차벨 테스트", ""],
-                    ].map(([title, sub], i) => (
-                      <li key={title} className="flex items-baseline gap-2 py-2">
+                    {checklist.device.map(({ t, s }, i) => (
+                      <li key={i} className="flex items-baseline gap-2 py-2">
                         <span className="w-5 shrink-0 text-right text-xs font-bold text-blue-600">
                           {i + 1}.
                         </span>
-                        <span className="font-medium">{title}</span>
-                        {sub && <span className="text-xs text-gray-500">({sub})</span>}
+                        <span className="font-medium">{t}</span>
+                        {s && <span className="text-xs text-gray-500">({s})</span>}
                       </li>
                     ))}
                   </ol>
