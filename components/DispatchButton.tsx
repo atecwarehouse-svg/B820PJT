@@ -1179,7 +1179,7 @@ export default function DispatchButton() {
                           </td>
                           <td
                             className={`border border-gray-300 px-2 py-1.5 text-center font-medium ${
-                              isOff ? "text-red-500 line-through" : "text-gray-900"
+                              isOff ? "text-red-500" : "text-gray-900"
                             }`}
                           >
                             {e.plate}
