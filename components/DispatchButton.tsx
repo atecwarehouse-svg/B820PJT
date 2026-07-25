@@ -715,7 +715,7 @@ export default function DispatchButton() {
                                 <p
                                   className={`truncate text-sm font-medium ${
                                     isOff
-                                      ? "text-red-400 line-through"
+                                      ? "text-red-400"
                                       : e.excluded
                                         ? "text-gray-400"
                                         : "text-gray-800"
@@ -1019,7 +1019,7 @@ export default function DispatchButton() {
                         <div className="min-w-0">
                           <p
                             className={`truncate text-sm font-medium ${
-                              isOff ? "text-red-400 line-through" : "text-gray-800"
+                              isOff ? "text-red-400" : "text-gray-800"
                             }`}
                           >
                             {e.plate}
