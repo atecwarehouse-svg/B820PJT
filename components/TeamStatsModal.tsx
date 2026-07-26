@@ -5,6 +5,16 @@ import { useState } from "react";
 interface TeamRow {
   team: string;
   count: number;
+  avgMin?: number | null; // 평균 소요시간(분) — 시작 보고~완료 보고
+  days?: number; // 작업일 수(업무일 기준)
+  perDay?: number | null; // 일평균 처리 대수
+}
+
+// 분 → "1시간 23분" 표기
+function fmtDur(min: number): string {
+  const h = Math.floor(min / 60);
+  const m = min % 60;
+  return h > 0 ? `${h}시간 ${m}분` : `${m}분`;
 }
 
 interface TeamVehicle {
@@ -17,6 +27,7 @@ interface TeamVehicle {
 // 팀을 누르면 그 팀이 설치한 차량(운수사별 차량번호)이 펼쳐진다.
 export default function TeamStatsModal() {
   const [open, setOpen] = useState(false);
+  const [tab, setTab] = useState<"count" | "time">("count");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [teams, setTeams] = useState<TeamRow[]>([]);
@@ -28,6 +39,7 @@ export default function TeamStatsModal() {
 
   async function openModal() {
     setOpen(true);
+    setTab("count");
     setLoading(true);
     setError(null);
     setOpenTeam(null);
@@ -97,7 +109,7 @@ export default function TeamStatsModal() {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
-              <h2 className="text-sm font-bold text-sky-700">설치팀별 누적 현황</h2>
+              <h2 className="text-sm font-bold text-sky-700">설치팀 현황</h2>
               <button
                 onClick={() => setOpen(false)}
                 className="rounded-lg px-2 py-1 text-sm text-gray-400 hover:bg-gray-100 hover:text-gray-600"
@@ -105,6 +117,28 @@ export default function TeamStatsModal() {
               >
                 ✕
               </button>
+            </div>
+
+            <div className="flex gap-1 border-b border-gray-100 px-4 pt-2">
+              {(
+                [
+                  ["count", "누적 현황"],
+                  ["time", "소요시간 통계"],
+                ] as const
+              ).map(([key, label]) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setTab(key)}
+                  className={`rounded-t-lg px-3 py-1.5 text-xs font-semibold ${
+                    tab === key
+                      ? "border border-b-0 border-gray-200 bg-white text-sky-700"
+                      : "text-gray-400 hover:text-gray-600"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
             </div>
 
             <div className="p-4">
@@ -116,6 +150,30 @@ export default function TeamStatsModal() {
                 <p className="py-8 text-center text-sm text-gray-400">
                   아직 설치(저장) 완료된 차량이 없습니다.
                 </p>
+              ) : tab === "time" ? (
+                <>
+                  <p className="mb-2 text-xs text-gray-500">
+                    소요시간은 <b>설치 시작 보고~완료 보고</b> 기준 평균, 작업일은 저장일(업무일)
+                    기준입니다
+                  </p>
+                  <ul className="divide-y divide-gray-100 overflow-hidden rounded-xl border border-gray-200">
+                    {teams.map((t) => (
+                      <li key={t.team} className="px-3 py-2.5">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-medium text-gray-800">{t.team}</span>
+                          <span className="text-sm font-bold tabular-nums text-sky-700">
+                            {typeof t.avgMin === "number" ? `평균 ${fmtDur(t.avgMin)}` : "―"}
+                          </span>
+                        </div>
+                        <p className="mt-0.5 text-[11px] text-gray-500">
+                          작업일 {t.days ?? 0}일 · 일평균{" "}
+                          {typeof t.perDay === "number" ? `${t.perDay}대` : "―"} · 누적{" "}
+                          {t.count.toLocaleString()}대
+                        </p>
+                      </li>
+                    ))}
+                  </ul>
+                </>
               ) : (
                 <>
                   <p className="mb-2 text-xs text-gray-500">

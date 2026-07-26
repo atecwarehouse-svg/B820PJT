@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
 import { fetchAll } from "@/lib/supabase/paginate";
 import { getInstallTeamsFull, teamLabel, type InstallTeam } from "@/lib/settings";
+import { workDateString } from "@/lib/work-day";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -49,21 +50,62 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ vehicles });
   }
 
-  const rows = await fetchAll<{ team: string | null }>((from, to) =>
-    supabase
-      .from("records")
-      .select("team")
-      .not("saved_at", "is", null)
-      .order("plate")
-      .range(from, to),
-  );
-  const byTeam = new Map<string, number>();
+  // 소요시간 통계용 컬럼 포함 조회 — 컬럼 없는 옛 DB면 team·saved_at만으로 재시도(통계만 생략)
+  type StatRow = {
+    team: string | null;
+    saved_at: string | null;
+    start_notified_at?: string | null;
+    complete_notified_at?: string | null;
+  };
+  let rows: StatRow[];
+  try {
+    rows = await fetchAll<StatRow>((from, to) =>
+      supabase
+        .from("records")
+        .select("team, saved_at, start_notified_at, complete_notified_at")
+        .not("saved_at", "is", null)
+        .order("plate")
+        .range(from, to),
+    );
+  } catch {
+    rows = await fetchAll<StatRow>((from, to) =>
+      supabase
+        .from("records")
+        .select("team, saved_at")
+        .not("saved_at", "is", null)
+        .order("plate")
+        .range(from, to),
+    );
+  }
+
+  const byTeam = new Map<
+    string,
+    { count: number; durSum: number; durN: number; days: Set<string> }
+  >();
+  const DAY_MS = 86400000;
   for (const r of rows) {
     const t = norm(r.team);
-    byTeam.set(t, (byTeam.get(t) ?? 0) + 1);
+    const g = byTeam.get(t) ?? { count: 0, durSum: 0, durN: 0, days: new Set<string>() };
+    g.count += 1;
+    if (r.saved_at) g.days.add(workDateString(r.saved_at));
+    // 소요시간 = 시작 보고~완료 보고. 0 이하·24시간 초과는 이상값으로 제외
+    if (r.start_notified_at && r.complete_notified_at) {
+      const dur = Date.parse(r.complete_notified_at) - Date.parse(r.start_notified_at);
+      if (dur > 0 && dur <= DAY_MS) {
+        g.durSum += dur;
+        g.durN += 1;
+      }
+    }
+    byTeam.set(t, g);
   }
   const teams = [...byTeam.entries()]
-    .map(([team, count]) => ({ team, count }))
+    .map(([team, g]) => ({
+      team,
+      count: g.count,
+      avgMin: g.durN > 0 ? Math.round(g.durSum / g.durN / 60000) : null,
+      days: g.days.size,
+      perDay: g.days.size > 0 ? Math.round((g.count / g.days.size) * 10) / 10 : null,
+    }))
     .sort((a, b) => b.count - a.count || a.team.localeCompare(b.team, "ko"));
   return NextResponse.json({ teams, total: rows.length });
 }
