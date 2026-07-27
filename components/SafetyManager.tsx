@@ -13,6 +13,7 @@ export interface PledgeSessionRow {
   location: string | null;
   install_date: string;
   signer_count: number;
+  unsigned_count: number; // 서명자 중 설치 후 서명 미완료 인원 (0이면 표시 안 함)
   ended: boolean;
   end_time: string | null;
 }
@@ -235,7 +236,17 @@ export default function SafetyManager({ sessions }: { sessions: PledgeSessionRow
 
       {/* 기존 세션 목록 */}
       <section>
-        <h2 className="mb-2 text-sm font-bold text-gray-700">생성된 서약서 목록</h2>
+        <div className="mb-2 flex items-center justify-between">
+          <h2 className="text-sm font-bold text-gray-700">생성된 서약서 목록</h2>
+          {sessions.length > 0 && (
+            <button
+              onClick={() => downloadUrl(`/api/export/safety?all=1`)}
+              className="rounded-lg border border-green-600 px-2.5 py-1 text-xs font-semibold text-green-700 active:bg-green-50"
+            >
+              전체 PDF 다운로드
+            </button>
+          )}
+        </div>
         {sessions.length === 0 ? (
           <p className="rounded-xl border border-dashed border-gray-300 p-4 text-center text-xs text-gray-400">
             아직 생성된 서약서가 없습니다.
@@ -260,6 +271,12 @@ export default function SafetyManager({ sessions }: { sessions: PledgeSessionRow
                     </p>
                     <p className="mt-0.5 text-[11px] text-gray-500">
                       담당: {s.manager_name} · 서명 {s.signer_count}명
+                      {s.unsigned_count > 0 && (
+                        <span className="font-semibold text-red-600">
+                          {" "}
+                          · 미서명 {s.unsigned_count}명
+                        </span>
+                      )}
                       {s.location ? ` · ${s.location}` : ""}
                     </p>
                   </div>

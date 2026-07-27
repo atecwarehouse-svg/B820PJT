@@ -21,17 +21,34 @@ export default async function SafetyPage() {
 
   // 세션별 서명자 수 집계 — 누적 서명이 1000행을 넘으면 1회 요청 상한에
   // 조용히 잘려 서명자 수가 줄어 보이므로 전수 페이지네이션으로 조회
-  const sigs = await fetchAll<{ session_id: string }>((from, to) =>
-    supabase
-      .from("pledge_signatures")
-      .select("session_id")
-      .order("id")
-      .range(from, to),
-  ).catch(() => [] as { session_id: string }[]);
+  // 미서명 = 그 세션에 설치 전 서명은 했지만 설치 후 서명이 아직 없는 인원
+  // (서명 이미지는 용량이 커서 내려받지 않고, null 여부만 필터로 집계)
+  const [sigs, unsignedRows] = await Promise.all([
+    fetchAll<{ session_id: string }>((from, to) =>
+      supabase
+        .from("pledge_signatures")
+        .select("session_id")
+        .order("id")
+        .range(from, to),
+    ).catch(() => [] as { session_id: string }[]),
+    fetchAll<{ session_id: string }>((from, to) =>
+      supabase
+        .from("pledge_signatures")
+        .select("session_id")
+        .is("sig_after", null)
+        .order("id")
+        .range(from, to),
+    ).catch(() => [] as { session_id: string }[]),
+  ]);
   const counts = new Map<string, number>();
   for (const row of sigs ?? []) {
     const k = row.session_id as string;
     counts.set(k, (counts.get(k) ?? 0) + 1);
+  }
+  const unsignedCounts = new Map<string, number>();
+  for (const row of unsignedRows ?? []) {
+    const k = row.session_id as string;
+    unsignedCounts.set(k, (unsignedCounts.get(k) ?? 0) + 1);
   }
 
   const rows: PledgeSessionRow[] = (sessions ?? []).map((s) => ({
@@ -41,6 +58,7 @@ export default async function SafetyPage() {
     location: (s.location as string | null) ?? null,
     install_date: s.install_date as string,
     signer_count: counts.get(s.id as string) ?? 0,
+    unsigned_count: unsignedCounts.get(s.id as string) ?? 0,
     ended: Boolean(s.ended_at),
     end_time: (s.end_time as string | null) ?? null,
   }));

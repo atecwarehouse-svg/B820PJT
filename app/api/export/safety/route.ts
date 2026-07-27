@@ -1,7 +1,13 @@
 import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
+import { fetchAll } from "@/lib/supabase/paginate";
 import { renderPdf } from "@/lib/export/pdf-render";
-import { buildPledgeHtml } from "@/lib/export/pledge-html";
+import {
+  buildPledgeHtml,
+  buildPledgeAllHtml,
+  type PledgeSessionData,
+  type PledgeSignatureData,
+} from "@/lib/export/pledge-html";
 import { uploadExport, deletePhoto } from "@/lib/gdrive";
 import { isAdmin } from "@/lib/admin-auth";
 
@@ -20,7 +26,10 @@ export async function GET(req: Request) {
   if (!isAdmin()) {
     return NextResponse.json({ error: "관리자 인증이 필요합니다." }, { status: 401 });
   }
-  const sessionId = new URL(req.url).searchParams.get("session")?.trim();
+  const params = new URL(req.url).searchParams;
+  if (params.get("all")) return exportAll();
+
+  const sessionId = params.get("session")?.trim();
   if (!sessionId) {
     return NextResponse.json({ error: "세션 정보가 없습니다." }, { status: 400 });
   }
@@ -77,6 +86,73 @@ export async function GET(req: Request) {
     console.error("[export/safety] 드라이브 업로드 실패:", e);
   }
 
+  return new NextResponse(buffer as unknown as BodyInit, {
+    status: 200,
+    headers: {
+      "Content-Type": PDF_MIME,
+      "Content-Disposition": `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`,
+    },
+  });
+}
+
+// GET /api/export/safety?all=1 — 전체 세션을 설치일 순으로 한 PDF에 묶어 다운로드.
+// 드라이브 보관은 세션별 PDF가 담당하므로 여기서는 업로드하지 않는다.
+async function exportAll() {
+  const supabase = createServiceClient();
+
+  const { data: sessions, error: sErr } = await supabase
+    .from("pledge_sessions")
+    .select(
+      "id, manager_name, manager_sig, operator, location, install_date, work_content, quantity, start_time, end_time",
+    )
+    .order("install_date", { ascending: true })
+    .order("created_at", { ascending: true });
+  if (sErr) return NextResponse.json({ error: sErr.message }, { status: 500 });
+  if (!sessions?.length) {
+    return NextResponse.json({ error: "생성된 서약서가 없습니다." }, { status: 404 });
+  }
+
+  // 서명 이미지 포함 전수 조회 — 1000행 상한 회피를 위해 페이지네이션
+  let sigs: (PledgeSignatureData & { session_id: string })[];
+  try {
+    sigs = await fetchAll<PledgeSignatureData & { session_id: string }>((from, to) =>
+      supabase
+        .from("pledge_signatures")
+        .select("session_id, worker_name, sig_before, sig_after")
+        .order("id", { ascending: true })
+        .range(from, to),
+    );
+  } catch (e) {
+    return NextResponse.json(
+      { error: e instanceof Error ? e.message : "서명 조회 실패" },
+      { status: 500 },
+    );
+  }
+
+  const bySession = new Map<string, PledgeSignatureData[]>();
+  for (const r of sigs) {
+    const list = bySession.get(r.session_id) ?? [];
+    list.push(r);
+    bySession.set(r.session_id, list);
+  }
+
+  let buffer: Buffer;
+  try {
+    const html = buildPledgeAllHtml(
+      sessions.map((s) => ({
+        session: s as unknown as PledgeSessionData,
+        signatures: bySession.get(s.id as string) ?? [],
+      })),
+    );
+    buffer = await renderPdf(html);
+  } catch (e) {
+    return NextResponse.json(
+      { error: e instanceof Error ? e.message : "PDF 생성 실패" },
+      { status: 500 },
+    );
+  }
+
+  const filename = `안전관리서약서_전체_${sessions.length}건.pdf`;
   return new NextResponse(buffer as unknown as BodyInit, {
     status: 200,
     headers: {

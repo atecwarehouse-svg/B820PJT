@@ -156,7 +156,15 @@ export function buildPledgeHtml(
   session: PledgeSessionData,
   signatures: PledgeSignatureData[],
 ): string {
+  return buildPledgeAllHtml([{ session, signatures }]);
+}
+
+// 여러 세션을 한 문서로 — 세션마다 1·2페이지가 이어 붙는다(.page 페이지 분리 CSS 재사용).
+export function buildPledgeAllHtml(
+  docs: { session: PledgeSessionData; signatures: PledgeSignatureData[] }[],
+): string {
+  const body = docs.map((d) => page1(d.session) + page2(d.session, d.signatures)).join("");
   return `<!doctype html><html lang="ko"><head><meta charset="utf-8" />
   <style>${CSS}</style></head>
-  <body>${page1(session)}${page2(session, signatures)}</body></html>`;
+  <body>${body}</body></html>`;
 }
