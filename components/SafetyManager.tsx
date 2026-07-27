@@ -13,7 +13,6 @@ export interface PledgeSessionRow {
   location: string | null;
   install_date: string;
   signer_count: number;
-  unsigned_count: number | null; // 등록 설치팀원 중 미서명 인원(등록 명단 없으면 null)
   ended: boolean;
   end_time: string | null;
 }
@@ -261,18 +260,6 @@ export default function SafetyManager({ sessions }: { sessions: PledgeSessionRow
                     </p>
                     <p className="mt-0.5 text-[11px] text-gray-500">
                       담당: {s.manager_name} · 서명 {s.signer_count}명
-                      {s.unsigned_count !== null && (
-                        <span
-                          className={
-                            s.unsigned_count > 0
-                              ? "font-semibold text-red-600"
-                              : "text-green-600"
-                          }
-                        >
-                          {" "}
-                          · 미서명 {s.unsigned_count}명
-                        </span>
-                      )}
                       {s.location ? ` · ${s.location}` : ""}
                     </p>
                   </div>
