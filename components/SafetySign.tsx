@@ -101,14 +101,15 @@ export default function SafetySign({
       setError("서명을 입력하세요.");
       return;
     }
-    if (phase === "before" && !name.trim()) {
-      setError("이름을 입력하세요.");
+    if (phase === "before" && !name.trim() && selectedId == null) {
+      setError("이름을 입력하거나 수정할 이름을 선택하세요.");
       return;
     }
     if (phase === "after" && selectedId == null) {
       setError("본인 이름을 선택하세요.");
       return;
     }
+    const selected = signers.find((s) => s.id === selectedId);
 
     submittingRef.current = true;
     setSubmitting(true);
@@ -121,16 +122,14 @@ export default function SafetySign({
           phase,
           name: name.trim(),
           signature,
-          signatureId: phase === "after" ? selectedId : undefined,
+          signatureId: selectedId ?? undefined, // before에서도 선택 시 = 기존 서명 수정
+          overwrite: phase === "after" && selected?.has_after ? true : undefined,
         }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "제출 실패");
 
-      const who =
-        phase === "before"
-          ? name.trim()
-          : signers.find((s) => s.id === selectedId)?.worker_name ?? "";
+      const who = selected?.worker_name ?? name.trim();
       // 완료 화면으로 전환 → 폼이 사라져 같은 사람이 다시 저장할 수 없음
       setName("");
       setSelectedId(null);
@@ -208,15 +207,51 @@ export default function SafetySign({
       ) : (
       <section className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
         {phase === "before" ? (
-          <label className="block">
-            <span className="text-[11px] font-medium text-gray-500">이름</span>
-            <input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="본인 이름"
-              className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-base focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-            />
-          </label>
+          <div>
+            {selectedId == null ? (
+              <label className="block">
+                <span className="text-[11px] font-medium text-gray-500">이름</span>
+                <input
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="본인 이름"
+                  className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-base focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                />
+              </label>
+            ) : (
+              <p className="flex items-center justify-between rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                <span>
+                  ✏️ <b>{signers.find((s) => s.id === selectedId)?.worker_name}</b>님 서명 수정 —
+                  아래에 다시 서명하세요
+                </span>
+                <button onClick={() => setSelectedId(null)} className="ml-2 shrink-0 text-xs font-semibold text-gray-500 underline">
+                  취소
+                </button>
+              </p>
+            )}
+            {signers.length > 0 && (
+              <div className="mt-3">
+                <span className="text-[11px] font-medium text-gray-500">
+                  이미 서명한 사람 수정 (이름 선택 → 다시 서명하면 교체)
+                </span>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {signers.map((s) => (
+                    <button
+                      key={s.id}
+                      onClick={() => setSelectedId(selectedId === s.id ? null : s.id)}
+                      className={`rounded-full px-3 py-1.5 text-sm font-medium ${
+                        selectedId === s.id
+                          ? "bg-amber-500 text-white"
+                          : "border border-gray-300 bg-white text-gray-700"
+                      }`}
+                    >
+                      {s.worker_name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
         ) : (
           <div>
             <span className="text-[11px] font-medium text-gray-500">본인 이름 선택 (설치 전 서명자)</span>
@@ -241,6 +276,30 @@ export default function SafetySign({
                 ))}
               </div>
             )}
+            {signers.some((s) => s.has_after) && (
+              <div className="mt-3">
+                <span className="text-[11px] font-medium text-gray-500">
+                  서명 완료자 수정 (이름 선택 → 다시 서명하면 교체)
+                </span>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {signers
+                    .filter((s) => s.has_after)
+                    .map((s) => (
+                      <button
+                        key={s.id}
+                        onClick={() => setSelectedId(selectedId === s.id ? null : s.id)}
+                        className={`rounded-full px-3 py-1.5 text-sm font-medium ${
+                          selectedId === s.id
+                            ? "bg-amber-500 text-white"
+                            : "border border-amber-200 bg-amber-50 text-amber-700"
+                        }`}
+                      >
+                        {s.worker_name} ✓
+                      </button>
+                    ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -255,7 +314,7 @@ export default function SafetySign({
 
         <button
           onClick={submit}
-          disabled={submitting || (phase === "after" && pending.length === 0)}
+          disabled={submitting || (phase === "after" && signers.length === 0)}
           className="mt-3 w-full rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white active:bg-blue-700 disabled:opacity-50"
         >
           {submitting ? "제출 중…" : "서명 제출"}

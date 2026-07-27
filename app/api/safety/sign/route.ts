@@ -9,12 +9,13 @@ interface SignBody {
   name?: string;
   phase?: "before" | "after";
   signature?: string; // PNG data URL
-  signatureId?: number; // phase==="after" 일 때 갱신할 설치전 서명 행 id
+  signatureId?: number; // 갱신할 서명 행 id (after 필수 / before는 기존 서명 수정 시)
+  overwrite?: boolean; // phase==="after"에서 이미 완료된 서명을 교체(수정)할 때
 }
 
 // POST /api/safety/sign  → 작업자 서명 저장
-//  - phase="before": 새 행 생성 (이름 + 설치 전 서명). 입력 순서대로 쌓임(id 오름차순).
-//  - phase="after" : 기존 행(signatureId)에 설치 후 서명 갱신.
+//  - phase="before": 새 행 생성 (이름 + 설치 전 서명). signatureId 있으면 기존 행 서명 수정.
+//  - phase="after" : 기존 행(signatureId)에 설치 후 서명 갱신. overwrite면 완료된 서명도 교체.
 export async function POST(req: NextRequest) {
   const body = (await req.json()) as SignBody;
   const sessionId = (body.sessionId ?? "").trim();
@@ -35,6 +36,22 @@ export async function POST(req: NextRequest) {
   const now = new Date().toISOString();
 
   if (phase === "before") {
+    // 기존 행 서명 수정(재서명) — 이름 선택으로 대상 행이 특정됨
+    if (typeof body.signatureId === "number") {
+      const { data, error } = await supabase
+        .from("pledge_signatures")
+        .update({ sig_before: signature, before_at: now })
+        .eq("id", body.signatureId)
+        .eq("session_id", sessionId)
+        .select("id")
+        .maybeSingle();
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+      if (!data) {
+        return NextResponse.json({ error: "대상 서명을 찾을 수 없습니다." }, { status: 409 });
+      }
+      return NextResponse.json({ id: data.id });
+    }
+
     const name = (body.name ?? "").trim();
     if (!name) {
       return NextResponse.json({ error: "이름을 입력하세요." }, { status: 400 });
@@ -88,14 +105,14 @@ export async function POST(req: NextRequest) {
   }
   // 이미 서명된 행은 덮어쓰지 않는다 — 두 사람이 같은 이름 행을 골라 서명하면
   // (동명이인·오래된 목록) 먼저 한 서명이 소리 없이 사라진다.
-  const { data, error } = await supabase
+  // 단, overwrite(서명 수정)는 완료된 행을 명시적으로 골라 교체하는 것이므로 허용.
+  let query = supabase
     .from("pledge_signatures")
     .update({ sig_after: signature, after_at: now })
     .eq("id", sigId)
-    .eq("session_id", sessionId)
-    .is("sig_after", null)
-    .select("id")
-    .maybeSingle();
+    .eq("session_id", sessionId);
+  if (!body.overwrite) query = query.is("sig_after", null);
+  const { data, error } = await query.select("id").maybeSingle();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   if (!data) {
     // 행이 없거나, 그 사이 다른 사람이 이미 서명을 완료한 경우
