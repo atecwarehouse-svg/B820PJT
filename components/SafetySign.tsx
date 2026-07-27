@@ -48,9 +48,9 @@ export interface SignerRow {
 
 export type Phase = "before" | "after";
 
-// 임시 해제(2026-07-27, 사용자 요청): 기기당 1회 서명 제한을 풀어 같은 휴대폰으로
-// 여러 명이 이어서 서명 가능. 원복하려면 true 로 되돌리면 됨(완료화면 이어서 버튼도 함께 사라짐).
-const DEVICE_LOCK = false;
+// 기기당 1회 서명 잠금. false 로 바꾸면 임시 해제 모드: 같은 휴대폰으로 여러 명 이어서
+// 서명 + 기존 서명 수정(이름 선택 후 재서명 교체) 가능. 2026-07-27 일괄 정비 때 사용 후 원복.
+const DEVICE_LOCK: boolean = true;
 
 // 작업자용 서명 화면 (본인 휴대폰).
 // 링크에 따라 단계가 고정된다: /safety/[id]=설치 전, /safety/[id]?phase=after=설치 후.
@@ -229,7 +229,7 @@ export default function SafetySign({
                 </button>
               </p>
             )}
-            {signers.length > 0 && (
+            {!DEVICE_LOCK && signers.length > 0 && (
               <div className="mt-3">
                 <span className="text-[11px] font-medium text-gray-500">
                   이미 서명한 사람 수정 (이름 선택 → 다시 서명하면 교체)
@@ -276,7 +276,7 @@ export default function SafetySign({
                 ))}
               </div>
             )}
-            {signers.some((s) => s.has_after) && (
+            {!DEVICE_LOCK && signers.some((s) => s.has_after) && (
               <div className="mt-3">
                 <span className="text-[11px] font-medium text-gray-500">
                   서명 완료자 수정 (이름 선택 → 다시 서명하면 교체)
@@ -314,7 +314,7 @@ export default function SafetySign({
 
         <button
           onClick={submit}
-          disabled={submitting || (phase === "after" && signers.length === 0)}
+          disabled={submitting || (phase === "after" && (DEVICE_LOCK ? pending.length === 0 : signers.length === 0))}
           className="mt-3 w-full rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white active:bg-blue-700 disabled:opacity-50"
         >
           {submitting ? "제출 중…" : "서명 제출"}
