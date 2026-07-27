@@ -48,6 +48,10 @@ export interface SignerRow {
 
 export type Phase = "before" | "after";
 
+// 임시 해제(2026-07-27, 사용자 요청): 기기당 1회 서명 제한을 풀어 같은 휴대폰으로
+// 여러 명이 이어서 서명 가능. 원복하려면 true 로 되돌리면 됨(완료화면 이어서 버튼도 함께 사라짐).
+const DEVICE_LOCK = false;
+
 // 작업자용 서명 화면 (본인 휴대폰).
 // 링크에 따라 단계가 고정된다: /safety/[id]=설치 전, /safety/[id]?phase=after=설치 후.
 // 설치 전: 이름 입력 + 터치 서명 → 새 행 생성.
@@ -78,6 +82,7 @@ export default function SafetySign({
   // 이 기기에서 이미 서명 완료한 세션·단계면 재접속(새로고침) 시 완료 화면 복원 → 중복 제출 방지
   const signedKey = `${session.id}:${phase}`;
   useEffect(() => {
+    if (!DEVICE_LOCK) return; // 임시 해제 중 — 재접속해도 새 폼 제공
     const prev = readSigned()[signedKey];
     if (prev) setCompleted({ phase, who: prev.who });
   }, [signedKey, phase]);
@@ -158,6 +163,15 @@ export default function SafetySign({
           </p>
           <p className="mt-2 text-[11px] text-gray-400">다시 저장할 필요가 없습니다.</p>
         </section>
+
+        {!DEVICE_LOCK && (
+          <button
+            onClick={() => setCompleted(null)}
+            className="w-full rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white active:bg-blue-700"
+          >
+            다른 사람 이어서 서명하기
+          </button>
+        )}
 
         <button
           onClick={closeOrHome}
