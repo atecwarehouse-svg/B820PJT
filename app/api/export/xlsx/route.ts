@@ -20,7 +20,11 @@ export async function POST(req: NextRequest) {
   if (!isAdmin()) {
     return NextResponse.json({ error: "관리자 인증이 필요합니다." }, { status: 401 });
   }
-  const { plates, title } = (await req.json()) as { plates?: string[]; title?: string };
+  const { plates, title, noStamp } = (await req.json()) as {
+    plates?: string[];
+    title?: string;
+    noStamp?: boolean; // 운수사별 다운로드 — 파일명이 기간_운수사라 생성시각 스탬프 생략
+  };
   if (!plates || plates.length === 0) {
     return NextResponse.json({ error: "선택된 차량이 없습니다." }, { status: 400 });
   }
@@ -43,7 +47,9 @@ export async function POST(req: NextRequest) {
     const wb = await buildWorkbookMulti(inputs);
     const buf = Buffer.from(await wb.xlsx.writeBuffer());
     const base = (title || "B820_설치사진첩").replace(/[\\/]/g, "-");
-    const fileName = `${base}_${inputs.length}대_${kstStamp()}.xlsx`;
+    const fileName = noStamp
+      ? `${base}_${inputs.length}대.xlsx`
+      : `${base}_${inputs.length}대_${kstStamp()}.xlsx`;
     const { link, folderLink } = await uploadExport(XLSX_FOLDER, fileName, buf, XLSX_MIME);
     return NextResponse.json({ ok: true, folder: XLSX_FOLDER, name: fileName, link, folderLink, count: inputs.length });
   } catch (e) {

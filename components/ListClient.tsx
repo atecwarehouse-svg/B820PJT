@@ -89,6 +89,7 @@ export default function ListClient({
     kind: "pdf" | "xlsx",
     plates: string[],
     titlePrefix: string,
+    noStamp?: boolean, // 운수사별 다운로드 — 파일명이 기간_운수사라 생성시각 스탬프 생략
   ): Promise<ExportResult[]> {
     const chunks: string[][] = [];
     for (let i = 0; i < plates.length; i += EXPORT_CHUNK) {
@@ -105,7 +106,7 @@ export default function ListClient({
       const res = await fetch(`/api/export/${kind}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ plates: chunks[i], title }),
+        body: JSON.stringify({ plates: chunks[i], title, noStamp }),
       });
       const j = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(j.error ?? "생성 실패");
@@ -159,7 +160,16 @@ export default function ListClient({
         alert("이 운수사에 사진이 있는 차량이 없습니다.");
         return;
       }
-      const results = await runExport(kind, plates, operator);
+      // 파일명: 설치일자 기간_운수사명 (예: 260701-260715_신흥교통)
+      const yymmdd = (d: string) => d.replace(/-/g, "").slice(2);
+      const period =
+        j.from && j.to
+          ? j.from === j.to
+            ? yymmdd(j.from)
+            : `${yymmdd(j.from)}-${yymmdd(j.to)}`
+          : "";
+      const title = period ? `${period}_${operator}` : operator;
+      const results = await runExport(kind, plates, title, true);
       finishExport(results, operator, plates.length);
     } catch (e) {
       alert(e instanceof Error ? e.message : "생성 실패");
