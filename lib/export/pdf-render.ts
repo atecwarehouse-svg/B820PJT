@@ -62,38 +62,47 @@ async function launchBrowser(): Promise<Browser> {
 }
 
 export async function renderPdf(html: string): Promise<Buffer> {
+  return (await renderPdfMany([html]))[0];
+}
+
+// 여러 HTML을 PDF 여러 개로 — 브라우저를 1회만 띄워 순차 렌더(문서당 재실행 비용 제거).
+export async function renderPdfMany(htmls: string[]): Promise<Buffer[]> {
   const browser = await launchBrowser();
   try {
     const page = await browser.newPage();
-    await page.setContent(html, { waitUntil: "load", timeout: 30000 });
-    // 한글 폰트를 명시적으로 로드한 뒤, 폰트/이미지 로딩 완료까지 대기
-    await page.evaluate(async () => {
-      const d = document as any;
-      try {
-        await d.fonts.load("400 16px Pretendard");
-        await d.fonts.load("700 16px Pretendard");
-      } catch {}
-      try {
-        await d.fonts.ready;
-      } catch {}
-      const imgs = Array.from(document.images);
-      await Promise.all(
-        imgs.map((img) =>
-          img.complete
-            ? Promise.resolve()
-            : new Promise((res) => {
-                img.onload = img.onerror = () => res(null);
-              }),
-        ),
-      );
-    });
-    const pdf = await page.pdf({
-      format: "A4",
-      printBackground: true,
-      preferCSSPageSize: true,
-      margin: { top: "10mm", bottom: "10mm", left: "10mm", right: "10mm" },
-    });
-    return Buffer.from(pdf);
+    const out: Buffer[] = [];
+    for (const html of htmls) {
+      await page.setContent(html, { waitUntil: "load", timeout: 30000 });
+      // 한글 폰트를 명시적으로 로드한 뒤, 폰트/이미지 로딩 완료까지 대기
+      await page.evaluate(async () => {
+        const d = document as any;
+        try {
+          await d.fonts.load("400 16px Pretendard");
+          await d.fonts.load("700 16px Pretendard");
+        } catch {}
+        try {
+          await d.fonts.ready;
+        } catch {}
+        const imgs = Array.from(document.images);
+        await Promise.all(
+          imgs.map((img) =>
+            img.complete
+              ? Promise.resolve()
+              : new Promise((res) => {
+                  img.onload = img.onerror = () => res(null);
+                }),
+          ),
+        );
+      });
+      const pdf = await page.pdf({
+        format: "A4",
+        printBackground: true,
+        preferCSSPageSize: true,
+        margin: { top: "10mm", bottom: "10mm", left: "10mm", right: "10mm" },
+      });
+      out.push(Buffer.from(pdf));
+    }
+    return out;
   } finally {
     await browser.close();
   }

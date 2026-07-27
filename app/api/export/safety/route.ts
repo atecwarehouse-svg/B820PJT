@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
 import { fetchAll } from "@/lib/supabase/paginate";
-import { renderPdf } from "@/lib/export/pdf-render";
+import { renderPdf, renderPdfMany } from "@/lib/export/pdf-render";
 import {
   buildPledgeHtml,
-  buildPledgeAllHtml,
   type PledgeSessionData,
   type PledgeSignatureData,
 } from "@/lib/export/pledge-html";
+import JSZip from "jszip";
 import { uploadExport, deletePhoto } from "@/lib/gdrive";
 import { isAdmin } from "@/lib/admin-auth";
 
@@ -95,7 +95,8 @@ export async function GET(req: Request) {
   });
 }
 
-// GET /api/export/safety?all=1 — 전체 세션을 설치일 순으로 한 PDF에 묶어 다운로드.
+// GET /api/export/safety?all=1 — 전체 세션을 세션별 개별 PDF로 만들어 ZIP으로 다운로드.
+// 파일명: {운수사}_안전관리서약서_{YYMMDD}.pdf (같은 운수사·같은 날짜는 (2) 접미).
 // 드라이브 보관은 세션별 PDF가 담당하므로 여기서는 업로드하지 않는다.
 async function exportAll() {
   const supabase = createServiceClient();
@@ -138,13 +139,27 @@ async function exportAll() {
 
   let buffer: Buffer;
   try {
-    const html = buildPledgeAllHtml(
-      sessions.map((s) => ({
-        session: s as unknown as PledgeSessionData,
-        signatures: bySession.get(s.id as string) ?? [],
-      })),
+    const pdfs = await renderPdfMany(
+      sessions.map((s) =>
+        buildPledgeHtml(
+          s as unknown as PledgeSessionData,
+          bySession.get(s.id as string) ?? [],
+        ),
+      ),
     );
-    buffer = await renderPdf(html);
+    const zip = new JSZip();
+    const used = new Set<string>();
+    sessions.forEach((s, i) => {
+      const yymmdd = String(s.install_date ?? "").replace(/-/g, "").slice(2);
+      const operator = ((s.operator as string | null) || "미지정").replace(/[\\/]/g, "-");
+      let name = `${operator}_안전관리서약서_${yymmdd}.pdf`;
+      for (let n = 2; used.has(name); n++) {
+        name = `${operator}_안전관리서약서_${yymmdd}(${n}).pdf`;
+      }
+      used.add(name);
+      zip.file(name, pdfs[i]);
+    });
+    buffer = await zip.generateAsync({ type: "nodebuffer" });
   } catch (e) {
     return NextResponse.json(
       { error: e instanceof Error ? e.message : "PDF 생성 실패" },
@@ -152,11 +167,11 @@ async function exportAll() {
     );
   }
 
-  const filename = `안전관리서약서_전체_${sessions.length}건.pdf`;
+  const filename = `안전관리서약서_전체_${sessions.length}건.zip`;
   return new NextResponse(buffer as unknown as BodyInit, {
     status: 200,
     headers: {
-      "Content-Type": PDF_MIME,
+      "Content-Type": "application/zip",
       "Content-Disposition": `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`,
     },
   });
