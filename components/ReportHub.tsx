@@ -360,10 +360,27 @@ function ShareStatPanel({
   const [startTime, setStartTime] = useState(() => new Date().toTimeString().slice(0, 5)); // 설치 시작시간 (기기 시각 기본)
   const [managers, setManagers] = useState<Record<string, string>>({}); // 운수사별 담당자명
   const operators = isStart ? [...new Set(planGroups.map((g) => g.operator))] : [];
+  // 운수사별 개별 발송 — 당일 보고 완료된 운수사는 기기(localStorage) 기준으로 잠금
+  const lsKey = `startReportSent:${today}`;
+  const [sentOps, setSentOps] = useState<string[]>(() => {
+    if (typeof window === "undefined") return [];
+    try {
+      const v = JSON.parse(localStorage.getItem(lsKey) ?? "[]");
+      return Array.isArray(v) ? v : [];
+    } catch {
+      return [];
+    }
+  });
+  const [selected, setSelected] = useState<Set<string>>(
+    () => new Set(operators.filter((op) => !sentOps.includes(op))),
+  );
+  const selGroups = planGroups.filter((g) => selected.has(g.operator));
+  const selPlanned = selGroups.reduce((s, g) => s + g.planned, 0);
+  const allSent = operators.length > 0 && operators.every((op) => sentOps.includes(op));
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
   async function share() {
-    if (sharing || sent) return;
+    if (sharing || (isStart ? selected.size === 0 : sent)) return;
     setSharing(true);
     setMsg(null);
     try {
@@ -373,14 +390,14 @@ function ShareStatPanel({
         body: JSON.stringify({
           kind,
           label,
-          todayPlanned,
+          todayPlanned: isStart ? selPlanned : todayPlanned,
           todayDone,
           complete,
           inProgress,
           remain,
           ...(isStart
             ? {
-                groups: planGroups.map((g) => ({
+                groups: selGroups.map((g) => ({
                   ...g,
                   manager: (managers[g.operator] ?? "").trim(),
                 })),
@@ -392,7 +409,16 @@ function ShareStatPanel({
       });
       const j = await res.json();
       if (!res.ok) throw new Error(j.error ?? "전송 실패");
-      setSent(true);
+      if (isStart) {
+        const next = [...new Set([...sentOps, ...selected])];
+        setSentOps(next);
+        try {
+          localStorage.setItem(lsKey, JSON.stringify(next));
+        } catch {}
+        setSelected(new Set());
+      } else {
+        setSent(true);
+      }
       setMsg({ ok: true, text: "팀즈로 전송되었습니다." });
     } catch (e) {
       setMsg({ ok: false, text: e instanceof Error ? e.message : "전송 실패" });
@@ -403,8 +429,8 @@ function ShareStatPanel({
 
   const rows: [string, number, string][] = isStart
     ? [
-        ["금일 설치계획", todayPlanned, "text-gray-700"],
-        ...planGroups.map(
+        ["금일 설치계획", selPlanned, "text-gray-700"],
+        ...selGroups.map(
           (g): [string, number, string] => [
             `· ${g.operator}${g.route ? ` ${g.route}노선` : ""}${
               (managers[g.operator] ?? "").trim() ? ` (담당 ${managers[g.operator].trim()})` : ""
@@ -461,23 +487,52 @@ function ShareStatPanel({
           />
         </div>
       )}
-      {isStart && operators.length >= 2 && (
+      {isStart && (
         <div className="mt-2 space-y-1.5">
           <p className="text-[11px] font-medium text-gray-500">
-            운수사별 담당자 <span className="font-normal text-gray-400">(선택 — 카드에 함께 표시)</span>
+            보고할 운수사 선택{" "}
+            <span className="font-normal text-gray-400">(보고 완료된 곳은 선택 불가 · 담당자명은 카드에 함께 표시)</span>
           </p>
-          {operators.map((op) => (
-            <div key={op} className="flex items-center gap-2">
-              <span className="w-24 shrink-0 truncate text-xs text-gray-600">{op}</span>
-              <input
-                value={managers[op] ?? ""}
-                onChange={(e) => setManagers((m) => ({ ...m, [op]: e.target.value }))}
-                maxLength={20}
-                placeholder="담당자명"
-                className="w-full rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-gray-800 placeholder:text-gray-300 focus:border-orange-400 focus:outline-none"
-              />
-            </div>
-          ))}
+          {operators.map((op) => {
+            const done = sentOps.includes(op);
+            const on = selected.has(op);
+            return (
+              <div
+                key={op}
+                className={`flex items-center gap-2 rounded-lg border px-2.5 py-1.5 ${
+                  done ? "border-gray-100 bg-gray-50 opacity-60" : "border-gray-200"
+                }`}
+              >
+                <input
+                  type="checkbox"
+                  checked={on}
+                  disabled={done}
+                  onChange={(e) =>
+                    setSelected((s) => {
+                      const n = new Set(s);
+                      if (e.target.checked) n.add(op);
+                      else n.delete(op);
+                      return n;
+                    })
+                  }
+                  className="h-4 w-4 shrink-0 accent-orange-600"
+                />
+                <span className="w-20 shrink-0 truncate text-xs font-medium text-gray-700">{op}</span>
+                {done ? (
+                  <span className="ml-auto shrink-0 text-[11px] font-medium text-green-600">보고 완료 ✓</span>
+                ) : (
+                  <input
+                    value={managers[op] ?? ""}
+                    onChange={(e) => setManagers((m) => ({ ...m, [op]: e.target.value }))}
+                    maxLength={20}
+                    disabled={!on}
+                    placeholder="담당자명 (선택)"
+                    className="w-full min-w-0 rounded-md border border-gray-200 px-2 py-1 text-xs text-gray-800 placeholder:text-gray-300 focus:border-orange-400 focus:outline-none disabled:bg-gray-50"
+                  />
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
       {isStart && (
@@ -504,10 +559,18 @@ function ShareStatPanel({
         </button>
         <button
           onClick={share}
-          disabled={sharing || sent}
+          disabled={sharing || (isStart ? selected.size === 0 : sent)}
           className={`flex-1 rounded-lg px-3 py-2.5 text-sm font-semibold text-white disabled:opacity-50 ${sendBtn}`}
         >
-          {sharing ? "전송 중…" : sent ? "전송 완료 ✓" : isStart ? "팀즈로 보고" : "팀즈로 공유"}
+          {sharing
+            ? "전송 중…"
+            : isStart
+              ? allSent
+                ? "보고 완료 ✓"
+                : "선택 운수사 팀즈로 보고"
+              : sent
+                ? "전송 완료 ✓"
+                : "팀즈로 공유"}
         </button>
       </div>
       {msg && (
