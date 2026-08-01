@@ -122,6 +122,9 @@ export default function DispatchButton() {
   const [routeFilter, setRouteFilter] = useState(""); // "" = 전체
 
   const [entries, setEntries] = useState<Entry[]>([]);
+  // 설치완료됐지만 검수완료가 아직 저장 안 된 차량 — 메인 리스트 맨 위에 고정.
+  // 검수완료를 체크하고 저장해야 해제되어 원래 시간순 위치로 돌아간다(체크만으로는 유지).
+  const [pinned, setPinned] = useState<Set<string>>(new Set());
   // 이 기기에서 수정한 차량번호 → 수정한 항목들. 저장 시 이 차량의 이 항목들만 보낸다.
   // 차량 전체나 항목 전체를 보내면 다른 기기가 그 사이 저장한 값(예: 검수완료)을
   // 로드 시점의 옛 값으로 덮어쓴다.
@@ -266,7 +269,11 @@ export default function DispatchButton() {
       // (이전 응답이 화면을 덮어쓰면 다른 운수사 이름으로 저장되는 사고가 난다)
       if (seq !== loadSeqRef.current) return;
       if (!res.ok) throw new Error(j?.error ?? "차량 목록을 불러오지 못했습니다.");
-      setEntries(j.vehicles ?? []);
+      const vehicles: Entry[] = j.vehicles ?? [];
+      setEntries(vehicles);
+      setPinned(
+        new Set(vehicles.filter((v) => v.completed && !v.checklist).map((v) => v.plate)),
+      );
       setDbReady(j.dbReady !== false);
     } catch (e) {
       if (seq !== loadSeqRef.current) return;
@@ -424,6 +431,12 @@ export default function DispatchButton() {
         }
         if (cur.size === 0) dirtyRef.current.delete(plate);
       }
+      // 검수완료가 저장된 차량은 상단 고정 해제 → 원래 시간순 위치로
+      setPinned((prev) => {
+        const next = new Set(prev);
+        for (const c of changed) if (c.checklist) next.delete(c.plate);
+        return next;
+      });
       setSaveMsg({ ok: true, text: "저장됨 ✓ 모든 기기에서 같은 배차표가 보입니다." });
     } catch (e) {
       setSaveMsg({
@@ -449,6 +462,11 @@ export default function DispatchButton() {
   const tachoCount = active.filter((e) => e.tachoCheck).length;
   const tachoDoneCount = active.filter((e) => e.tachoCheck && e.tachoDone).length;
   const exclCount = visible.filter((e) => e.excluded).length;
+  // 메인 리스트 전용 — 고정 차량을 맨 위로(캡쳐용 표는 항상 시간순 유지)
+  const mainList = [
+    ...visible.filter((e) => pinned.has(e.plate)),
+    ...visible.filter((e) => !pinned.has(e.plate)),
+  ];
 
   return (
     <>
@@ -702,7 +720,7 @@ export default function DispatchButton() {
                         순서로 정렬됩니다
                       </p>
                       <ul className="divide-y divide-gray-100 rounded-lg border border-gray-200">
-                        {visible.map((e) => {
+                        {mainList.map((e) => {
                           const isOff = e.outTime === OFF;
                           return (
                             <li

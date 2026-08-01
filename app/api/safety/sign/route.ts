@@ -36,11 +36,19 @@ export async function POST(req: NextRequest) {
   const now = new Date().toISOString();
 
   if (phase === "before") {
+    // 설치 전 서명 1회로 완료 — 설치 후 서명도 같은 서명으로 자동 입력
+    // (작업자는 전 서명만 하면 되고, 설치 후 링크·미서명 집계는 자연히 0)
+    const bothSigs = {
+      sig_before: signature,
+      before_at: now,
+      sig_after: signature,
+      after_at: now,
+    };
     // 기존 행 서명 수정(재서명) — 이름 선택으로 대상 행이 특정됨
     if (typeof body.signatureId === "number") {
       const { data, error } = await supabase
         .from("pledge_signatures")
-        .update({ sig_before: signature, before_at: now })
+        .update(bothSigs)
         .eq("id", body.signatureId)
         .eq("session_id", sessionId)
         .select("id")
@@ -71,8 +79,7 @@ export async function POST(req: NextRequest) {
       .insert({
         session_id: sessionId,
         worker_name: name,
-        sig_before: signature,
-        before_at: now,
+        ...bothSigs,
       })
       .select("id")
       .single();
