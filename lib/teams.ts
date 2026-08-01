@@ -118,8 +118,9 @@ export async function sendStartReportCard(d: {
   todayPlanned: number;
   complete: number;
   remain: number;
-  groups: { operator: string; route: string; planned: number }[];
+  groups: { operator: string; route: string; planned: number; manager?: string }[];
   note?: string; // 특이사항 — 있을 때만 카드 하단에 표시
+  startTime?: string; // 시작시간 (HH:MM) — 있을 때만 표시
 }): Promise<void> {
   const url = process.env.TEAMS_WEBHOOK_URL;
   if (!url) throw new Error("팀즈 웹후크가 설정되지 않았습니다. (TEAMS_WEBHOOK_URL)");
@@ -148,6 +149,16 @@ export async function sendStartReportCard(d: {
               spacing: "None",
               wrap: true,
             },
+            ...(d.startTime
+              ? [
+                  {
+                    type: "TextBlock",
+                    weight: "Bolder",
+                    text: `⏰ 시작시간 ${d.startTime}`,
+                    wrap: true,
+                  },
+                ]
+              : []),
             {
               type: "TextBlock",
               weight: "Bolder",
@@ -160,7 +171,7 @@ export async function sendStartReportCard(d: {
                     type: "FactSet",
                     spacing: "Small",
                     facts: d.groups.map((g) => ({
-                      title: `· ${g.operator}${g.route ? ` ${g.route}노선` : ""}`,
+                      title: `· ${g.operator}${g.route ? ` ${g.route}노선` : ""}${g.manager ? ` (담당 ${g.manager})` : ""}`,
                       value: `${g.planned.toLocaleString()}대`,
                     })),
                   },

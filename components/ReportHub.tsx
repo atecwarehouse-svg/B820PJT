@@ -357,6 +357,9 @@ function ShareStatPanel({
   const [sharing, setSharing] = useState(false);
   const [sent, setSent] = useState(false); // 전송 성공 — 버튼을 잠가 중복 카드 방지
   const [note, setNote] = useState(""); // 설치시작 보고 특이사항 — 카드에 함께 표시
+  const [startTime, setStartTime] = useState(() => new Date().toTimeString().slice(0, 5)); // 설치 시작시간 (기기 시각 기본)
+  const [managers, setManagers] = useState<Record<string, string>>({}); // 운수사별 담당자명
+  const operators = isStart ? [...new Set(planGroups.map((g) => g.operator))] : [];
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
   async function share() {
@@ -375,7 +378,16 @@ function ShareStatPanel({
           complete,
           inProgress,
           remain,
-          ...(isStart ? { groups: planGroups, note: note.trim() } : {}),
+          ...(isStart
+            ? {
+                groups: planGroups.map((g) => ({
+                  ...g,
+                  manager: (managers[g.operator] ?? "").trim(),
+                })),
+                note: note.trim(),
+                startTime,
+              }
+            : {}),
         }),
       });
       const j = await res.json();
@@ -394,7 +406,9 @@ function ShareStatPanel({
         ["금일 설치계획", todayPlanned, "text-gray-700"],
         ...planGroups.map(
           (g): [string, number, string] => [
-            `· ${g.operator}${g.route ? ` ${g.route}노선` : ""}`,
+            `· ${g.operator}${g.route ? ` ${g.route}노선` : ""}${
+              (managers[g.operator] ?? "").trim() ? ` (담당 ${managers[g.operator].trim()})` : ""
+            }`,
             g.planned,
             "text-gray-500",
           ],
@@ -425,7 +439,7 @@ function ShareStatPanel({
           {isStart ? "B820 단말기 설치 시작 보고" : "🚌 B820 단말기 설치 진행 현황"}
         </p>
         <p className={`text-xs ${headSub}`}>
-          {isStart ? `${label} 설치 시작` : `${label} 기준`}
+          {isStart ? `${label} ${startTime} 설치 시작` : `${label} 기준`}
         </p>
       </div>
       <ul className="mt-2 divide-y divide-gray-100 rounded-xl border border-gray-100">
@@ -436,6 +450,36 @@ function ShareStatPanel({
           </li>
         ))}
       </ul>
+      {isStart && (
+        <div className="mt-2 flex items-center gap-2">
+          <label className="shrink-0 text-[11px] font-medium text-gray-500">시작시간</label>
+          <input
+            type="time"
+            value={startTime}
+            onChange={(e) => setStartTime(e.target.value)}
+            className="rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-gray-800 focus:border-orange-400 focus:outline-none"
+          />
+        </div>
+      )}
+      {isStart && operators.length >= 2 && (
+        <div className="mt-2 space-y-1.5">
+          <p className="text-[11px] font-medium text-gray-500">
+            운수사별 담당자 <span className="font-normal text-gray-400">(선택 — 카드에 함께 표시)</span>
+          </p>
+          {operators.map((op) => (
+            <div key={op} className="flex items-center gap-2">
+              <span className="w-24 shrink-0 truncate text-xs text-gray-600">{op}</span>
+              <input
+                value={managers[op] ?? ""}
+                onChange={(e) => setManagers((m) => ({ ...m, [op]: e.target.value }))}
+                maxLength={20}
+                placeholder="담당자명"
+                className="w-full rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-gray-800 placeholder:text-gray-300 focus:border-orange-400 focus:outline-none"
+              />
+            </div>
+          ))}
+        </div>
+      )}
       {isStart && (
         <div className="mt-2">
           <label className="mb-1 block text-[11px] font-medium text-gray-500">

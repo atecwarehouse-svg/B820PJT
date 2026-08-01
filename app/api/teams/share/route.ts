@@ -13,8 +13,9 @@ interface ShareBody {
   inProgress?: number;
   remain?: number;
   // 설치 시작 보고용 — 금일 계획의 운수사·노선별 대수
-  groups?: { operator?: string; route?: string; planned?: number }[];
+  groups?: { operator?: string; route?: string; planned?: number; manager?: string }[];
   note?: string; // 설치 시작 보고용 특이사항
+  startTime?: string; // 설치 시작 보고용 시작시간 (HH:MM)
 }
 
 // POST /api/teams/share  → 설치 진행 현황(또는 설치 시작 보고) 카드를 Teams 채널에 전송
@@ -27,6 +28,7 @@ export async function POST(req: NextRequest) {
         operator: (g?.operator ?? "").toString().slice(0, 40),
         route: (g?.route ?? "").toString().slice(0, 40),
         planned: n(g?.planned),
+        manager: (g?.manager ?? "").toString().slice(0, 20).trim(),
       }));
       await sendStartReportCard({
         label: (b.label ?? "").toString().slice(0, 40),
@@ -35,6 +37,7 @@ export async function POST(req: NextRequest) {
         remain: n(b.remain),
         groups,
         note: (b.note ?? "").toString().slice(0, 500).trim(),
+        startTime: (b.startTime ?? "").toString().slice(0, 5),
       });
     } else {
       await sendProgressCard({
