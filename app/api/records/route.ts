@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
-import type { CustomSlot } from "@/lib/slots";
+import { CHECK_SLOTS, REQUIRED_CHECK_KEYS, type CustomSlot } from "@/lib/slots";
 import { notifyInstallProgress, originFromRequest } from "@/lib/install-status";
 import { runAfterResponse } from "@/lib/background";
 import { adminPassword, isAdmin } from "@/lib/admin-auth";
@@ -58,6 +58,30 @@ export async function POST(req: NextRequest) {
   }
 
   const supabase = createServiceClient();
+
+  // '저장'(중간 저장 포함) 시 필수 확인 사진(전광판·차량계기판·CCTV) 검증 —
+  // '없음' 체크로 대체 불가. (check_photos 테이블 미생성 등 조회 오류는 통과)
+  if (body.saved) {
+    const { data: reqPhotos, error: rpErr } = await supabase
+      .from("check_photos")
+      .select("slot_key")
+      .eq("plate", plate)
+      .in("slot_key", REQUIRED_CHECK_KEYS);
+    if (!rpErr) {
+      const have = new Set((reqPhotos ?? []).map((p) => p.slot_key));
+      const missing = CHECK_SLOTS.filter(
+        (s) => REQUIRED_CHECK_KEYS.includes(s.slotKey) && !have.has(s.slotKey),
+      );
+      if (missing.length > 0) {
+        return NextResponse.json(
+          {
+            error: `${missing.map((s) => s.label).join("·")} 사진을 촬영해야 저장할 수 있습니다.`,
+          },
+          { status: 400 },
+        );
+      }
+    }
+  }
 
   // 차량 마스터 확인(운수사/노선 스냅샷용)과 기존 레코드 조회를 병렬로
   const [vehicleRes, existingRes] = await Promise.all([

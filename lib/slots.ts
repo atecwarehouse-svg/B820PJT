@@ -36,6 +36,10 @@ export const CHECK_SLOTS: SlotDef[] = [
   { slotKey: "check_seat", label: "빈좌석표시기", section: "check" },
 ];
 
+// 차량 이상유무 중 사진 필수 항목 — '없음' 체크 불가, 실제 사진이 있어야
+// 다음 단계 진행·저장 가능 (클라이언트·서버 공용 기준)
+export const REQUIRED_CHECK_KEYS = ["check_led", "check_dashboard", "check_cctv"];
+
 // 설치 후 (7개, 고정)
 export const AFTER_SLOTS: SlotDef[] = [
   { slotKey: "after_gps", label: "GPS안테나", section: "after" },

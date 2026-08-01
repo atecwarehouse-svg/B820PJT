@@ -10,6 +10,7 @@ import {
   buildCheckSlots,
   makeCustomSlotKey,
   makeCheckCustomSlotKey,
+  REQUIRED_CHECK_KEYS,
   type CustomSlot,
 } from "@/lib/slots";
 import { publicPhotoUrl } from "@/lib/photo-url";
@@ -78,7 +79,9 @@ export default function RecordEditor({ plate, initial, teamOptions = [] }: Props
       !!(rec?.team ?? "").trim() &&
       !!(rec?.check_note ?? "").trim() &&
       buildCheckSlots(customs).every(
-        (s) => photoKeys.has(s.slotKey) || checkNa.has(s.slotKey),
+        (s) =>
+          photoKeys.has(s.slotKey) ||
+          (checkNa.has(s.slotKey) && !REQUIRED_CHECK_KEYS.includes(s.slotKey)),
       );
     if (!checkDone) return 0;
     const beforeDone = buildBeforeSlots(customs).every(
@@ -297,6 +300,14 @@ export default function RecordEditor({ plate, initial, teamOptions = [] }: Props
     setEditInfo((v) => !v);
   }
 
+  // 전광판·차량계기판·CCTV는 사진 필수 — 비어 있으면 라벨 목록 반환('없음' 대체 불가)
+  const missingRequiredCheck = useCallback(() => {
+    const missing = checkSlots.filter(
+      (s) => REQUIRED_CHECK_KEYS.includes(s.slotKey) && !urls[s.slotKey],
+    );
+    return missing.length ? missing.map((s) => s.label).join("·") : null;
+  }, [checkSlots, urls]);
+
   const [submitting, setSubmitting] = useState(false);
   const [savedPopup, setSavedPopup] = useState(false); // 저장 완료 팝업
   const [midSavedPopup, setMidSavedPopup] = useState(false); // 중간 저장 완료 팝업
@@ -312,6 +323,11 @@ export default function RecordEditor({ plate, initial, teamOptions = [] }: Props
     }
     if (!checkNote.trim()) {
       showToast("비고(차량 이상유무)를 입력해주세요. 없으면 '없음'", "error");
+      return;
+    }
+    const missing = missingRequiredCheck();
+    if (missing) {
+      showToast(`${missing} 사진은 필수입니다. 촬영해주세요`, "error");
       return;
     }
     setStep(1);
@@ -332,6 +348,11 @@ export default function RecordEditor({ plate, initial, teamOptions = [] }: Props
       showToast("비고(차량 이상유무)를 입력해주세요. 없으면 '없음'", "error");
       return;
     }
+    const missing = missingRequiredCheck();
+    if (missing) {
+      showToast(`${missing} 사진은 필수입니다. 촬영해주세요`, "error");
+      return;
+    }
     setSubmitting(true);
     const ok = await saveRecord({ saved: true, mid: true });
     setSubmitting(false);
@@ -343,13 +364,16 @@ export default function RecordEditor({ plate, initial, teamOptions = [] }: Props
   }
 
   async function handleSave() {
-    if (!team.trim() || !checkNote.trim()) {
+    const missingReq = missingRequiredCheck();
+    if (!team.trim() || !checkNote.trim() || missingReq) {
       // 앞 단계 입력이 비어 있으면(다른 탭 수정 등) 해당 단계로 되돌린다
       setStep(0);
       showToast(
         !team.trim()
           ? "팀명을 입력해야 저장할 수 있습니다"
-          : "비고(차량 이상유무)를 입력해주세요. 없으면 '없음'",
+          : !checkNote.trim()
+            ? "비고(차량 이상유무)를 입력해주세요. 없으면 '없음'"
+            : `${missingReq} 사진은 필수입니다. 촬영해주세요`,
         "error",
       );
       return;
@@ -656,26 +680,31 @@ export default function RecordEditor({ plate, initial, teamOptions = [] }: Props
           {/* 차량 이상유무 확인 (작업 시작 전 8종 + 추가 항목 — 사진은 드라이브 보관용, PDF/엑셀 미포함) */}
           <SectionHeader title="차량 이상유무 확인" />
           <p className="mb-2 -mt-1 text-[11px] text-gray-500">
-            작업 시작 전 촬영 · 장비가 없는 항목은 &lsquo;없음&rsquo;에 체크해주세요.
+            작업 시작 전 촬영 · <span className="font-semibold text-red-500">전광판·차량계기판·CCTV(*)는 사진 필수</span>
+            {" "}· 그 외 장비가 없는 항목은 &lsquo;없음&rsquo;에 체크해주세요.
           </p>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-            {checkSlots.map((slot, i) => (
-              <PhotoSlot
-                key={slot.slotKey}
-                plate={plate}
-                slot={slot}
-                sortOrder={i}
-                initialUrl={urls[slot.slotKey] ?? null}
-                onUploaded={handleUploaded}
-                onDeleted={handleDeleted}
-                onError={handleSlotError}
-                onRemoveSlot={removeCustomSlot}
-                allowNoTerminal
-                naLabel="없음"
-                noTerminal={checkNaSlots.includes(slot.slotKey)}
-                onToggleNoTerminal={toggleCheckNa}
-              />
-            ))}
+            {checkSlots.map((slot, i) => {
+              const req = REQUIRED_CHECK_KEYS.includes(slot.slotKey);
+              return (
+                <PhotoSlot
+                  key={slot.slotKey}
+                  plate={plate}
+                  slot={slot}
+                  sortOrder={i}
+                  initialUrl={urls[slot.slotKey] ?? null}
+                  onUploaded={handleUploaded}
+                  onDeleted={handleDeleted}
+                  onError={handleSlotError}
+                  onRemoveSlot={removeCustomSlot}
+                  allowNoTerminal={!req}
+                  required={req}
+                  naLabel="없음"
+                  noTerminal={!req && checkNaSlots.includes(slot.slotKey)}
+                  onToggleNoTerminal={toggleCheckNa}
+                />
+              );
+            })}
             <button
               onClick={() => addCustomSlot("check")}
               className="flex aspect-[3/2] min-h-[120px] flex-col items-center justify-center rounded-lg border-2 border-dashed border-blue-300 text-blue-500 active:bg-blue-50"

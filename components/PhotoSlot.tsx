@@ -18,6 +18,7 @@ interface Props {
   noTerminal?: boolean; // 단말기 없음 상태
   onToggleNoTerminal?: (slotKey: string, value: boolean) => void;
   naLabel?: string; // 없음 체크 라벨 (기본 "단말기 없음", 이상유무 칸은 "없음")
+  required?: boolean; // 사진 필수 칸 — 라벨에 * 표시
 }
 
 export default function PhotoSlot({
@@ -33,6 +34,7 @@ export default function PhotoSlot({
   noTerminal,
   onToggleNoTerminal,
   naLabel = "단말기 없음",
+  required,
 }: Props) {
   const [url, setUrl] = useState<string | null>(initialUrl ?? null);
   const [busy, setBusy] = useState(false);
@@ -149,6 +151,7 @@ export default function PhotoSlot({
       <div className="mb-1.5 flex items-center justify-between gap-1">
         <span className="truncate text-sm font-medium text-gray-700">
           {slot.label}
+          {required && <span className="ml-0.5 text-red-500">*</span>}
         </span>
         {slot.isCustom && onRemoveSlot && (
           <button
