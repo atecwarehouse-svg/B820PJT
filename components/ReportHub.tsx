@@ -360,20 +360,29 @@ function ShareStatPanel({
   const [startTime, setStartTime] = useState(() => new Date().toTimeString().slice(0, 5)); // 설치 시작시간 (기기 시각 기본)
   const [managers, setManagers] = useState<Record<string, string>>({}); // 운수사별 담당자명
   const operators = isStart ? [...new Set(planGroups.map((g) => g.operator))] : [];
-  // 운수사별 개별 발송 — 당일 보고 완료된 운수사는 기기(localStorage) 기준으로 잠금
-  const lsKey = `startReportSent:${today}`;
-  const [sentOps, setSentOps] = useState<string[]>(() => {
-    if (typeof window === "undefined") return [];
+  // 운수사별 개별 발송 — 당일 보고 완료 운수사는 DB(app_settings) 기준으로 잠금 (전 기기 공유)
+  const [sentOps, setSentOps] = useState<string[]>([]);
+  const [loadingSent, setLoadingSent] = useState(isStart);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+
+  async function loadSent(init: boolean) {
     try {
-      const v = JSON.parse(localStorage.getItem(lsKey) ?? "[]");
-      return Array.isArray(v) ? v : [];
+      const j = await (await fetch(`/api/teams/share?date=${today}`)).json();
+      const ops: string[] = Array.isArray(j.sentOps) ? j.sentOps : [];
+      setSentOps(ops);
+      if (init) {
+        setSelected(new Set(operators.filter((op) => !ops.includes(op))));
+      } else {
+        setSelected((s) => new Set([...s].filter((op) => !ops.includes(op))));
+      }
     } catch {
-      return [];
+      if (init) setSelected(new Set(operators)); // 조회 실패 시 잠금 없이 진행 (서버가 중복을 최종 차단)
     }
-  });
-  const [selected, setSelected] = useState<Set<string>>(
-    () => new Set(operators.filter((op) => !sentOps.includes(op))),
-  );
+  }
+
+  useEffect(() => {
+    if (isStart) loadSent(true).finally(() => setLoadingSent(false));
+  }, []);
   const selGroups = planGroups.filter((g) => selected.has(g.operator));
   const selPlanned = selGroups.reduce((s, g) => s + g.planned, 0);
   const allSent = operators.length > 0 && operators.every((op) => sentOps.includes(op));
@@ -403,6 +412,7 @@ function ShareStatPanel({
                 })),
                 note: note.trim(),
                 startTime,
+                date: today,
               }
             : {}),
         }),
@@ -410,11 +420,7 @@ function ShareStatPanel({
       const j = await res.json();
       if (!res.ok) throw new Error(j.error ?? "전송 실패");
       if (isStart) {
-        const next = [...new Set([...sentOps, ...selected])];
-        setSentOps(next);
-        try {
-          localStorage.setItem(lsKey, JSON.stringify(next));
-        } catch {}
+        setSentOps((prev) => [...new Set([...prev, ...selected])]);
         setSelected(new Set());
       } else {
         setSent(true);
@@ -422,6 +428,7 @@ function ShareStatPanel({
       setMsg({ ok: true, text: "팀즈로 전송되었습니다." });
     } catch (e) {
       setMsg({ ok: false, text: e instanceof Error ? e.message : "전송 실패" });
+      if (isStart) loadSent(false); // 다른 사람이 먼저 보고했을 수 있음 — 잠금 목록 새로고침
     } finally {
       setSharing(false);
     }
@@ -559,15 +566,17 @@ function ShareStatPanel({
         </button>
         <button
           onClick={share}
-          disabled={sharing || (isStart ? selected.size === 0 : sent)}
+          disabled={sharing || (isStart ? loadingSent || selected.size === 0 : sent)}
           className={`flex-1 rounded-lg px-3 py-2.5 text-sm font-semibold text-white disabled:opacity-50 ${sendBtn}`}
         >
           {sharing
             ? "전송 중…"
             : isStart
-              ? allSent
-                ? "보고 완료 ✓"
-                : "선택 운수사 팀즈로 보고"
+              ? loadingSent
+                ? "보고 현황 확인 중…"
+                : allSent
+                  ? "보고 완료 ✓"
+                  : "선택 운수사 팀즈로 보고"
               : sent
                 ? "전송 완료 ✓"
                 : "팀즈로 공유"}
