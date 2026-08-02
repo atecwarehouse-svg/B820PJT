@@ -47,9 +47,9 @@ export default function TeamsClient({ vehicles }: { vehicles: Vehicle[] }) {
   const [openTeam, setOpenTeam] = useState<string | null>(null);
   const [capOpen, setCapOpen] = useState(false); // 캡쳐 종류 선택 메뉴
   // 캡쳐 결과 팝업 — 페이지별 미리보기·저장 (여러 장 자동 공유가 폰에서 어색하다는 피드백)
-  const [capFiles, setCapFiles] = useState<{ name: string; url: string; file: File }[] | null>(
-    null,
-  );
+  const [capFiles, setCapFiles] = useState<
+    { name: string; url: string; file: File; label: string }[] | null
+  >(null);
 
   const operators = useMemo(
     () =>
@@ -119,8 +119,6 @@ export default function TeamsClient({ vehicles }: { vehicles: Vehicle[] }) {
     | { kind: "op"; text: string; cnt: number | null; team: string }
     | { kind: "veh"; v: Vehicle; team: string; op: string };
   const LINE_H = { team: 34, op: 22, veh: 18 } as const;
-  // 페이지당 내용 높이 ≈ 차량 70대 분량 — 한 장이 폰 화면에서 너무 길지 않게 잘게 나눈다
-  const MAX_CONTENT_H = 1400;
 
   function buildCapLines(withVehicles: boolean): CapLine[] {
     const lines: CapLine[] = [];
@@ -135,27 +133,17 @@ export default function TeamsClient({ vehicles }: { vehicles: Vehicle[] }) {
     return lines;
   }
 
-  // 높이 기준으로 페이지 분할 — 중간에서 끊기면 다음 페이지에 "(계속)" 헤더를 다시 그린다
-  function paginateCapLines(lines: CapLine[]): CapLine[][] {
+  // 페이지 분할 — 차량 목록 포함이면 1팀 = 1페이지, 요약만이면 전체 한 장
+  function paginateCapLines(lines: CapLine[], perTeam: boolean): CapLine[][] {
+    if (!perTeam) return [lines];
     const pages: CapLine[][] = [];
     let cur: CapLine[] = [];
-    let h = 0;
     for (const ln of lines) {
-      if (h + LINE_H[ln.kind] > MAX_CONTENT_H && cur.length) {
+      if (ln.kind === "team" && cur.length) {
         pages.push(cur);
         cur = [];
-        h = 0;
-        if (ln.kind === "veh") {
-          cur.push({ kind: "team", text: `${ln.team} (계속)`, cnt: null });
-          cur.push({ kind: "op", text: `${ln.op} (계속)`, cnt: null, team: ln.team });
-          h += LINE_H.team + LINE_H.op;
-        } else if (ln.kind === "op") {
-          cur.push({ kind: "team", text: `${ln.team} (계속)`, cnt: null });
-          h += LINE_H.team;
-        }
       }
       cur.push(ln);
-      h += LINE_H[ln.kind];
     }
     if (cur.length) pages.push(cur);
     return pages;
@@ -233,26 +221,24 @@ export default function TeamsClient({ vehicles }: { vehicles: Vehicle[] }) {
     return new Promise<Blob | null>((r) => canvas.toBlob(r, "image/png"));
   }
 
-  // '차량 목록 포함' 선택 시 몇 장으로 나뉘는지 — 메뉴 라벨 표시용
-  const detailPageCount = useMemo(
-    () => (teams.length ? paginateCapLines(buildCapLines(true)).length : 0),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [teams],
-  );
+  // '차량 목록 포함'은 1팀 = 1장 — 메뉴 라벨 표시용
+  const detailPageCount = teams.length;
 
   // 검색 결과를 캔버스에 그려 PNG 생성 → 페이지별 미리보기·저장 팝업을 연다.
   // withVehicles=false면 팀별 요약만, true면 운수사별 묶음·차량번호 목록까지(길면 여러 장).
   async function capture(withVehicles: boolean) {
     setCapOpen(false);
-    const pages = paginateCapLines(buildCapLines(withVehicles));
-    const files: { name: string; url: string; file: File }[] = [];
+    const pages = paginateCapLines(buildCapLines(withVehicles), withVehicles);
+    const files: { name: string; url: string; file: File; label: string }[] = [];
     for (let i = 0; i < pages.length; i++) {
       const blob = await drawCapPage(pages[i], i + 1, pages.length);
       if (!blob) continue;
+      const first = pages[i][0];
+      const label = withVehicles && first.kind === "team" ? first.text : "팀별 요약";
       const suffix = pages.length > 1 ? `_${i + 1}` : "";
       const name = `설치팀별현황_${workToday()}${suffix}.png`;
       const file = new File([blob], name, { type: "image/png" });
-      files.push({ name, url: URL.createObjectURL(file), file });
+      files.push({ name, url: URL.createObjectURL(file), file, label });
     }
     if (files.length) setCapFiles(files);
   }
@@ -526,8 +512,8 @@ export default function TeamsClient({ vehicles }: { vehicles: Vehicle[] }) {
               {capFiles.map((f, i) => (
                 <div key={f.name} className="rounded-xl border border-gray-200 p-2">
                   <div className="flex items-center justify-between px-1 pb-2">
-                    <span className="text-xs font-semibold text-gray-700">
-                      페이지 {i + 1} / {capFiles.length}
+                    <span className="min-w-0 truncate text-xs font-semibold text-gray-700">
+                      {i + 1}/{capFiles.length} · {f.label}
                     </span>
                     <button
                       type="button"
