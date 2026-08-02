@@ -46,6 +46,10 @@ export default function TeamsClient({ vehicles }: { vehicles: Vehicle[] }) {
   const [group, setGroup] = useState("");
   const [openTeam, setOpenTeam] = useState<string | null>(null);
   const [capOpen, setCapOpen] = useState(false); // 캡쳐 종류 선택 메뉴
+  // 캡쳐 결과 팝업 — 페이지별 미리보기·저장 (여러 장 자동 공유가 폰에서 어색하다는 피드백)
+  const [capFiles, setCapFiles] = useState<{ name: string; url: string; file: File }[] | null>(
+    null,
+  );
 
   const operators = useMemo(
     () =>
@@ -229,44 +233,45 @@ export default function TeamsClient({ vehicles }: { vehicles: Vehicle[] }) {
     return new Promise<Blob | null>((r) => canvas.toBlob(r, "image/png"));
   }
 
-  // 검색 결과를 캔버스에 그려 PNG로 저장 — 공유시트(모바일) 우선, 미지원이면 다운로드.
-  // 화면 스크린샷 대신 직접 그려서 필터 조건·합계가 항상 포함된 깔끔한 이미지가 나온다.
+  // 검색 결과를 캔버스에 그려 PNG 생성 → 페이지별 미리보기·저장 팝업을 연다.
   // withVehicles=false면 팀별 요약만, true면 운수사별 묶음·차량번호 목록까지(길면 여러 장).
   async function capture(withVehicles: boolean) {
     setCapOpen(false);
     const pages = paginateCapLines(buildCapLines(withVehicles));
-    const files: File[] = [];
+    const files: { name: string; url: string; file: File }[] = [];
     for (let i = 0; i < pages.length; i++) {
       const blob = await drawCapPage(pages[i], i + 1, pages.length);
       if (!blob) continue;
       const suffix = pages.length > 1 ? `_${i + 1}` : "";
-      files.push(
-        new File([blob], `설치팀별현황_${workToday()}${suffix}.png`, { type: "image/png" }),
-      );
+      const name = `설치팀별현황_${workToday()}${suffix}.png`;
+      const file = new File([blob], name, { type: "image/png" });
+      files.push({ name, url: URL.createObjectURL(file), file });
     }
-    if (!files.length) return;
-    // PhotoSlot의 '휴대폰에 저장'과 동일 정책 — 공유시트 우선, 폴백은 다운로드
+    if (files.length) setCapFiles(files);
+  }
+
+  function closeCapModal() {
+    capFiles?.forEach((f) => URL.revokeObjectURL(f.url));
+    setCapFiles(null);
+  }
+
+  // 페이지 1장 저장 — PhotoSlot의 '휴대폰에 저장'과 동일 정책: 공유시트 우선, 폴백은 다운로드
+  async function saveCapFile(f: { name: string; url: string; file: File }) {
     if (
       typeof navigator.share === "function" &&
       typeof navigator.canShare === "function" &&
-      navigator.canShare({ files })
+      navigator.canShare({ files: [f.file] })
     ) {
       try {
-        await navigator.share({ files });
+        await navigator.share({ files: [f.file] });
       } catch {
         // 사용자가 공유시트를 닫은 경우 — 아무것도 안 함
       }
     } else {
-      for (const f of files) {
-        const url = URL.createObjectURL(f);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = f.name;
-        a.click();
-        URL.revokeObjectURL(url);
-        // 연속 다운로드가 브라우저에서 씹히지 않게 잠깐 간격
-        await new Promise((r) => setTimeout(r, 300));
-      }
+      const a = document.createElement("a");
+      a.href = f.url; // 팝업 미리보기가 쓰는 URL이라 revoke는 팝업 닫을 때만
+      a.download = f.name;
+      a.click();
     }
   }
 
@@ -483,6 +488,61 @@ export default function TeamsClient({ vehicles }: { vehicles: Vehicle[] }) {
             </li>
           ))}
         </ul>
+      )}
+
+      {/* 캡쳐 결과 팝업 — 페이지별 미리보기 + 저장 */}
+      {capFiles && (
+        <div
+          className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4"
+          onClick={closeCapModal}
+        >
+          <div
+            className="mb-12 mt-10 w-full max-w-sm rounded-2xl bg-white shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
+              <h2 className="text-sm font-bold text-sky-700">
+                캡쳐 저장 ({capFiles.length}장)
+              </h2>
+              <button
+                type="button"
+                onClick={closeCapModal}
+                className="rounded-lg px-2 py-1 text-sm text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+                aria-label="닫기"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="space-y-3 p-4">
+              <p className="text-xs text-gray-500">
+                저장 버튼을 누르면 페이지별로 저장(공유)됩니다
+              </p>
+              {capFiles.map((f, i) => (
+                <div key={f.name} className="rounded-xl border border-gray-200 p-2">
+                  <div className="flex items-center justify-between px-1 pb-2">
+                    <span className="text-xs font-semibold text-gray-700">
+                      페이지 {i + 1} / {capFiles.length}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => saveCapFile(f)}
+                      className="rounded-lg bg-sky-600 px-4 py-1.5 text-xs font-semibold text-white shadow-sm active:bg-sky-700"
+                    >
+                      저장
+                    </button>
+                  </div>
+                  {/* 미리보기 — 긴 이미지는 위쪽만 보여줌 */}
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={f.url}
+                    alt={f.name}
+                    className="max-h-64 w-full rounded-lg border border-gray-100 object-cover object-top"
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
