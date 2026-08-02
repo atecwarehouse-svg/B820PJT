@@ -1,45 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import nodemailer from "nodemailer";
-import ExcelJS from "exceljs";
 import { kstDateString } from "@/lib/work-day";
+import { buildCaptureXlsx, type CaptureRow } from "@/lib/export/build-capture-xlsx";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
-
-interface CaptureRow {
-  team?: string;
-  operator?: string;
-  route?: string;
-  plate?: string;
-  date?: string;
-}
-
-// 검색 결과를 정리한 엑셀 — [팀별 요약]·[차량 목록] 2시트
-async function buildCaptureXlsx(rows: CaptureRow[], label: string): Promise<Buffer> {
-  const wb = new ExcelJS.Workbook();
-  const bold = { bold: true };
-
-  const sum = wb.addWorksheet("팀별 요약");
-  sum.getColumn(1).width = 22;
-  sum.getColumn(2).width = 10;
-  sum.addRow(["검색 조건", label]).font = bold;
-  sum.addRow([]);
-  sum.addRow(["설치팀", "대수"]).font = bold;
-  const byTeam = new Map<string, number>();
-  for (const r of rows) byTeam.set(r.team ?? "", (byTeam.get(r.team ?? "") ?? 0) + 1);
-  for (const [t, c] of [...byTeam.entries()].sort((a, b) => a[0].localeCompare(b[0], "ko"))) {
-    sum.addRow([t, c]);
-  }
-  sum.addRow(["합계", rows.length]).font = bold;
-
-  const ws = wb.addWorksheet("차량 목록");
-  [22, 20, 12, 16, 12].forEach((w, i) => (ws.getColumn(i + 1).width = w));
-  ws.addRow(["설치팀", "운수사", "노선", "차량번호", "설치일"]).font = bold;
-  for (const r of rows) ws.addRow([r.team, r.operator, r.route, r.plate, r.date]);
-
-  return Buffer.from(await wb.xlsx.writeBuffer());
-}
 
 // 설치팀별 확인 캡쳐 이미지·정리 엑셀을 입력한 메일주소로 발송 (report/send와 같은 Gmail 설정).
 // 공개 페이지에서 호출되므로 수신자 수·이미지 수·용량을 제한한다.
@@ -96,7 +62,7 @@ export async function POST(req: NextRequest) {
     try {
       attachments.push({
         filename: `설치팀별현황_${kstDateString()}.xlsx`,
-        content: await buildCaptureXlsx(rows, label),
+        content: await buildCaptureXlsx(rows, label, kstDateString()),
       });
     } catch (e) {
       console.warn(
