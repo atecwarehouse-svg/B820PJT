@@ -119,8 +119,8 @@ export default function TeamsClient({ vehicles }: { vehicles: Vehicle[] }) {
     | { kind: "op"; text: string; cnt: number | null; team: string }
     | { kind: "veh"; v: Vehicle; team: string; op: string };
   const LINE_H = { team: 34, op: 22, veh: 18 } as const;
-  // 페이지당 내용 높이 ≈ 차량 300대 분량 — 넘으면 페이지 1/2/…로 나눠 그린다
-  const MAX_CONTENT_H = 5400;
+  // 페이지당 내용 높이 ≈ 차량 70대 분량 — 한 장이 폰 화면에서 너무 길지 않게 잘게 나눈다
+  const MAX_CONTENT_H = 1400;
 
   function buildCapLines(withVehicles: boolean): CapLine[] {
     const lines: CapLine[] = [];
@@ -232,6 +232,13 @@ export default function TeamsClient({ vehicles }: { vehicles: Vehicle[] }) {
 
     return new Promise<Blob | null>((r) => canvas.toBlob(r, "image/png"));
   }
+
+  // '차량 목록 포함' 선택 시 몇 장으로 나뉘는지 — 메뉴 라벨 표시용
+  const detailPageCount = useMemo(
+    () => (teams.length ? paginateCapLines(buildCapLines(true)).length : 0),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [teams],
+  );
 
   // 검색 결과를 캔버스에 그려 PNG 생성 → 페이지별 미리보기·저장 팝업을 연다.
   // withVehicles=false면 팀별 요약만, true면 운수사별 묶음·차량번호 목록까지(길면 여러 장).
@@ -429,8 +436,7 @@ export default function TeamsClient({ vehicles }: { vehicles: Vehicle[] }) {
                   className="block w-full rounded-lg px-3 py-2 text-left text-xs font-medium text-gray-700 active:bg-sky-50"
                 >
                   차량 목록 포함
-                  {filtered.length > 300 &&
-                    ` (${Math.ceil(filtered.length / 300)}장 분할)`}
+                  {detailPageCount > 1 && ` (${detailPageCount}장 분할)`}
                 </button>
               </div>
             )}
