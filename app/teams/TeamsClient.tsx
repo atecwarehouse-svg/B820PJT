@@ -10,6 +10,18 @@ interface Vehicle {
   date: string; // 설치일(업무일) YYYY-MM-DD
 }
 
+// 오늘의 업무일 "YYYY-MM-DD" — lib/work-day.ts workDateString과 동일 규칙(KST −12h).
+// 서버 함수는 클라이언트에서 못 쓰므로 같은 계산을 여기서 수행한다.
+function workToday(): string {
+  const shifted = new Date(Date.now() - 12 * 3600000);
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul" }).format(shifted);
+}
+
+function addDays(ymd: string, n: number): string {
+  const [y, m, d] = ymd.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d + n)).toISOString().slice(0, 10);
+}
+
 // 설치팀별 확인 — 기간·운수사·노선 필터 후 팀별 대수 + 차량 목록(차량번호) 표시.
 // 데이터는 서버에서 전체를 받아(최대 수천 행) 클라이언트에서 필터링한다.
 export default function TeamsClient({ vehicles }: { vehicles: Vehicle[] }) {
@@ -56,6 +68,39 @@ export default function TeamsClient({ vehicles }: { vehicles: Vehicle[] }) {
     <div className="mt-4">
       {/* 검색 필터 */}
       <div className="rounded-xl border border-gray-200 bg-white p-3 shadow-sm">
+        {/* 기간 빠른 선택 — 한 번 탭으로 기간 적용 */}
+        <div className="mb-2 flex flex-wrap gap-1.5">
+          {(() => {
+            const today = workToday();
+            const presets: [string, string, string][] = [
+              ["오늘", today, today],
+              ["어제", addDays(today, -1), addDays(today, -1)],
+              ["최근 7일", addDays(today, -6), today],
+              ["이번 달", today.slice(0, 8) + "01", today],
+              ["전체", "", ""],
+            ];
+            return presets.map(([label, f, t]) => {
+              const active = from === f && to === t;
+              return (
+                <button
+                  key={label}
+                  type="button"
+                  onClick={() => {
+                    setFrom(f);
+                    setTo(t);
+                  }}
+                  className={`rounded-full px-2.5 py-1 text-xs font-medium ${
+                    active
+                      ? "bg-sky-600 text-white"
+                      : "bg-gray-100 text-gray-600 active:bg-gray-200"
+                  }`}
+                >
+                  {label}
+                </button>
+              );
+            });
+          })()}
+        </div>
         <div className="flex items-center gap-2">
           <input
             type="date"
