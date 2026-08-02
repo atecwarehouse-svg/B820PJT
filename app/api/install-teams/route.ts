@@ -1,24 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
 import { fetchAll } from "@/lib/supabase/paginate";
-import { getInstallTeamsFull, teamLabel, type InstallTeam } from "@/lib/settings";
+import { getInstallTeamsFull, makeTeamNormalizer } from "@/lib/settings";
 import { workDateString } from "@/lib/work-day";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-// 기록의 팀 표기 통합 — 구기록("부천1")·신기록("부천1 최봉식")을 현재 등록된 팀의
-// 라벨("팀명 이름")로 정규화해 같은 팀으로 집계. 등록에 없는 표기는 그대로 둔다.
-function makeNormalizer(installTeams: InstallTeam[]) {
-  return (raw: string | null): string => {
-    const s = (raw ?? "").trim();
-    if (!s) return "팀 미입력";
-    for (const t of installTeams) {
-      if (s === t.team || s === teamLabel(t) || s.startsWith(t.team + " ")) return teamLabel(t);
-    }
-    return s;
-  };
-}
 
 // 설치팀 확인 팝업용 — 저장(saved_at) 완료된 차량을 팀별로 집계.
 //   GET /api/install-teams          → 팀별 누적 대수 [{ team, count }]
@@ -26,7 +13,7 @@ function makeNormalizer(installTeams: InstallTeam[]) {
 export async function GET(req: NextRequest) {
   const team = (req.nextUrl.searchParams.get("team") ?? "").trim();
   const supabase = createServiceClient();
-  const norm = makeNormalizer(await getInstallTeamsFull());
+  const norm = makeTeamNormalizer(await getInstallTeamsFull());
 
   if (team) {
     // 팀명 미입력("팀 미입력")도 조회되도록 전체를 받아 정규화된 팀명으로 필터

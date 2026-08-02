@@ -18,6 +18,19 @@ export function teamLabel(t: InstallTeam): string {
   return [t.team, t.name].filter(Boolean).join(" ");
 }
 
+// 기록의 팀 표기 통합 — 구기록("부천1")·신기록("부천1 최봉식")을 현재 등록된 팀의
+// 라벨("팀명 이름")로 정규화해 같은 팀으로 집계. 등록에 없는 표기는 그대로 둔다.
+export function makeTeamNormalizer(installTeams: InstallTeam[]) {
+  return (raw: string | null): string => {
+    const s = (raw ?? "").trim();
+    if (!s) return "팀 미입력";
+    for (const t of installTeams) {
+      if (s === t.team || s === teamLabel(t) || s.startsWith(t.team + " ")) return teamLabel(t);
+    }
+    return s;
+  };
+}
+
 // 설치팀 전체(팀명·이름·전화) 읽기 — 미설정/테이블 미생성이면 빈 배열.
 // 구버전 문자열 배열(["1팀"])은 {team:"1팀", name:"", phone:""}로 변환.
 export async function getInstallTeamsFull(): Promise<InstallTeam[]> {
