@@ -81,6 +81,21 @@ export default function TeamsClient({ vehicles }: { vehicles: Vehicle[] }) {
 
   const hasFilter = from || to || operator || route || q || group;
 
+  // 팀 차량 목록을 운수사별로 묶고(가나다순), 안에서는 노선→차량번호 순 정렬
+  function groupByOperator(list: Vehicle[]): [string, Vehicle[]][] {
+    const m = new Map<string, Vehicle[]>();
+    for (const v of list) m.set(v.operator, [...(m.get(v.operator) ?? []), v]);
+    return [...m.entries()]
+      .sort((a, b) => a[0].localeCompare(b[0], "ko"))
+      .map(([op, vs]) => [
+        op,
+        vs.sort(
+          (x, y) =>
+            x.route.localeCompare(y.route, "ko") || x.plate.localeCompare(y.plate, "ko"),
+        ),
+      ]);
+  }
+
   // 현재 검색 조건 요약 문구 — 캡쳐 이미지 머리글용
   function filterLabel(): string {
     const parts: string[] = [];
@@ -95,11 +110,25 @@ export default function TeamsClient({ vehicles }: { vehicles: Vehicle[] }) {
 
   // 검색 결과를 캔버스에 그려 PNG로 저장 — 공유시트(모바일) 우선, 미지원이면 다운로드.
   // 화면 스크린샷 대신 직접 그려서 필터 조건·합계가 항상 포함된 깔끔한 이미지가 나온다.
+  // 팀별 대수 + 운수사별 묶음의 차량번호 목록까지 포함. 차량이 너무 많으면(300대 초과)
+  // 캔버스 높이 한계에 걸리므로 팀별 요약만 담는다.
   async function capture() {
+    const FONT = "'Malgun Gothic', sans-serif";
     const W = 420;
     const headerH = 96;
-    const rowH = 36;
-    const H = headerH + teams.length * rowH + 28;
+    const withVehicles = filtered.length <= 300;
+    const grouped = teams.map(
+      ([team, list]) => [team, list.length, groupByOperator(list)] as const,
+    );
+
+    // 높이 선계산 — 팀 헤더 34, 운수사 헤더 22, 차량 행 18
+    let H = headerH + 20;
+    for (const [, , ops] of grouped) {
+      H += 34;
+      if (withVehicles) for (const [, vs] of ops) H += 22 + vs.length * 18 + 6;
+    }
+    if (!withVehicles) H += 20; // 생략 안내 문구
+
     const scale = 2; // 레티나 대응 — 캡쳐가 흐리지 않게
     const canvas = document.createElement("canvas");
     canvas.width = W * scale;
@@ -111,10 +140,10 @@ export default function TeamsClient({ vehicles }: { vehicles: Vehicle[] }) {
     ctx.fillStyle = "#ffffff";
     ctx.fillRect(0, 0, W, H);
     ctx.fillStyle = "#0369a1";
-    ctx.font = "bold 18px 'Malgun Gothic', sans-serif";
+    ctx.font = `bold 18px ${FONT}`;
     ctx.fillText("설치팀별 설치 현황", 20, 34);
     ctx.fillStyle = "#6b7280";
-    ctx.font = "12px 'Malgun Gothic', sans-serif";
+    ctx.font = `12px ${FONT}`;
     ctx.fillText(filterLabel(), 20, 58);
     ctx.fillText(
       `합계 ${filtered.length.toLocaleString()}대 · ${new Intl.DateTimeFormat("ko-KR", {
@@ -126,20 +155,41 @@ export default function TeamsClient({ vehicles }: { vehicles: Vehicle[] }) {
       76,
     );
 
-    teams.forEach(([team, list], i) => {
-      const y = headerH + i * rowH;
-      if (i % 2 === 0) {
-        ctx.fillStyle = "#f0f9ff";
-        ctx.fillRect(12, y, W - 24, rowH);
+    let y = headerH;
+    const rightAlign = (text: string) => W - 20 - ctx.measureText(text).width;
+    for (const [team, count, ops] of grouped) {
+      ctx.fillStyle = "#e0f2fe";
+      ctx.fillRect(12, y, W - 24, 28);
+      ctx.fillStyle = "#0c4a6e";
+      ctx.font = `bold 14px ${FONT}`;
+      ctx.fillText(team, 20, y + 19);
+      const cnt = `${count.toLocaleString()}대`;
+      ctx.fillText(cnt, rightAlign(cnt), y + 19);
+      y += 34;
+      if (!withVehicles) continue;
+      for (const [op, vs] of ops) {
+        ctx.fillStyle = "#0369a1";
+        ctx.font = `bold 12px ${FONT}`;
+        ctx.fillText(`${op} ${vs.length.toLocaleString()}대`, 24, y + 15);
+        y += 22;
+        for (const v of vs) {
+          ctx.fillStyle = "#1f2937";
+          ctx.font = `12px ${FONT}`;
+          ctx.fillText(v.plate, 32, y + 13);
+          const info = `${v.route} · ${v.date}`;
+          ctx.fillStyle = "#6b7280";
+          ctx.font = `11px ${FONT}`;
+          ctx.fillText(info, rightAlign(info), y + 13);
+          y += 18;
+        }
+        y += 6;
       }
-      ctx.fillStyle = "#1f2937";
-      ctx.font = "14px 'Malgun Gothic', sans-serif";
-      ctx.fillText(team, 20, y + 23);
-      const cnt = `${list.length.toLocaleString()}대`;
-      ctx.fillStyle = "#0369a1";
-      ctx.font = "bold 14px 'Malgun Gothic', sans-serif";
-      ctx.fillText(cnt, W - 20 - ctx.measureText(cnt).width, y + 23);
-    });
+    }
+    if (!withVehicles) {
+      ctx.fillStyle = "#9ca3af";
+      ctx.font = `11px ${FONT}`;
+      ctx.fillText("차량번호 목록은 검색 결과 300대 이하일 때 포함됩니다", 20, y + 14);
+    }
 
     const blob = await new Promise<Blob | null>((r) => canvas.toBlob(r, "image/png"));
     if (!blob) return;
@@ -329,24 +379,30 @@ export default function TeamsClient({ vehicles }: { vehicles: Vehicle[] }) {
                 </span>
               </button>
               {openTeam === team && (
-                <ul className="space-y-1 border-t border-gray-50 bg-gray-50/50 px-3 py-2.5">
-                  {list.map((v) => (
-                    <li
-                      key={v.plate}
-                      className="flex items-center justify-between rounded bg-white px-2 py-1.5"
-                    >
-                      <div className="min-w-0">
-                        <p className="text-xs font-semibold text-gray-800">{v.plate}</p>
-                        <p className="truncate text-[11px] text-gray-500">
-                          {v.operator} · {v.route}
-                        </p>
-                      </div>
-                      <span className="ml-2 shrink-0 text-[11px] tabular-nums text-gray-500">
-                        {v.date}
-                      </span>
-                    </li>
+                <div className="space-y-2.5 border-t border-gray-50 bg-gray-50/50 px-3 py-2.5">
+                  {groupByOperator(list).map(([op, vs]) => (
+                    <div key={op}>
+                      <p className="text-[11px] font-semibold text-sky-700">
+                        {op} <span className="font-normal text-gray-400">{vs.length}대</span>
+                      </p>
+                      <ul className="mt-1 space-y-1">
+                        {vs.map((v) => (
+                          <li
+                            key={v.plate}
+                            className="flex items-center justify-between rounded bg-white px-2 py-1.5"
+                          >
+                            <span className="text-xs font-semibold text-gray-800">
+                              {v.plate}
+                            </span>
+                            <span className="ml-2 shrink-0 text-[11px] tabular-nums text-gray-500">
+                              {v.route} · {v.date}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
                   ))}
-                </ul>
+                </div>
               )}
             </li>
           ))}
