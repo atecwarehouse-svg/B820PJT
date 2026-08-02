@@ -76,9 +76,7 @@ export default function TeamsClient({ vehicles }: { vehicles: Vehicle[] }) {
   const teams = useMemo(() => {
     const m = new Map<string, Vehicle[]>();
     for (const v of filtered) m.set(v.team, [...(m.get(v.team) ?? []), v]);
-    return [...m.entries()].sort(
-      (a, b) => b[1].length - a[1].length || a[0].localeCompare(b[0], "ko"),
-    );
+    return [...m.entries()].sort((a, b) => a[0].localeCompare(b[0], "ko"));
   }, [filtered]);
 
   const hasFilter = from || to || operator || route || q || group;
