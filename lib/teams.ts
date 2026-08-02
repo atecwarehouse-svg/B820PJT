@@ -165,18 +165,33 @@ export async function sendStartReportCard(d: {
               text: `금일 설치계획 ${d.todayPlanned.toLocaleString()}대`,
               wrap: true,
             },
-            ...(d.groups.length
-              ? [
-                  {
-                    type: "FactSet",
-                    spacing: "Small",
-                    facts: d.groups.map((g) => ({
-                      title: `· ${g.operator}${g.route ? ` ${g.route}노선` : ""}${g.manager ? ` (담당 ${g.manager})` : ""}`,
-                      value: `${g.planned.toLocaleString()}대`,
-                    })),
-                  },
-                ]
-              : []),
+            // 운수사별 묶음: "운수사 · 담당자" 헤더 아래 노선별 대수를 FactSet(2열 정렬)으로.
+            // 노선을 한 줄에 길게 붙이면 줄바꿈이 흐트러져 보기 불편하다는 피드백 반영.
+            ...[...d.groups.reduce((m, g) => {
+              const cur = m.get(g.operator) ?? { manager: "", routes: [] };
+              if (g.manager) cur.manager = g.manager;
+              cur.routes.push(g);
+              return m.set(g.operator, cur);
+            }, new Map<string, { manager: string; routes: typeof d.groups }>())].flatMap(
+              ([op, info]) => [
+                {
+                  type: "TextBlock",
+                  weight: "Bolder",
+                  text: `🚍 ${op}${info.manager ? ` · 담당 ${info.manager}` : ""} — ${info.routes
+                    .reduce((s, r) => s + r.planned, 0)
+                    .toLocaleString()}대`,
+                  wrap: true,
+                },
+                {
+                  type: "FactSet",
+                  spacing: "Small",
+                  facts: info.routes.map((r) => ({
+                    title: r.route ? `${r.route}노선` : "노선 미지정",
+                    value: `${r.planned.toLocaleString()}대`,
+                  })),
+                },
+              ],
+            ),
             {
               type: "FactSet",
               facts: [
