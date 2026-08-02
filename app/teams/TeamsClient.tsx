@@ -50,6 +50,12 @@ export default function TeamsClient({ vehicles }: { vehicles: Vehicle[] }) {
   const [capFiles, setCapFiles] = useState<
     { name: string; url: string; file: File; label: string }[] | null
   >(null);
+  // 메일로 받기 — 주소는 별도 입력, 마지막 주소는 기기에 기억
+  const [mailTo, setMailTo] = useState(() =>
+    typeof window === "undefined" ? "" : localStorage.getItem("teams_mail_to") ?? "",
+  );
+  const [mailBusy, setMailBusy] = useState(false);
+  const [mailMsg, setMailMsg] = useState<string | null>(null);
 
   const operators = useMemo(
     () =>
@@ -246,6 +252,50 @@ export default function TeamsClient({ vehicles }: { vehicles: Vehicle[] }) {
   function closeCapModal() {
     capFiles?.forEach((f) => URL.revokeObjectURL(f.url));
     setCapFiles(null);
+    setMailMsg(null);
+  }
+
+  async function fileToBase64(file: File): Promise<string> {
+    const buf = new Uint8Array(await file.arrayBuffer());
+    let s = "";
+    for (let i = 0; i < buf.length; i += 0x8000) {
+      s += String.fromCharCode(...buf.subarray(i, i + 0x8000));
+    }
+    return btoa(s);
+  }
+
+  // 캡쳐 이미지 전체 + 검색 결과 정리 엑셀을 입력한 주소로 메일 발송
+  async function sendCaptureMail() {
+    if (!capFiles || mailBusy) return;
+    const to = mailTo.trim();
+    if (!to.includes("@")) {
+      setMailMsg("받는 메일주소를 입력하세요.");
+      return;
+    }
+    setMailBusy(true);
+    setMailMsg(null);
+    try {
+      const images = [];
+      for (const f of capFiles) images.push({ name: f.name, data: await fileToBase64(f.file) });
+      const rows = teams.flatMap(([team, list]) =>
+        groupByOperator(list).flatMap(([op, vs]) =>
+          vs.map((v) => ({ team, operator: op, route: v.route, plate: v.plate, date: v.date })),
+        ),
+      );
+      const res = await fetch("/api/teams/capture-mail", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ to, label: filterLabel(), images, rows }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "발송 실패");
+      localStorage.setItem("teams_mail_to", to);
+      setMailMsg(`✅ 발송 완료 — 이미지 ${json.count}장${json.xlsx ? " + 엑셀" : ""}`);
+    } catch (e) {
+      setMailMsg("❌ " + (e instanceof Error ? e.message : "발송 실패"));
+    } finally {
+      setMailBusy(false);
+    }
   }
 
   // 페이지 1장 저장 — PhotoSlot의 '휴대폰에 저장'과 동일 정책: 공유시트 우선, 폴백은 다운로드
@@ -506,6 +556,30 @@ export default function TeamsClient({ vehicles }: { vehicles: Vehicle[] }) {
               </button>
             </div>
             <div className="space-y-3 p-4">
+              {/* 메일로 받기 — 이미지 전체 + 정리 엑셀 첨부 */}
+              <div className="rounded-xl border border-gray-200 bg-gray-50/50 p-2">
+                <p className="px-1 pb-1.5 text-xs font-semibold text-gray-700">
+                  📧 메일로 받기 <span className="font-normal text-gray-400">(이미지 전체 + 엑셀)</span>
+                </p>
+                <div className="flex gap-2">
+                  <input
+                    type="email"
+                    value={mailTo}
+                    onChange={(e) => setMailTo(e.target.value)}
+                    placeholder="받는 메일주소"
+                    className="min-w-0 flex-1 rounded-lg border border-gray-300 px-2 py-1.5 text-xs"
+                  />
+                  <button
+                    type="button"
+                    onClick={sendCaptureMail}
+                    disabled={mailBusy}
+                    className="shrink-0 rounded-lg bg-sky-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm active:bg-sky-700 disabled:opacity-50"
+                  >
+                    {mailBusy ? "발송 중…" : "보내기"}
+                  </button>
+                </div>
+                {mailMsg && <p className="mt-1.5 px-1 text-[11px] text-gray-600">{mailMsg}</p>}
+              </div>
               <p className="text-xs text-gray-500">
                 저장 버튼을 누르면 페이지별로 저장(공유)됩니다
               </p>
