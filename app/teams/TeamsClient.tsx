@@ -45,6 +45,7 @@ export default function TeamsClient({ vehicles }: { vehicles: Vehicle[] }) {
   const [teamQuery, setTeamQuery] = useState("");
   const [group, setGroup] = useState("");
   const [openTeam, setOpenTeam] = useState<string | null>(null);
+  const [capOpen, setCapOpen] = useState(false); // 캡쳐 종류 선택 메뉴
 
   const operators = useMemo(
     () =>
@@ -108,40 +109,78 @@ export default function TeamsClient({ vehicles }: { vehicles: Vehicle[] }) {
     return parts.join(" · ");
   }
 
-  // 검색 결과를 캔버스에 그려 PNG로 저장 — 공유시트(모바일) 우선, 미지원이면 다운로드.
-  // 화면 스크린샷 대신 직접 그려서 필터 조건·합계가 항상 포함된 깔끔한 이미지가 나온다.
-  // 팀별 대수 + 운수사별 묶음의 차량번호 목록까지 포함. 차량이 너무 많으면(300대 초과)
-  // 캔버스 높이 한계에 걸리므로 팀별 요약만 담는다.
-  async function capture() {
+  // 캡쳐 이미지 한 줄(팀 헤더 / 운수사 헤더 / 차량 행) — 높이: 팀 34, 운수사 22, 차량 18
+  type CapLine =
+    | { kind: "team"; text: string; cnt: number | null }
+    | { kind: "op"; text: string; cnt: number | null; team: string }
+    | { kind: "veh"; v: Vehicle; team: string; op: string };
+  const LINE_H = { team: 34, op: 22, veh: 18 } as const;
+  // 페이지당 내용 높이 ≈ 차량 300대 분량 — 넘으면 페이지 1/2/…로 나눠 그린다
+  const MAX_CONTENT_H = 5400;
+
+  function buildCapLines(withVehicles: boolean): CapLine[] {
+    const lines: CapLine[] = [];
+    for (const [team, list] of teams) {
+      lines.push({ kind: "team", text: team, cnt: list.length });
+      if (!withVehicles) continue;
+      for (const [op, vs] of groupByOperator(list)) {
+        lines.push({ kind: "op", text: op, cnt: vs.length, team });
+        for (const v of vs) lines.push({ kind: "veh", v, team, op });
+      }
+    }
+    return lines;
+  }
+
+  // 높이 기준으로 페이지 분할 — 중간에서 끊기면 다음 페이지에 "(계속)" 헤더를 다시 그린다
+  function paginateCapLines(lines: CapLine[]): CapLine[][] {
+    const pages: CapLine[][] = [];
+    let cur: CapLine[] = [];
+    let h = 0;
+    for (const ln of lines) {
+      if (h + LINE_H[ln.kind] > MAX_CONTENT_H && cur.length) {
+        pages.push(cur);
+        cur = [];
+        h = 0;
+        if (ln.kind === "veh") {
+          cur.push({ kind: "team", text: `${ln.team} (계속)`, cnt: null });
+          cur.push({ kind: "op", text: `${ln.op} (계속)`, cnt: null, team: ln.team });
+          h += LINE_H.team + LINE_H.op;
+        } else if (ln.kind === "op") {
+          cur.push({ kind: "team", text: `${ln.team} (계속)`, cnt: null });
+          h += LINE_H.team;
+        }
+      }
+      cur.push(ln);
+      h += LINE_H[ln.kind];
+    }
+    if (cur.length) pages.push(cur);
+    return pages;
+  }
+
+  function drawCapPage(lines: CapLine[], pageNo: number, pageTotal: number): Promise<Blob | null> {
     const FONT = "'Malgun Gothic', sans-serif";
     const W = 420;
     const headerH = 96;
-    const withVehicles = filtered.length <= 300;
-    const grouped = teams.map(
-      ([team, list]) => [team, list.length, groupByOperator(list)] as const,
-    );
-
-    // 높이 선계산 — 팀 헤더 34, 운수사 헤더 22, 차량 행 18
-    let H = headerH + 20;
-    for (const [, , ops] of grouped) {
-      H += 34;
-      if (withVehicles) for (const [, vs] of ops) H += 22 + vs.length * 18 + 6;
-    }
-    if (!withVehicles) H += 20; // 생략 안내 문구
-
+    const H = headerH + lines.reduce((s, ln) => s + LINE_H[ln.kind], 0) + 20;
     const scale = 2; // 레티나 대응 — 캡쳐가 흐리지 않게
     const canvas = document.createElement("canvas");
     canvas.width = W * scale;
     canvas.height = H * scale;
     const ctx = canvas.getContext("2d");
-    if (!ctx) return;
+    if (!ctx) return Promise.resolve(null);
     ctx.scale(scale, scale);
+    const rightAlign = (text: string) => W - 20 - ctx.measureText(text).width;
 
     ctx.fillStyle = "#ffffff";
     ctx.fillRect(0, 0, W, H);
     ctx.fillStyle = "#0369a1";
     ctx.font = `bold 18px ${FONT}`;
     ctx.fillText("설치팀별 설치 현황", 20, 34);
+    if (pageTotal > 1) {
+      const p = `페이지 ${pageNo}/${pageTotal}`;
+      ctx.font = `bold 13px ${FONT}`;
+      ctx.fillText(p, rightAlign(p), 34);
+    }
     ctx.fillStyle = "#6b7280";
     ctx.font = `12px ${FONT}`;
     ctx.fillText(filterLabel(), 20, 58);
@@ -156,63 +195,78 @@ export default function TeamsClient({ vehicles }: { vehicles: Vehicle[] }) {
     );
 
     let y = headerH;
-    const rightAlign = (text: string) => W - 20 - ctx.measureText(text).width;
-    for (const [team, count, ops] of grouped) {
-      ctx.fillStyle = "#e0f2fe";
-      ctx.fillRect(12, y, W - 24, 28);
-      ctx.fillStyle = "#0c4a6e";
-      ctx.font = `bold 14px ${FONT}`;
-      ctx.fillText(team, 20, y + 19);
-      const cnt = `${count.toLocaleString()}대`;
-      ctx.fillText(cnt, rightAlign(cnt), y + 19);
-      y += 34;
-      if (!withVehicles) continue;
-      for (const [op, vs] of ops) {
+    for (const ln of lines) {
+      if (ln.kind === "team") {
+        ctx.fillStyle = "#e0f2fe";
+        ctx.fillRect(12, y, W - 24, 28);
+        ctx.fillStyle = "#0c4a6e";
+        ctx.font = `bold 14px ${FONT}`;
+        ctx.fillText(ln.text, 20, y + 19);
+        if (ln.cnt !== null) {
+          const cnt = `${ln.cnt.toLocaleString()}대`;
+          ctx.fillText(cnt, rightAlign(cnt), y + 19);
+        }
+      } else if (ln.kind === "op") {
         ctx.fillStyle = "#0369a1";
         ctx.font = `bold 12px ${FONT}`;
-        ctx.fillText(`${op} ${vs.length.toLocaleString()}대`, 24, y + 15);
-        y += 22;
-        for (const v of vs) {
-          ctx.fillStyle = "#1f2937";
-          ctx.font = `12px ${FONT}`;
-          ctx.fillText(v.plate, 32, y + 13);
-          const info = `${v.route} · ${v.date}`;
-          ctx.fillStyle = "#6b7280";
-          ctx.font = `11px ${FONT}`;
-          ctx.fillText(info, rightAlign(info), y + 13);
-          y += 18;
-        }
-        y += 6;
+        ctx.fillText(
+          ln.cnt !== null ? `${ln.text} ${ln.cnt.toLocaleString()}대` : ln.text,
+          24,
+          y + 15,
+        );
+      } else {
+        ctx.fillStyle = "#1f2937";
+        ctx.font = `12px ${FONT}`;
+        ctx.fillText(ln.v.plate, 32, y + 13);
+        const info = `${ln.v.route} · ${ln.v.date}`;
+        ctx.fillStyle = "#6b7280";
+        ctx.font = `11px ${FONT}`;
+        ctx.fillText(info, rightAlign(info), y + 13);
       }
-    }
-    if (!withVehicles) {
-      ctx.fillStyle = "#9ca3af";
-      ctx.font = `11px ${FONT}`;
-      ctx.fillText("차량번호 목록은 검색 결과 300대 이하일 때 포함됩니다", 20, y + 14);
+      y += LINE_H[ln.kind];
     }
 
-    const blob = await new Promise<Blob | null>((r) => canvas.toBlob(r, "image/png"));
-    if (!blob) return;
-    const name = `설치팀별현황_${workToday()}.png`;
-    const file = new File([blob], name, { type: "image/png" });
+    return new Promise<Blob | null>((r) => canvas.toBlob(r, "image/png"));
+  }
+
+  // 검색 결과를 캔버스에 그려 PNG로 저장 — 공유시트(모바일) 우선, 미지원이면 다운로드.
+  // 화면 스크린샷 대신 직접 그려서 필터 조건·합계가 항상 포함된 깔끔한 이미지가 나온다.
+  // withVehicles=false면 팀별 요약만, true면 운수사별 묶음·차량번호 목록까지(길면 여러 장).
+  async function capture(withVehicles: boolean) {
+    setCapOpen(false);
+    const pages = paginateCapLines(buildCapLines(withVehicles));
+    const files: File[] = [];
+    for (let i = 0; i < pages.length; i++) {
+      const blob = await drawCapPage(pages[i], i + 1, pages.length);
+      if (!blob) continue;
+      const suffix = pages.length > 1 ? `_${i + 1}` : "";
+      files.push(
+        new File([blob], `설치팀별현황_${workToday()}${suffix}.png`, { type: "image/png" }),
+      );
+    }
+    if (!files.length) return;
     // PhotoSlot의 '휴대폰에 저장'과 동일 정책 — 공유시트 우선, 폴백은 다운로드
     if (
       typeof navigator.share === "function" &&
       typeof navigator.canShare === "function" &&
-      navigator.canShare({ files: [file] })
+      navigator.canShare({ files })
     ) {
       try {
-        await navigator.share({ files: [file] });
+        await navigator.share({ files });
       } catch {
         // 사용자가 공유시트를 닫은 경우 — 아무것도 안 함
       }
     } else {
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = name;
-      a.click();
-      URL.revokeObjectURL(url);
+      for (const f of files) {
+        const url = URL.createObjectURL(f);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = f.name;
+        a.click();
+        URL.revokeObjectURL(url);
+        // 연속 다운로드가 브라우저에서 씹히지 않게 잠깐 간격
+        await new Promise((r) => setTimeout(r, 300));
+      }
     }
   }
 
@@ -347,13 +401,35 @@ export default function TeamsClient({ vehicles }: { vehicles: Vehicle[] }) {
           누르면 차량 목록 표시
         </p>
         {teams.length > 0 && (
-          <button
-            type="button"
-            onClick={capture}
-            className="shrink-0 rounded-lg bg-sky-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm active:bg-sky-700"
-          >
-            📷 캡쳐하기
-          </button>
+          <div className="relative shrink-0">
+            <button
+              type="button"
+              onClick={() => setCapOpen((o) => !o)}
+              className="rounded-lg bg-sky-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm active:bg-sky-700"
+            >
+              📷 캡쳐하기
+            </button>
+            {capOpen && (
+              <div className="absolute right-0 top-full z-10 mt-1 w-48 rounded-xl border border-gray-200 bg-white p-1 shadow-lg">
+                <button
+                  type="button"
+                  onClick={() => capture(false)}
+                  className="block w-full rounded-lg px-3 py-2 text-left text-xs font-medium text-gray-700 active:bg-sky-50"
+                >
+                  팀별 요약만
+                </button>
+                <button
+                  type="button"
+                  onClick={() => capture(true)}
+                  className="block w-full rounded-lg px-3 py-2 text-left text-xs font-medium text-gray-700 active:bg-sky-50"
+                >
+                  차량 목록 포함
+                  {filtered.length > 300 &&
+                    ` (${Math.ceil(filtered.length / 300)}장 분할)`}
+                </button>
+              </div>
+            )}
+          </div>
         )}
       </div>
 
