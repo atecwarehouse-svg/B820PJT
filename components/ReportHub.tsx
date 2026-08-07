@@ -340,6 +340,7 @@ function ShareStatPanel({
   inProgress,
   remain,
   planGroups,
+  inspectorList,
   onClose,
 }: {
   kind: "start" | "progress";
@@ -350,6 +351,7 @@ function ShareStatPanel({
   inProgress: number;
   remain: number;
   planGroups: PlanGroup[];
+  inspectorList: string[]; // 등록된 검수자 이름 — 운수사별 담당 선택지
   onClose: () => void;
 }) {
   const label = fmtLabel(today);
@@ -358,7 +360,13 @@ function ShareStatPanel({
   const [sent, setSent] = useState(false); // 전송 성공 — 버튼을 잠가 중복 카드 방지
   const [note, setNote] = useState(""); // 설치시작 보고 특이사항 — 카드에 함께 표시
   const [startTime, setStartTime] = useState(() => new Date().toTimeString().slice(0, 5)); // 설치 시작시간 (기기 시각 기본)
-  const [managers, setManagers] = useState<Record<string, string>>({}); // 운수사별 담당자명
+  // 운수사별 담당 검수자(복수 가능) — 카드 표기 + 설치시작·완료 알림을 담당자 개인방으로 보내는 기준
+  const [managers, setManagers] = useState<Record<string, string[]>>({});
+  const toggleManager = (op: string, name: string) =>
+    setManagers((m) => {
+      const cur = m[op] ?? [];
+      return { ...m, [op]: cur.includes(name) ? cur.filter((n) => n !== name) : [...cur, name] };
+    });
   const operators = isStart ? [...new Set(planGroups.map((g) => g.operator))] : [];
   // 운수사별 개별 발송 — 당일 보고 완료 운수사는 DB(app_settings) 기준으로 잠금 (전 기기 공유)
   const [sentOps, setSentOps] = useState<string[]>([]);
@@ -408,7 +416,7 @@ function ShareStatPanel({
             ? {
                 groups: selGroups.map((g) => ({
                   ...g,
-                  manager: (managers[g.operator] ?? "").trim(),
+                  inspectors: managers[g.operator] ?? [],
                 })),
                 note: note.trim(),
                 startTime,
@@ -440,7 +448,7 @@ function ShareStatPanel({
         ...selGroups.map(
           (g): [string, number, string] => [
             `· ${g.operator}${g.route ? ` ${g.route}노선` : ""}${
-              (managers[g.operator] ?? "").trim() ? ` (담당 ${managers[g.operator].trim()})` : ""
+              (managers[g.operator] ?? []).length ? ` (담당 ${managers[g.operator].join(", ")})` : ""
             }`,
             g.planned,
             "text-gray-500",
@@ -498,7 +506,10 @@ function ShareStatPanel({
         <div className="mt-2 space-y-1.5">
           <p className="text-[11px] font-medium text-gray-500">
             보고할 운수사 선택{" "}
-            <span className="font-normal text-gray-400">(보고 완료된 곳은 선택 불가 · 담당자명은 카드에 함께 표시)</span>
+            <span className="font-normal text-gray-400">
+              (보고 완료된 곳은 선택 불가
+              {inspectorList.length ? " · 담당 검수자는 복수 선택 가능, 설치 알림이 담당자 방으로 갑니다" : ""})
+            </span>
           </p>
           {operators.map((op) => {
             const done = sentOps.includes(op);
@@ -506,36 +517,51 @@ function ShareStatPanel({
             return (
               <div
                 key={op}
-                className={`flex items-center gap-2 rounded-lg border px-2.5 py-1.5 ${
+                className={`rounded-lg border px-2.5 py-1.5 ${
                   done ? "border-gray-100 bg-gray-50 opacity-60" : "border-gray-200"
                 }`}
               >
-                <input
-                  type="checkbox"
-                  checked={on}
-                  disabled={done}
-                  onChange={(e) =>
-                    setSelected((s) => {
-                      const n = new Set(s);
-                      if (e.target.checked) n.add(op);
-                      else n.delete(op);
-                      return n;
-                    })
-                  }
-                  className="h-4 w-4 shrink-0 accent-orange-600"
-                />
-                <span className="w-20 shrink-0 truncate text-xs font-medium text-gray-700">{op}</span>
-                {done ? (
-                  <span className="ml-auto shrink-0 text-[11px] font-medium text-green-600">보고 완료 ✓</span>
-                ) : (
+                <div className="flex items-center gap-2">
                   <input
-                    value={managers[op] ?? ""}
-                    onChange={(e) => setManagers((m) => ({ ...m, [op]: e.target.value }))}
-                    maxLength={20}
-                    disabled={!on}
-                    placeholder="담당자명 (선택)"
-                    className="w-full min-w-0 rounded-md border border-gray-200 px-2 py-1 text-xs text-gray-800 placeholder:text-gray-300 focus:border-orange-400 focus:outline-none disabled:bg-gray-50"
+                    type="checkbox"
+                    checked={on}
+                    disabled={done}
+                    onChange={(e) =>
+                      setSelected((s) => {
+                        const n = new Set(s);
+                        if (e.target.checked) n.add(op);
+                        else n.delete(op);
+                        return n;
+                      })
+                    }
+                    className="h-4 w-4 shrink-0 accent-orange-600"
                   />
+                  <span className="min-w-0 flex-1 truncate text-xs font-medium text-gray-700">{op}</span>
+                  {done && (
+                    <span className="shrink-0 text-[11px] font-medium text-green-600">보고 완료 ✓</span>
+                  )}
+                </div>
+                {!done && inspectorList.length > 0 && (
+                  <div className="mt-1.5 flex flex-wrap gap-1 pl-6">
+                    {inspectorList.map((name) => {
+                      const picked = (managers[op] ?? []).includes(name);
+                      return (
+                        <button
+                          key={name}
+                          type="button"
+                          disabled={!on}
+                          onClick={() => toggleManager(op, name)}
+                          className={`rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors disabled:opacity-40 ${
+                            picked
+                              ? "border-orange-600 bg-orange-600 text-white"
+                              : "border-gray-200 bg-white text-gray-600"
+                          }`}
+                        >
+                          {name}
+                        </button>
+                      );
+                    })}
+                  </div>
                 )}
               </div>
             );
@@ -838,6 +864,7 @@ export default function ReportHub(props: {
   complete: number;
   inProgress: number;
   remain: number;
+  inspectorList: string[]; // 등록된 검수자 이름 (TEAMS_INSPECTOR_WEBHOOKS 키) — 설치시작 보고 담당 선택지
 }) {
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<TabKey>("plan");
@@ -915,6 +942,7 @@ export default function ReportHub(props: {
                   inProgress={props.inProgress}
                   remain={props.remain}
                   planGroups={props.planGroups}
+                  inspectorList={props.inspectorList}
                   onClose={close}
                 />
               )}
@@ -929,6 +957,7 @@ export default function ReportHub(props: {
                   inProgress={props.inProgress}
                   remain={props.remain}
                   planGroups={props.planGroups}
+                  inspectorList={[]} /* 진행중 공유 탭은 운수사·담당 선택 없음 */
                   onClose={close}
                 />
               )}

@@ -7,6 +7,36 @@ export const REPORT_MAIL_KEY = "report_mail_to";
 export const INSTALL_TEAMS_KEY = "install_teams"; // 설치팀 목록 (JSON [{team,name,phone}], 구버전 문자열 배열 호환)
 export const INSPECT_CHECKLIST_KEY = "inspect_checklist"; // 배차표 검수항목 (JSON {vehicle,device})
 
+// 업무일별 설치시작 보고 현황 — JSON {운수사: [담당 검수자…]}.
+// 두 가지를 겸한다: (1) 보고 완료 운수사 잠금(키 존재 여부), (2) 그날 담당 검수자 배정
+// (설치시작·완료 팀즈 카드를 담당자 개인방으로 보내는 라우팅 기준).
+export const startReportKey = (date: string) => `start_report_sent:${date}`;
+
+// 저장값 → {운수사: [검수자…]}.
+// 구버전 값 호환 필수: 담당자 도입 전에는 운수사 문자열 배열(["삼환교통", …])로 저장했다.
+// 이걸 잘못 읽으면 그날의 보고 완료 잠금이 통째로 풀린다.
+export function parseStartReport(raw: string | null): Record<string, string[]> {
+  try {
+    const v = JSON.parse(raw ?? "{}");
+    if (Array.isArray(v)) {
+      return Object.fromEntries(v.filter((x): x is string => typeof x === "string").map((op) => [op, []]));
+    }
+    if (!v || typeof v !== "object") return {};
+    return Object.fromEntries(
+      Object.entries(v as Record<string, unknown>).map(([op, names]) => [
+        op,
+        Array.isArray(names) ? names.filter((n): n is string => typeof n === "string") : [],
+      ]),
+    );
+  } catch {
+    return {};
+  }
+}
+
+export async function getStartReport(date: string): Promise<Record<string, string[]>> {
+  return parseStartReport(await getSetting(startReportKey(date)));
+}
+
 export interface InstallTeam {
   team: string; // 팀명 (예: 1팀)
   name: string; // 이름

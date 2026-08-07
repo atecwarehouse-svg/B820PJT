@@ -18,11 +18,22 @@ import { createHash } from "node:crypto";
 import { createServiceClient } from "@/lib/supabase/server";
 import { BEFORE_SLOTS, AFTER_SLOTS, CHECK_SLOTS } from "@/lib/slots";
 import { sendStartCard, sendCompletionCard } from "@/lib/teams";
+import { getStartReport } from "@/lib/settings";
+import { workDateString } from "@/lib/work-day";
 
 type SB = ReturnType<typeof createServiceClient>;
 
 const fingerprint = (v: unknown) =>
   createHash("sha256").update(JSON.stringify(v)).digest("hex");
+
+// 그날 이 운수사를 맡은 검수자 — 설치시작 보고에서 지정한 값. 없으면 공용방으로만 간다.
+// 기준 업무일은 "설치를 시작한 시각"(start_notified_at). 완료 카드는 항상 값이 있으므로
+// 업무일 경계(12시)를 넘겨 마무리 저장해도 시작한 날의 담당자에게 그대로 간다.
+async function inspectorsFor(operator: string, startedAt: string | null): Promise<string[]> {
+  if (!operator.trim()) return [];
+  const day = workDateString(startedAt ?? new Date());
+  return (await getStartReport(day))[operator.trim()] ?? [];
+}
 
 export async function notifyInstallProgress(opts: {
   supabase: SB;
@@ -182,6 +193,7 @@ export async function notifyInstallProgress(opts: {
         startedAt: rec.start_notified_at,
         completedAt,
         photos,
+        inspectors: await inspectorsFor(operator, rec.start_notified_at),
       });
     } catch {
       return; // 발송 실패 시 지문 미기록 → 다음 저장 때 재시도
@@ -208,7 +220,16 @@ export async function notifyInstallProgress(opts: {
     // 시작시간 = 최초 시작 카드 발송 시각(수정 재발송에도 유지 — 소요시간 계산 기준)
     const startedAt = rec.start_notified_at ?? new Date().toISOString();
     try {
-      await sendStartCard({ operator, plate, route, team, checkNote, extraNote, startedAt });
+      await sendStartCard({
+        operator,
+        plate,
+        route,
+        team,
+        checkNote,
+        extraNote,
+        startedAt,
+        inspectors: await inspectorsFor(operator, rec.start_notified_at),
+      });
     } catch {
       return; // 발송 실패 시 지문 미기록 → 다음 저장 때 재시도
     }

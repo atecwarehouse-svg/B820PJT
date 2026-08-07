@@ -21,6 +21,7 @@ import ProgressDownloadButton from "@/components/ProgressDownloadButton";
 import ScheduleUploadModal from "@/components/ScheduleUploadModal";
 import ConsultationModal from "@/components/ConsultationModal";
 import ReportHub from "@/components/ReportHub";
+import { inspectorNames } from "@/lib/teams";
 import TeamStatsModal from "@/components/TeamStatsModal";
 import ScheduleChart from "@/components/ScheduleChart";
 import InstallDateSearch from "@/components/InstallDateSearch";
@@ -200,6 +201,7 @@ export default async function DashboardPage() {
             complete={s.complete}
             inProgress={inProgressCount}
             remain={remainCount}
+            inspectorList={inspectorNames()}
           />
           {ip && (
             <DailyReportModal

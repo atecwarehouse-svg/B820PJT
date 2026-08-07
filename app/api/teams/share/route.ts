@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { sendProgressCard, sendStartReportCard } from "@/lib/teams";
-import { getSetting, setSetting } from "@/lib/settings";
+import { sendProgressCard, sendStartReportCard, inspectorNames } from "@/lib/teams";
+import { getStartReport, setSetting, startReportKey } from "@/lib/settings";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -13,30 +13,21 @@ interface ShareBody {
   complete?: number;
   inProgress?: number;
   remain?: number;
-  // 설치 시작 보고용 — 금일 계획의 운수사·노선별 대수
-  groups?: { operator?: string; route?: string; planned?: number; manager?: string }[];
+  // 설치 시작 보고용 — 금일 계획의 운수사·노선별 대수 (inspectors = 담당 검수자)
+  groups?: { operator?: string; route?: string; planned?: number; inspectors?: string[] }[];
   note?: string; // 설치 시작 보고용 특이사항
   startTime?: string; // 설치 시작 보고용 시작시간 (HH:MM)
   date?: string; // 설치 시작 보고용 업무일(YYYY-MM-DD) — 운수사별 보고 완료 기록 키
 }
 
-// 설치 시작 보고 완료 운수사 목록 (app_settings) — 여러 기기·여러 사람이 공유
-const sentKey = (date: string) => `start_report_sent:${date}`;
+// 설치 시작 보고 완료 운수사·담당 검수자 (app_settings) — 여러 기기·여러 사람이 공유
 const isDate = (v: unknown): v is string => typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v);
-
-async function readSentOps(date: string): Promise<string[]> {
-  try {
-    const v = JSON.parse((await getSetting(sentKey(date))) ?? "[]");
-    return Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
-  } catch {
-    return [];
-  }
-}
 
 // GET /api/teams/share?date=YYYY-MM-DD → 해당 업무일에 시작 보고를 마친 운수사 목록
 export async function GET(req: NextRequest) {
   const date = req.nextUrl.searchParams.get("date");
-  return NextResponse.json({ sentOps: isDate(date) ? await readSentOps(date) : [] });
+  const map = isDate(date) ? await getStartReport(date) : {};
+  return NextResponse.json({ sentOps: Object.keys(map) });
 }
 
 // POST /api/teams/share  → 설치 진행 현황(또는 설치 시작 보고) 카드를 Teams 채널에 전송
@@ -45,14 +36,26 @@ export async function POST(req: NextRequest) {
   const n = (v: unknown) => (typeof v === "number" && isFinite(v) ? v : 0);
   try {
     if (b.kind === "start") {
-      const groups = (Array.isArray(b.groups) ? b.groups : []).slice(0, 50).map((g) => ({
-        operator: (g?.operator ?? "").toString().slice(0, 40),
-        route: (g?.route ?? "").toString().slice(0, 40),
-        planned: n(g?.planned),
-        manager: (g?.manager ?? "").toString().slice(0, 20).trim(),
-      }));
+      // 담당 검수자는 등록된 이름(TEAMS_INSPECTOR_WEBHOOKS)만 허용 — 오타·쓰레기 값 차단
+      const known = new Set(inspectorNames());
+      const groups = (Array.isArray(b.groups) ? b.groups : []).slice(0, 50).map((g) => {
+        const inspectors = [
+          ...new Set(
+            (Array.isArray(g?.inspectors) ? g.inspectors : [])
+              .map((x) => String(x).trim())
+              .filter((x) => known.has(x)),
+          ),
+        ];
+        return {
+          operator: (g?.operator ?? "").toString().slice(0, 40),
+          route: (g?.route ?? "").toString().slice(0, 40),
+          planned: n(g?.planned),
+          inspectors,
+          manager: inspectors.join(", "), // 카드 표기 — "담당 김준영, 황문환"
+        };
+      });
       // 다른 기기·다른 사람이 이미 보고한 운수사는 발송 전에 차단 (동시 보고 중복 방지)
-      const sentOps = isDate(b.date) ? await readSentOps(b.date) : [];
+      const sentOps = isDate(b.date) ? Object.keys(await getStartReport(b.date)) : [];
       const dup = [...new Set(groups.map((g) => g.operator).filter((op) => sentOps.includes(op)))];
       if (dup.length) {
         return NextResponse.json(
@@ -70,12 +73,14 @@ export async function POST(req: NextRequest) {
         startTime: (b.startTime ?? "").toString().slice(0, 5),
       });
       if (isDate(b.date)) {
-        // 기록 저장 실패는 무시 — 카드는 이미 발송됨 (다음 조회에서 잠금이 빠질 뿐)
+        // 기록 저장 실패는 무시 — 카드는 이미 발송됨 (다음 조회에서 잠금이 빠질 뿐).
+        // 팀즈 전송에 수초가 걸리므로 발송 전 값(sentOps)이 아니라 지금 값을 다시 읽어 병합한다.
+        // ponytail: read-modify-write. app_settings.value가 text라 원자적 merge 불가.
+        //           동시 보고 충돌이 잦아지면 jsonb + || 로.
         try {
-          await setSetting(
-            sentKey(b.date),
-            JSON.stringify([...new Set([...sentOps, ...groups.map((g) => g.operator)])]),
-          );
+          const map = await getStartReport(b.date);
+          for (const g of groups) map[g.operator] = g.inspectors;
+          await setSetting(startReportKey(b.date), JSON.stringify(map));
         } catch {}
       }
     } else {

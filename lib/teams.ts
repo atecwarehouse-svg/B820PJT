@@ -46,6 +46,63 @@ function vocSummaryBlocks(s: VocOperatorSummary, headSpacing: "Small" | "Medium"
   return blocks;
 }
 
+// ── 검수자별 채팅방 ─────────────────────────────────────────
+// TEAMS_INSPECTOR_WEBHOOKS = {"김준영":"https://…", …}  (환경변수 하나에 JSON)
+// 키(이름)가 곧 설치시작 보고 화면의 담당자 선택지. 미설정·형식 오류면 빈 값 —
+// 대시보드 렌더 중에 호출되므로 절대 throw하지 않는다.
+function inspectorWebhooks(): Record<string, string> {
+  try {
+    const v = JSON.parse(process.env.TEAMS_INSPECTOR_WEBHOOKS ?? "{}");
+    if (!v || typeof v !== "object" || Array.isArray(v)) return {};
+    return Object.fromEntries(
+      Object.entries(v as Record<string, unknown>)
+        .filter(([k, url]) => k.trim() && typeof url === "string" && url.startsWith("https://"))
+        .map(([k, url]) => [k.trim(), url as string]),
+    );
+  } catch {
+    return {};
+  }
+}
+
+/** 등록된 검수자 이름 목록 (설치시작 보고 담당자 선택지 · 서버에서만 호출). */
+export function inspectorNames(): string[] {
+  return Object.keys(inspectorWebhooks());
+}
+
+/** 담당 검수자 이름 → 개인방 웹훅 URL. except(공용방)와 중복은 제외. */
+function inspectorUrls(names: string[] | undefined, except: string): string[] {
+  if (!names?.length) return [];
+  const map = inspectorWebhooks();
+  return [...new Set(names.map((n) => map[n.trim()]).filter((u): u is string => !!u && u !== except))];
+}
+
+async function post(url: string, card: unknown, what: string): Promise<void> {
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(card),
+  });
+  if (!res.ok) {
+    const t = await res.text().catch(() => "");
+    throw new Error(`Teams ${what} 응답 ${res.status} ${t.slice(0, 160)}`);
+  }
+}
+
+// 공용방 + 담당 검수자 개인방으로 같은 카드를 보낸다.
+// 공용방 실패만 throw — 개인방 실패까지 던지면 install-status가 지문을 기록하지 못해
+// 다음 저장 때 공용방에 같은 카드가 중복 발송된다.
+async function postToRooms(
+  sharedUrl: string,
+  card: unknown,
+  what: string,
+  inspectors?: string[],
+): Promise<void> {
+  await post(sharedUrl, card, what);
+  await Promise.allSettled(
+    inspectorUrls(inspectors, sharedUrl).map((u) => post(u, card, what)),
+  );
+}
+
 export interface ProgressCardData {
   label: string; // 날짜 라벨 (예: "9/17 (수)")
   todayPlanned: number;
@@ -610,6 +667,7 @@ function noteBlocks(d: { checkNote?: string; extraNote?: string }): unknown[] {
 }
 
 // 설치 시작(설치전 7장 + 차량이상유무 8종 충족) 시 보내는 카드. 완료 카드와 같은 채팅방.
+// inspectors: 그날 이 운수사를 맡은 검수자 — 공용방과 함께 개인방에도 보낸다.
 export async function sendStartCard(d: {
   operator: string;
   plate: string;
@@ -618,6 +676,7 @@ export async function sendStartCard(d: {
   checkNote?: string; // 차량이상 비고 (records.check_note)
   extraNote?: string; // 특이사항 (records.extra_note)
   startedAt?: string; // 설치 시작 시각(ISO) — 카드에 "시작시간 HH:MM" 표기
+  inspectors?: string[]; // 담당 검수자 (개인 채팅방 라우팅)
 }): Promise<void> {
   const url = process.env.TEAMS_COMPLETE_WEBHOOK_URL;
   if (!url) return;
@@ -688,15 +747,7 @@ export async function sendStartCard(d: {
     ],
   };
 
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(card),
-  });
-  if (!res.ok) {
-    const t = await res.text().catch(() => "");
-    throw new Error(`Teams 시작카드 응답 ${res.status} ${t.slice(0, 160)}`);
-  }
+  await postToRooms(url, card, "시작카드", d.inspectors);
 }
 
 // 현장에서 "관리자 호출" 버튼을 눌렀을 때 보내는 카드.
@@ -802,6 +853,7 @@ export async function sendCompletionCard(d: {
   startedAt?: string | null; // 설치 시작 시각(ISO) — 있으면 소요시간 계산
   completedAt?: string; // 설치 종료 시각(ISO) — "종료시간 HH:MM" 표기
   photos?: { url: string; label: string }[];
+  inspectors?: string[]; // 담당 검수자 (개인 채팅방 라우팅)
 }): Promise<void> {
   const url = process.env.TEAMS_COMPLETE_WEBHOOK_URL;
   if (!url) return; // 웹후크 미설정 → 발송 생략
@@ -900,15 +952,7 @@ export async function sendCompletionCard(d: {
     ],
   };
 
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(card),
-  });
-  if (!res.ok) {
-    const t = await res.text().catch(() => "");
-    throw new Error(`Teams 완료카드 응답 ${res.status} ${t.slice(0, 160)}`);
-  }
+  await postToRooms(url, card, "완료카드", d.inspectors);
 }
 
 export interface ConsultationCardData {
