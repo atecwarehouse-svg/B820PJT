@@ -984,7 +984,7 @@ export interface ConsultationCardData {
 }
 
 // 운수사 협의사항 카드 — 대시보드 '운수사 협의사항' 폼에서 전송.
-// 웹후크: TEAMS_COMPLETE_WEBHOOK_URL (설치완료 사진과 같은 채팅방).
+// 웹후크: TEAMS_COMPLETE_WEBHOOK_URL (설치완료 사진과 같은 채팅방) + 검수자 4명 개인방 전체.
 // 사용자가 명시적으로 보내는 것이므로 미설정 시 throw해 실패를 알린다.
 export async function sendConsultationCard(d: ConsultationCardData): Promise<void> {
   const url = process.env.TEAMS_COMPLETE_WEBHOOK_URL;
@@ -1111,15 +1111,9 @@ export async function sendConsultationCard(d: ConsultationCardData): Promise<voi
     ],
   };
 
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(card),
-  });
-  if (!res.ok) {
-    const t = await res.text().catch(() => "");
-    throw new Error(`Teams 협의사항카드 응답 ${res.status} ${t.slice(0, 160)}`);
-  }
+  // 협의사항은 건수가 적고 전원이 알아야 할 내용이라 검수자 4명 방 모두에 함께 보낸다
+  // (설치시작·완료 카드처럼 담당자에게만 보내지 않음).
+  await postToRooms(url, card, "협의사항카드", inspectorNames());
 }
 
 export interface PlanReportGroup {
