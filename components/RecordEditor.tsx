@@ -312,6 +312,36 @@ export default function RecordEditor({ plate, initial, teamOptions = [] }: Props
   const [savedPopup, setSavedPopup] = useState(false); // 저장 완료 팝업
   const [midSavedPopup, setMidSavedPopup] = useState(false); // 중간 저장 완료 팝업
 
+  // 하차단말기 재확인 팝업 — 사진도 '없음' 체크도 없는 하차 칸이 있으면 진행 전 확인.
+  // proceed는 확정된 na_slots를 받아 이어서 실행(닫힌 상태값이 낡아 override로 전달).
+  const [alightConfirm, setAlightConfirm] = useState<{
+    keys: string[];
+    labels: string;
+    proceed: (na: string[]) => void;
+  } | null>(null);
+
+  // 현재 단계에 보이는 하차 칸 중 미해결(사진 없음 + 없음 체크 없음)이면 팝업, 아니면 바로 진행
+  function confirmAlightThen(
+    slots: { slotKey: string; label: string }[],
+    proceed: (na: string[]) => void,
+  ) {
+    const pending = slots.filter(
+      (s) =>
+        s.slotKey.includes("alight") &&
+        !urls[s.slotKey] &&
+        !naSlots.includes(s.slotKey),
+    );
+    if (pending.length === 0) {
+      proceed(naSlots);
+      return;
+    }
+    setAlightConfirm({
+      keys: pending.map((s) => s.slotKey),
+      labels: pending.map((s) => s.label).join(" · "),
+      proceed,
+    });
+  }
+
   // 1단계(이상유무) → 다음: 팀명·비고를 여기서 확인해 마지막에 몰아서 막히지 않게 한다
   function goNextFromCheck() {
     if (!team.trim()) {
@@ -336,7 +366,7 @@ export default function RecordEditor({ plate, initial, teamOptions = [] }: Props
   // 1·2단계 중간 저장 — 특이사항 없이도 여기까지 저장. 팀명·비고만 확인.
   // saved:true지만 mid:true라 서버가 완료일(saved_at)은 찍지 않는다(3단계 최종 저장 때 기록).
   // 팀즈 시작/완료 카드 판정은 기존 로직대로 처리.
-  async function handleMidSave() {
+  async function handleMidSave(naOverride?: string[]) {
     if (!team.trim()) {
       showToast(
         teamOptions.length > 0 ? "팀을 선택해주세요" : "팀명을 입력해주세요",
@@ -354,7 +384,11 @@ export default function RecordEditor({ plate, initial, teamOptions = [] }: Props
       return;
     }
     setSubmitting(true);
-    const ok = await saveRecord({ saved: true, mid: true });
+    const ok = await saveRecord({
+      saved: true,
+      mid: true,
+      ...(naOverride ? { na_slots: naOverride } : {}),
+    });
     setSubmitting(false);
     if (ok) {
       setMidSavedPopup(true);
@@ -363,7 +397,7 @@ export default function RecordEditor({ plate, initial, teamOptions = [] }: Props
     }
   }
 
-  async function handleSave() {
+  async function handleSave(naOverride?: string[]) {
     const missingReq = missingRequiredCheck();
     if (!team.trim() || !checkNote.trim() || missingReq) {
       // 앞 단계 입력이 비어 있으면(다른 탭 수정 등) 해당 단계로 되돌린다
@@ -383,7 +417,10 @@ export default function RecordEditor({ plate, initial, teamOptions = [] }: Props
       return;
     }
     setSubmitting(true);
-    const ok = await saveRecord({ saved: true });
+    const ok = await saveRecord({
+      saved: true,
+      ...(naOverride ? { na_slots: naOverride } : {}),
+    });
     setSubmitting(false);
     if (ok) {
       setSavedPopup(true);
@@ -475,6 +512,46 @@ export default function RecordEditor({ plate, initial, teamOptions = [] }: Props
           >
             {toast.type === "success" ? "✓ " : "⚠ "}
             {toast.msg}
+          </div>
+        </div>
+      )}
+
+      {/* 하차단말기 재확인 팝업 — 사진·없음 체크가 모두 빈 하차 칸이 있을 때 */}
+      {alightConfirm && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4 no-print">
+          <div className="w-full max-w-xs rounded-2xl bg-white p-5 text-center shadow-xl">
+            <div className="text-4xl">⚠️</div>
+            <p className="mt-2 text-lg font-bold text-gray-800">
+              하차단말기 확인
+            </p>
+            <p className="mt-1 text-sm text-gray-600">
+              <span className="font-semibold text-red-500">
+                {alightConfirm.labels}
+              </span>{" "}
+              칸에 사진과 &lsquo;없음&rsquo; 체크가 모두 없습니다.
+              <br />이 차량에 하차단말기가 있나요?
+            </p>
+            <div className="mt-4 flex gap-2">
+              <button
+                onClick={() => {
+                  const next = Array.from(
+                    new Set([...naSlots, ...alightConfirm.keys]),
+                  );
+                  setNaSlots(next);
+                  setAlightConfirm(null);
+                  alightConfirm.proceed(next);
+                }}
+                className="flex-1 rounded-lg border border-gray-300 px-4 py-2.5 text-sm font-medium text-gray-600 active:bg-gray-100"
+              >
+                없음 (체크 후 계속)
+              </button>
+              <button
+                onClick={() => setAlightConfirm(null)}
+                className="flex-1 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white active:bg-blue-700"
+              >
+                있음 (촬영하기)
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -852,7 +929,11 @@ export default function RecordEditor({ plate, initial, teamOptions = [] }: Props
           )}
           {step < 2 && (
             <button
-              onClick={handleMidSave}
+              onClick={() =>
+                confirmAlightThen(step === 1 ? beforeSlots : [], (na) =>
+                  handleMidSave(na),
+                )
+              }
               disabled={submitting}
               className="flex-1 rounded-lg border border-blue-600 bg-white px-4 py-3 text-sm font-semibold text-blue-600 active:bg-blue-50 disabled:opacity-50"
             >
@@ -869,7 +950,12 @@ export default function RecordEditor({ plate, initial, teamOptions = [] }: Props
           )}
           {step === 1 && (
             <button
-              onClick={() => setStep(2)}
+              onClick={() =>
+                confirmAlightThen(beforeSlots, (na) => {
+                  if (na !== naSlots) saveRecord({ na_slots: na });
+                  setStep(2);
+                })
+              }
               className="flex-1 rounded-lg bg-blue-600 px-4 py-3 text-sm font-semibold text-white active:bg-blue-700"
             >
               다음 (설치 후) →
@@ -877,7 +963,9 @@ export default function RecordEditor({ plate, initial, teamOptions = [] }: Props
           )}
           {step === 2 && (
             <button
-              onClick={handleSave}
+              onClick={() =>
+                confirmAlightThen(AFTER_SLOTS, (na) => handleSave(na))
+              }
               disabled={submitting}
               className="flex-1 rounded-lg bg-blue-600 px-4 py-3 text-sm font-semibold text-white active:bg-blue-700 disabled:opacity-50"
             >
