@@ -50,18 +50,21 @@ function vocSummaryBlocks(s: VocOperatorSummary, headSpacing: "Small" | "Medium"
 // TEAMS_INSPECTOR_WEBHOOKS = {"김준영":"https://…", …}  (환경변수 하나에 JSON)
 // 키(이름)가 곧 설치시작 보고 화면의 담당자 선택지. 미설정·형식 오류면 빈 값 —
 // 대시보드 렌더 중에 호출되므로 절대 throw하지 않는다.
+// 이름으로 조회하는 맵이라 프로토타입 없는 객체로 만든다 — 일반 객체면 "toString" 같은
+// 이름을 조회했을 때 URL 대신 함수가 나온다(settings.ts parseStartReport와 같은 이유).
 function inspectorWebhooks(): Record<string, string> {
+  const out: Record<string, string> = Object.create(null);
+  let v: unknown;
   try {
-    const v = JSON.parse(process.env.TEAMS_INSPECTOR_WEBHOOKS ?? "{}");
-    if (!v || typeof v !== "object" || Array.isArray(v)) return {};
-    return Object.fromEntries(
-      Object.entries(v as Record<string, unknown>)
-        .filter(([k, url]) => k.trim() && typeof url === "string" && url.startsWith("https://"))
-        .map(([k, url]) => [k.trim(), url as string]),
-    );
+    v = JSON.parse(process.env.TEAMS_INSPECTOR_WEBHOOKS ?? "{}");
   } catch {
-    return {};
+    return out;
   }
+  if (!v || typeof v !== "object" || Array.isArray(v)) return out;
+  for (const [k, url] of Object.entries(v as Record<string, unknown>)) {
+    if (k.trim() && typeof url === "string" && url.startsWith("https://")) out[k.trim()] = url;
+  }
+  return out;
 }
 
 /** 등록된 검수자 이름 목록 (설치시작 보고 담당자 선택지 · 서버에서만 호출). */
@@ -69,18 +72,31 @@ export function inspectorNames(): string[] {
   return Object.keys(inspectorWebhooks());
 }
 
-/** 담당 검수자 이름 → 개인방 웹훅 URL. except(공용방)와 중복은 제외. */
+/** 담당 검수자 이름 → 개인방 웹훅 URL. except(공용방)와 같은 주소는 제외.
+ *  공백 차이로 같은 방에 두 번 보내지 않도록 양쪽 다 trim 후 비교한다. */
 function inspectorUrls(names: string[] | undefined, except: string): string[] {
   if (!names?.length) return [];
   const map = inspectorWebhooks();
-  return [...new Set(names.map((n) => map[n.trim()]).filter((u): u is string => !!u && u !== except))];
+  const shared = except.trim();
+  return [
+    ...new Set(
+      names
+        .map((n) => map[n.trim()]?.trim())
+        .filter((u): u is string => !!u && u !== shared),
+    ),
+  ];
 }
+
+// 웹훅이 응답하지 않고 매달리면 함수가 통째로 죽어 카드 발송 기록(지문)이 남지 않고,
+// 다음 저장 때 공용방에 같은 카드가 또 나간다. 그래서 반드시 시간 제한을 건다.
+const POST_TIMEOUT_MS = 10_000;
 
 async function post(url: string, card: unknown, what: string): Promise<void> {
   const res = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(card),
+    signal: AbortSignal.timeout(POST_TIMEOUT_MS),
   });
   if (!res.ok) {
     const t = await res.text().catch(() => "");

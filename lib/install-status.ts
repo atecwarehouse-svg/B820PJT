@@ -27,12 +27,18 @@ const fingerprint = (v: unknown) =>
   createHash("sha256").update(JSON.stringify(v)).digest("hex");
 
 // 그날 이 운수사를 맡은 검수자 — 설치시작 보고에서 지정한 값. 없으면 공용방으로만 간다.
-// 기준 업무일은 "설치를 시작한 시각"(start_notified_at). 완료 카드는 항상 값이 있으므로
+// 기준 업무일은 "설치를 시작한 시각"(start_notified_at). 완료 카드는 대개 값이 있으므로
 // 업무일 경계(12시)를 넘겨 마무리 저장해도 시작한 날의 담당자에게 그대로 간다.
 async function inspectorsFor(operator: string, startedAt: string | null): Promise<string[]> {
-  if (!operator.trim()) return [];
-  const day = workDateString(startedAt ?? new Date());
-  return (await getStartReport(day))[operator.trim()] ?? [];
+  const op = operator.trim();
+  if (!op) return [];
+  const now = new Date();
+  const found = (await getStartReport(workDateString(startedAt ?? now)))[op];
+  if (found || startedAt) return found ?? [];
+  // 시작 카드 없이 한 번에 저장해 완료된 차량(start_notified_at 없음)은 기준 시각이 '지금'이라,
+  // 12시를 넘겨 마무리하면 다음 업무일 키를 보게 된다. 그 경우만 직전 업무일을 한 번 더 본다.
+  const prev = new Date(now.getTime() - 24 * 3600 * 1000);
+  return (await getStartReport(workDateString(prev)))[op] ?? [];
 }
 
 export async function notifyInstallProgress(opts: {

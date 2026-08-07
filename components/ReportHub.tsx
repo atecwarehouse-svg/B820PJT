@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { workDateString } from "@/lib/work-day";
 
 // ── 공통 유틸 ───────────────────────────────────────────────
 const DOW = ["일", "월", "화", "수", "목", "금", "토"];
@@ -362,7 +363,9 @@ function ShareStatPanel({
   const [startTime, setStartTime] = useState(() => new Date().toTimeString().slice(0, 5)); // 설치 시작시간 (기기 시각 기본)
   // 운수사별 담당 검수자(복수 가능) — 카드 표기 + 설치시작·완료 알림을 담당자 개인방으로 보내는 기준
   const [managers, setManagers] = useState<Record<string, string[]>>({});
-  const [savingOp, setSavingOp] = useState<string | null>(null); // 담당 수정 저장 중인 운수사
+  // 담당 수정 저장 중인 운수사 — 한 칸짜리로 두면 A 저장 중에 B를 눌렀을 때 A가 다시 눌리고
+  // 되돌리기 값이 어긋난다. 운수사별로 잠근다.
+  const [savingOps, setSavingOps] = useState<Set<string>>(new Set());
   const operators = isStart ? [...new Set(planGroups.map((g) => g.operator))] : [];
   // 운수사별 개별 발송 — 당일 보고 완료 운수사는 DB(app_settings) 기준으로 잠금 (전 기기 공유)
   const [sentOps, setSentOps] = useState<string[]>([]);
@@ -395,9 +398,10 @@ function ShareStatPanel({
 
   // 보고 완료된 운수사의 담당자 변경 — 저장만 하고 팀즈 보고 카드는 다시 보내지 않는다.
   async function saveManagers(op: string, names: string[]) {
+    if (savingOps.has(op)) return;
     const prev = managers[op] ?? [];
     setManagers((m) => ({ ...m, [op]: names })); // 먼저 화면에 반영
-    setSavingOp(op);
+    setSavingOps((s) => new Set(s).add(op));
     setMsg(null);
     try {
       const res = await fetch("/api/teams/share", {
@@ -407,15 +411,23 @@ function ShareStatPanel({
       });
       const j = await res.json();
       if (!res.ok) throw new Error(j.error ?? "담당 저장 실패");
+      // 서버가 실제로 저장한 값으로 맞춘다 — 등록에 없는 이름은 서버가 걸러내므로
+      // 화면만 반영해 두면 "저장됐다"고 보이는데 알림은 안 가는 상태가 된다.
+      const saved = Array.isArray(j.inspectors) ? (j.inspectors as string[]) : names;
+      setManagers((m) => ({ ...m, [op]: saved }));
       setMsg({
         ok: true,
-        text: `${op} 담당 ${names.length ? names.join(", ") : "없음"}으로 변경했습니다. (보고는 다시 나가지 않습니다)`,
+        text: `${op} 담당 ${saved.length ? saved.join(", ") : "없음"}으로 변경했습니다. (보고는 다시 나가지 않습니다)`,
       });
     } catch (e) {
       setManagers((m) => ({ ...m, [op]: prev })); // 실패하면 되돌림
       setMsg({ ok: false, text: e instanceof Error ? e.message : "담당 저장 실패" });
     } finally {
-      setSavingOp(null);
+      setSavingOps((s) => {
+        const next = new Set(s);
+        next.delete(op);
+        return next;
+      });
     }
   }
 
@@ -425,6 +437,12 @@ function ShareStatPanel({
 
   async function share() {
     if (sharing || (isStart ? selected.size === 0 : sent)) return;
+    // 화면을 오래 열어두면 서버가 그려준 업무일이 지금과 달라질 수 있다. 그대로 보고하면
+    // 배정이 엉뚱한 날짜에 저장돼 알림이 담당자에게 안 가고, 잘못된 중복 경고까지 뜬다.
+    if (isStart && today !== workDateString(new Date())) {
+      setMsg({ ok: false, text: "업무일이 바뀌었습니다. 새로고침 후 다시 보고해 주세요." });
+      return;
+    }
     setSharing(true);
     setMsg(null);
     try {
@@ -584,27 +602,30 @@ function ShareStatPanel({
                         <button
                           key={name}
                           type="button"
+                          aria-pressed={picked}
                           // 보고 전에는 체크한 운수사만, 보고 후에는 담당 수정을 위해 항상 누를 수 있다
-                          disabled={done ? savingOp === op : !on}
+                          disabled={done ? savingOps.has(op) : !on}
                           onClick={() => {
                             const cur = managers[op] ?? [];
                             const next = picked ? cur.filter((n) => n !== name) : [...cur, name];
                             if (done) saveManagers(op, next);
                             else setManagers((m) => ({ ...m, [op]: next }));
                           }}
-                          className={`rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors disabled:opacity-40 ${
+                          // 장갑 낀 손으로 새벽에 누르는 화면이라 터치 영역을 키운다.
+                          // 비활성이어도 고른 이름은 읽혀야 하므로 흐리게만 하지 않고 색을 유지.
+                          className={`min-h-[36px] rounded-full border px-3 py-2 text-xs font-medium transition-colors disabled:opacity-60 ${
                             picked
                               ? "border-orange-600 bg-orange-600 text-white"
-                              : "border-gray-200 bg-white text-gray-600"
+                              : "border-gray-300 bg-white text-gray-600"
                           }`}
                         >
-                          {name}
+                          {picked ? `✓ ${name}` : name}
                         </button>
                       );
                     })}
                     {done && (
                       <span className="ml-1 text-[10px] text-gray-400">
-                        {savingOp === op ? "저장 중…" : "담당 수정 가능"}
+                        {savingOps.has(op) ? "저장 중…" : "담당 수정 가능"}
                       </span>
                     )}
                   </div>

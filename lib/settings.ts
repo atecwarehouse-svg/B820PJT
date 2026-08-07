@@ -15,26 +15,47 @@ export const startReportKey = (date: string) => `start_report_sent:${date}`;
 // 저장값 → {운수사: [검수자…]}.
 // 구버전 값 호환 필수: 담당자 도입 전에는 운수사 문자열 배열(["삼환교통", …])로 저장했다.
 // 이걸 잘못 읽으면 그날의 보고 완료 잠금이 통째로 풀린다.
+//
+// 반환값은 프로토타입 없는 객체다. 운수사명을 키로 쓰기 때문에 일반 객체면
+// "toString"·"constructor" 같은 이름이 실제로 없는데도 있는 것처럼 조회된다
+// (`"toString" in map` → true, `map["constructor"]` → 함수). 그러면 담당자 조회가
+// 함수를 반환해 카드 발송이 깨지고, 보고 여부 판정도 잘못된다.
 export function parseStartReport(raw: string | null): Record<string, string[]> {
+  const out: Record<string, string[]> = Object.create(null);
+  let v: unknown;
   try {
-    const v = JSON.parse(raw ?? "{}");
-    if (Array.isArray(v)) {
-      return Object.fromEntries(v.filter((x): x is string => typeof x === "string").map((op) => [op, []]));
-    }
-    if (!v || typeof v !== "object") return {};
-    return Object.fromEntries(
-      Object.entries(v as Record<string, unknown>).map(([op, names]) => [
-        op,
-        Array.isArray(names) ? names.filter((n): n is string => typeof n === "string") : [],
-      ]),
-    );
+    v = JSON.parse(raw ?? "{}");
   } catch {
-    return {};
+    return out;
   }
+  if (Array.isArray(v)) {
+    for (const op of v) if (typeof op === "string") out[op] = [];
+    return out;
+  }
+  if (!v || typeof v !== "object") return out;
+  for (const [op, names] of Object.entries(v as Record<string, unknown>)) {
+    out[op] = Array.isArray(names) ? names.filter((n): n is string => typeof n === "string") : [];
+  }
+  return out;
 }
 
+/** 화면 표시용 읽기 — 조회 실패는 '기록 없음'으로 처리(잠금이 잠깐 안 보일 뿐). */
 export async function getStartReport(date: string): Promise<Record<string, string[]>> {
   return parseStartReport(await getSetting(startReportKey(date)));
+}
+
+/** 수정 전 읽기 — 조회 실패 시 던진다.
+ *  getSetting은 오류를 삼키고 null을 주기 때문에, 그대로 쓰면 일시적 DB 오류를
+ *  '아직 아무도 보고 안 함'으로 오해해 그날 기록 전체를 덮어써 버린다. */
+export async function getStartReportForUpdate(date: string): Promise<Record<string, string[]>> {
+  const supabase = createServiceClient();
+  const { data, error } = await supabase
+    .from("app_settings")
+    .select("value")
+    .eq("key", startReportKey(date))
+    .maybeSingle();
+  if (error) throw new Error(`보고 기록을 읽지 못했습니다: ${error.message}`);
+  return parseStartReport(typeof data?.value === "string" ? data.value : null);
 }
 
 export interface InstallTeam {

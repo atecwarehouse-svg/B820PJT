@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { sendProgressCard, sendStartReportCard, inspectorNames } from "@/lib/teams";
-import { getStartReport, setSetting, startReportKey } from "@/lib/settings";
+import {
+  getStartReport,
+  getStartReportForUpdate,
+  setSetting,
+  startReportKey,
+} from "@/lib/settings";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -56,8 +61,8 @@ export async function PATCH(req: NextRequest) {
   const inspectors = cleanInspectors(b.inspectors);
 
   try {
-    const map = await getStartReport(b.date);
-    if (!(operator in map)) {
+    const map = await getStartReportForUpdate(b.date);
+    if (!Object.hasOwn(map, operator)) {
       // 보고 전 운수사는 보고할 때 함께 저장되므로 여기서 새로 만들지 않는다
       return NextResponse.json({ error: "아직 보고되지 않은 운수사입니다." }, { status: 400 });
     }
@@ -74,7 +79,12 @@ export async function PATCH(req: NextRequest) {
 
 // POST /api/teams/share  → 설치 진행 현황(또는 설치 시작 보고) 카드를 Teams 채널에 전송
 export async function POST(req: NextRequest) {
-  const b = (await req.json()) as ShareBody;
+  let b: ShareBody;
+  try {
+    b = (await req.json()) as ShareBody;
+  } catch {
+    return NextResponse.json({ error: "잘못된 요청입니다." }, { status: 400 });
+  }
   const n = (v: unknown) => (typeof v === "number" && isFinite(v) ? v : 0);
   try {
     if (b.kind === "start") {
@@ -88,34 +98,46 @@ export async function POST(req: NextRequest) {
           manager: inspectors.join(", "), // 카드 표기 — "담당 김준영, 황문환"
         };
       });
-      // 다른 기기·다른 사람이 이미 보고한 운수사는 발송 전에 차단 (동시 보고 중복 방지)
-      const sentOps = isDate(b.date) ? Object.keys(await getStartReport(b.date)) : [];
-      const dup = [...new Set(groups.map((g) => g.operator).filter((op) => sentOps.includes(op)))];
-      if (dup.length) {
-        return NextResponse.json(
-          { error: `이미 보고가 완료된 운수사입니다: ${dup.join(", ")}` },
-          { status: 409 },
-        );
+      // 보고 잠금을 카드 발송 "전"에 먼저 기록한다(선점). 발송에 수초가 걸리는데 그 사이
+      // 화면을 닫았다 다시 열거나 다른 기기에서 같은 운수사를 보고하면, 잠금이 아직 없어
+      // 같은 카드가 두 번 나가기 때문. 발송이 실패하면 아래에서 선점을 되돌린다.
+      // ponytail: read-modify-write. app_settings.value가 text라 원자적 merge 불가 —
+      //           선점 덕에 창이 수초→수십ms로 줄었다. 더 줄이려면 jsonb + || 로.
+      const date = isDate(b.date) ? b.date : null;
+      if (date) {
+        const map = await getStartReportForUpdate(date);
+        const dup = [
+          ...new Set(groups.map((g) => g.operator).filter((op) => Object.hasOwn(map, op))),
+        ];
+        if (dup.length) {
+          return NextResponse.json(
+            { error: `이미 보고가 완료된 운수사입니다: ${dup.join(", ")}` },
+            { status: 409 },
+          );
+        }
+        for (const g of groups) map[g.operator] = g.inspectors;
+        await setSetting(startReportKey(date), JSON.stringify(map));
       }
-      await sendStartReportCard({
-        label: (b.label ?? "").toString().slice(0, 40),
-        todayPlanned: n(b.todayPlanned),
-        complete: n(b.complete),
-        remain: n(b.remain),
-        groups,
-        note: (b.note ?? "").toString().slice(0, 500).trim(),
-        startTime: (b.startTime ?? "").toString().slice(0, 5),
-      });
-      if (isDate(b.date)) {
-        // 기록 저장 실패는 무시 — 카드는 이미 발송됨 (다음 조회에서 잠금이 빠질 뿐).
-        // 팀즈 전송에 수초가 걸리므로 발송 전 값(sentOps)이 아니라 지금 값을 다시 읽어 병합한다.
-        // ponytail: read-modify-write. app_settings.value가 text라 원자적 merge 불가.
-        //           동시 보고 충돌이 잦아지면 jsonb + || 로.
-        try {
-          const map = await getStartReport(b.date);
-          for (const g of groups) map[g.operator] = g.inspectors;
-          await setSetting(startReportKey(b.date), JSON.stringify(map));
-        } catch {}
+      try {
+        await sendStartReportCard({
+          label: (b.label ?? "").toString().slice(0, 40),
+          todayPlanned: n(b.todayPlanned),
+          complete: n(b.complete),
+          remain: n(b.remain),
+          groups,
+          note: (b.note ?? "").toString().slice(0, 500).trim(),
+          startTime: (b.startTime ?? "").toString().slice(0, 5),
+        });
+      } catch (e) {
+        // 카드가 안 나갔으므로 선점을 풀어 다시 보고할 수 있게 한다
+        if (date) {
+          try {
+            const cur = await getStartReportForUpdate(date);
+            for (const g of groups) delete cur[g.operator];
+            await setSetting(startReportKey(date), JSON.stringify(cur));
+          } catch {}
+        }
+        throw e;
       }
     } else {
       await sendProgressCard({
