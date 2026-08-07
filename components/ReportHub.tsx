@@ -362,11 +362,7 @@ function ShareStatPanel({
   const [startTime, setStartTime] = useState(() => new Date().toTimeString().slice(0, 5)); // 설치 시작시간 (기기 시각 기본)
   // 운수사별 담당 검수자(복수 가능) — 카드 표기 + 설치시작·완료 알림을 담당자 개인방으로 보내는 기준
   const [managers, setManagers] = useState<Record<string, string[]>>({});
-  const toggleManager = (op: string, name: string) =>
-    setManagers((m) => {
-      const cur = m[op] ?? [];
-      return { ...m, [op]: cur.includes(name) ? cur.filter((n) => n !== name) : [...cur, name] };
-    });
+  const [savingOp, setSavingOp] = useState<string | null>(null); // 담당 수정 저장 중인 운수사
   const operators = isStart ? [...new Set(planGroups.map((g) => g.operator))] : [];
   // 운수사별 개별 발송 — 당일 보고 완료 운수사는 DB(app_settings) 기준으로 잠금 (전 기기 공유)
   const [sentOps, setSentOps] = useState<string[]>([]);
@@ -378,6 +374,10 @@ function ShareStatPanel({
       const j = await (await fetch(`/api/teams/share?date=${today}`)).json();
       const ops: string[] = Array.isArray(j.sentOps) ? j.sentOps : [];
       setSentOps(ops);
+      // 이미 보고된 운수사는 저장된 담당자를 그대로 보여준다(아직 안 보낸 곳의 선택은 유지)
+      if (j.assignments && typeof j.assignments === "object") {
+        setManagers((m) => ({ ...m, ...(j.assignments as Record<string, string[]>) }));
+      }
       if (init) {
         setSelected(new Set(operators.filter((op) => !ops.includes(op))));
       } else {
@@ -391,10 +391,37 @@ function ShareStatPanel({
   useEffect(() => {
     if (isStart) loadSent(true).finally(() => setLoadingSent(false));
   }, []);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  // 보고 완료된 운수사의 담당자 변경 — 저장만 하고 팀즈 보고 카드는 다시 보내지 않는다.
+  async function saveManagers(op: string, names: string[]) {
+    const prev = managers[op] ?? [];
+    setManagers((m) => ({ ...m, [op]: names })); // 먼저 화면에 반영
+    setSavingOp(op);
+    setMsg(null);
+    try {
+      const res = await fetch("/api/teams/share", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ date: today, operator: op, inspectors: names }),
+      });
+      const j = await res.json();
+      if (!res.ok) throw new Error(j.error ?? "담당 저장 실패");
+      setMsg({
+        ok: true,
+        text: `${op} 담당 ${names.length ? names.join(", ") : "없음"}으로 변경했습니다. (보고는 다시 나가지 않습니다)`,
+      });
+    } catch (e) {
+      setManagers((m) => ({ ...m, [op]: prev })); // 실패하면 되돌림
+      setMsg({ ok: false, text: e instanceof Error ? e.message : "담당 저장 실패" });
+    } finally {
+      setSavingOp(null);
+    }
+  }
+
   const selGroups = planGroups.filter((g) => selected.has(g.operator));
   const selPlanned = selGroups.reduce((s, g) => s + g.planned, 0);
   const allSent = operators.length > 0 && operators.every((op) => sentOps.includes(op));
-  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
   async function share() {
     if (sharing || (isStart ? selected.size === 0 : sent)) return;
@@ -507,8 +534,10 @@ function ShareStatPanel({
           <p className="text-[11px] font-medium text-gray-500">
             보고할 운수사 선택{" "}
             <span className="font-normal text-gray-400">
-              (보고 완료된 곳은 선택 불가
-              {inspectorList.length ? " · 담당 검수자는 복수 선택 가능, 설치 알림이 담당자 방으로 갑니다" : ""})
+              (보고 완료된 곳은 다시 보고 불가
+              {inspectorList.length
+                ? " · 담당 검수자는 복수 선택 가능, 설치 알림이 담당자 방으로 갑니다. 보고 후에도 담당은 바꿀 수 있고 보고는 다시 나가지 않습니다"
+                : ""})
             </span>
           </p>
           {operators.map((op) => {
@@ -518,7 +547,7 @@ function ShareStatPanel({
               <div
                 key={op}
                 className={`rounded-lg border px-2.5 py-1.5 ${
-                  done ? "border-gray-100 bg-gray-50 opacity-60" : "border-gray-200"
+                  done ? "border-gray-100 bg-gray-50" : "border-gray-200"
                 }`}
               >
                 <div className="flex items-center gap-2">
@@ -536,21 +565,33 @@ function ShareStatPanel({
                     }
                     className="h-4 w-4 shrink-0 accent-orange-600"
                   />
-                  <span className="min-w-0 flex-1 truncate text-xs font-medium text-gray-700">{op}</span>
+                  <span
+                    className={`min-w-0 flex-1 truncate text-xs font-medium ${
+                      done ? "text-gray-400" : "text-gray-700"
+                    }`}
+                  >
+                    {op}
+                  </span>
                   {done && (
                     <span className="shrink-0 text-[11px] font-medium text-green-600">보고 완료 ✓</span>
                   )}
                 </div>
-                {!done && inspectorList.length > 0 && (
-                  <div className="mt-1.5 flex flex-wrap gap-1 pl-6">
+                {inspectorList.length > 0 && (
+                  <div className="mt-1.5 flex flex-wrap items-center gap-1 pl-6">
                     {inspectorList.map((name) => {
                       const picked = (managers[op] ?? []).includes(name);
                       return (
                         <button
                           key={name}
                           type="button"
-                          disabled={!on}
-                          onClick={() => toggleManager(op, name)}
+                          // 보고 전에는 체크한 운수사만, 보고 후에는 담당 수정을 위해 항상 누를 수 있다
+                          disabled={done ? savingOp === op : !on}
+                          onClick={() => {
+                            const cur = managers[op] ?? [];
+                            const next = picked ? cur.filter((n) => n !== name) : [...cur, name];
+                            if (done) saveManagers(op, next);
+                            else setManagers((m) => ({ ...m, [op]: next }));
+                          }}
                           className={`rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors disabled:opacity-40 ${
                             picked
                               ? "border-orange-600 bg-orange-600 text-white"
@@ -561,6 +602,11 @@ function ShareStatPanel({
                         </button>
                       );
                     })}
+                    {done && (
+                      <span className="ml-1 text-[10px] text-gray-400">
+                        {savingOp === op ? "저장 중…" : "담당 수정 가능"}
+                      </span>
+                    )}
                   </div>
                 )}
               </div>

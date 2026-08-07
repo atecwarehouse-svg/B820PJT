@@ -23,11 +23,53 @@ interface ShareBody {
 // 설치 시작 보고 완료 운수사·담당 검수자 (app_settings) — 여러 기기·여러 사람이 공유
 const isDate = (v: unknown): v is string => typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v);
 
-// GET /api/teams/share?date=YYYY-MM-DD → 해당 업무일에 시작 보고를 마친 운수사 목록
+// 담당 검수자 정리 — 등록된 이름(TEAMS_INSPECTOR_WEBHOOKS)만 허용해 오타·쓰레기 값 차단
+function cleanInspectors(v: unknown): string[] {
+  const known = new Set(inspectorNames());
+  return [
+    ...new Set(
+      (Array.isArray(v) ? v : []).map((x) => String(x).trim()).filter((x) => known.has(x)),
+    ),
+  ];
+}
+
+// GET /api/teams/share?date=YYYY-MM-DD → 시작 보고를 마친 운수사 목록 + 운수사별 담당 검수자
 export async function GET(req: NextRequest) {
   const date = req.nextUrl.searchParams.get("date");
   const map = isDate(date) ? await getStartReport(date) : {};
-  return NextResponse.json({ sentOps: Object.keys(map) });
+  return NextResponse.json({ sentOps: Object.keys(map), assignments: map });
+}
+
+// PATCH /api/teams/share — 이미 보고한 운수사의 담당 검수자만 수정.
+// 팀즈 카드는 보내지 않는다(보고 중복 발송 방지). 보고 잠금도 그대로 유지된다.
+export async function PATCH(req: NextRequest) {
+  let b: { date?: string; operator?: string; inspectors?: unknown };
+  try {
+    b = await req.json();
+  } catch {
+    return NextResponse.json({ error: "잘못된 요청입니다." }, { status: 400 });
+  }
+  if (!isDate(b.date)) {
+    return NextResponse.json({ error: "날짜를 확인하세요." }, { status: 400 });
+  }
+  const operator = String(b.operator ?? "").trim();
+  const inspectors = cleanInspectors(b.inspectors);
+
+  try {
+    const map = await getStartReport(b.date);
+    if (!(operator in map)) {
+      // 보고 전 운수사는 보고할 때 함께 저장되므로 여기서 새로 만들지 않는다
+      return NextResponse.json({ error: "아직 보고되지 않은 운수사입니다." }, { status: 400 });
+    }
+    map[operator] = inspectors;
+    await setSetting(startReportKey(b.date), JSON.stringify(map));
+    return NextResponse.json({ ok: true, inspectors });
+  } catch (e) {
+    return NextResponse.json(
+      { error: "담당 저장 실패: " + (e instanceof Error ? e.message : "알 수 없는 오류") },
+      { status: 500 },
+    );
+  }
 }
 
 // POST /api/teams/share  → 설치 진행 현황(또는 설치 시작 보고) 카드를 Teams 채널에 전송
@@ -36,16 +78,8 @@ export async function POST(req: NextRequest) {
   const n = (v: unknown) => (typeof v === "number" && isFinite(v) ? v : 0);
   try {
     if (b.kind === "start") {
-      // 담당 검수자는 등록된 이름(TEAMS_INSPECTOR_WEBHOOKS)만 허용 — 오타·쓰레기 값 차단
-      const known = new Set(inspectorNames());
       const groups = (Array.isArray(b.groups) ? b.groups : []).slice(0, 50).map((g) => {
-        const inspectors = [
-          ...new Set(
-            (Array.isArray(g?.inspectors) ? g.inspectors : [])
-              .map((x) => String(x).trim())
-              .filter((x) => known.has(x)),
-          ),
-        ];
+        const inspectors = cleanInspectors(g?.inspectors);
         return {
           operator: (g?.operator ?? "").toString().slice(0, 40),
           route: (g?.route ?? "").toString().slice(0, 40),
