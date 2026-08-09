@@ -30,6 +30,58 @@ interface Entry {
   excluded: boolean; // 설치제외 — 나중에 설치(리스트에는 유지)
 }
 
+// 요약 타일 = 리스트 필터 버튼. 같은 타일을 다시 누르면 전체로 돌아온다.
+// 집계는 설치대상(설치제외 아님)만 — 제외 차량을 세면 '검수완료 > 설치대상' 모순
+const TILES: {
+  key: string;
+  label: string;
+  color: string;
+  match: (e: Entry) => boolean;
+}[] = [
+  {
+    key: "target",
+    label: "설치대상",
+    color: "text-gray-900",
+    match: (e) => !e.excluded,
+  },
+  {
+    key: "installing",
+    label: "설치중",
+    color: "text-blue-600",
+    match: (e) => !e.excluded && e.installing,
+  },
+  {
+    key: "notyet",
+    label: "미설치",
+    color: "text-red-500",
+    match: (e) => !e.excluded && !e.installing && !e.completed,
+  },
+  {
+    key: "checked",
+    label: "검수완료",
+    color: "text-green-600",
+    match: (e) => !e.excluded && e.checklist,
+  },
+  {
+    key: "tacho",
+    label: "타코대상",
+    color: "text-amber-600",
+    match: (e) => !e.excluded && e.tachoCheck,
+  },
+  {
+    key: "tachoDone",
+    label: "타코확인",
+    color: "text-emerald-700",
+    match: (e) => !e.excluded && e.tachoCheck && e.tachoDone,
+  },
+  {
+    key: "excluded",
+    label: "설치제외",
+    color: "text-gray-500",
+    match: (e) => e.excluded,
+  },
+];
+
 // 저장 대상 항목 — 이 기기에서 실제로 바꾼 항목만 서버로 보낸다(기기 간 덮어쓰기 방지)
 type DirtyField = "outTime" | "checklist" | "tachoDone" | "excluded";
 
@@ -123,6 +175,7 @@ export default function DispatchButton() {
   const [operator, setOperator] = useState("");
   const [date, setDate] = useState("");
   const [routeFilter, setRouteFilter] = useState(""); // "" = 전체
+  const [tileFilter, setTileFilter] = useState<string | null>(null); // 요약 타일 필터(null = 전체)
 
   const [entries, setEntries] = useState<Entry[]>([]);
   // 설치완료됐지만 검수완료가 아직 저장 안 된 차량 — 메인 리스트 맨 위에 고정.
@@ -268,6 +321,7 @@ export default function DispatchButton() {
 
   async function loadList(op: string, d: string) {
     const seq = ++loadSeqRef.current;
+    setTileFilter(null); // 다른 운수사·날짜를 부르면 필터는 전체로
     setListLoading(true);
     setListError("");
     try {
@@ -487,19 +541,14 @@ export default function DispatchButton() {
     (e) => e.outTime && e.outTime !== OFF,
   ).length;
   const offCount = visible.filter((e) => e.outTime === OFF).length;
-  // 검수완료·타코 집계는 설치대상(설치제외 아님)만 — 제외 차량을 세면 '검수완료 > 설치대상' 모순
-  const active = visible.filter((e) => !e.excluded);
-  const installingCount = active.filter((e) => e.installing).length;
-  const checkCount = active.filter((e) => e.checklist).length;
-  const tachoCount = active.filter((e) => e.tachoCheck).length;
-  const tachoDoneCount = active.filter(
-    (e) => e.tachoCheck && e.tachoDone,
-  ).length;
   const exclCount = visible.filter((e) => e.excluded).length;
-  // 메인 리스트 전용 — 고정 차량을 맨 위로(캡쳐용 표는 항상 시간순 유지)
+  // 메인 리스트 전용 — 타일 필터 적용 후 고정 차량을 맨 위로(캡쳐용 표는 항상 전체·시간순)
+  const shown = tileFilter
+    ? visible.filter(TILES.find((t) => t.key === tileFilter)!.match)
+    : visible;
   const mainList = [
-    ...visible.filter((e) => pinned.has(e.plate)),
-    ...visible.filter((e) => !pinned.has(e.plate)),
+    ...shown.filter((e) => pinned.has(e.plate)),
+    ...shown.filter((e) => !pinned.has(e.plate)),
   ];
 
   return (
@@ -716,51 +765,55 @@ export default function DispatchButton() {
                           실행)가 필요합니다. 관리자에게 문의하세요.
                         </div>
                       )}
-                      {/* 관리자용 한눈 요약 — 수량 타일 */}
-                      <div className="mb-2 grid grid-cols-6 divide-x divide-gray-100 rounded-xl border border-gray-200 bg-gray-50 py-2 text-center">
-                        <div>
-                          <p className="text-[10px] text-gray-500">설치대상</p>
-                          <p className="text-base font-bold tabular-nums text-gray-900">
-                            {visible.length - exclCount}
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-[10px] text-gray-500">설치중</p>
-                          <p className="text-base font-bold tabular-nums text-blue-600">
-                            {installingCount}
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-[10px] text-gray-500">검수완료</p>
-                          <p className="text-base font-bold tabular-nums text-green-600">
-                            {checkCount}
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-[10px] text-gray-500">타코대상</p>
-                          <p className="text-base font-bold tabular-nums text-amber-600">
-                            {tachoCount}
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-[10px] text-gray-500">타코확인</p>
-                          <p className="text-base font-bold tabular-nums text-emerald-700">
-                            {tachoDoneCount}
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-[10px] text-gray-500">설치제외</p>
-                          <p className="text-base font-bold tabular-nums text-gray-500">
-                            {exclCount}
-                          </p>
-                        </div>
+                      {/* 관리자용 한눈 요약 — 탭하면 그 항목만 보기(다시 탭하면 전체) */}
+                      <div className="mb-2 grid grid-cols-4 gap-px overflow-hidden rounded-xl border border-gray-200 bg-gray-200 text-center">
+                        {TILES.map((t) => {
+                          const on = tileFilter === t.key;
+                          return (
+                            <button
+                              key={t.key}
+                              type="button"
+                              onClick={() => setTileFilter(on ? null : t.key)}
+                              className={`py-2 ${on ? "bg-blue-100" : "bg-gray-50 active:bg-gray-100"}`}
+                            >
+                              <p
+                                className={`text-[10px] ${on ? "font-semibold text-blue-700" : "text-gray-500"}`}
+                              >
+                                {t.label}
+                              </p>
+                              <p
+                                className={`text-base font-bold tabular-nums ${t.color}`}
+                              >
+                                {visible.filter(t.match).length}
+                              </p>
+                            </button>
+                          );
+                        })}
+                        <span className="bg-gray-50" />
                       </div>
                       <p className="mb-1 text-[11px] text-gray-400">
-                        시간 입력 {timedCount}대
-                        {offCount > 0 && ` · 휴차 ${offCount}대`} — 시간을
-                        고르면 이른 순서로 정렬됩니다
+                        {tileFilter ? (
+                          <>
+                            {TILES.find((t) => t.key === tileFilter)?.label}{" "}
+                            {mainList.length}대만 보는 중 — 타일을 다시 누르면
+                            전체
+                          </>
+                        ) : (
+                          <>
+                            시간 입력 {timedCount}대
+                            {offCount > 0 && ` · 휴차 ${offCount}대`} — 시간을
+                            고르면 이른 순서로 정렬됩니다
+                          </>
+                        )}
                       </p>
-                      <ul className="divide-y divide-gray-100 rounded-lg border border-gray-200">
+                      {mainList.length === 0 && (
+                        <p className="rounded-lg border border-gray-200 py-4 text-center text-sm text-gray-400">
+                          해당 차량이 없습니다.
+                        </p>
+                      )}
+                      <ul
+                        className={`divide-y divide-gray-100 rounded-lg border border-gray-200 ${mainList.length === 0 ? "hidden" : ""}`}
+                      >
                         {mainList.map((e) => {
                           const isOff = e.outTime === OFF;
                           return (
