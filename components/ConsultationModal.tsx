@@ -8,7 +8,9 @@ const INPUT =
 const LABEL = "text-[11px] font-medium text-gray-500";
 
 const HOURS = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, "0"));
-const MINUTES = Array.from({ length: 12 }, (_, i) => String(i * 5).padStart(2, "0")); // 5분 단위
+const MINUTES = Array.from({ length: 12 }, (_, i) =>
+  String(i * 5).padStart(2, "0"),
+); // 5분 단위
 
 const KEY_OPTIONS = ["차량 내 보관", "배차실 수령", "직접입력"];
 const ENGINE_OPTIONS = ["가능", "불가능"];
@@ -115,7 +117,11 @@ function OptionField({
   return (
     <label className="block">
       <span className={LABEL}>{label}</span>
-      <select value={value} onChange={(e) => onChange(e.target.value)} className={INPUT}>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className={INPUT}
+      >
         <option value="">선택</option>
         {options.map((o) => (
           <option key={o} value={o}>
@@ -173,7 +179,9 @@ function OperatorCombobox({
       {listOpen && (
         <ul className="absolute z-10 mt-1 max-h-48 w-full overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-lg">
           {filtered.length === 0 ? (
-            <li className="px-3 py-2 text-xs text-gray-400">일치하는 운수사가 없습니다</li>
+            <li className="px-3 py-2 text-xs text-gray-400">
+              일치하는 운수사가 없습니다
+            </li>
           ) : (
             filtered.map((o) => (
               <li key={o.operator}>
@@ -206,7 +214,11 @@ function OperatorCombobox({
 
 // '운수사 협의사항' 버튼 → 팝업 폼 → 팀즈(사진 전송 채팅방) 카드 전송.
 // 운수사·설치일만 필수, 나머지는 미입력 시 카드에 '-'로 표기(협의 진행 중 초안 공유 허용).
-export default function ConsultationModal({ operators }: { operators: OperatorSchedule[] }) {
+export default function ConsultationModal({
+  operators,
+}: {
+  operators: OperatorSchedule[];
+}) {
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState<"form" | "done">("form");
   const [busy, setBusy] = useState(false);
@@ -223,6 +235,8 @@ export default function ConsultationModal({ operators }: { operators: OperatorSc
   const [arrival, setArrival] = useState<string | null>(null);
   const [nextFirstBus, setNextFirstBus] = useState<string | null>(null);
   const [depotOut, setDepotOut] = useState<string | null>(null);
+  const [simulStart, setSimulStart] = useState(""); // 9-1. 동시출발 여부
+  const [earlyPlates, setEarlyPlates] = useState(""); // 9-2. 사전출발 차량번호
   const [keyOpt, setKeyOpt] = useState("");
   const [keyCustom, setKeyCustom] = useState("");
   const [engineOn, setEngineOn] = useState("");
@@ -245,7 +259,9 @@ export default function ConsultationModal({ operators }: { operators: OperatorSc
   const [vehOpen, setVehOpen] = useState(false);
   const [vehLoading, setVehLoading] = useState(false);
   const [vehError, setVehError] = useState<string | null>(null);
-  const [vehList, setVehList] = useState<{ plate: string; route: string }[]>([]);
+  const [vehList, setVehList] = useState<{ plate: string; route: string }[]>(
+    [],
+  );
 
   const count = selectedOp?.dates.find((d) => d.date === date)?.count ?? 0;
   // 선택한 날짜에 설치하는 노선별 대수 (자동 표기·카드에도 포함)
@@ -265,6 +281,8 @@ export default function ConsultationModal({ operators }: { operators: OperatorSc
     setArrival(null);
     setNextFirstBus(null);
     setDepotOut(null);
+    setSimulStart("");
+    setEarlyPlates("");
     setKeyOpt("");
     setKeyCustom("");
     setEngineOn("");
@@ -359,14 +377,18 @@ export default function ConsultationModal({ operators }: { operators: OperatorSc
           arrival: arrival ?? "",
           nextFirstBus: nextFirstBus ?? "",
           depotOut: depotOut ?? "",
+          simulStart,
+          earlyPlates,
           keyMethod: keyOpt === "직접입력" ? keyCustom : keyOpt,
           engineOn,
           fuel,
           managerDay,
           managerNight,
           mountDisplay,
-          mountMain: mountMainOpt === "직접입력" ? mountMainCustom : mountMainOpt,
-          mountBoard: mountBoardOpt === "직접입력" ? mountBoardCustom : mountBoardOpt,
+          mountMain:
+            mountMainOpt === "직접입력" ? mountMainCustom : mountMainOpt,
+          mountBoard:
+            mountBoardOpt === "직접입력" ? mountBoardCustom : mountBoardOpt,
           handleRemoval,
           terminalStorage,
           notes,
@@ -428,8 +450,8 @@ export default function ConsultationModal({ operators }: { operators: OperatorSc
                   </p>
                   {!savedOk && (
                     <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-[11px] text-amber-700">
-                      전송은 완료됐지만 DB 저장은 되지 않았습니다. (관리자에게 문의 —
-                      마이그레이션 필요)
+                      전송은 완료됐지만 DB 저장은 되지 않았습니다. (관리자에게
+                      문의 — 마이그레이션 필요)
                     </p>
                   )}
                   <button
@@ -442,392 +464,505 @@ export default function ConsultationModal({ operators }: { operators: OperatorSc
                 </div>
               ) : (
                 <div className="grid gap-4 md:grid-cols-2">
-                <div className="space-y-3">
-                  {/* 제목 미리보기 — 설치일 선택 시 자동 표기 */}
-                  <p className="rounded-lg bg-blue-50 px-3 py-2 text-center text-sm font-bold text-blue-700">
-                    [{date ? fmtDot(date) : "0000.00.00"} 설치 일정]
-                  </p>
-
-                  <div>
-                    <span className={LABEL}>1. 운수사</span>
-                    <OperatorCombobox
-                      operators={operators}
-                      selected={selectedOp}
-                      onSelect={handleSelectOp}
-                    />
-                  </div>
-
-                  {selectedOp &&
-                    (selectedOp.dates.length === 0 ? (
-                      <p className="rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-400">
-                        이 운수사는 설치 예정일 데이터가 없어 전송할 수 없습니다.
-                      </p>
-                    ) : (
-                      <label className="block">
-                        <span className={LABEL}>설치 일정 (엑셀 예정일 기준)</span>
-                        <select
-                          value={date}
-                          onChange={(e) => setDate(e.target.value)}
-                          className={INPUT}
-                        >
-                          <option value="">날짜 선택</option>
-                          {selectedOp.dates.map((d) => (
-                            <option key={d.date} value={d.date}>
-                              {fmtDot(d.date)} ({d.count}대)
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                    ))}
-
-                  {selectedOp && date && (
-                    <button
-                      type="button"
-                      onClick={openVehicleList}
-                      className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-xs font-semibold text-gray-600 hover:bg-gray-50"
-                    >
-                      🚌 차량리스트 보기 ({count}대)
-                    </button>
-                  )}
-
-                  <label className="block">
-                    <span className={LABEL}>차량리스트·수량 확인</span>
-                    <select
-                      value={listCheck}
-                      onChange={(e) => setListCheck(e.target.value)}
-                      className={INPUT}
-                    >
-                      <option value="">선택</option>
-                      <option value="이상 없음">이상 없음</option>
-                      <option value="변동 있음">변동 있음</option>
-                    </select>
-                    {listCheck === "변동 있음" && (
-                      <input
-                        type="text"
-                        value={listChange}
-                        onChange={(e) => setListChange(e.target.value)}
-                        placeholder="변동사항 입력 (예: 차량 교체·추가·제외)"
-                        className={INPUT}
-                      />
-                    )}
-                  </label>
-
-                  <div>
-                    <span className={LABEL}>2. 설치 대수 (자동 표기)</span>
-                    <p className="mt-1 rounded-lg bg-gray-50 px-3 py-2 text-sm font-semibold text-gray-700">
-                      {date ? `${count}대` : "-"}
+                  <div className="space-y-3">
+                    {/* 제목 미리보기 — 설치일 선택 시 자동 표기 */}
+                    <p className="rounded-lg bg-blue-50 px-3 py-2 text-center text-sm font-bold text-blue-700">
+                      [{date ? fmtDot(date) : "0000.00.00"} 설치 일정]
                     </p>
-                  </div>
 
-                  {date && routes.length > 0 && (
                     <div>
-                      <span className={LABEL}>설치 노선 (자동 표기)</span>
-                      <p className="mt-1 rounded-lg bg-gray-50 px-3 py-2 text-sm leading-relaxed text-gray-700">
-                        {routesText}
-                      </p>
-                    </div>
-                  )}
-
-                  <label className="block">
-                    <span className={LABEL}>3. 설치 장소</span>
-                    <input
-                      type="text"
-                      value={place}
-                      onChange={(e) => setPlace(e.target.value)}
-                      placeholder="주소 입력"
-                      className={INPUT}
-                    />
-                  </label>
-
-                  <TimeField
-                    label="4. 작업 시간 (첫차 운행 종료 시간)"
-                    value={workStart}
-                    onChange={setWorkStart}
-                    suffix="이후부터 가능"
-                  />
-
-                  <label className="block">
-                    <span className={LABEL}>5. 당일 휴차</span>
-                    <input
-                      type="text"
-                      value={dayOff}
-                      onChange={(e) => setDayOff(e.target.value)}
-                      placeholder="차량번호 입력"
-                      className={INPUT}
-                    />
-                  </label>
-
-                  <label className="block">
-                    <span className={LABEL}>6. 익일 휴차</span>
-                    <input
-                      type="text"
-                      value={nextDayOff}
-                      onChange={(e) => setNextDayOff(e.target.value)}
-                      placeholder="차량번호 입력"
-                      className={INPUT}
-                    />
-                  </label>
-
-                  <TimeField
-                    label="7. 첫차 운행 종료 후 도착 예정 시간"
-                    value={arrival}
-                    onChange={setArrival}
-                  />
-
-                  <TimeField
-                    label="8. 익일 첫차 출발"
-                    value={nextFirstBus}
-                    onChange={setNextFirstBus}
-                  />
-
-                  <TimeField
-                    label="9. 차고지에서 나가는 시간 (첫차 기준)"
-                    value={depotOut}
-                    onChange={setDepotOut}
-                  />
-
-                  <OptionField
-                    label="10. 차키 협조"
-                    options={KEY_OPTIONS}
-                    value={keyOpt}
-                    onChange={setKeyOpt}
-                    custom={keyCustom}
-                    onCustomChange={setKeyCustom}
-                  />
-
-                  <label className="block">
-                    <span className={LABEL}>11. 작업 중 차량 시동 가능 여부</span>
-                    <select
-                      value={engineOn}
-                      onChange={(e) => setEngineOn(e.target.value)}
-                      className={INPUT}
-                    >
-                      <option value="">선택</option>
-                      {ENGINE_OPTIONS.map((o) => (
-                        <option key={o} value={o}>
-                          {o}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-
-                  <label className="block">
-                    <span className={LABEL}>12. 확인사항 · 충전 여부</span>
-                    <select
-                      value={fuel}
-                      onChange={(e) => setFuel(e.target.value)}
-                      className={INPUT}
-                    >
-                      <option value="">선택</option>
-                      {FUEL_OPTIONS.map((o) => (
-                        <option key={o} value={o}>
-                          {o}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-
-                  <div>
-                    <span className={LABEL}>13. 운수사 담당자</span>
-                    <input
-                      type="text"
-                      value={managerDay}
-                      onChange={(e) => setManagerDay(e.target.value)}
-                      placeholder="주간 — 이름/연락처"
-                      className={INPUT}
-                    />
-                    <input
-                      type="text"
-                      value={managerNight}
-                      onChange={(e) => setManagerNight(e.target.value)}
-                      placeholder="야간 — 이름/연락처"
-                      className={INPUT}
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <span className={LABEL}>14. 단말기 설치 위치 (협의)</span>
-                    <label className="block">
-                      <span className="text-[11px] text-gray-400">표출기</span>
-                      <input
-                        type="text"
-                        value={mountDisplay}
-                        onChange={(e) => setMountDisplay(e.target.value)}
-                        className={INPUT}
+                      <span className={LABEL}>1. 운수사</span>
+                      <OperatorCombobox
+                        operators={operators}
+                        selected={selectedOp}
+                        onSelect={handleSelectOp}
                       />
-                    </label>
-                    <OptionField
-                      label="통합단말기"
-                      options={MOUNT_MAIN_OPTIONS}
-                      value={mountMainOpt}
-                      onChange={setMountMainOpt}
-                      custom={mountMainCustom}
-                      onCustomChange={setMountMainCustom}
-                      placeholder="설치 위치 직접 입력"
-                    />
-                    <OptionField
-                      label="승차"
-                      options={MOUNT_BOARD_OPTIONS}
-                      value={mountBoardOpt}
-                      onChange={setMountBoardOpt}
-                      custom={mountBoardCustom}
-                      onCustomChange={setMountBoardCustom}
-                      placeholder="설치 위치 직접 입력"
-                    />
+                    </div>
+
+                    {selectedOp &&
+                      (selectedOp.dates.length === 0 ? (
+                        <p className="rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-400">
+                          이 운수사는 설치 예정일 데이터가 없어 전송할 수
+                          없습니다.
+                        </p>
+                      ) : (
+                        <label className="block">
+                          <span className={LABEL}>
+                            설치 일정 (엑셀 예정일 기준)
+                          </span>
+                          <select
+                            value={date}
+                            onChange={(e) => setDate(e.target.value)}
+                            className={INPUT}
+                          >
+                            <option value="">날짜 선택</option>
+                            {selectedOp.dates.map((d) => (
+                              <option key={d.date} value={d.date}>
+                                {fmtDot(d.date)} ({d.count}대)
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      ))}
+
+                    {selectedOp && date && (
+                      <button
+                        type="button"
+                        onClick={openVehicleList}
+                        className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-xs font-semibold text-gray-600 hover:bg-gray-50"
+                      >
+                        🚌 차량리스트 보기 ({count}대)
+                      </button>
+                    )}
+
                     <label className="block">
-                      <span className={LABEL}>격벽 손잡이(얇은봉) 탈거 유무</span>
+                      <span className={LABEL}>차량리스트·수량 확인</span>
                       <select
-                        value={handleRemoval}
-                        onChange={(e) => setHandleRemoval(e.target.value)}
+                        value={listCheck}
+                        onChange={(e) => setListCheck(e.target.value)}
                         className={INPUT}
                       >
                         <option value="">선택</option>
-                        {HANDLE_REMOVAL_OPTIONS.map((o) => (
+                        <option value="이상 없음">이상 없음</option>
+                        <option value="변동 있음">변동 있음</option>
+                      </select>
+                      {listCheck === "변동 있음" && (
+                        <input
+                          type="text"
+                          value={listChange}
+                          onChange={(e) => setListChange(e.target.value)}
+                          placeholder="변동사항 입력 (예: 차량 교체·추가·제외)"
+                          className={INPUT}
+                        />
+                      )}
+                    </label>
+
+                    <div>
+                      <span className={LABEL}>2. 설치 대수 (자동 표기)</span>
+                      <p className="mt-1 rounded-lg bg-gray-50 px-3 py-2 text-sm font-semibold text-gray-700">
+                        {date ? `${count}대` : "-"}
+                      </p>
+                    </div>
+
+                    {date && routes.length > 0 && (
+                      <div>
+                        <span className={LABEL}>설치 노선 (자동 표기)</span>
+                        <p className="mt-1 rounded-lg bg-gray-50 px-3 py-2 text-sm leading-relaxed text-gray-700">
+                          {routesText}
+                        </p>
+                      </div>
+                    )}
+
+                    <label className="block">
+                      <span className={LABEL}>3. 설치 장소</span>
+                      <input
+                        type="text"
+                        value={place}
+                        onChange={(e) => setPlace(e.target.value)}
+                        placeholder="주소 입력"
+                        className={INPUT}
+                      />
+                    </label>
+
+                    <TimeField
+                      label="4. 작업 시간 (첫차 운행 종료 시간)"
+                      value={workStart}
+                      onChange={setWorkStart}
+                      suffix="이후부터 가능"
+                    />
+
+                    <label className="block">
+                      <span className={LABEL}>5. 당일 휴차</span>
+                      <input
+                        type="text"
+                        value={dayOff}
+                        onChange={(e) => setDayOff(e.target.value)}
+                        placeholder="차량번호 입력"
+                        className={INPUT}
+                      />
+                    </label>
+
+                    <label className="block">
+                      <span className={LABEL}>6. 익일 휴차</span>
+                      <input
+                        type="text"
+                        value={nextDayOff}
+                        onChange={(e) => setNextDayOff(e.target.value)}
+                        placeholder="차량번호 입력"
+                        className={INPUT}
+                      />
+                    </label>
+
+                    <TimeField
+                      label="7. 첫차 운행 종료 후 도착 예정 시간"
+                      value={arrival}
+                      onChange={setArrival}
+                    />
+
+                    <TimeField
+                      label="8. 익일 첫차 출발"
+                      value={nextFirstBus}
+                      onChange={setNextFirstBus}
+                    />
+
+                    <TimeField
+                      label="9. 차고지에서 나가는 시간 (첫차 기준)"
+                      value={depotOut}
+                      onChange={setDepotOut}
+                    />
+
+                    <label className="block">
+                      <span className={LABEL}>9-1. 동시출발 여부</span>
+                      <select
+                        value={simulStart}
+                        onChange={(e) => setSimulStart(e.target.value)}
+                        className={INPUT}
+                      >
+                        <option value="">선택</option>
+                        <option value="해당">해당</option>
+                        <option value="해당없음">해당없음</option>
+                      </select>
+                    </label>
+
+                    <label className="block">
+                      <span className={LABEL}>9-2. 사전출발 차량번호</span>
+                      <input
+                        type="text"
+                        value={earlyPlates}
+                        onChange={(e) => setEarlyPlates(e.target.value)}
+                        placeholder="차량번호 입력"
+                        className={INPUT}
+                      />
+                    </label>
+
+                    <OptionField
+                      label="10. 차키 협조"
+                      options={KEY_OPTIONS}
+                      value={keyOpt}
+                      onChange={setKeyOpt}
+                      custom={keyCustom}
+                      onCustomChange={setKeyCustom}
+                    />
+
+                    <label className="block">
+                      <span className={LABEL}>
+                        11. 작업 중 차량 시동 가능 여부
+                      </span>
+                      <select
+                        value={engineOn}
+                        onChange={(e) => setEngineOn(e.target.value)}
+                        className={INPUT}
+                      >
+                        <option value="">선택</option>
+                        {ENGINE_OPTIONS.map((o) => (
                           <option key={o} value={o}>
                             {o}
                           </option>
                         ))}
                       </select>
                     </label>
-                  </div>
 
-                  <label className="block">
-                    <span className={LABEL}>15. 단말기 보관 위치</span>
-                    <input
-                      type="text"
-                      value={terminalStorage}
-                      onChange={(e) => setTerminalStorage(e.target.value)}
-                      placeholder="예: 배차실, 차고지 창고"
-                      className={INPUT}
-                    />
-                  </label>
+                    <label className="block">
+                      <span className={LABEL}>12. 확인사항 · 충전 여부</span>
+                      <select
+                        value={fuel}
+                        onChange={(e) => setFuel(e.target.value)}
+                        className={INPUT}
+                      >
+                        <option value="">선택</option>
+                        {FUEL_OPTIONS.map((o) => (
+                          <option key={o} value={o}>
+                            {o}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
 
-                  <label className="block">
-                    <span className={LABEL}>16. 특이사항</span>
-                    <textarea
-                      value={notes}
-                      onChange={(e) => setNotes(e.target.value)}
-                      rows={3}
-                      placeholder="협의 중 나온 특이사항"
-                      className={INPUT}
-                    />
-                  </label>
-
-                  <label className="block">
-                    <span className={LABEL}>17. 협의자</span>
-                    <input
-                      type="text"
-                      value={consulter}
-                      onChange={(e) => setConsulter(e.target.value)}
-                      placeholder="이름/연락처"
-                      className={INPUT}
-                    />
-                  </label>
-
-                  {error && (
-                    <p className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600">
-                      {error}
-                    </p>
-                  )}
-
-                  <p className="text-[11px] text-gray-400">
-                    운수사·설치 일정만 필수입니다. 입력하지 않은 항목은 카드에 &quot;-&quot;로
-                    표기됩니다.
-                  </p>
-
-                  <button
-                    type="button"
-                    onClick={handleSend}
-                    disabled={!selectedOp || !date || busy}
-                    className="w-full rounded-xl bg-blue-600 py-3 text-sm font-bold text-white active:bg-blue-700 disabled:opacity-50"
-                  >
-                    {busy ? "전송 중..." : "팀즈로 보내기"}
-                  </button>
-
-                  {/* 모바일 전용 — 미리보기 토글 버튼 (PC는 오른쪽에 항상 표시) */}
-                  <button
-                    type="button"
-                    onClick={() => setPreviewOpen((v) => !v)}
-                    className="w-full rounded-xl border border-gray-300 bg-white py-2.5 text-sm font-semibold text-gray-600 active:bg-gray-50 md:hidden"
-                  >
-                    {previewOpen ? "미리보기 닫기 ▲" : "카드 미리보기 ▼"}
-                  </button>
-                </div>
-
-                {/* 카드 미리보기 — 입력하면 실시간 반영 (PC: 오른쪽 항상, 모바일: 버튼으로 토글) */}
-                <div
-                  className={`h-fit rounded-xl border border-gray-200 bg-gray-50 p-3 md:sticky md:top-2 md:block ${previewOpen ? "" : "hidden"}`}
-                >
-                  <p className="mb-2 text-[11px] font-semibold text-gray-400">
-                    카드 미리보기 (팀즈 협의사항방)
-                  </p>
-                  <div className="rounded-lg border border-gray-200 bg-white p-3 text-xs leading-relaxed shadow-sm">
-                    <p className="text-sm font-bold text-gray-900">
-                      📋 [{date ? fmtDot(date) : "0000.00.00"} 설치 일정] 운수사 협의사항
-                    </p>
-                    <p className="font-bold text-blue-600">
-                      {selectedOp?.operator ?? "운수사 미선택"} · {date ? count : 0}대
-                    </p>
-                    <div className="mt-1.5">
-                      <PreviewRow title="운수사" value={selectedOp?.operator ?? "-"} />
-                      <PreviewRow title="설치 대수" value={date ? `${count}대` : "-"} />
-                      <PreviewRow title="설치 노선" value={routesText || "-"} />
-                      <PreviewRow title="차량리스트 확인" value={listCheck.trim() || "-"} />
-                      {listCheck === "변동 있음" && listChange.trim() && (
-                        <PreviewRow title="변동사항" value={listChange.trim()} />
-                      )}
-                      <PreviewRow title="설치 장소" value={place.trim() || "-"} />
-                      <PreviewRow
-                        title="작업 시간"
-                        value={workStart ? `${workStart} 이후부터 가능` : "-"}
+                    <div>
+                      <span className={LABEL}>13. 운수사 담당자</span>
+                      <input
+                        type="text"
+                        value={managerDay}
+                        onChange={(e) => setManagerDay(e.target.value)}
+                        placeholder="주간 — 이름/연락처"
+                        className={INPUT}
                       />
-                      <PreviewRow title="당일 휴차" value={dayOff.trim() || "-"} />
-                      <PreviewRow title="익일 휴차" value={nextDayOff.trim() || "-"} />
+                      <input
+                        type="text"
+                        value={managerNight}
+                        onChange={(e) => setManagerNight(e.target.value)}
+                        placeholder="야간 — 이름/연락처"
+                        className={INPUT}
+                      />
                     </div>
-                    <PreviewSub text="○ 차량 운행 시간" />
-                    <PreviewRow title="첫차 종료 후 도착" value={arrival ?? "-"} />
-                    <PreviewRow title="익일 첫차 출발" value={nextFirstBus ?? "-"} />
-                    <PreviewRow title="차고지 출발(첫차)" value={depotOut ?? "-"} />
-                    <PreviewSub text="○ 협조·확인사항" />
-                    <PreviewRow
-                      title="차키 협조"
-                      value={(keyOpt === "직접입력" ? keyCustom : keyOpt).trim() || "-"}
-                    />
-                    <PreviewRow title="작업 중 시동" value={engineOn.trim() || "-"} />
-                    <PreviewRow title="충전 여부" value={fuel.trim() || "-"} />
-                    <PreviewSub text="○ 담당자·단말기 설치 위치" />
-                    <PreviewRow title="담당자(주간)" value={managerDay.trim() || "-"} />
-                    <PreviewRow title="담당자(야간)" value={managerNight.trim() || "-"} />
-                    <PreviewRow title="표출기" value={mountDisplay.trim() || "-"} />
-                    <PreviewRow
-                      title="통합단말기"
-                      value={(mountMainOpt === "직접입력" ? mountMainCustom : mountMainOpt).trim() || "-"}
-                    />
-                    <PreviewRow
-                      title="승차"
-                      value={(mountBoardOpt === "직접입력" ? mountBoardCustom : mountBoardOpt).trim() || "-"}
-                    />
-                    <PreviewRow title="격벽 손잡이 탈거" value={handleRemoval.trim() || "-"} />
-                    <PreviewRow title="단말기 보관 위치" value={terminalStorage.trim() || "-"} />
-                    <PreviewSub text="○ 특이사항" />
-                    <div className="text-gray-800">
-                      {(notes.trim()
-                        ? notes
-                            .trim()
-                            .split(/\r?\n/)
-                            .map((l) => l.trim())
-                            .filter(Boolean)
-                            .map((l) => (l.startsWith("-") ? l : `- ${l}`))
-                        : ["- 없음"]
-                      ).map((l, i) => (
-                        <p key={i}>{l}</p>
-                      ))}
+
+                    <div className="space-y-2">
+                      <span className={LABEL}>14. 단말기 설치 위치 (협의)</span>
+                      <label className="block">
+                        <span className="text-[11px] text-gray-400">
+                          표출기
+                        </span>
+                        <input
+                          type="text"
+                          value={mountDisplay}
+                          onChange={(e) => setMountDisplay(e.target.value)}
+                          className={INPUT}
+                        />
+                      </label>
+                      <OptionField
+                        label="통합단말기"
+                        options={MOUNT_MAIN_OPTIONS}
+                        value={mountMainOpt}
+                        onChange={setMountMainOpt}
+                        custom={mountMainCustom}
+                        onCustomChange={setMountMainCustom}
+                        placeholder="설치 위치 직접 입력"
+                      />
+                      <OptionField
+                        label="승차"
+                        options={MOUNT_BOARD_OPTIONS}
+                        value={mountBoardOpt}
+                        onChange={setMountBoardOpt}
+                        custom={mountBoardCustom}
+                        onCustomChange={setMountBoardCustom}
+                        placeholder="설치 위치 직접 입력"
+                      />
+                      <label className="block">
+                        <span className={LABEL}>
+                          격벽 손잡이(얇은봉) 탈거 유무
+                        </span>
+                        <select
+                          value={handleRemoval}
+                          onChange={(e) => setHandleRemoval(e.target.value)}
+                          className={INPUT}
+                        >
+                          <option value="">선택</option>
+                          {HANDLE_REMOVAL_OPTIONS.map((o) => (
+                            <option key={o} value={o}>
+                              {o}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
                     </div>
-                    <div className="mt-1.5">
-                      <PreviewRow title="협의자" value={consulter.trim() || "-"} />
+
+                    <label className="block">
+                      <span className={LABEL}>15. 단말기 보관 위치</span>
+                      <input
+                        type="text"
+                        value={terminalStorage}
+                        onChange={(e) => setTerminalStorage(e.target.value)}
+                        placeholder="예: 배차실, 차고지 창고"
+                        className={INPUT}
+                      />
+                    </label>
+
+                    <label className="block">
+                      <span className={LABEL}>16. 특이사항</span>
+                      <textarea
+                        value={notes}
+                        onChange={(e) => setNotes(e.target.value)}
+                        rows={3}
+                        placeholder="협의 중 나온 특이사항"
+                        className={INPUT}
+                      />
+                    </label>
+
+                    <label className="block">
+                      <span className={LABEL}>17. 협의자</span>
+                      <input
+                        type="text"
+                        value={consulter}
+                        onChange={(e) => setConsulter(e.target.value)}
+                        placeholder="이름/연락처"
+                        className={INPUT}
+                      />
+                    </label>
+
+                    {error && (
+                      <p className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600">
+                        {error}
+                      </p>
+                    )}
+
+                    <p className="text-[11px] text-gray-400">
+                      운수사·설치 일정만 필수입니다. 입력하지 않은 항목은 카드에
+                      &quot;-&quot;로 표기됩니다.
+                    </p>
+
+                    <button
+                      type="button"
+                      onClick={handleSend}
+                      disabled={!selectedOp || !date || busy}
+                      className="w-full rounded-xl bg-blue-600 py-3 text-sm font-bold text-white active:bg-blue-700 disabled:opacity-50"
+                    >
+                      {busy ? "전송 중..." : "팀즈로 보내기"}
+                    </button>
+
+                    {/* 모바일 전용 — 미리보기 토글 버튼 (PC는 오른쪽에 항상 표시) */}
+                    <button
+                      type="button"
+                      onClick={() => setPreviewOpen((v) => !v)}
+                      className="w-full rounded-xl border border-gray-300 bg-white py-2.5 text-sm font-semibold text-gray-600 active:bg-gray-50 md:hidden"
+                    >
+                      {previewOpen ? "미리보기 닫기 ▲" : "카드 미리보기 ▼"}
+                    </button>
+                  </div>
+
+                  {/* 카드 미리보기 — 입력하면 실시간 반영 (PC: 오른쪽 항상, 모바일: 버튼으로 토글) */}
+                  <div
+                    className={`h-fit rounded-xl border border-gray-200 bg-gray-50 p-3 md:sticky md:top-2 md:block ${previewOpen ? "" : "hidden"}`}
+                  >
+                    <p className="mb-2 text-[11px] font-semibold text-gray-400">
+                      카드 미리보기 (팀즈 협의사항방)
+                    </p>
+                    <div className="rounded-lg border border-gray-200 bg-white p-3 text-xs leading-relaxed shadow-sm">
+                      <p className="text-sm font-bold text-gray-900">
+                        📋 [{date ? fmtDot(date) : "0000.00.00"} 설치 일정]
+                        운수사 협의사항
+                      </p>
+                      <p className="font-bold text-blue-600">
+                        {selectedOp?.operator ?? "운수사 미선택"} ·{" "}
+                        {date ? count : 0}대
+                      </p>
+                      <div className="mt-1.5">
+                        <PreviewRow
+                          title="운수사"
+                          value={selectedOp?.operator ?? "-"}
+                        />
+                        <PreviewRow
+                          title="설치 대수"
+                          value={date ? `${count}대` : "-"}
+                        />
+                        <PreviewRow
+                          title="설치 노선"
+                          value={routesText || "-"}
+                        />
+                        <PreviewRow
+                          title="차량리스트 확인"
+                          value={listCheck.trim() || "-"}
+                        />
+                        {listCheck === "변동 있음" && listChange.trim() && (
+                          <PreviewRow
+                            title="변동사항"
+                            value={listChange.trim()}
+                          />
+                        )}
+                        <PreviewRow
+                          title="설치 장소"
+                          value={place.trim() || "-"}
+                        />
+                        <PreviewRow
+                          title="작업 시간"
+                          value={workStart ? `${workStart} 이후부터 가능` : "-"}
+                        />
+                        <PreviewRow
+                          title="당일 휴차"
+                          value={dayOff.trim() || "-"}
+                        />
+                        <PreviewRow
+                          title="익일 휴차"
+                          value={nextDayOff.trim() || "-"}
+                        />
+                      </div>
+                      <PreviewSub text="○ 차량 운행 시간" />
+                      <PreviewRow
+                        title="첫차 종료 후 도착"
+                        value={arrival ?? "-"}
+                      />
+                      <PreviewRow
+                        title="익일 첫차 출발"
+                        value={nextFirstBus ?? "-"}
+                      />
+                      <PreviewRow
+                        title="차고지 출발(첫차)"
+                        value={depotOut ?? "-"}
+                      />
+                      <PreviewRow
+                        title="동시출발 여부"
+                        value={simulStart || "-"}
+                      />
+                      <PreviewRow
+                        title="사전출발 차량번호"
+                        value={earlyPlates.trim() || "-"}
+                      />
+                      <PreviewSub text="○ 협조·확인사항" />
+                      <PreviewRow
+                        title="차키 협조"
+                        value={
+                          (keyOpt === "직접입력" ? keyCustom : keyOpt).trim() ||
+                          "-"
+                        }
+                      />
+                      <PreviewRow
+                        title="작업 중 시동"
+                        value={engineOn.trim() || "-"}
+                      />
+                      <PreviewRow
+                        title="충전 여부"
+                        value={fuel.trim() || "-"}
+                      />
+                      <PreviewSub text="○ 담당자·단말기 설치 위치" />
+                      <PreviewRow
+                        title="담당자(주간)"
+                        value={managerDay.trim() || "-"}
+                      />
+                      <PreviewRow
+                        title="담당자(야간)"
+                        value={managerNight.trim() || "-"}
+                      />
+                      <PreviewRow
+                        title="표출기"
+                        value={mountDisplay.trim() || "-"}
+                      />
+                      <PreviewRow
+                        title="통합단말기"
+                        value={
+                          (mountMainOpt === "직접입력"
+                            ? mountMainCustom
+                            : mountMainOpt
+                          ).trim() || "-"
+                        }
+                      />
+                      <PreviewRow
+                        title="승차"
+                        value={
+                          (mountBoardOpt === "직접입력"
+                            ? mountBoardCustom
+                            : mountBoardOpt
+                          ).trim() || "-"
+                        }
+                      />
+                      <PreviewRow
+                        title="격벽 손잡이 탈거"
+                        value={handleRemoval.trim() || "-"}
+                      />
+                      <PreviewRow
+                        title="단말기 보관 위치"
+                        value={terminalStorage.trim() || "-"}
+                      />
+                      <PreviewSub text="○ 특이사항" />
+                      <div className="text-gray-800">
+                        {(notes.trim()
+                          ? notes
+                              .trim()
+                              .split(/\r?\n/)
+                              .map((l) => l.trim())
+                              .filter(Boolean)
+                              .map((l) => (l.startsWith("-") ? l : `- ${l}`))
+                          : ["- 없음"]
+                        ).map((l, i) => (
+                          <p key={i}>{l}</p>
+                        ))}
+                      </div>
+                      <div className="mt-1.5">
+                        <PreviewRow
+                          title="협의자"
+                          value={consulter.trim() || "-"}
+                        />
+                      </div>
                     </div>
                   </div>
-                </div>
                 </div>
               )}
             </div>
@@ -860,9 +995,13 @@ export default function ConsultationModal({ operators }: { operators: OperatorSc
 
             <div className="max-h-[60vh] overflow-y-auto p-4">
               {vehLoading ? (
-                <p className="py-6 text-center text-xs text-gray-400">불러오는 중…</p>
+                <p className="py-6 text-center text-xs text-gray-400">
+                  불러오는 중…
+                </p>
               ) : vehError ? (
-                <p className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600">{vehError}</p>
+                <p className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600">
+                  {vehError}
+                </p>
               ) : vehList.length === 0 ? (
                 <p className="py-6 text-center text-xs text-gray-400">
                   해당 날짜의 차량이 없습니다.
@@ -883,7 +1022,10 @@ export default function ConsultationModal({ operators }: { operators: OperatorSc
                       {[...groups.entries()].map(([route, plates]) => (
                         <div key={route}>
                           <p className="text-[11px] font-semibold text-blue-700">
-                            {route} <span className="font-normal text-gray-400">{plates.length}대</span>
+                            {route}{" "}
+                            <span className="font-normal text-gray-400">
+                              {plates.length}대
+                            </span>
                           </p>
                           <ul className="mt-1 grid grid-cols-2 gap-x-2 gap-y-1">
                             {plates.map((p) => (

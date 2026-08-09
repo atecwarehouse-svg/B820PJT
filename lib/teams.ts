@@ -8,7 +8,10 @@ import { VOC_RATINGS, starBar } from "./voc";
 // 운수사 VOC 요약 → 팀즈 카드 블록. 항목별 평균 별점은 FactSet(라벨·별점 2열)로
 // 그려 별점 열이 세로로 정렬되게 한다. 개별 의견·특이사항은 자유 텍스트라 TextBlock.
 // VOC 등록 카드(sendVocCard)와 금일완료 2차 카드가 공유한다.
-function vocSummaryBlocks(s: VocOperatorSummary, headSpacing: "Small" | "Medium"): unknown[] {
+function vocSummaryBlocks(
+  s: VocOperatorSummary,
+  headSpacing: "Small" | "Medium",
+): unknown[] {
   const blocks: unknown[] = [
     {
       type: "TextBlock",
@@ -18,10 +21,12 @@ function vocSummaryBlocks(s: VocOperatorSummary, headSpacing: "Small" | "Medium"
       wrap: true,
     },
   ];
-  const facts = VOC_RATINGS.filter((r) => s.averages[r.key] !== undefined).map((r) => ({
-    title: r.label,
-    value: starBar(s.averages[r.key]!),
-  }));
+  const facts = VOC_RATINGS.filter((r) => s.averages[r.key] !== undefined).map(
+    (r) => ({
+      title: r.label,
+      value: starBar(s.averages[r.key]!),
+    }),
+  );
   if (facts.length) {
     blocks.push({ type: "FactSet", spacing: "Small", facts });
   }
@@ -62,7 +67,8 @@ function inspectorWebhooks(): Record<string, string> {
   }
   if (!v || typeof v !== "object" || Array.isArray(v)) return out;
   for (const [k, url] of Object.entries(v as Record<string, unknown>)) {
-    if (k.trim() && typeof url === "string" && url.startsWith("https://")) out[k.trim()] = url;
+    if (k.trim() && typeof url === "string" && url.startsWith("https://"))
+      out[k.trim()] = url;
   }
   return out;
 }
@@ -130,7 +136,8 @@ export interface ProgressCardData {
 
 export async function sendProgressCard(d: ProgressCardData): Promise<void> {
   const url = process.env.TEAMS_WEBHOOK_URL;
-  if (!url) throw new Error("팀즈 웹후크가 설정되지 않았습니다. (TEAMS_WEBHOOK_URL)");
+  if (!url)
+    throw new Error("팀즈 웹후크가 설정되지 않았습니다. (TEAMS_WEBHOOK_URL)");
 
   const card = {
     type: "message",
@@ -159,11 +166,26 @@ export async function sendProgressCard(d: ProgressCardData): Promise<void> {
             {
               type: "FactSet",
               facts: [
-                { title: "금일 설치계획", value: `${d.todayPlanned.toLocaleString()}대` },
-                { title: "진행중", value: `${d.inProgress.toLocaleString()}대` },
-                { title: "금일완료", value: `${d.todayDone.toLocaleString()}대` },
-                { title: "누적완료", value: `${d.complete.toLocaleString()}대` },
-                { title: "잔여(설치대상)", value: `${d.remain.toLocaleString()}대` },
+                {
+                  title: "금일 설치계획",
+                  value: `${d.todayPlanned.toLocaleString()}대`,
+                },
+                {
+                  title: "진행중",
+                  value: `${d.inProgress.toLocaleString()}대`,
+                },
+                {
+                  title: "금일완료",
+                  value: `${d.todayDone.toLocaleString()}대`,
+                },
+                {
+                  title: "누적완료",
+                  value: `${d.complete.toLocaleString()}대`,
+                },
+                {
+                  title: "잔여(설치대상)",
+                  value: `${d.remain.toLocaleString()}대`,
+                },
               ],
             },
           ],
@@ -191,12 +213,18 @@ export async function sendStartReportCard(d: {
   todayPlanned: number;
   complete: number;
   remain: number;
-  groups: { operator: string; route: string; planned: number; manager?: string }[];
+  groups: {
+    operator: string;
+    route: string;
+    planned: number;
+    manager?: string;
+  }[];
   note?: string; // 특이사항 — 있을 때만 카드 하단에 표시
   startTime?: string; // 시작시간 (HH:MM) — 있을 때만 표시
 }): Promise<void> {
   const url = process.env.TEAMS_WEBHOOK_URL;
-  if (!url) throw new Error("팀즈 웹후크가 설정되지 않았습니다. (TEAMS_WEBHOOK_URL)");
+  if (!url)
+    throw new Error("팀즈 웹후크가 설정되지 않았습니다. (TEAMS_WEBHOOK_URL)");
 
   const card = {
     type: "message",
@@ -240,36 +268,42 @@ export async function sendStartReportCard(d: {
             },
             // 운수사별 묶음: "운수사 · 담당자" 헤더 아래 노선별 대수를 FactSet(2열 정렬)으로.
             // 노선을 한 줄에 길게 붙이면 줄바꿈이 흐트러져 보기 불편하다는 피드백 반영.
-            ...[...d.groups.reduce((m, g) => {
-              const cur = m.get(g.operator) ?? { manager: "", routes: [] };
-              if (g.manager) cur.manager = g.manager;
-              cur.routes.push(g);
-              return m.set(g.operator, cur);
-            }, new Map<string, { manager: string; routes: typeof d.groups }>())].flatMap(
-              ([op, info]) => [
-                {
-                  type: "TextBlock",
-                  weight: "Bolder",
-                  text: `🚍 ${op}${info.manager ? ` · 담당 ${info.manager}` : ""} — ${info.routes
-                    .reduce((s, r) => s + r.planned, 0)
-                    .toLocaleString()}대`,
-                  wrap: true,
-                },
-                {
-                  type: "FactSet",
-                  spacing: "Small",
-                  facts: info.routes.map((r) => ({
-                    title: r.route ? `${r.route}노선` : "노선 미지정",
-                    value: `${r.planned.toLocaleString()}대`,
-                  })),
-                },
-              ],
-            ),
+            ...[
+              ...d.groups.reduce((m, g) => {
+                const cur = m.get(g.operator) ?? { manager: "", routes: [] };
+                if (g.manager) cur.manager = g.manager;
+                cur.routes.push(g);
+                return m.set(g.operator, cur);
+              }, new Map<string, { manager: string; routes: typeof d.groups }>()),
+            ].flatMap(([op, info]) => [
+              {
+                type: "TextBlock",
+                weight: "Bolder",
+                text: `🚍 ${op}${info.manager ? ` · 담당 ${info.manager}` : ""} — ${info.routes
+                  .reduce((s, r) => s + r.planned, 0)
+                  .toLocaleString()}대`,
+                wrap: true,
+              },
+              {
+                type: "FactSet",
+                spacing: "Small",
+                facts: info.routes.map((r) => ({
+                  title: r.route ? `${r.route}노선` : "노선 미지정",
+                  value: `${r.planned.toLocaleString()}대`,
+                })),
+              },
+            ]),
             {
               type: "FactSet",
               facts: [
-                { title: "누적 완료", value: `${d.complete.toLocaleString()}대` },
-                { title: "잔여(설치대상)", value: `${d.remain.toLocaleString()}대` },
+                {
+                  title: "누적 완료",
+                  value: `${d.complete.toLocaleString()}대`,
+                },
+                {
+                  title: "잔여(설치대상)",
+                  value: `${d.remain.toLocaleString()}대`,
+                },
               ],
             },
             ...(d.note
@@ -314,7 +348,8 @@ export async function sendCompletionReportCard(
   vocs?: VocOperatorSummary[], // 2차 발송에서만 전달 — 운수사 VOC 섹션
 ): Promise<void> {
   const url = process.env.TEAMS_WEBHOOK_URL;
-  if (!url) throw new Error("팀즈 웹후크가 설정되지 않았습니다. (TEAMS_WEBHOOK_URL)");
+  if (!url)
+    throw new Error("팀즈 웹후크가 설정되지 않았습니다. (TEAMS_WEBHOOK_URL)");
 
   const noteText = notes.trim()
     ? notes
@@ -340,7 +375,10 @@ export async function sendCompletionReportCard(
         {
           type: "FactSet",
           spacing: "Small",
-          facts: checkRows.map((row) => ({ title: row.title, value: row.value })),
+          facts: checkRows.map((row) => ({
+            title: row.title,
+            value: row.value,
+          })),
         },
       ]
     : [];
@@ -404,7 +442,10 @@ export async function sendCompletionReportCard(
             {
               type: "FactSet",
               facts: [
-                { title: "누적 계획", value: `${r.cumPlanned.toLocaleString()}대` },
+                {
+                  title: "누적 계획",
+                  value: `${r.cumPlanned.toLocaleString()}대`,
+                },
                 {
                   title: "누적 완료",
                   value: `${r.cumDone.toLocaleString()}대 (${r.cumPct.toFixed(1)}%)`,
@@ -463,7 +504,8 @@ export async function sendServiceStartCard(d: {
   notes?: string;
 }): Promise<void> {
   const url = process.env.TEAMS_WEBHOOK_URL;
-  if (!url) throw new Error("팀즈 웹후크가 설정되지 않았습니다. (TEAMS_WEBHOOK_URL)");
+  if (!url)
+    throw new Error("팀즈 웹후크가 설정되지 않았습니다. (TEAMS_WEBHOOK_URL)");
 
   const rows = serviceCheckRows(d.check);
   // 이상 항목 증상은 카드 하단에 붉게 별도 표기
@@ -472,7 +514,9 @@ export async function sendServiceStartCard(d: {
     issues.push(`- BIS(인천): ${d.check.bisSymptom?.trim() || "증상 미기재"}`);
   }
   if (d.check.kakaoStatus === "issue") {
-    issues.push(`- 카카오(초정밀): ${d.check.kakaoSymptom?.trim() || "증상 미기재"}`);
+    issues.push(
+      `- 카카오(초정밀): ${d.check.kakaoSymptom?.trim() || "증상 미기재"}`,
+    );
   }
   const reportedAt = new Date().toLocaleString("ko-KR", {
     timeZone: "Asia/Seoul",
@@ -505,7 +549,15 @@ export async function sendServiceStartCard(d: {
               wrap: true,
             },
             ...(rows.length
-              ? [{ type: "FactSet", facts: rows.map((r) => ({ title: r.title, value: r.value })) }]
+              ? [
+                  {
+                    type: "FactSet",
+                    facts: rows.map((r) => ({
+                      title: r.title,
+                      value: r.value,
+                    })),
+                  },
+                ]
               : []),
             {
               type: "TextBlock",
@@ -541,7 +593,12 @@ export async function sendServiceStartCard(d: {
               spacing: "Medium",
               wrap: true,
             },
-            { type: "TextBlock", text: bulletText(d.notes), spacing: "None", wrap: true },
+            {
+              type: "TextBlock",
+              text: bulletText(d.notes),
+              spacing: "None",
+              wrap: true,
+            },
           ],
         },
       },
@@ -571,7 +628,8 @@ export interface VocCardData {
 
 export async function sendVocCard(d: VocCardData): Promise<void> {
   const url = process.env.TEAMS_WEBHOOK_URL;
-  if (!url) throw new Error("팀즈 웹후크가 설정되지 않았습니다. (TEAMS_WEBHOOK_URL)");
+  if (!url)
+    throw new Error("팀즈 웹후크가 설정되지 않았습니다. (TEAMS_WEBHOOK_URL)");
 
   const lines = (d.groups.length ? d.groups : [{ count: 0 }]).map((g) =>
     [d.operator, g.route ? `${g.route}노선` : "", d.label, `(${g.count}대)`]
@@ -633,7 +691,10 @@ function kstHM(iso: string): string {
 
 // 시작~종료 소요시간 → "00시간00분"
 function elapsedLabel(startIso: string, endIso: string): string {
-  const min = Math.max(0, Math.round((+new Date(endIso) - +new Date(startIso)) / 60000));
+  const min = Math.max(
+    0,
+    Math.round((+new Date(endIso) - +new Date(startIso)) / 60000),
+  );
   const h = String(Math.floor(min / 60)).padStart(2, "0");
   const m = String(min % 60).padStart(2, "0");
   return `${h}시간${m}분`;
@@ -877,7 +938,9 @@ export async function sendCompletionCard(d: {
   // 종료시간 + 소요시간(시작 시각이 있을 때만) — "⏱ 종료시간 14:05 · 소요시간 01시간23분"
   const timeText = d.completedAt
     ? `⏱ 종료시간 ${kstHM(d.completedAt)}${
-        d.startedAt ? ` · 소요시간 ${elapsedLabel(d.startedAt, d.completedAt)}` : ""
+        d.startedAt
+          ? ` · 소요시간 ${elapsedLabel(d.startedAt, d.completedAt)}`
+          : ""
       }`
     : "";
 
@@ -985,6 +1048,8 @@ export interface ConsultationCardData {
   arrival?: string; // 7. 첫차 운행 종료 후 도착 예정 "HH:MM"
   nextFirstBus?: string; // 8. 익일 첫차 출발 "HH:MM"
   depotOut?: string; // 9. 차고지에서 나가는 시간(첫차 기준) "HH:MM"
+  simulStart?: string; // 9-1. 동시출발 여부 (해당/해당없음)
+  earlyPlates?: string; // 9-2. 사전출발 차량번호
   keyMethod?: string; // 10. 차키 협조
   engineOn?: string; // 11. 작업 중 차량 시동 가능 여부
   fuel?: string; // 12. 충전 여부
@@ -1002,7 +1067,9 @@ export interface ConsultationCardData {
 // 운수사 협의사항 카드 — 대시보드 '운수사 협의사항' 폼에서 전송.
 // 웹후크: TEAMS_COMPLETE_WEBHOOK_URL (설치완료 사진과 같은 채팅방) + 검수자 4명 개인방 전체.
 // 사용자가 명시적으로 보내는 것이므로 미설정 시 throw해 실패를 알린다.
-export async function sendConsultationCard(d: ConsultationCardData): Promise<void> {
+export async function sendConsultationCard(
+  d: ConsultationCardData,
+): Promise<void> {
   const url = process.env.TEAMS_COMPLETE_WEBHOOK_URL;
   if (!url) {
     throw new Error(
@@ -1084,6 +1151,8 @@ export async function sendConsultationCard(d: ConsultationCardData): Promise<voi
                 { title: "첫차 종료 후 도착", value: v(d.arrival) },
                 { title: "익일 첫차 출발", value: v(d.nextFirstBus) },
                 { title: "차고지 출발(첫차)", value: v(d.depotOut) },
+                { title: "동시출발 여부", value: v(d.simulStart) },
+                { title: "사전출발 차량번호", value: v(d.earlyPlates) },
               ],
             },
             sub("○ 협조·확인사항"),
@@ -1202,7 +1271,10 @@ export async function sendPlanReportCard(
     wrap: true,
   });
   const baseFacts = (g: PlanReportGroup) => [
-    { title: "노선", value: g.routes.map((r) => `${r.route} ${r.count}대`).join(" · ") || "-" },
+    {
+      title: "노선",
+      value: g.routes.map((r) => `${r.route} ${r.count}대`).join(" · ") || "-",
+    },
     { title: "집합시간", value: v(g.time) },
     { title: "설치 장소", value: v(g.place) },
     // 특이사항은 입력된 운수사만 (시작보고방 카드는 간결 유지)
@@ -1260,7 +1332,8 @@ export async function sendPlanReportCard(
         facts: [
           {
             title: "노선",
-            value: g.routes.map((r) => `${r.route} ${r.count}대`).join(" · ") || "-",
+            value:
+              g.routes.map((r) => `${r.route} ${r.count}대`).join(" · ") || "-",
           },
           { title: "당일 휴차", value: v(g.dayOff) },
           { title: "익일 휴차", value: v(g.nextDayOff) },
@@ -1278,9 +1351,19 @@ export async function sendPlanReportCard(
     ]),
   ]);
 
-  const allTargets: { room: PlanReportRoom; name: string; url: string | undefined; card: unknown }[] = [
+  const allTargets: {
+    room: PlanReportRoom;
+    name: string;
+    url: string | undefined;
+    card: unknown;
+  }[] = [
     { room: "start", name: "시작보고 채팅방", url: startUrl, card: startCard },
-    { room: "consult", name: "협의사항 채팅방", url: consultUrl, card: consultCard },
+    {
+      room: "consult",
+      name: "협의사항 채팅방",
+      url: consultUrl,
+      card: consultCard,
+    },
   ];
   const targets = allTargets.filter((t) => rooms.includes(t.room));
 
@@ -1290,7 +1373,9 @@ export async function sendPlanReportCard(
     if (!t.url) {
       errors.push(
         `${t.name} 웹후크가 설정되지 않았습니다. (${
-          t.room === "start" ? "TEAMS_WEBHOOK_URL" : "TEAMS_COMPLETE_WEBHOOK_URL"
+          t.room === "start"
+            ? "TEAMS_WEBHOOK_URL"
+            : "TEAMS_COMPLETE_WEBHOOK_URL"
         })`,
       );
       continue;
@@ -1303,7 +1388,9 @@ export async function sendPlanReportCard(
       });
       if (!res.ok) {
         const txt = await res.text().catch(() => "");
-        throw new Error(`Teams 설치계획 응답(${t.name}) ${res.status} ${txt.slice(0, 160)}`);
+        throw new Error(
+          `Teams 설치계획 응답(${t.name}) ${res.status} ${txt.slice(0, 160)}`,
+        );
       }
       sent.push(t.room);
     } catch (e) {

@@ -17,6 +17,8 @@ interface Consultation {
   arrival: string | null;
   next_first_bus: string | null;
   depot_out: string | null;
+  simul_start: string | null;
+  early_plates: string | null;
   key_method: string | null;
   engine_on: string | null;
   fuel: string | null;
@@ -44,6 +46,8 @@ const FIELDS: [keyof Consultation, string][] = [
   ["arrival", "첫차 종료 후 도착"],
   ["next_first_bus", "익일 첫차 출발"],
   ["depot_out", "차고지 출발(첫차)"],
+  ["simul_start", "동시출발 여부"],
+  ["early_plates", "사전출발 차량번호"],
   ["key_method", "차키 협조"],
   ["engine_on", "작업 중 시동"],
   ["fuel", "충전 여부"],
@@ -81,7 +85,9 @@ export default function ConsultationManager() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/admin/consultations", { cache: "no-store" });
+      const res = await fetch("/api/admin/consultations", {
+        cache: "no-store",
+      });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "불러오기 실패");
       setList(json.list as Consultation[]);
@@ -129,7 +135,9 @@ export default function ConsultationManager() {
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "수정 실패");
-      setList((l) => l.map((x) => (x.id === id ? (json.item as Consultation) : x)));
+      setList((l) =>
+        l.map((x) => (x.id === id ? (json.item as Consultation) : x)),
+      );
       cancelEdit();
     } catch (e) {
       setEditError(e instanceof Error ? e.message : "수정 실패");
@@ -142,7 +150,9 @@ export default function ConsultationManager() {
     if (!confirm(`${c.operator} ${c.date} 협의사항을 삭제할까요?`)) return;
     setDeleting(c.id);
     try {
-      const res = await fetch(`/api/admin/consultations?id=${c.id}`, { method: "DELETE" });
+      const res = await fetch(`/api/admin/consultations?id=${c.id}`, {
+        method: "DELETE",
+      });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "삭제 실패");
       setList((l) => l.filter((x) => x.id !== c.id));
@@ -155,10 +165,12 @@ export default function ConsultationManager() {
 
   return (
     <section className="mb-5">
-      <h2 className="mb-2 text-sm font-semibold text-gray-700">📋 운수사 협의사항</h2>
+      <h2 className="mb-2 text-sm font-semibold text-gray-700">
+        📋 운수사 협의사항
+      </h2>
       <p className="mb-3 text-xs text-gray-500">
-        협의사항 폼에서 팀즈 전송한 내용이 운수사+설치일 기준으로 저장됩니다. (재전송 시 최신
-        내용으로 갱신 · 여기서 직접 수정도 가능)
+        협의사항 폼에서 팀즈 전송한 내용이 운수사+설치일 기준으로 저장됩니다.
+        (재전송 시 최신 내용으로 갱신 · 여기서 직접 수정도 가능)
       </p>
 
       {needMigration && (
@@ -190,7 +202,9 @@ export default function ConsultationManager() {
                   <p className="truncate text-sm font-medium text-gray-800">
                     {c.date?.slice(0, 10).replace(/-/g, ".")} · {c.operator}
                     {c.count ? (
-                      <span className="ml-1 font-normal text-gray-400">{c.count}대</span>
+                      <span className="ml-1 font-normal text-gray-400">
+                        {c.count}대
+                      </span>
                     ) : null}
                   </p>
                   <p className="truncate text-xs text-gray-400">
@@ -241,18 +255,26 @@ export default function ConsultationManager() {
               {editId === c.id && (
                 <div className="border-t border-gray-50 bg-blue-50/40 px-3 py-3">
                   <p className="mb-2 text-[11px] text-gray-500">
-                    {c.date?.slice(0, 10).replace(/-/g, ".")} · {c.operator} — 내용 수정
-                    <span className="ml-1 text-gray-400">(운수사·설치일은 변경 불가)</span>
+                    {c.date?.slice(0, 10).replace(/-/g, ".")} · {c.operator} —
+                    내용 수정
+                    <span className="ml-1 text-gray-400">
+                      (운수사·설치일은 변경 불가)
+                    </span>
                   </p>
                   <div className="grid gap-2 sm:grid-cols-2">
                     <label className="block">
-                      <span className="text-[11px] font-medium text-gray-500">설치 대수</span>
+                      <span className="text-[11px] font-medium text-gray-500">
+                        설치 대수
+                      </span>
                       <input
                         type="number"
                         min={0}
                         value={form.count ?? 0}
                         onChange={(e) =>
-                          setForm((f) => ({ ...f, count: Number(e.target.value) }))
+                          setForm((f) => ({
+                            ...f,
+                            count: Number(e.target.value),
+                          }))
                         }
                         className={INPUT}
                       />

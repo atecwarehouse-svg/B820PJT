@@ -53,13 +53,20 @@ export async function POST(req: NextRequest) {
     .slice(0, 50);
   const date = String(body.date ?? "").trim();
   const countNum = Number(body.count);
-  const count = Number.isFinite(countNum) && countNum > 0 ? Math.floor(countNum) : 0;
+  const count =
+    Number.isFinite(countNum) && countNum > 0 ? Math.floor(countNum) : 0;
 
   if (!operator) {
-    return NextResponse.json({ error: "운수사를 선택하세요." }, { status: 400 });
+    return NextResponse.json(
+      { error: "운수사를 선택하세요." },
+      { status: 400 },
+    );
   }
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-    return NextResponse.json({ error: "설치 일정을 선택하세요." }, { status: 400 });
+    return NextResponse.json(
+      { error: "설치 일정을 선택하세요." },
+      { status: 400 },
+    );
   }
 
   const card = {
@@ -76,6 +83,8 @@ export async function POST(req: NextRequest) {
     arrival: time("arrival"),
     nextFirstBus: time("nextFirstBus"),
     depotOut: time("depotOut"),
+    simulStart: text("simulStart", 20),
+    earlyPlates: text("earlyPlates", 300),
     keyMethod: text("keyMethod"),
     engineOn: text("engineOn", 20),
     fuel: text("fuel", 30),
@@ -94,7 +103,10 @@ export async function POST(req: NextRequest) {
     await sendConsultationCard(card);
   } catch (e) {
     const msg = e instanceof Error ? e.message : "알 수 없는 오류";
-    return NextResponse.json({ error: `팀즈 전송 실패: ${msg}` }, { status: 500 });
+    return NextResponse.json(
+      { error: `팀즈 전송 실패: ${msg}` },
+      { status: 500 },
+    );
   }
 
   // 전송 성공 후 DB 저장 — 같은 운수사+설치일이면 최신 내용으로 갱신.
@@ -103,39 +115,45 @@ export async function POST(req: NextRequest) {
   try {
     const supabase = createServiceClient();
     const row: Record<string, unknown> = {
-        operator: card.operator,
-        date: card.date,
-        count: card.count,
-        routes: card.routes ?? null,
-        list_check: card.listCheck ?? null,
-        list_change: card.listChange ?? null,
-        place: card.place ?? null,
-        work_start: card.workStart ?? null,
-        day_off: card.dayOff ?? null,
-        next_day_off: card.nextDayOff ?? null,
-        arrival: card.arrival ?? null,
-        next_first_bus: card.nextFirstBus ?? null,
-        depot_out: card.depotOut ?? null,
-        key_method: card.keyMethod ?? null,
-        engine_on: card.engineOn ?? null,
-        fuel: card.fuel ?? null,
-        manager_day: card.managerDay ?? null,
-        manager_night: card.managerNight ?? null,
-        mount_display: card.mountDisplay ?? null,
-        mount_main: card.mountMain ?? null,
-        mount_board: card.mountBoard ?? null,
-        handle_removal: card.handleRemoval ?? null,
-        terminal_storage: card.terminalStorage ?? null,
-        notes: card.notes ?? null,
-        consulter: card.consulter ?? null,
-        updated_at: new Date().toISOString(),
-      };
+      operator: card.operator,
+      date: card.date,
+      count: card.count,
+      routes: card.routes ?? null,
+      list_check: card.listCheck ?? null,
+      list_change: card.listChange ?? null,
+      place: card.place ?? null,
+      work_start: card.workStart ?? null,
+      day_off: card.dayOff ?? null,
+      next_day_off: card.nextDayOff ?? null,
+      arrival: card.arrival ?? null,
+      next_first_bus: card.nextFirstBus ?? null,
+      depot_out: card.depotOut ?? null,
+      simul_start: card.simulStart ?? null,
+      early_plates: card.earlyPlates ?? null,
+      key_method: card.keyMethod ?? null,
+      engine_on: card.engineOn ?? null,
+      fuel: card.fuel ?? null,
+      manager_day: card.managerDay ?? null,
+      manager_night: card.managerNight ?? null,
+      mount_display: card.mountDisplay ?? null,
+      mount_main: card.mountMain ?? null,
+      mount_board: card.mountBoard ?? null,
+      handle_removal: card.handleRemoval ?? null,
+      terminal_storage: card.terminalStorage ?? null,
+      notes: card.notes ?? null,
+      consulter: card.consulter ?? null,
+      updated_at: new Date().toISOString(),
+    };
     let { error } = await supabase
       .from("consultations")
       .upsert(row, { onConflict: "operator,date" });
-    // terminal_storage 컬럼 마이그레이션 전 DB — 그 컬럼만 빼고 재시도(기존 저장 유지)
-    if (error && /terminal_storage/.test(error.message)) {
-      delete row.terminal_storage;
+    // 나중에 추가된 컬럼(마이그레이션 전 DB) — 그 컬럼만 빼고 재시도(기존 항목 저장은 유지)
+    const OPTIONAL_COLS = ["terminal_storage", "simul_start", "early_plates"];
+    while (error) {
+      const msg = error.message;
+      const col = OPTIONAL_COLS.find((c) => c in row && msg.includes(c));
+      if (!col) break;
+      delete row[col];
       ({ error } = await supabase
         .from("consultations")
         .upsert(row, { onConflict: "operator,date" }));

@@ -8,7 +8,10 @@ export const dynamic = "force-dynamic";
 // GET /api/admin/consultations → 저장된 운수사 협의사항 목록 (설치일 최신순)
 export async function GET() {
   if (!isAdmin()) {
-    return NextResponse.json({ error: "관리자 인증이 필요합니다." }, { status: 401 });
+    return NextResponse.json(
+      { error: "관리자 인증이 필요합니다." },
+      { status: 401 },
+    );
   }
   const supabase = createServiceClient();
   const { data, error } = await supabase
@@ -44,6 +47,8 @@ const EDITABLE_TEXT = [
   "arrival",
   "next_first_bus",
   "depot_out",
+  "simul_start",
+  "early_plates",
   "key_method",
   "engine_on",
   "fuel",
@@ -61,7 +66,10 @@ const EDITABLE_TEXT = [
 // PATCH /api/admin/consultations → 저장된 협의사항 내용 수정 (id + 수정 필드)
 export async function PATCH(req: NextRequest) {
   if (!isAdmin()) {
-    return NextResponse.json({ error: "관리자 인증이 필요합니다." }, { status: 401 });
+    return NextResponse.json(
+      { error: "관리자 인증이 필요합니다." },
+      { status: 401 },
+    );
   }
   let body: Record<string, unknown>;
   try {
@@ -89,7 +97,10 @@ export async function PATCH(req: NextRequest) {
   }
 
   if (Object.keys(update).length === 0) {
-    return NextResponse.json({ error: "수정할 내용이 없습니다." }, { status: 400 });
+    return NextResponse.json(
+      { error: "수정할 내용이 없습니다." },
+      { status: 400 },
+    );
   }
   update.updated_at = new Date().toISOString();
 
@@ -109,7 +120,10 @@ export async function PATCH(req: NextRequest) {
 // DELETE /api/admin/consultations?id=123 → 협의사항 삭제
 export async function DELETE(req: NextRequest) {
   if (!isAdmin()) {
-    return NextResponse.json({ error: "관리자 인증이 필요합니다." }, { status: 401 });
+    return NextResponse.json(
+      { error: "관리자 인증이 필요합니다." },
+      { status: 401 },
+    );
   }
   const id = Number(req.nextUrl.searchParams.get("id"));
   if (!Number.isFinite(id) || id <= 0) {
