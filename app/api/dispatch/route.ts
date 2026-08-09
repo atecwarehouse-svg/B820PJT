@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
-import { fetchAll } from "@/lib/supabase/paginate";
+import { fetchAll, chunk } from "@/lib/supabase/paginate";
 import { BEFORE_SLOTS, AFTER_SLOTS } from "@/lib/slots";
 import { isTachoCheck } from "@/lib/tacho";
 
@@ -62,17 +62,29 @@ export async function GET(req: NextRequest) {
     "plate, out_time, checklist",
     "plate, out_time",
   ];
+  // 이 화면에 필요한 건 위에서 뽑은 차량들뿐이다. 날짜만으로 받으면 그날 모든
+  // 운수사의 행이 섞여 상한(1000행)에 걸리고, 넘치는 만큼 시간·검수완료·설치제외가
+  // 조용히 사라진다. 차량번호로 100대씩 나눠 필요한 행만 받는다.
   for (const cols of SELECTS) {
-    const res = await supabase
-      .from("dispatch_times")
-      .select(cols)
-      .eq("date", date)
-      .range(0, 999);
-    if (!res.error) {
-      savedRows = (res.data ?? []) as unknown as SavedRow[];
+    const rows: SavedRow[] = [];
+    let failed: { message: string } | null = null;
+    for (const part of chunk(plates)) {
+      const res = await supabase
+        .from("dispatch_times")
+        .select(cols)
+        .eq("date", date)
+        .in("plate", part);
+      if (res.error) {
+        failed = res.error;
+        break;
+      }
+      rows.push(...((res.data ?? []) as unknown as SavedRow[]));
+    }
+    if (!failed) {
+      savedRows = rows;
       break;
     }
-    if (!/checklist|tacho_checked|excluded/i.test(res.error.message)) break;
+    if (!/checklist|tacho_checked|excluded/i.test(failed.message)) break;
   }
   if (savedRows === null) {
     dbReady = false;
@@ -94,21 +106,19 @@ export async function GET(req: NextRequest) {
   const teamOf = new Map<string, string>();
   try {
     const stdSlots = [...BEFORE_SLOTS, ...AFTER_SLOTS].map((s) => s.slotKey);
-    const CH = 100; // 한글 plate 다수 in() 필터는 URL 길이 초과 방지를 위해 분할
-    for (let i = 0; i < plates.length; i += CH) {
-      const chunk = plates.slice(i, i + CH);
+    for (const part of chunk(plates)) {
       // 사진은 fetchAll 페이지네이션으로 — Supabase Max Rows 설정값에 의존해
       // 조용히 잘리면 일부 완료 차량의 배지가 빠진다.
       const [recRes, photoRows] = await Promise.all([
         supabase
           .from("records")
           .select("plate, saved_at, na_slots, team")
-          .in("plate", chunk),
+          .in("plate", part),
         fetchAll<{ plate: string; slot_key: string }>((from, to) =>
           supabase
             .from("photos")
             .select("plate, slot_key")
-            .in("plate", chunk)
+            .in("plate", part)
             .in("slot_key", stdSlots)
             .order("id")
             .range(from, to),

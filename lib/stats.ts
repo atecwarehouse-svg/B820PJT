@@ -2,7 +2,7 @@
 // 메타데이터는 Supabase. Supabase REST는 요청당 1000행 제한이 있어 페이지네이션으로 전수 조회.
 
 import { createServiceClient } from "@/lib/supabase/server";
-import { fetchAll } from "@/lib/supabase/paginate";
+import { fetchAll, chunk } from "@/lib/supabase/paginate";
 import { workDateString } from "@/lib/work-day";
 import { DEFAULT_PHOTO_COUNT, BEFORE_SLOTS, AFTER_SLOTS } from "@/lib/slots";
 import { loadOperatorAddresses } from "@/lib/operator-address";
@@ -166,14 +166,13 @@ export async function loadInProgressList(): Promise<InProgressVehicle[]> {
     });
   if (candidates.length === 0) return [];
 
-  // 후보 차량의 운수사/노선 조회 (chunk로 in)
+  // 후보 차량의 운수사/노선 조회 (100대씩 — in() URL 길이 상한)
   const meta = new Map<string, { operator: string; route: string }>();
-  const CH = 200;
-  for (let i = 0; i < candidates.length; i += CH) {
+  for (const part of chunk(candidates)) {
     const { data, error } = await supabase
       .from("vehicles")
       .select("plate, operator, route")
-      .in("plate", candidates.slice(i, i + CH));
+      .in("plate", part);
     if (error) throw new Error(error.message);
     for (const v of data ?? []) {
       meta.set(v.plate, { operator: v.operator ?? "", route: v.route ?? "" });
@@ -366,13 +365,18 @@ export async function loadTodayExcludedPlates(date: string): Promise<string[]> {
     .range(0, 999);
   if (error || !data?.length) return [];
   const plates = data.map((r) => r.plate).filter(Boolean);
-  const { data: veh, error: vehError } = await supabase
-    .from("vehicles")
-    .select("plate")
-    .eq("planned_date", date)
-    .in("plate", plates.slice(0, 500));
-  if (vehError) return [];
-  const planned = new Set((veh ?? []).map((v) => v.plate));
+  // 100대씩 나눠 조회 — 한 번에 보내면 URL 길이 초과로 실패하고,
+  // 앞부분만 자르면 그 뒤 제외 차량이 조용히 빠진다.
+  const planned = new Set<string>();
+  for (const part of chunk(plates)) {
+    const { data: veh, error: vehError } = await supabase
+      .from("vehicles")
+      .select("plate")
+      .eq("planned_date", date)
+      .in("plate", part);
+    if (vehError) return [];
+    for (const v of veh ?? []) planned.add(v.plate);
+  }
   return plates.filter((p) => planned.has(p));
 }
 

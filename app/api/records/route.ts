@@ -96,6 +96,12 @@ export async function POST(req: NextRequest) {
       { status: 404 },
     );
   }
+  // 기존 레코드 조회가 '실패'한 것을 '기록 없음'으로 오해하면 안 된다 —
+  // 아래에서 최초 생성으로 처리해 설치일자·운수사·노선을 덮어쓰고 완료일(saved_at)을
+  // 다시 찍어 집계가 틀어지며, 팀명 잠금(prevTeam)도 풀린다.
+  if (existingRes.error) {
+    return NextResponse.json({ error: existingRes.error.message }, { status: 500 });
+  }
 
   // 기존 레코드의 install_date 보존 (없으면 today 기본값)
   const existing = existingRes.data;

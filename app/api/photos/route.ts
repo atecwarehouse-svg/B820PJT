@@ -13,12 +13,15 @@ export const dynamic = "force-dynamic";
 async function ensureRecord(
   supabase: ReturnType<typeof createServiceClient>,
   plate: string,
-): Promise<{ ok: boolean; operator: string }> {
-  const { data: rec } = await supabase
+): Promise<{ ok: boolean; operator: string; error?: string }> {
+  const { data: rec, error: recErr } = await supabase
     .from("records")
     .select("plate, operator")
     .eq("plate", plate)
     .maybeSingle();
+  // 조회 실패를 '기록 없음'으로 오해하면 아래 upsert가 기존 레코드의
+  // 설치일자·운수사·노선을 덮어쓴다 — 실패는 그대로 올려 업로드를 중단시킨다.
+  if (recErr) return { ok: false, operator: "", error: recErr.message };
   if (rec) return { ok: true, operator: (rec.operator as string) ?? "" };
 
   const { data: vehicle } = await supabase
@@ -79,10 +82,12 @@ export async function POST(req: NextRequest) {
       .maybeSingle(),
   ]);
   if (!recResult.ok) {
-    return NextResponse.json(
-      { error: "차량리스트에 없는 차량번호입니다." },
-      { status: 404 },
-    );
+    return recResult.error
+      ? NextResponse.json({ error: recResult.error }, { status: 500 })
+      : NextResponse.json(
+          { error: "차량리스트에 없는 차량번호입니다." },
+          { status: 404 },
+        );
   }
   const operator = recResult.operator;
   const existing = existingRes.data;
@@ -187,9 +192,8 @@ export async function DELETE(req: NextRequest) {
     .eq("slot_key", slotKey)
     .maybeSingle();
 
-  if (photo?.storage_path) {
-    await deletePhoto(photo.storage_path).catch(() => {});
-  }
+  // DB 행을 먼저 지운다 — Drive 파일을 먼저 지우면 DB 삭제가 실패했을 때
+  // 파일 없는 사진 행이 남아 화면·PDF에 깨진 사진이 뜬다.
   // DB 삭제 실패를 삼키면 사진 행이 남은 채 칸만 사라져, 같은 키가 재사용될 때
   // 옛 사진이 새 칸에 되살아난다 — 실패를 그대로 돌려줘 클라이언트가 중단하게 한다.
   const { error } = await supabase
@@ -199,6 +203,11 @@ export async function DELETE(req: NextRequest) {
     .eq("slot_key", slotKey);
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+  // 파일 삭제는 응답을 먼저 돌려보낸 뒤 best-effort (실패해도 고아 파일만 남음)
+  if (photo?.storage_path) {
+    const path = photo.storage_path as string;
+    runAfterResponse(() => deletePhoto(path).catch(() => {}));
   }
 
   return NextResponse.json({ ok: true });

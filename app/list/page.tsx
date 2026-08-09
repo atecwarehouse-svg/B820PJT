@@ -11,6 +11,9 @@ import AdminLogin from "@/components/AdminLogin";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+// 완료 판정 기준 = 설치전 7 + 설치후 7 표준 슬롯 (lib/stats.ts와 같은 기준)
+const STD_SLOT_KEYS = [...BEFORE_SLOTS, ...AFTER_SLOTS].map((s) => s.slotKey);
+
 export default async function ListPage() {
   if (!isAdmin()) return <AdminLogin />;
 
@@ -27,8 +30,15 @@ export default async function ListPage() {
         .order("plate")
         .range(from, to),
     ),
+    // 표준 14칸만 센다 — 사용자가 추가한 칸(before_custom_*) 사진까지 세면
+    // 표준 칸이 비어 있어도 '14장/14장 완료'로 보인다(대시보드 집계와 어긋남).
     fetchAll<{ plate: string }>((from, to) =>
-      supabase.from("photos").select("plate").order("id").range(from, to),
+      supabase
+        .from("photos")
+        .select("plate")
+        .in("slot_key", STD_SLOT_KEYS)
+        .order("id")
+        .range(from, to),
     ),
     supabase
       .from("operator_progress")
@@ -43,7 +53,7 @@ export default async function ListPage() {
 
   // 표준 14칸 슬롯키 — na_slots에 커스텀 칸(before_custom_*)이 섞여 있어도
   // 총수량(14)에서는 표준 칸만 차감해야 필요 사진 수가 과도하게 줄지 않는다.
-  const stdKeys = new Set([...BEFORE_SLOTS, ...AFTER_SLOTS].map((s) => s.slotKey));
+  const stdKeys = new Set(STD_SLOT_KEYS);
   const items: ListItem[] = records.map((r) => {
     // '단말기 없음'(하차 등) 체크 칸은 촬영 대상에서 빼서 그 차량의 총수량을 줄인다.
     // 예) 하차 4칸 없음 → 10장/10장 완료.

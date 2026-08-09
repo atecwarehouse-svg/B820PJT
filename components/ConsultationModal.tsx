@@ -615,7 +615,12 @@ export default function ConsultationModal({
                       <span className={LABEL}>9-1. 동시출발 여부</span>
                       <select
                         value={simulStart}
-                        onChange={(e) => setSimulStart(e.target.value)}
+                        onChange={(e) => {
+                          setSimulStart(e.target.value);
+                          // 해당없음이면 사전출발 차량번호 자체가 의미 없다 —
+                          // 숨기기만 하면 이미 적힌 값이 그대로 전송되므로 비운다
+                          if (e.target.value === "해당없음") setEarlyPlates("");
+                        }}
                         className={INPUT}
                       >
                         <option value="">선택</option>
@@ -624,16 +629,18 @@ export default function ConsultationModal({
                       </select>
                     </label>
 
-                    <label className="block">
-                      <span className={LABEL}>9-2. 사전출발 차량번호</span>
-                      <input
-                        type="text"
-                        value={earlyPlates}
-                        onChange={(e) => setEarlyPlates(e.target.value)}
-                        placeholder="차량번호 입력"
-                        className={INPUT}
-                      />
-                    </label>
+                    {simulStart !== "해당없음" && (
+                      <label className="block">
+                        <span className={LABEL}>9-2. 사전출발 차량번호</span>
+                        <input
+                          type="text"
+                          value={earlyPlates}
+                          onChange={(e) => setEarlyPlates(e.target.value)}
+                          placeholder="차량번호 입력"
+                          className={INPUT}
+                        />
+                      </label>
+                    )}
 
                     <OptionField
                       label="10. 차키 협조"
@@ -882,10 +889,12 @@ export default function ConsultationModal({
                         title="동시출발 여부"
                         value={simulStart || "-"}
                       />
-                      <PreviewRow
-                        title="사전출발 차량번호"
-                        value={earlyPlates.trim() || "-"}
-                      />
+                      {simulStart !== "해당없음" && (
+                        <PreviewRow
+                          title="사전출발 차량번호"
+                          value={earlyPlates.trim() || "-"}
+                        />
+                      )}
                       <PreviewSub text="○ 협조·확인사항" />
                       <PreviewRow
                         title="차키 협조"

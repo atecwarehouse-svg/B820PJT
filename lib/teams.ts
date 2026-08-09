@@ -95,6 +95,8 @@ function inspectorUrls(names: string[] | undefined, except: string): string[] {
 
 // 웹훅이 응답하지 않고 매달리면 함수가 통째로 죽어 카드 발송 기록(지문)이 남지 않고,
 // 다음 저장 때 공용방에 같은 카드가 또 나간다. 그래서 반드시 시간 제한을 건다.
+// 이 파일의 모든 전송은 post()를 거친다 — 맨 fetch를 쓰면 시간 제한이 빠져
+// 웹훅이 응답을 안 줄 때 요청 전체가 함수 한도(60초)까지 매달렸다 504로 끝난다.
 const POST_TIMEOUT_MS = 10_000;
 
 async function post(url: string, card: unknown, what: string): Promise<void> {
@@ -194,15 +196,7 @@ export async function sendProgressCard(d: ProgressCardData): Promise<void> {
     ],
   };
 
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(card),
-  });
-  if (!res.ok) {
-    const t = await res.text().catch(() => "");
-    throw new Error(`Teams 응답 ${res.status} ${t.slice(0, 160)}`);
-  }
+  await post(url, card, "진행현황");
 }
 
 // 설치 시작 보고 카드 — 진행현황 카드와 같은 채팅방(설치 진행중 공유방, TEAMS_WEBHOOK_URL).
@@ -328,15 +322,7 @@ export async function sendStartReportCard(d: {
     ],
   };
 
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(card),
-  });
-  if (!res.ok) {
-    const t = await res.text().catch(() => "");
-    throw new Error(`Teams 시작보고 응답 ${res.status} ${t.slice(0, 160)}`);
-  }
+  await post(url, card, "시작보고");
 }
 
 // 금일 설치 완료 보고 카드 — 진행현황·설치시작 보고 카드와 같은 채팅방(설치 진행중 공유방, TEAMS_WEBHOOK_URL).
@@ -474,15 +460,7 @@ export async function sendCompletionReportCard(
     ],
   };
 
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(card),
-  });
-  if (!res.ok) {
-    const t = await res.text().catch(() => "");
-    throw new Error(`Teams 완료보고 응답 ${res.status} ${t.slice(0, 160)}`);
-  }
+  await post(url, card, "완료보고");
 }
 
 // 특이사항 텍스트 → 카드 표기용 불릿 목록 (빈 값이면 "- 없음")
@@ -605,15 +583,7 @@ export async function sendServiceStartCard(d: {
     ],
   };
 
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(card),
-  });
-  if (!res.ok) {
-    const t = await res.text().catch(() => "");
-    throw new Error(`Teams 운행시작 응답 ${res.status} ${t.slice(0, 160)}`);
-  }
+  await post(url, card, "운행시작");
 }
 
 // 운수사 VOC 등록 알림 카드 — 설치 진행중 공유방(TEAMS_WEBHOOK_URL).
@@ -668,15 +638,7 @@ export async function sendVocCard(d: VocCardData): Promise<void> {
     ],
   };
 
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json; charset=utf-8" },
-    body: JSON.stringify(card),
-  });
-  if (!res.ok) {
-    const t = await res.text().catch(() => "");
-    throw new Error(`Teams VOC 응답 ${res.status} ${t.slice(0, 160)}`);
-  }
+  await post(url, card, "VOC");
 }
 
 // ISO 시각 → KST "HH:MM" — 설치 시작/완료 카드의 시간 표기용
@@ -906,15 +868,7 @@ export async function sendAdminCallCard(d: {
     ],
   };
 
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(card),
-  });
-  if (!res.ok) {
-    const t = await res.text().catch(() => "");
-    throw new Error(`Teams 호출카드 응답 ${res.status} ${t.slice(0, 160)}`);
-  }
+  await post(url, card, "호출카드");
 }
 
 // 설치 완료(사진 13장 업로드) 시 별도 채팅방으로 보내는 카드.
@@ -1152,7 +1106,10 @@ export async function sendConsultationCard(
                 { title: "익일 첫차 출발", value: v(d.nextFirstBus) },
                 { title: "차고지 출발(첫차)", value: v(d.depotOut) },
                 { title: "동시출발 여부", value: v(d.simulStart) },
-                { title: "사전출발 차량번호", value: v(d.earlyPlates) },
+                // 해당없음이면 사전출발 차량번호 줄 자체를 빼서 카드에 안 보이게
+                ...(d.simulStart === "해당없음"
+                  ? []
+                  : [{ title: "사전출발 차량번호", value: v(d.earlyPlates) }]),
               ],
             },
             sub("○ 협조·확인사항"),
@@ -1381,17 +1338,7 @@ export async function sendPlanReportCard(
       continue;
     }
     try {
-      const res = await fetch(t.url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(t.card),
-      });
-      if (!res.ok) {
-        const txt = await res.text().catch(() => "");
-        throw new Error(
-          `Teams 설치계획 응답(${t.name}) ${res.status} ${txt.slice(0, 160)}`,
-        );
-      }
+      await post(t.url, t.card, `설치계획(${t.name})`);
       sent.push(t.room);
     } catch (e) {
       errors.push(e instanceof Error ? e.message : `${t.name} 전송 실패`);

@@ -5,6 +5,16 @@
 
 const PAGE = 1000;
 
+// in() 필터는 GET 쿼리스트링이라 한글 차량번호를 많이 담으면 URL 길이 초과로
+// "fetch failed"가 난다(2026-07-10 실사례). 반드시 이 크기로 나눠 보낼 것.
+export const PLATE_CHUNK = 100;
+
+export function chunk<T>(arr: T[], size = PLATE_CHUNK): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
+  return out;
+}
+
 export async function fetchAll<T>(
   makeQuery: (
     from: number,

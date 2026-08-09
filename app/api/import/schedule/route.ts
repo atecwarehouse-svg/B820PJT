@@ -249,9 +249,15 @@ export async function POST(req: NextRequest) {
       templateNote = prep.reason;
     } else {
       const storage = supabase.storage.from(TEMPLATE_BUCKET);
-      // 직전 템플릿 백업(실패해도 교체는 진행)
-      await storage.remove([TEMPLATE_BACKUP]);
-      await storage.copy(TEMPLATE_OBJECT, TEMPLATE_BACKUP);
+      // 직전 템플릿 백업 — copy는 대상이 있으면 실패하므로 임시 이름으로 뜬 뒤 갈아끼운다.
+      // 백업을 먼저 지우고 copy가 실패하면 백업 없이 덮어쓰게 되므로 순서가 중요하다.
+      const tmpBackup = TEMPLATE_BACKUP.replace(/\.xlsx$/, ".new.xlsx");
+      await storage.remove([tmpBackup]);
+      const { error: copyError } = await storage.copy(TEMPLATE_OBJECT, tmpBackup);
+      if (!copyError) {
+        await storage.remove([TEMPLATE_BACKUP]);
+        await storage.move(tmpBackup, TEMPLATE_BACKUP);
+      }
       const { error: upError } = await storage.upload(TEMPLATE_OBJECT, prep.buffer, {
         contentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         upsert: true,
