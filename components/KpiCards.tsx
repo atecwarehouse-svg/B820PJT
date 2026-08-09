@@ -95,6 +95,7 @@ export default function KpiCards({
                             {v.route ? ` ${v.route}` : ""}
                           </span>{" "}
                           <span className="font-medium">{v.plate}</span>
+                          {v.team && <span className="ml-1 text-gray-500">{v.team}</span>}
                         </span>
                         <span className="shrink-0 tabular-nums font-semibold text-amber-600">
                           {v.photoCount}/{target}장

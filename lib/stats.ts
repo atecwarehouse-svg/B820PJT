@@ -124,6 +124,7 @@ export interface InProgressVehicle {
   plate: string;
   operator: string;
   route: string;
+  team: string; // 설치팀 표기 "팀명 이름" (records.team)
   photoCount: number;
 }
 
@@ -133,8 +134,8 @@ export async function loadInProgressList(): Promise<InProgressVehicle[]> {
 
   // 시작된 차량 = records 존재. + plate별 사진 장수. '단말기 없음'은 사진 1장으로 간주.
   const [recRows, photoRows] = await Promise.all([
-    fetchAll<{ plate: string; na_slots: string[] | null }>((from, to) =>
-      supabase.from("records").select("plate, na_slots").order("plate").range(from, to),
+    fetchAll<{ plate: string; na_slots: string[] | null; team: string | null }>((from, to) =>
+      supabase.from("records").select("plate, na_slots, team").order("plate").range(from, to),
     ),
     fetchAll<{ plate: string }>((from, to) =>
       supabase
@@ -149,9 +150,11 @@ export async function loadInProgressList(): Promise<InProgressVehicle[]> {
   for (const p of photoRows) photoCnt.set(p.plate, (photoCnt.get(p.plate) ?? 0) + 1);
   // 충족 칸수 = 사진수 + 단말기없음 칸수
   const count = new Map<string, number>();
+  const teamOf = new Map<string, string>();
   for (const r of recRows) {
     const na = Array.isArray(r.na_slots) ? r.na_slots.length : 0;
     count.set(r.plate, (photoCnt.get(r.plate) ?? 0) + na);
+    teamOf.set(r.plate, (r.team ?? "").trim());
   }
 
   // 충족 1칸 이상 & 13칸 미만 = 진행중 (0칸은 제외 → 미설치로 집계)
@@ -182,6 +185,7 @@ export async function loadInProgressList(): Promise<InProgressVehicle[]> {
       plate,
       operator: meta.get(plate)?.operator ?? "",
       route: meta.get(plate)?.route ?? "",
+      team: teamOf.get(plate) ?? "",
       photoCount: count.get(plate) ?? 0,
     }))
     .sort((a, b) => b.photoCount - a.photoCount); // 완료 임박 순
