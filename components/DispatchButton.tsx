@@ -53,16 +53,23 @@ const TILES: {
     match: (e) => !e.excluded && e.installing,
   },
   {
-    key: "notyet",
-    label: "미설치",
-    color: "text-red-500",
-    match: (e) => !e.excluded && !e.installing && !e.completed,
+    // 검수대상 = 설치완료 차량 중 아직 검수완료 체크 안 된 것 = 남은 검수 물량
+    key: "inspectTarget",
+    label: "검수대상",
+    color: "text-green-700",
+    match: (e) => !e.excluded && e.completed && !e.checklist,
   },
   {
     key: "checked",
     label: "검수완료",
     color: "text-green-600",
     match: (e) => !e.excluded && e.checklist,
+  },
+  {
+    key: "notyet",
+    label: "미설치",
+    color: "text-red-500",
+    match: (e) => !e.excluded && !e.installing && !e.completed,
   },
   {
     key: "tacho",
@@ -620,6 +627,28 @@ export default function DispatchButton() {
                 ✅ 검수항목 보기
               </button>
 
+              {/* 저장 — 검수항목 보기 바로 아래 */}
+              {date && !listLoading && entries.length > 0 && (
+                <div>
+                  <button
+                    onClick={handleSave}
+                    disabled={saving || !dbReady}
+                    className="w-full rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white active:bg-blue-700 disabled:opacity-50"
+                  >
+                    {saving ? "저장 중…" : "💾 저장"}
+                  </button>
+                  {saveMsg && (
+                    <p
+                      className={`mt-1.5 text-center text-xs ${
+                        saveMsg.ok ? "text-green-600" : "text-red-500"
+                      }`}
+                    >
+                      {saveMsg.text}
+                    </p>
+                  )}
+                </div>
+              )}
+
               {/* 금일 설치 — 오늘 일정이 있는 운수사·노선 자동 표시 */}
               {operators !== null && !optError && (
                 <div>
@@ -810,7 +839,6 @@ export default function DispatchButton() {
                             </button>
                           );
                         })}
-                        <span className="bg-gray-50" />
                       </div>
                       <p className="mb-1 text-[11px] text-gray-400">
                         {tileFilter ? (
@@ -998,27 +1026,6 @@ export default function DispatchButton() {
                 </div>
               )}
 
-              {/* 저장 */}
-              {date && !listLoading && entries.length > 0 && (
-                <div>
-                  <button
-                    onClick={handleSave}
-                    disabled={saving || !dbReady}
-                    className="w-full rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white active:bg-blue-700 disabled:opacity-50"
-                  >
-                    {saving ? "저장 중…" : "💾 저장"}
-                  </button>
-                  {saveMsg && (
-                    <p
-                      className={`mt-1.5 text-center text-xs ${
-                        saveMsg.ok ? "text-green-600" : "text-red-500"
-                      }`}
-                    >
-                      {saveMsg.text}
-                    </p>
-                  )}
-                </div>
-              )}
             </div>
           </div>
 
