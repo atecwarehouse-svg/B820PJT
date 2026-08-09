@@ -166,8 +166,42 @@ export default function DailyReportCard({
   // 이미 [설치제외 블록이 있으면 입력칸을 숨기고 중복 포함하지 않음)
   const [exclPlates, setExclPlates] = useState<string[]>([]);
   const [exclReasons, setExclReasons] = useState<Record<string, string>>({});
-  // 배차표 '타코 미연결' 차량 — 사유는 배차표에서 이미 적었으므로 여기선 목록만 붙인다.
+  // 배차표 '타코 미연결' 차량. 사유는 배차표에서 적은 값을 불러와 보여주고, 여기서
+  // 고치면 배차표와 같은 곳(dispatch_times.tacho_reason)에 바로 반영한다 —
+  // 리포트에만 반영하면 배차표와 값이 갈린다.
   const [tachoOff, setTachoOff] = useState<{ plate: string; reason: string }[]>([]);
+  const savedTachoRef = useRef<Record<string, string>>({}); // 마지막으로 저장된 사유(변경 감지·실패 복구)
+  const [tachoSaving, setTachoSaving] = useState<string | null>(null);
+  const [tachoErr, setTachoErr] = useState<string | null>(null);
+
+  // 입력칸을 떠날 때 저장 — 값이 그대로면 아무것도 하지 않는다.
+  async function saveTachoReason(plate: string) {
+    const cur = (tachoOff.find((t) => t.plate === plate)?.reason ?? "").trim();
+    const prev = savedTachoRef.current[plate] ?? "";
+    if (cur === prev) return;
+    setTachoSaving(plate);
+    setTachoErr(null);
+    try {
+      const res = await fetch("/api/dispatch/tacho", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ date, plate, reason: cur }),
+      });
+      const j = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(j?.error ?? "저장에 실패했습니다.");
+      savedTachoRef.current[plate] = cur;
+      // 사유를 비우면 미연결 해제 — 목록에서도 뺀다(리포트 블록에서 사라짐)
+      if (!cur) setTachoOff((list) => list.filter((t) => t.plate !== plate));
+    } catch (e) {
+      setTachoErr(e instanceof Error ? e.message : "저장에 실패했습니다.");
+      // 저장 실패한 값을 화면에 남겨두면 반영된 것처럼 보인다 — 마지막 저장값으로 되돌린다
+      setTachoOff((list) =>
+        list.map((t) => (t.plate === plate ? { ...t, reason: prev } : t)),
+      );
+    } finally {
+      setTachoSaving(null);
+    }
+  }
 
   // 1차/2차 탭 전환 — 발송 잠금·결과 메시지만 초기화(입력값은 유지).
   // (리마운트 없이 같은 인스턴스를 쓰므로, 1차 발송 후 2차 탭의 발송이 잠기지 않게)
@@ -247,12 +281,19 @@ export default function DailyReportCard({
         const json = await res.json();
         if (alive) {
           setExclPlates((json.plates ?? []) as string[]);
-          setTachoOff((json.tachoOff ?? []) as { plate: string; reason: string }[]);
+          const list = (json.tachoOff ?? []) as { plate: string; reason: string }[];
+          setTachoOff(list);
+          // 불러온 값이 곧 '저장된 값' — 이후 변경 감지·실패 복구의 기준
+          savedTachoRef.current = Object.fromEntries(
+            list.map((t) => [t.plate, t.reason]),
+          );
+          setTachoErr(null);
         }
       } catch {
         if (alive) {
           setExclPlates([]);
           setTachoOff([]);
+          savedTachoRef.current = {};
         }
       }
     })();
@@ -279,7 +320,11 @@ export default function DailyReportCard({
   const tachoInNotes = notes.includes("[타코 미연결");
   const tachoBlock = useMemo(() => {
     if (tachoOff.length === 0 || tachoInNotes) return "";
-    const lines = tachoOff.map((t, i) => ` ${i + 1}. ${t.plate} — ${t.reason}`);
+    // 사유를 지우는 중(빈 값)에는 설치제외 블록처럼 대시 없이 차량번호만
+    const lines = tachoOff.map((t, i) => {
+      const reason = t.reason.trim();
+      return ` ${i + 1}. ${t.plate}${reason ? ` — ${reason}` : ""}`;
+    });
     return `[타코 미연결 ${tachoOff.length}대]\n${lines.join("\n")}`;
   }, [tachoOff, tachoInNotes]);
 
@@ -519,31 +564,51 @@ export default function DailyReportCard({
         </div>
       )}
 
-      {/* 타코 미연결 — 사유는 배차표에서 이미 적었으므로 여기선 확인만 (수정은 배차표에서) */}
-      {tachoBlock && (
+      {/* 타코 미연결 — 배차표에 적은 사유를 불러와 여기서도 고칠 수 있다.
+          고친 값은 칸을 벗어나는 즉시 배차표와 같은 곳에 저장된다. */}
+      {tachoOff.length > 0 && !tachoInNotes && (
         <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50/60 p-3">
           <p className="text-xs font-semibold text-amber-800">
-            ⚠️ 타코 미연결 {tachoOff.length}대 — 배차표에 적은 사유가 그대로
-            들어갑니다
+            ⚠️ 타코 미연결 {tachoOff.length}대 — 사유를 고치면 배차표에도 함께
+            반영됩니다
           </p>
           <p className="mt-0.5 text-[11px] text-amber-600">
-            고치려면 홈 → 배차표에서 해당 차량의 사유를 수정하세요
+            특이사항에 자동으로 포함됩니다 (미리보기 확인) · 사유를 비우면 미연결이
+            해제됩니다
           </p>
-          <ul className="mt-2 space-y-1">
+          <ul className="mt-2 space-y-1.5">
             {tachoOff.map((t, i) => (
-              <li key={t.plate} className="flex items-start gap-2 text-sm">
+              <li key={t.plate} className="flex items-center gap-2">
                 <span className="w-5 shrink-0 text-right text-xs tabular-nums text-gray-500">
                   {i + 1}.
                 </span>
-                <span className="w-28 shrink-0 truncate font-medium text-gray-800">
+                <span className="w-28 shrink-0 truncate text-sm font-medium text-gray-800">
                   {t.plate}
                 </span>
-                <span className="min-w-0 flex-1 break-words text-gray-600">
-                  {t.reason}
-                </span>
+                <input
+                  type="text"
+                  value={t.reason}
+                  maxLength={200}
+                  disabled={tachoSaving === t.plate}
+                  onChange={(e) =>
+                    setTachoOff((list) =>
+                      list.map((x) =>
+                        x.plate === t.plate ? { ...x, reason: e.target.value } : x,
+                      ),
+                    )
+                  }
+                  onBlur={() => saveTachoReason(t.plate)}
+                  placeholder="미연결 사유 (비우면 타코 정상)"
+                  className="min-w-0 flex-1 rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-sm focus:border-amber-500 focus:outline-none disabled:bg-gray-100"
+                />
               </li>
             ))}
           </ul>
+          {tachoErr && (
+            <p className="mt-1.5 text-[11px] font-medium text-red-600">
+              {tachoErr}
+            </p>
+          )}
         </div>
       )}
 
