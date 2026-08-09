@@ -7,6 +7,14 @@ import TeamCallButton from "@/components/TeamCallButton";
 import ReloadButton from "@/components/ReloadButton";
 import WeatherWidget from "@/components/WeatherWidget";
 
+// 빌드(배포) 시각 KST "26.08.09 22:10" + 커밋 7자리 — 정적 페이지라 빌드 때 값이 박힌다
+const BUILD_TIME = new Date().toLocaleString("sv-SE", {
+  timeZone: "Asia/Seoul", // sv-SE = "2026-08-09 22:10"
+  dateStyle: "short",
+  timeStyle: "short",
+});
+const COMMIT = process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? "";
+
 export default function HomePage() {
   return (
     <main className="relative mx-auto flex min-h-screen max-w-md flex-col px-4 pt-24">
@@ -62,6 +70,11 @@ export default function HomePage() {
       >
         ℹ️ 앱 소개
       </Link>
+      {/* 배포 버전 — 빌드 시점에 고정. 새로고침해서 이 값이 바뀌면 최신판을 받은 것 */}
+      <p className="mb-6 mt-4 text-center text-[10px] text-gray-400">
+        v{BUILD_TIME}
+        {COMMIT && ` · ${COMMIT}`}
+      </p>
     </main>
   );
 }
