@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { InstallTeam } from "@/lib/settings";
+import { loadTeamContacts, telHref } from "@/lib/team-call";
 
 // 홈 화면 '설치팀 호출' 버튼 (VOC 접수 아래) — 관리자 비밀번호 필요.
 // 연락처 1건이면 바로 전화, 여러 건이면 팝업에서 선택.
@@ -11,32 +12,13 @@ export default function TeamCallButton() {
   const [loading, setLoading] = useState(false);
   const [contacts, setContacts] = useState<InstallTeam[]>([]);
 
-  const telHref = (phone: string) => `tel:${phone.replace(/[^0-9+]/g, "")}`;
-
-  async function fetchContacts(pw: string): Promise<InstallTeam[] | "unauthorized"> {
-    const res = await fetch(`/api/team-phones?pw=${encodeURIComponent(pw)}`, {
-      cache: "no-store",
-    });
-    if (res.status === 401) return "unauthorized";
-    const j = await res.json();
-    return Array.isArray(j.list) ? j.list : [];
-  }
-
   async function onClick() {
     if (loading) return;
     setLoading(true);
     try {
       // 관리자 로그인 쿠키가 있으면 비밀번호 입력 없이 통과
-      let list = await fetchContacts("");
-      if (list === "unauthorized") {
-        const pw = window.prompt("관리자 비밀번호를 입력하세요.");
-        if (!pw) return;
-        list = await fetchContacts(pw);
-        if (list === "unauthorized") {
-          alert("비밀번호가 올바르지 않습니다.");
-          return;
-        }
-      }
+      const list = await loadTeamContacts();
+      if (!list) return;
       if (list.length === 1) {
         window.location.href = telHref(list[0].phone);
         return;

@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import type { OperatorSchedule } from "@/lib/stats";
 import { workDateString } from "@/lib/work-day";
 import { DEFAULT_CHECKLIST, type Checklist } from "@/lib/checklist";
+import type { InstallTeam } from "@/lib/settings";
+import { loadTeamContacts, telHref } from "@/lib/team-call";
 
 // 홈 화면 '배차표' 버튼 + 팝업 — 그날 설치할 운수사·노선을 골라 차량별
 // 나가는 시간을 입력한다. 시간은 DB(dispatch_times)에 공용 저장되어
@@ -176,6 +178,7 @@ export default function DispatchButton() {
   const [date, setDate] = useState("");
   const [routeFilter, setRouteFilter] = useState(""); // "" = 전체
   const [tileFilter, setTileFilter] = useState<string | null>(null); // 요약 타일 필터(null = 전체)
+  const teamPhonesRef = useRef<InstallTeam[] | null>(null); // 설치팀 연락처 — 비번 1회만 묻도록 캐시
 
   const [entries, setEntries] = useState<Entry[]>([]);
   // 설치완료됐지만 검수완료가 아직 저장 안 된 차량 — 메인 리스트 맨 위에 고정.
@@ -392,6 +395,24 @@ export default function DispatchButton() {
       list.map((e) => (e.plate === plate ? { ...e, checklist: checked } : e)),
     );
     setSaveMsg(null);
+  }
+
+  // 설치팀 📞 — 관리자 비밀번호 확인(홈 설치팀 호출과 같은 API) 후 그 팀 번호로 전화.
+  // 한 번 통과하면 팝업이 열려 있는 동안은 다시 묻지 않는다.
+  async function callTeam(team: string) {
+    const list =
+      teamPhonesRef.current ?? (await loadTeamContacts().catch(() => null));
+    if (!list) return;
+    teamPhonesRef.current = list;
+    const norm = (s: string) => s.replace(/\s/g, "");
+    const hit = list.find((c) => norm(c.team) === norm(team));
+    if (!hit?.phone) {
+      alert(
+        `${team} 전화번호가 등록되어 있지 않습니다.\n관리자 페이지 → 설치팀 탭에서 추가하세요.`,
+      );
+      return;
+    }
+    window.location.href = telHref(hit.phone);
   }
 
   // 타코확인 완료 토글 — 배지 탭. 저장하면 녹색 상태가 모든 기기에 공유된다.
@@ -862,9 +883,19 @@ export default function DispatchButton() {
                                     </button>
                                   )}
                                   {e.team && (
-                                    <span className="ml-1.5 align-middle text-[11px] text-gray-500">
-                                      {e.team}
-                                    </span>
+                                    <>
+                                      <span className="ml-1.5 align-middle text-[11px] text-gray-500">
+                                        {e.team}
+                                      </span>
+                                      <button
+                                        type="button"
+                                        onClick={() => callTeam(e.team)}
+                                        className="ml-1 rounded border border-green-300 bg-green-50 px-1.5 py-0.5 align-middle text-[10px] font-semibold text-green-700 active:bg-green-100"
+                                        aria-label={`${e.team} 전화걸기`}
+                                      >
+                                        📞
+                                      </button>
+                                    </>
                                   )}
                                   {e.excluded && (
                                     <span className="ml-1.5 rounded bg-gray-200 px-1.5 py-0.5 align-middle text-[10px] font-semibold text-gray-600">
