@@ -10,7 +10,9 @@ import { DEFAULT_CHECKLIST, type Checklist } from "@/lib/checklist";
 // 모든 기기에서 같은 배차표를 보고 수정할 수 있다(팀즈 전송 없음).
 
 const HOURS = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, "0"));
-const MINUTES = Array.from({ length: 12 }, (_, i) => String(i * 5).padStart(2, "0")); // 5분 단위
+const MINUTES = Array.from({ length: 12 }, (_, i) =>
+  String(i * 5).padStart(2, "0"),
+); // 5분 단위
 
 // 휴차는 out_time에 "OFF"로 저장 — 별도 컬럼 없이 기존 테이블 그대로 사용
 const OFF = "OFF";
@@ -22,6 +24,7 @@ interface Entry {
   checklist: boolean; // 체크리스트 작성 완료
   completed: boolean; // 설치완료(서버 판정 — 저장+설치전후 사진 충족)
   installing: boolean; // 설치중(서버 판정 — 시작했으나 아직 미완료)
+  team: string; // 설치팀 팀명(records.team의 앞 토큰 — 서버 판정, 기록 없으면 빈값)
   tachoCheck: boolean; // 타코확인 대상(타코 제조사 = 조영 DT-202, 서버 판정)
   tachoDone: boolean; // 타코확인 완료 — 배지 탭으로 토글, 저장 시 녹색 유지
   excluded: boolean; // 설치제외 — 나중에 설치(리스트에는 유지)
@@ -44,7 +47,7 @@ function routeKey(route: string): string {
 // 나가는 시간순 정렬 — 미입력은 뒤, 설치제외는 그 뒤, 휴차는 맨 뒤, 같은 시간은 차량번호순
 function sortEntries(list: Entry[]): Entry[] {
   const key = (e: Entry) =>
-    e.outTime === OFF ? "ZZ:ZZ" : e.excluded ? "ZY:ZY" : e.outTime ?? "99:99";
+    e.outTime === OFF ? "ZZ:ZZ" : e.excluded ? "ZY:ZY" : (e.outTime ?? "99:99");
   return [...list].sort((a, b) => {
     const ka = key(a);
     const kb = key(b);
@@ -146,7 +149,8 @@ export default function DispatchButton() {
     fetch("/api/checklist")
       .then((r) => r.json())
       .then((j) => {
-        if (Array.isArray(j?.vehicle) && Array.isArray(j?.device)) setChecklist(j);
+        if (Array.isArray(j?.vehicle) && Array.isArray(j?.device))
+          setChecklist(j);
       })
       .catch(() => {});
   }, [checklistView]);
@@ -154,7 +158,9 @@ export default function DispatchButton() {
   const [saving, setSaving] = useState(false);
   const savingRef = useRef(false); // 저장 요청 진행 중 표시(markDirty에서 참조)
   const reDirtiedRef = useRef<Map<string, Set<DirtyField>>>(new Map()); // 저장 중 재수정된 항목
-  const [saveMsg, setSaveMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [saveMsg, setSaveMsg] = useState<{ ok: boolean; text: string } | null>(
+    null,
+  );
   const [tableView, setTableView] = useState(false); // 캡쳐용 표 보기
 
   // 자동 입력 — 첫차 출발시간 + 분 간격 + 차량별 순번으로 시간 일괄 계산
@@ -211,8 +217,12 @@ export default function DispatchButton() {
       todayDate: o.dates.find((d) => d.date === today),
     }))
     .filter(
-      (x): x is { operator: string; todayDate: OperatorSchedule["dates"][number] } =>
-        !!x.todayDate,
+      (
+        x,
+      ): x is {
+        operator: string;
+        todayDate: OperatorSchedule["dates"][number];
+      } => !!x.todayDate,
     );
 
   // 금일 카드 탭 → 그 운수사의 오늘 배차표로 바로 이동
@@ -268,16 +278,23 @@ export default function DispatchButton() {
       // 운수사를 빠르게 바꾸면 이전 요청이 늦게 도착할 수 있다 — 최신 요청만 반영.
       // (이전 응답이 화면을 덮어쓰면 다른 운수사 이름으로 저장되는 사고가 난다)
       if (seq !== loadSeqRef.current) return;
-      if (!res.ok) throw new Error(j?.error ?? "차량 목록을 불러오지 못했습니다.");
+      if (!res.ok)
+        throw new Error(j?.error ?? "차량 목록을 불러오지 못했습니다.");
       const vehicles: Entry[] = j.vehicles ?? [];
       setEntries(vehicles);
       setPinned(
-        new Set(vehicles.filter((v) => v.completed && !v.checklist).map((v) => v.plate)),
+        new Set(
+          vehicles
+            .filter((v) => v.completed && !v.checklist)
+            .map((v) => v.plate),
+        ),
       );
       setDbReady(j.dbReady !== false);
     } catch (e) {
       if (seq !== loadSeqRef.current) return;
-      setListError(e instanceof Error ? e.message : "차량 목록을 불러오지 못했습니다.");
+      setListError(
+        e instanceof Error ? e.message : "차량 목록을 불러오지 못했습니다.",
+      );
       setEntries([]);
     } finally {
       if (seq === loadSeqRef.current) {
@@ -327,7 +344,9 @@ export default function DispatchButton() {
   function toggleTachoDone(plate: string) {
     markDirty(plate, "tachoDone");
     setEntries((list) =>
-      list.map((e) => (e.plate === plate ? { ...e, tachoDone: !e.tachoDone } : e)),
+      list.map((e) =>
+        e.plate === plate ? { ...e, tachoDone: !e.tachoDone } : e,
+      ),
     );
     setSaveMsg(null);
   }
@@ -348,7 +367,9 @@ export default function DispatchButton() {
 
   // 자동 입력 대상 — 노선 필터 적용, 설치제외만 제외(휴차는 목록에서 직접 체크 가능).
   const autoTargets = (
-    routeFilter ? entries.filter((e) => routeKey(e.route) === routeFilter) : entries
+    routeFilter
+      ? entries.filter((e) => routeKey(e.route) === routeFilter)
+      : entries
   ).filter((e) => !e.excluded);
 
   // 자동 입력 적용 — 순번 n 차량의 시간 = 첫차 + (n−1)×간격. 순번 없는 차량은 그대로.
@@ -368,13 +389,17 @@ export default function DispatchButton() {
     }
     if (timeByPlate.size === 0) {
       // 페이지를 닫지 않고 그 자리에서 안내 팝업
-      setAutoAlert("순번이 입력되지 않았습니다.\n차량별 나가는 순번을 입력해주세요.");
+      setAutoAlert(
+        "순번이 입력되지 않았습니다.\n차량별 나가는 순번을 입력해주세요.",
+      );
       return;
     }
     for (const p of timeByPlate.keys()) markDirty(p, "outTime");
     setEntries((list) =>
       list.map((e) =>
-        timeByPlate.has(e.plate) ? { ...e, outTime: timeByPlate.get(e.plate)! } : e,
+        timeByPlate.has(e.plate)
+          ? { ...e, outTime: timeByPlate.get(e.plate)! }
+          : e,
       ),
     );
     setSaveMsg({
@@ -437,7 +462,10 @@ export default function DispatchButton() {
         for (const c of changed) if (c.checklist) next.delete(c.plate);
         return next;
       });
-      setSaveMsg({ ok: true, text: "저장됨 ✓ 모든 기기에서 같은 배차표가 보입니다." });
+      setSaveMsg({
+        ok: true,
+        text: "저장됨 ✓ 모든 기기에서 같은 배차표가 보입니다.",
+      });
     } catch (e) {
       setSaveMsg({
         ok: false,
@@ -451,16 +479,22 @@ export default function DispatchButton() {
 
   // 표시 목록 — 노선 필터 적용 후 시간순 정렬
   const visible = sortEntries(
-    routeFilter ? entries.filter((e) => routeKey(e.route) === routeFilter) : entries,
+    routeFilter
+      ? entries.filter((e) => routeKey(e.route) === routeFilter)
+      : entries,
   );
-  const timedCount = visible.filter((e) => e.outTime && e.outTime !== OFF).length;
+  const timedCount = visible.filter(
+    (e) => e.outTime && e.outTime !== OFF,
+  ).length;
   const offCount = visible.filter((e) => e.outTime === OFF).length;
   // 검수완료·타코 집계는 설치대상(설치제외 아님)만 — 제외 차량을 세면 '검수완료 > 설치대상' 모순
   const active = visible.filter((e) => !e.excluded);
   const installingCount = active.filter((e) => e.installing).length;
   const checkCount = active.filter((e) => e.checklist).length;
   const tachoCount = active.filter((e) => e.tachoCheck).length;
-  const tachoDoneCount = active.filter((e) => e.tachoCheck && e.tachoDone).length;
+  const tachoDoneCount = active.filter(
+    (e) => e.tachoCheck && e.tachoDone,
+  ).length;
   const exclCount = visible.filter((e) => e.excluded).length;
   // 메인 리스트 전용 — 고정 차량을 맨 위로(캡쳐용 표는 항상 시간순 유지)
   const mainList = [
@@ -529,7 +563,8 @@ export default function DispatchButton() {
                   ) : (
                     <div className="space-y-1.5">
                       {todayOps.map((t) => {
-                        const active = operator === t.operator && date === today;
+                        const active =
+                          operator === t.operator && date === today;
                         return (
                           <button
                             key={t.operator}
@@ -542,13 +577,14 @@ export default function DispatchButton() {
                             }`}
                           >
                             <span
-                              className={`text-sm font-semibold ${
+                              className={`shrink-0 text-sm font-semibold ${
                                 active ? "text-blue-700" : "text-gray-800"
                               }`}
                             >
                               {t.operator}
                             </span>
-                            <span className="shrink-0 text-[11px] text-gray-500">
+                            {/* 노선이 많으면 줄바꿈 — 한 줄 고정이면 카드 밖으로 넘친다 */}
+                            <span className="min-w-0 flex-1 break-words text-right text-[11px] leading-snug text-gray-500">
                               {t.todayDate.routes
                                 .map((r) => `${r.route} ${r.count}대`)
                                 .join(" · ")}
@@ -671,8 +707,8 @@ export default function DispatchButton() {
                     <>
                       {!dbReady && (
                         <div className="mb-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-700">
-                          시간을 저장하려면 DB 준비(migration_dispatch.sql 실행)가
-                          필요합니다. 관리자에게 문의하세요.
+                          시간을 저장하려면 DB 준비(migration_dispatch.sql
+                          실행)가 필요합니다. 관리자에게 문의하세요.
                         </div>
                       )}
                       {/* 관리자용 한눈 요약 — 수량 타일 */}
@@ -716,8 +752,8 @@ export default function DispatchButton() {
                       </div>
                       <p className="mb-1 text-[11px] text-gray-400">
                         시간 입력 {timedCount}대
-                        {offCount > 0 && ` · 휴차 ${offCount}대`} — 시간을 고르면 이른
-                        순서로 정렬됩니다
+                        {offCount > 0 && ` · 휴차 ${offCount}대`} — 시간을
+                        고르면 이른 순서로 정렬됩니다
                       </p>
                       <ul className="divide-y divide-gray-100 rounded-lg border border-gray-200">
                         {mainList.map((e) => {
@@ -725,13 +761,17 @@ export default function DispatchButton() {
                           return (
                             <li
                               key={e.plate}
-                              className={`flex flex-wrap items-center justify-between gap-x-2 gap-y-1 px-3 py-2 ${
-                                isOff ? "bg-red-50/60" : e.excluded ? "bg-gray-100/70" : ""
+                              className={`px-3 py-2 ${
+                                isOff
+                                  ? "bg-red-50/60"
+                                  : e.excluded
+                                    ? "bg-gray-100/70"
+                                    : ""
                               }`}
                             >
                               <div className="min-w-0">
                                 <p
-                                  className={`truncate text-sm font-medium ${
+                                  className={`text-sm font-medium ${
                                     isOff
                                       ? "text-red-400"
                                       : e.excluded
@@ -763,6 +803,11 @@ export default function DispatchButton() {
                                       ✔ 타코확인
                                     </button>
                                   )}
+                                  {e.team && (
+                                    <span className="ml-1.5 align-middle text-[11px] text-gray-500">
+                                      {e.team}
+                                    </span>
+                                  )}
                                   {e.excluded && (
                                     <span className="ml-1.5 rounded bg-gray-200 px-1.5 py-0.5 align-middle text-[10px] font-semibold text-gray-600">
                                       설치제외
@@ -775,69 +820,80 @@ export default function DispatchButton() {
                                   </p>
                                 )}
                               </div>
-                              <div className="ml-auto flex shrink-0 items-center gap-2">
-                                <label className="flex cursor-pointer items-center gap-1">
-                                  <input
-                                    type="checkbox"
-                                    checked={e.checklist}
-                                    onChange={(ev) =>
-                                      toggleChecklist(e.plate, ev.target.checked)
-                                    }
-                                    className="h-4 w-4 accent-green-600"
-                                  />
-                                  <span
-                                    className={`text-xs ${
-                                      e.checklist
-                                        ? "font-semibold text-green-700"
-                                        : "text-gray-500"
-                                    }`}
-                                  >
-                                    검수완료
-                                  </span>
-                                </label>
-                                <label className="flex cursor-pointer items-center gap-1">
-                                  <input
-                                    type="checkbox"
-                                    checked={e.excluded}
-                                    onChange={(ev) =>
-                                      toggleExcluded(e.plate, ev.target.checked)
-                                    }
-                                    className="h-4 w-4 accent-gray-500"
-                                  />
-                                  <span
-                                    className={`text-xs ${
+                              {/* 체크 3개는 왼쪽, 시간은 오른쪽 고정 — 행마다 시간 열이 같은 자리에 온다 */}
+                              <div className="mt-1 flex items-center justify-between gap-2">
+                                <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+                                  <label className="flex shrink-0 cursor-pointer items-center gap-1">
+                                    <input
+                                      type="checkbox"
+                                      checked={e.checklist}
+                                      onChange={(ev) =>
+                                        toggleChecklist(
+                                          e.plate,
+                                          ev.target.checked,
+                                        )
+                                      }
+                                      className="h-4 w-4 accent-green-600"
+                                    />
+                                    <span
+                                      className={`text-xs ${
+                                        e.checklist
+                                          ? "font-semibold text-green-700"
+                                          : "text-gray-500"
+                                      }`}
+                                    >
+                                      검수완료
+                                    </span>
+                                  </label>
+                                  <label className="flex shrink-0 cursor-pointer items-center gap-1">
+                                    <input
+                                      type="checkbox"
+                                      checked={e.excluded}
+                                      onChange={(ev) =>
+                                        toggleExcluded(
+                                          e.plate,
+                                          ev.target.checked,
+                                        )
+                                      }
+                                      className="h-4 w-4 accent-gray-500"
+                                    />
+                                    <span
+                                      className={`text-xs ${
+                                        e.excluded
+                                          ? "font-semibold text-gray-700"
+                                          : "text-gray-500"
+                                      }`}
+                                    >
+                                      설치제외
+                                    </span>
+                                  </label>
+                                  <label
+                                    className={`flex shrink-0 items-center gap-1 ${
                                       e.excluded
-                                        ? "font-semibold text-gray-700"
-                                        : "text-gray-500"
+                                        ? "opacity-40"
+                                        : "cursor-pointer"
                                     }`}
                                   >
-                                    설치제외
-                                  </span>
-                                </label>
-                                <label
-                                  className={`flex items-center gap-1 ${
-                                    e.excluded ? "opacity-40" : "cursor-pointer"
-                                  }`}
-                                >
-                                  <input
-                                    type="checkbox"
-                                    checked={isOff}
-                                    disabled={e.excluded}
-                                    onChange={(ev) =>
-                                      toggleOff(e.plate, ev.target.checked)
-                                    }
-                                    className="h-4 w-4 accent-red-600"
-                                  />
-                                  <span
-                                    className={`text-xs ${
-                                      isOff
-                                        ? "font-semibold text-red-600"
-                                        : "text-gray-500"
-                                    }`}
-                                  >
-                                    휴차
-                                  </span>
-                                </label>
+                                    <input
+                                      type="checkbox"
+                                      checked={isOff}
+                                      disabled={e.excluded}
+                                      onChange={(ev) =>
+                                        toggleOff(e.plate, ev.target.checked)
+                                      }
+                                      className="h-4 w-4 accent-red-600"
+                                    />
+                                    <span
+                                      className={`text-xs ${
+                                        isOff
+                                          ? "font-semibold text-red-600"
+                                          : "text-gray-500"
+                                      }`}
+                                    >
+                                      휴차
+                                    </span>
+                                  </label>
+                                </div>
                                 <RowTime
                                   value={isOff ? null : e.outTime}
                                   disabled={isOff || e.excluded}
@@ -906,7 +962,9 @@ export default function DispatchButton() {
                           {i + 1}.
                         </span>
                         <span className="font-medium">{t}</span>
-                        {s && <span className="text-xs text-gray-500">({s})</span>}
+                        {s && (
+                          <span className="text-xs text-gray-500">({s})</span>
+                        )}
                       </li>
                     ))}
                   </ol>
@@ -924,14 +982,17 @@ export default function DispatchButton() {
                           {i + 1}.
                         </span>
                         <span className="font-medium">{t}</span>
-                        {s && <span className="text-xs text-gray-500">({s})</span>}
+                        {s && (
+                          <span className="text-xs text-gray-500">({s})</span>
+                        )}
                       </li>
                     ))}
                   </ol>
                 </section>
 
                 <p className="text-center text-[11px] text-gray-400">
-                  검수 완료 후 배차표 리스트에서 차량별 &lsquo;검수완료&rsquo;를 체크해주세요.
+                  검수 완료 후 배차표 리스트에서 차량별 &lsquo;검수완료&rsquo;를
+                  체크해주세요.
                 </p>
               </div>
             </div>
@@ -945,7 +1006,9 @@ export default function DispatchButton() {
               onClick={(e) => e.stopPropagation()}
             >
               <div className="sticky top-0 z-10 flex items-center justify-between border-b border-gray-200 bg-white px-4 py-2.5">
-                <p className="text-sm font-bold text-gray-800">⚡ 배차표 자동 입력</p>
+                <p className="text-sm font-bold text-gray-800">
+                  ⚡ 배차표 자동 입력
+                </p>
                 <button
                   type="button"
                   onClick={() => setAutoView(false)}
@@ -957,14 +1020,16 @@ export default function DispatchButton() {
               <div className="px-4 py-4">
                 <p className="text-xs text-gray-500">
                   {operator} · {fmtDot(date)}
-                  {routeFilter && ` · ${routeFilter}`} — 첫차 시간과 간격을 정하고,
-                  차량마다 나가는 순번을 적으면 시간이 자동 계산됩니다.
+                  {routeFilter && ` · ${routeFilter}`} — 첫차 시간과 간격을
+                  정하고, 차량마다 나가는 순번을 적으면 시간이 자동 계산됩니다.
                 </p>
 
                 {/* 첫차 출발시간 + 분 간격 */}
                 <div className="mt-3 flex flex-wrap items-end gap-4 rounded-xl border border-orange-200 bg-orange-50 px-3 py-3">
                   <div>
-                    <p className="mb-1 text-[11px] font-medium text-gray-600">첫차 출발시간</p>
+                    <p className="mb-1 text-[11px] font-medium text-gray-600">
+                      첫차 출발시간
+                    </p>
                     <div className="flex items-center gap-1">
                       <select
                         value={autoH}
@@ -993,18 +1058,22 @@ export default function DispatchButton() {
                     </div>
                   </div>
                   <div>
-                    <p className="mb-1 text-[11px] font-medium text-gray-600">배차 간격</p>
+                    <p className="mb-1 text-[11px] font-medium text-gray-600">
+                      배차 간격
+                    </p>
                     <div className="flex items-center gap-1">
                       <select
                         value={autoGap}
                         onChange={(e) => setAutoGap(Number(e.target.value))}
                         className="rounded-lg border border-gray-300 bg-white px-1.5 py-1.5 text-base focus:border-orange-500 focus:outline-none"
                       >
-                        {Array.from({ length: 90 }, (_, i) => i + 1).map((n) => (
-                          <option key={n} value={n}>
-                            {n}
-                          </option>
-                        ))}
+                        {Array.from({ length: 90 }, (_, i) => i + 1).map(
+                          (n) => (
+                            <option key={n} value={n}>
+                              {n}
+                            </option>
+                          ),
+                        )}
                       </select>
                       <span className="text-xs text-gray-500">분 간격</span>
                     </div>
@@ -1013,17 +1082,20 @@ export default function DispatchButton() {
 
                 {/* 차량별 순번 입력 */}
                 <p className="mb-1 mt-4 text-[11px] text-gray-400">
-                  나가는 순번 (1 = 첫차 · 빈칸은 건너뜀 · 설치제외 차량은 목록에서 제외 ·
-                  휴차는 체크)
+                  나가는 순번 (1 = 첫차 · 빈칸은 건너뜀 · 설치제외 차량은
+                  목록에서 제외 · 휴차는 체크)
                 </p>
                 <ul className="divide-y divide-gray-100 rounded-lg border border-gray-200">
                   {autoTargets.map((e) => {
                     const isOff = e.outTime === OFF;
                     const raw = (seqMap[e.plate] ?? "").trim();
-                    const valid = !isOff && /^\d+$/.test(raw) && Number(raw) >= 1;
+                    const valid =
+                      !isOff && /^\d+$/.test(raw) && Number(raw) >= 1;
                     const t = valid
                       ? Math.min(
-                          Number(autoH) * 60 + Number(autoM) + (Number(raw) - 1) * autoGap,
+                          Number(autoH) * 60 +
+                            Number(autoM) +
+                            (Number(raw) - 1) * autoGap,
                           24 * 60 - 1,
                         )
                       : null;
@@ -1043,7 +1115,9 @@ export default function DispatchButton() {
                             {e.plate}
                           </p>
                           {!routeFilter && e.route && (
-                            <p className="text-[11px] text-gray-400">{e.route}</p>
+                            <p className="text-[11px] text-gray-400">
+                              {e.route}
+                            </p>
                           )}
                         </div>
                         <div className="flex shrink-0 items-center gap-2">
@@ -1057,12 +1131,16 @@ export default function DispatchButton() {
                             <input
                               type="checkbox"
                               checked={isOff}
-                              onChange={(ev) => toggleOff(e.plate, ev.target.checked)}
+                              onChange={(ev) =>
+                                toggleOff(e.plate, ev.target.checked)
+                              }
                               className="h-4 w-4 accent-red-600"
                             />
                             <span
                               className={`text-xs ${
-                                isOff ? "font-semibold text-red-600" : "text-gray-500"
+                                isOff
+                                  ? "font-semibold text-red-600"
+                                  : "text-gray-500"
                               }`}
                             >
                               휴차
@@ -1072,12 +1150,15 @@ export default function DispatchButton() {
                             type="text"
                             inputMode="numeric"
                             pattern="[0-9]*"
-                            value={isOff ? "" : seqMap[e.plate] ?? ""}
+                            value={isOff ? "" : (seqMap[e.plate] ?? "")}
                             disabled={isOff}
                             onChange={(ev) =>
                               setSeqMap((m) => ({
                                 ...m,
-                                [e.plate]: ev.target.value.replace(/[^0-9]/g, ""),
+                                [e.plate]: ev.target.value.replace(
+                                  /[^0-9]/g,
+                                  "",
+                                ),
                               }))
                             }
                             placeholder={isOff ? "휴차" : "순번"}
@@ -1136,7 +1217,9 @@ export default function DispatchButton() {
               onClick={(e) => e.stopPropagation()}
             >
               <div className="sticky top-0 flex items-center justify-between border-b border-gray-200 bg-white px-4 py-2.5">
-                <p className="text-sm font-bold text-gray-800">📋 배차표 (캡쳐용)</p>
+                <p className="text-sm font-bold text-gray-800">
+                  📋 배차표 (캡쳐용)
+                </p>
                 <button
                   type="button"
                   onClick={() => setTableView(false)}
@@ -1213,7 +1296,11 @@ export default function DispatchButton() {
                                     : "text-gray-300"
                             }`}
                           >
-                            {isOff ? "휴차" : e.excluded ? "설치제외" : e.outTime ?? "-"}
+                            {isOff
+                              ? "휴차"
+                              : e.excluded
+                                ? "설치제외"
+                                : (e.outTime ?? "-")}
                           </td>
                         </tr>
                       );
@@ -1221,7 +1308,8 @@ export default function DispatchButton() {
                   </tbody>
                 </table>
                 <p className="mt-3 text-center text-[11px] text-gray-400">
-                  이 화면을 캡쳐해 공유하세요 · ✕ 닫기를 누르면 입력 화면으로 돌아갑니다
+                  이 화면을 캡쳐해 공유하세요 · ✕ 닫기를 누르면 입력 화면으로
+                  돌아갑니다
                 </p>
               </div>
             </div>

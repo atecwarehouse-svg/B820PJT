@@ -90,6 +90,8 @@ export async function GET(req: NextRequest) {
   // (대시보드 진행중 판정과 동일 기준). 조회 실패해도 배차표 자체는 동작해야 하므로 표시만 생략.
   const completedSet = new Set<string>();
   const installingSet = new Set<string>();
+  // 설치팀 — records.team은 "팀명 이름"으로 저장, 배차표에는 팀명만 표시
+  const teamOf = new Map<string, string>();
   try {
     const stdSlots = [...BEFORE_SLOTS, ...AFTER_SLOTS].map((s) => s.slotKey);
     const CH = 100; // 한글 plate 다수 in() 필터는 URL 길이 초과 방지를 위해 분할
@@ -100,7 +102,7 @@ export async function GET(req: NextRequest) {
       const [recRes, photoRows] = await Promise.all([
         supabase
           .from("records")
-          .select("plate, saved_at, na_slots")
+          .select("plate, saved_at, na_slots, team")
           .in("plate", chunk),
         fetchAll<{ plate: string; slot_key: string }>((from, to) =>
           supabase
@@ -120,6 +122,8 @@ export async function GET(req: NextRequest) {
         bySlot.set(p.plate, s);
       }
       for (const r of recRes.data ?? []) {
+        const team = String(r.team ?? "").trim().split(/\s+/)[0]; // "1팀 홍길동" → "1팀"
+        if (team) teamOf.set(r.plate, team);
         const have = bySlot.get(r.plate);
         const na = new Set<string>(Array.isArray(r.na_slots) ? r.na_slots : []);
         if (r.saved_at && stdSlots.every((k) => have?.has(k) || na.has(k))) {
@@ -141,6 +145,7 @@ export async function GET(req: NextRequest) {
       checklist: checks.has(v.plate),
       completed: completedSet.has(v.plate),
       installing: installingSet.has(v.plate), // 설치중(시작했으나 미완료 — 서버 판정)
+      team: teamOf.get(v.plate) ?? "", // 설치팀 팀명(기록 없으면 빈값)
       tachoCheck: isTachoCheck(v.tacho), // 조영 DT-202 → 배차표에 '타코확인' 표시
       tachoDone: tachoDones.has(v.plate), // 타코확인 완료(체크 시 녹색)
       excluded: excludes.has(v.plate), // 설치제외(나중에 설치 — 리스트에는 유지)
