@@ -583,11 +583,16 @@ export default function DispatchButton() {
                             >
                               {t.operator}
                             </span>
-                            {/* 노선이 많으면 줄바꿈 — 한 줄 고정이면 카드 밖으로 넘친다 */}
-                            <span className="min-w-0 flex-1 break-words text-right text-[11px] leading-snug text-gray-500">
-                              {t.todayDate.routes
-                                .map((r) => `${r.route} ${r.count}대`)
-                                .join(" · ")}
+                            {/* 노선은 한 줄에 4개까지, 넘으면 다음 줄 — 한 줄 고정이면 카드 밖으로 넘친다 */}
+                            <span className="flex min-w-0 flex-1 flex-wrap justify-end gap-y-0.5 text-[11px] leading-snug text-gray-500">
+                              {t.todayDate.routes.map((r) => (
+                                <span
+                                  key={r.route}
+                                  className="w-1/4 truncate text-right"
+                                >
+                                  {r.route} {r.count}대
+                                </span>
+                              ))}
                             </span>
                           </button>
                         );
