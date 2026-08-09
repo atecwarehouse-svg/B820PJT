@@ -27,8 +27,7 @@ interface Entry {
   completed: boolean; // 설치완료(서버 판정 — 저장+설치전후 사진 충족)
   installing: boolean; // 설치중(서버 판정 — 시작했으나 아직 미완료)
   team: string; // 설치팀 팀명(records.team의 앞 토큰 — 서버 판정, 기록 없으면 빈값)
-  tachoCheck: boolean; // 타코확인 대상(타코 제조사 = 조영 DT-202, 서버 판정)
-  tachoDone: boolean; // 타코확인 완료 — 배지 탭으로 토글, 저장 시 녹색 유지
+  tachoReason: string; // 타코 미연결 사유 — 빈 값이면 '타코 정상'(기본), 값이 있으면 미연결
   excluded: boolean; // 설치제외 — 나중에 설치(리스트에는 유지)
 }
 
@@ -72,16 +71,10 @@ const TILES: {
     match: (e) => !e.excluded && !e.installing && !e.completed,
   },
   {
-    key: "tacho",
-    label: "타코대상",
+    key: "tachoOff",
+    label: "타코 미연결",
     color: "text-amber-600",
-    match: (e) => !e.excluded && e.tachoCheck,
-  },
-  {
-    key: "tachoDone",
-    label: "타코확인",
-    color: "text-emerald-700",
-    match: (e) => !e.excluded && e.tachoCheck && e.tachoDone,
+    match: (e) => !e.excluded && !!e.tachoReason,
   },
   {
     key: "excluded",
@@ -92,7 +85,7 @@ const TILES: {
 ];
 
 // 저장 대상 항목 — 이 기기에서 실제로 바꾼 항목만 서버로 보낸다(기기 간 덮어쓰기 방지)
-type DirtyField = "outTime" | "checklist" | "tachoDone" | "excluded";
+type DirtyField = "outTime" | "checklist" | "tachoReason" | "excluded";
 
 // "2026-07-15" → "2026.07.15"
 function fmtDot(d: string): string {
@@ -233,6 +226,9 @@ export default function DispatchButton() {
   const [autoGap, setAutoGap] = useState(5); // 분 간격
   const [seqMap, setSeqMap] = useState<Record<string, string>>({}); // plate → 순번
   const [autoAlert, setAutoAlert] = useState<string | null>(null); // 자동 입력 페이지 경고 팝업
+
+  // 타코 미연결 사유 입력 팝업 — {차량번호, 입력 중인 사유}
+  const [tachoEdit, setTachoEdit] = useState<{ plate: string; reason: string } | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -422,15 +418,16 @@ export default function DispatchButton() {
     window.location.href = telHref(hit.phone);
   }
 
-  // 타코확인 완료 토글 — 배지 탭. 저장하면 녹색 상태가 모든 기기에 공유된다.
-  function toggleTachoDone(plate: string) {
-    markDirty(plate, "tachoDone");
-    setEntries((list) =>
-      list.map((e) =>
-        e.plate === plate ? { ...e, tachoDone: !e.tachoDone } : e,
-      ),
+  // 타코 미연결 — 기본은 '정상'이고, 배지를 누르면 사유 입력 팝업이 뜬다.
+  // 사유를 적고 확인하면 그 자리에서 바로 저장한다(팝업만 닫고 저장을 잊으면 유실되므로).
+  function applyTachoReason(plate: string, reason: string) {
+    const next = entries.map((e) =>
+      e.plate === plate ? { ...e, tachoReason: reason } : e,
     );
-    setSaveMsg(null);
+    markDirty(plate, "tachoReason");
+    setEntries(next);
+    setTachoEdit(null);
+    handleSave(next); // setEntries 반영을 기다리지 않도록 새 목록을 직접 넘긴다
   }
 
   // 설치제외 토글 — 나중에 설치할 차량. 시간은 지우고 리스트에는 그대로 남는다.
@@ -491,14 +488,15 @@ export default function DispatchButton() {
     setAutoView(false);
   }
 
-  async function handleSave() {
+  // list: 방금 바꾼 목록을 직접 넘길 수 있다(상태 반영을 기다리지 않고 저장할 때).
+  async function handleSave(list: Entry[] = entries) {
     if (saving) return;
     // 이 기기에서 바꾼 차량의 바꾼 항목만 저장 — 다른 기기가 먼저 저장한 값을
     // (다른 항목이라도) 로드 시점의 옛 값으로 덮어쓰지 않는다.
     const snapshot = new Map(
       [...dirtyRef.current].map(([p, s]) => [p, new Set(s)] as const),
     );
-    const changed = entries
+    const changed = list
       .filter((e) => snapshot.has(e.plate))
       .map((e) => {
         const fields = snapshot.get(e.plate)!;
@@ -507,7 +505,7 @@ export default function DispatchButton() {
           route: e.route,
           ...(fields.has("outTime") ? { outTime: e.outTime } : {}),
           ...(fields.has("checklist") ? { checklist: e.checklist } : {}),
-          ...(fields.has("tachoDone") ? { tachoDone: e.tachoDone } : {}),
+          ...(fields.has("tachoReason") ? { tachoReason: e.tachoReason } : {}),
           ...(fields.has("excluded") ? { excluded: e.excluded } : {}),
         };
       });
@@ -631,7 +629,7 @@ export default function DispatchButton() {
               {date && !listLoading && entries.length > 0 && (
                 <div>
                   <button
-                    onClick={handleSave}
+                    onClick={() => handleSave()}
                     disabled={saving || !dbReady}
                     className="w-full rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white active:bg-blue-700 disabled:opacity-50"
                   >
@@ -839,6 +837,8 @@ export default function DispatchButton() {
                             </button>
                           );
                         })}
+                        {/* 7칸이라 4열 격자의 마지막 한 칸을 메운다(안 채우면 회색 구멍) */}
+                        <span className="bg-gray-50" />
                       </div>
                       <p className="mb-1 text-[11px] text-gray-400">
                         {tileFilter ? (
@@ -897,19 +897,22 @@ export default function DispatchButton() {
                                       설치중
                                     </span>
                                   )}
-                                  {e.tachoCheck && (
-                                    <button
-                                      type="button"
-                                      onClick={() => toggleTachoDone(e.plate)}
-                                      className={`ml-1.5 rounded border px-1.5 py-0.5 align-middle text-[10px] font-semibold ${
-                                        e.tachoDone
-                                          ? "border-green-300 bg-green-100 text-green-700"
-                                          : "border-amber-300 bg-amber-100 text-amber-700"
-                                      }`}
-                                    >
-                                      ✔ 타코확인
-                                    </button>
-                                  )}
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setTachoEdit({
+                                        plate: e.plate,
+                                        reason: e.tachoReason,
+                                      })
+                                    }
+                                    className={`ml-1.5 rounded border px-1.5 py-0.5 align-middle text-[10px] font-semibold ${
+                                      e.tachoReason
+                                        ? "border-amber-400 bg-amber-100 text-amber-700"
+                                        : "border-gray-300 bg-gray-50 text-gray-500"
+                                    }`}
+                                  >
+                                    {e.tachoReason ? "⚠ 타코 미연결" : "타코 정상"}
+                                  </button>
                                   {e.team && (
                                     <>
                                       <span className="ml-1.5 align-middle text-[11px] text-gray-500">
@@ -1028,6 +1031,76 @@ export default function DispatchButton() {
 
             </div>
           </div>
+
+          {/* 타코 미연결 사유 입력 — 기본은 '타코 정상', 사유를 적어야 미연결이 된다.
+              확인을 누르면 그 자리에서 저장까지 끝낸다(리포트 특이사항에 자동으로 들어감). */}
+          {tachoEdit && (
+            <div
+              className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 p-4"
+              onClick={(e) => {
+                e.stopPropagation();
+                setTachoEdit(null);
+              }}
+            >
+              <div
+                className="w-full max-w-xs rounded-2xl bg-white p-5 shadow-xl"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <p className="text-center text-sm font-bold text-gray-800">
+                  타코 미연결 사유
+                </p>
+                <p className="mt-0.5 text-center text-xs text-gray-500">
+                  {tachoEdit.plate}
+                </p>
+                <textarea
+                  value={tachoEdit.reason}
+                  onChange={(e) =>
+                    setTachoEdit({ ...tachoEdit, reason: e.target.value })
+                  }
+                  rows={3}
+                  maxLength={200}
+                  autoFocus
+                  placeholder="예) 타코메타 단자 불량으로 연결 불가"
+                  className="mt-3 w-full resize-none rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none"
+                />
+                <p className="mt-1 text-[11px] text-gray-400">
+                  사유를 적으면 &lsquo;타코 미연결&rsquo;로 표시되고, 금일 완료
+                  리포트 특이사항에 자동으로 들어갑니다.
+                </p>
+                <div className="mt-3 flex gap-2">
+                  {/* 이미 미연결인 차량만 '정상으로 되돌리기'를 보여준다 */}
+                  {entries.find((e) => e.plate === tachoEdit.plate)
+                    ?.tachoReason ? (
+                    <button
+                      type="button"
+                      onClick={() => applyTachoReason(tachoEdit.plate, "")}
+                      className="flex-1 rounded-lg border border-gray-300 px-3 py-2.5 text-sm font-medium text-gray-600 active:bg-gray-100"
+                    >
+                      정상으로 되돌리기
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setTachoEdit(null)}
+                      className="flex-1 rounded-lg border border-gray-300 px-3 py-2.5 text-sm font-medium text-gray-600 active:bg-gray-100"
+                    >
+                      취소
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    disabled={!tachoEdit.reason.trim()}
+                    onClick={() =>
+                      applyTachoReason(tachoEdit.plate, tachoEdit.reason.trim())
+                    }
+                    className="flex-1 rounded-lg bg-amber-600 px-3 py-2.5 text-sm font-semibold text-white active:bg-amber-700 disabled:opacity-40"
+                  >
+                    미연결 저장
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* 검수항목 — 검수자가 차량 옆에서 보면서 확인하는 고정 리스트 (저장 없음) */}
           {checklistView && (

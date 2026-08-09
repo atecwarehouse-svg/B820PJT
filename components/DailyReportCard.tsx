@@ -93,23 +93,32 @@ function StatRow({
   );
 }
 
-// 특이사항 텍스트에서 [설치제외 N대] 블록을 떼어내고 차량별 사유를 복원한다.
-// 2차 프리필이 1차의 블록을 그대로 상속하면 그 사이 바뀐 제외 목록이 갱신되지
-// 않으므로, 블록은 버리고(현재 목록으로 재생성) 사유만 입력칸에 되살리는 용도.
-function splitExclBlock(notes: string): { rest: string; reasons: Record<string, string> } {
+// 특이사항 텍스트에서 자동 생성 블록([설치제외 N대] · [타코 미연결 N대])을 떼어낸다.
+// 2차 프리필이 1차의 블록을 그대로 상속하면 그 사이 바뀐 목록이 갱신되지 않으므로,
+// 블록은 버리고(현재 목록으로 재생성) 설치제외 사유만 입력칸에 되살린다.
+// (타코 미연결 사유는 배차표에 저장돼 있어 복원할 필요가 없다.)
+const AUTO_BLOCK_HEAD = /^\[(설치제외|타코 미연결) \d+대\]/;
+function splitAutoBlocks(notes: string): { rest: string; reasons: Record<string, string> } {
   const lines = notes.split(/\r?\n/);
-  const start = lines.findIndex((l) => /^\[설치제외 \d+대\]/.test(l.trim()));
-  if (start < 0) return { rest: notes, reasons: {} };
   const reasons: Record<string, string> = {};
-  let end = start + 1;
-  while (end < lines.length) {
-    const m = lines[end].match(/^\s*\d+\.\s*(\S+)(?:\s+—\s*(.*))?$/);
-    if (!m) break;
-    if (m[2]?.trim()) reasons[m[1]] = m[2].trim();
-    end++;
+  const rest: string[] = [];
+  for (let i = 0; i < lines.length; ) {
+    const head = AUTO_BLOCK_HEAD.exec(lines[i].trim());
+    if (!head) {
+      rest.push(lines[i]);
+      i++;
+      continue;
+    }
+    const isExcl = head[1] === "설치제외";
+    i++; // 헤더 줄은 버리고, 이어지는 "1. 차량번호 — 사유" 줄들을 흡수
+    while (i < lines.length) {
+      const m = lines[i].match(/^\s*\d+\.\s*(\S+)(?:\s+—\s*(.*))?$/);
+      if (!m) break;
+      if (isExcl && m[2]?.trim()) reasons[m[1]] = m[2].trim();
+      i++;
+    }
   }
-  const rest = [...lines.slice(0, start), ...lines.slice(end)].join("\n").trim();
-  return { rest, reasons };
+  return { rest: rest.join("\n").trim(), reasons };
 }
 
 // 금일 설치 완료 리포트 카드 — 미리보기 + Gmail 발송.
@@ -157,6 +166,8 @@ export default function DailyReportCard({
   // 이미 [설치제외 블록이 있으면 입력칸을 숨기고 중복 포함하지 않음)
   const [exclPlates, setExclPlates] = useState<string[]>([]);
   const [exclReasons, setExclReasons] = useState<Record<string, string>>({});
+  // 배차표 '타코 미연결' 차량 — 사유는 배차표에서 이미 적었으므로 여기선 목록만 붙인다.
+  const [tachoOff, setTachoOff] = useState<{ plate: string; reason: string }[]>([]);
 
   // 1차/2차 탭 전환 — 발송 잠금·결과 메시지만 초기화(입력값은 유지).
   // (리마운트 없이 같은 인스턴스를 쓰므로, 1차 발송 후 2차 탭의 발송이 잠기지 않게)
@@ -183,7 +194,7 @@ export default function DailyReportCard({
           // 1차의 [설치제외] 블록은 그대로 상속하지 않는다 — 1차와 2차 사이에 배차표
           // 제외 목록이 바뀌면 옛 목록이 굳어버리므로, 블록은 떼어내고(현재 목록으로
           // 다시 생성됨) 차량별 사유만 입력칸에 복원한다.
-          const { rest, reasons } = splitExclBlock(d.notes);
+          const { rest, reasons } = splitAutoBlocks(d.notes);
           setNotes((cur) => (cur === "" ? rest : cur));
           if (Object.keys(reasons).length > 0) {
             setExclReasons((cur) => ({ ...reasons, ...cur }));
@@ -234,9 +245,15 @@ export default function DailyReportCard({
           cache: "no-store",
         });
         const json = await res.json();
-        if (alive) setExclPlates((json.plates ?? []) as string[]);
+        if (alive) {
+          setExclPlates((json.plates ?? []) as string[]);
+          setTachoOff((json.tachoOff ?? []) as { plate: string; reason: string }[]);
+        }
       } catch {
-        if (alive) setExclPlates([]);
+        if (alive) {
+          setExclPlates([]);
+          setTachoOff([]);
+        }
       }
     })();
     return () => {
@@ -258,10 +275,18 @@ export default function DailyReportCard({
     return `[설치제외 ${exclPlates.length}대]\n${lines.join("\n")}`;
   }, [showExclInputs, exclPlates, exclReasons]);
 
-  // 발송·미리보기용 특이사항 = 직접 입력 + 설치제외 블록
+  // 타코 미연결 블록 — 설치제외와 같은 모양. 사유는 배차표에 적힌 값을 그대로 쓴다.
+  const tachoInNotes = notes.includes("[타코 미연결");
+  const tachoBlock = useMemo(() => {
+    if (tachoOff.length === 0 || tachoInNotes) return "";
+    const lines = tachoOff.map((t, i) => ` ${i + 1}. ${t.plate} — ${t.reason}`);
+    return `[타코 미연결 ${tachoOff.length}대]\n${lines.join("\n")}`;
+  }, [tachoOff, tachoInNotes]);
+
+  // 발송·미리보기용 특이사항 = 직접 입력 + 설치제외 블록 + 타코 미연결 블록
   const mergedNotes = useMemo(
-    () => (exclBlock ? `${notes.trim() ? notes.trim() + "\n" : ""}${exclBlock}` : notes),
-    [notes, exclBlock],
+    () => [notes.trim(), exclBlock, tachoBlock].filter(Boolean).join("\n"),
+    [notes, exclBlock, tachoBlock],
   );
 
   // 2차 미리보기용 VOC 요약 — 선택한 날짜가 바뀌면 다시 불러온다.
@@ -488,6 +513,34 @@ export default function DailyReportCard({
                   placeholder="제외 사유 (예: 배차시간 부족)"
                   className="min-w-0 flex-1 rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-sm focus:border-amber-500 focus:outline-none"
                 />
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* 타코 미연결 — 사유는 배차표에서 이미 적었으므로 여기선 확인만 (수정은 배차표에서) */}
+      {tachoBlock && (
+        <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50/60 p-3">
+          <p className="text-xs font-semibold text-amber-800">
+            ⚠️ 타코 미연결 {tachoOff.length}대 — 배차표에 적은 사유가 그대로
+            들어갑니다
+          </p>
+          <p className="mt-0.5 text-[11px] text-amber-600">
+            고치려면 홈 → 배차표에서 해당 차량의 사유를 수정하세요
+          </p>
+          <ul className="mt-2 space-y-1">
+            {tachoOff.map((t, i) => (
+              <li key={t.plate} className="flex items-start gap-2 text-sm">
+                <span className="w-5 shrink-0 text-right text-xs tabular-nums text-gray-500">
+                  {i + 1}.
+                </span>
+                <span className="w-28 shrink-0 truncate font-medium text-gray-800">
+                  {t.plate}
+                </span>
+                <span className="min-w-0 flex-1 break-words text-gray-600">
+                  {t.reason}
+                </span>
               </li>
             ))}
           </ul>

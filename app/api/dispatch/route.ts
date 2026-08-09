@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
 import { fetchAll, chunk } from "@/lib/supabase/paginate";
 import { BEFORE_SLOTS, AFTER_SLOTS } from "@/lib/slots";
-import { isTachoCheck } from "@/lib/tacho";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -22,43 +21,38 @@ export async function GET(req: NextRequest) {
   }
 
   const supabase = createServiceClient();
-  // tacho(타코 제조사) 컬럼 없는 DB(migration_tacho.sql 미실행)면 빼고 재시도(타코확인 표시만 생략)
-  type VehicleRow = { plate: string; route: string | null; tacho?: string | null };
-  const selectVehicles = (cols: string) =>
-    supabase
-      .from("vehicles")
-      .select(cols)
-      .eq("operator", operator)
-      .eq("planned_date", date)
-      .order("route")
-      .order("plate")
-      .range(0, 999);
-  let { data, error } = await selectVehicles("plate, route, tacho");
-  if (error && /tacho/i.test(error.message)) {
-    ({ data, error } = await selectVehicles("plate, route"));
-  }
+  type VehicleRow = { plate: string; route: string | null };
+  const { data, error } = await supabase
+    .from("vehicles")
+    .select("plate, route")
+    .eq("operator", operator)
+    .eq("planned_date", date)
+    .order("route")
+    .order("plate")
+    .range(0, 999);
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
   const vehicles = (data ?? []) as unknown as VehicleRow[];
   const plates = vehicles.map((v) => v.plate);
 
-  // 저장된 시간·체크리스트·타코확인·설치제외 — 없는 컬럼(마이그레이션 전)은 단계적으로 빼고 재시도
+  // 저장된 시간·체크리스트·타코 미연결 사유·설치제외 — 없는 컬럼(마이그레이션 전)은 단계적으로 빼고 재시도
   let dbReady = true;
   const times = new Map<string, string | null>();
   const checks = new Set<string>();
-  const tachoDones = new Set<string>();
+  const tachoReasons = new Map<string, string>();
   const excludes = new Set<string>();
   type SavedRow = {
     plate: string;
     out_time: string | null;
     checklist?: boolean;
-    tacho_checked?: boolean;
+    tacho_reason?: string | null;
     excluded?: boolean;
   };
   let savedRows: SavedRow[] | null = null;
   const SELECTS = [
-    "plate, out_time, checklist, tacho_checked, excluded",
+    "plate, out_time, checklist, tacho_reason, excluded",
+    "plate, out_time, checklist, excluded",
     "plate, out_time, checklist",
     "plate, out_time",
   ];
@@ -84,7 +78,7 @@ export async function GET(req: NextRequest) {
       savedRows = rows;
       break;
     }
-    if (!/checklist|tacho_checked|excluded/i.test(failed.message)) break;
+    if (!/checklist|tacho_reason|excluded/i.test(failed.message)) break;
   }
   if (savedRows === null) {
     dbReady = false;
@@ -92,7 +86,8 @@ export async function GET(req: NextRequest) {
     for (const r of savedRows) {
       times.set(r.plate, r.out_time ?? null);
       if (r.checklist) checks.add(r.plate);
-      if (r.tacho_checked) tachoDones.add(r.plate);
+      const reason = (r.tacho_reason ?? "").trim();
+      if (reason) tachoReasons.set(r.plate, reason);
       if (r.excluded) excludes.add(r.plate);
     }
   }
@@ -156,8 +151,8 @@ export async function GET(req: NextRequest) {
       completed: completedSet.has(v.plate),
       installing: installingSet.has(v.plate), // 설치중(시작했으나 미완료 — 서버 판정)
       team: teamOf.get(v.plate) ?? "", // 설치팀 팀명(기록 없으면 빈값)
-      tachoCheck: isTachoCheck(v.tacho), // 조영 DT-202 → 배차표에 '타코확인' 표시
-      tachoDone: tachoDones.has(v.plate), // 타코확인 완료(체크 시 녹색)
+      // 타코 미연결 사유 — 빈 문자열이면 '타코 정상'(기본값)
+      tachoReason: tachoReasons.get(v.plate) ?? "",
       excluded: excludes.has(v.plate), // 설치제외(나중에 설치 — 리스트에는 유지)
     })),
     dbReady,
@@ -173,7 +168,7 @@ export async function POST(req: NextRequest) {
       route?: string;
       outTime?: string | null;
       checklist?: boolean;
-      tachoDone?: boolean;
+      tachoReason?: string | null;
       excluded?: boolean;
     }[];
   };
@@ -209,7 +204,10 @@ export async function POST(req: NextRequest) {
             : null;
       }
       if ("checklist" in e) row.checklist = e.checklist === true;
-      if ("tachoDone" in e) row.tacho_checked = e.tachoDone === true;
+      // 사유가 비면 null — '미연결 해제(정상으로 되돌리기)'가 된다
+      if ("tachoReason" in e) {
+        row.tacho_reason = String(e.tachoReason ?? "").trim().slice(0, 200) || null;
+      }
       if ("excluded" in e) row.excluded = e.excluded === true;
       return row;
     })
@@ -233,9 +231,24 @@ export async function POST(req: NextRequest) {
     let { error } = await supabase
       .from("dispatch_times")
       .upsert(g, { onConflict: "date,plate" });
-    // 타코확인·설치제외 컬럼 없는 DB(migration_dispatch_tacho_excl.sql 전) — 빼고 재시도
-    if (error && /tacho_checked|excluded/i.test(error.message)) {
-      const stripped = g.map(({ tacho_checked: _t, excluded: _e, ...rest }) => rest);
+    // 사유를 적어 보냈는데 컬럼이 없으면, 빼고 재시도해 '저장됨'으로 보이게 하면 안 된다 —
+    // 화면엔 미연결로 남고 DB엔 없어서 리포트에서 조용히 빠진다. 실패로 알린다.
+    if (
+      error &&
+      /tacho_reason/i.test(error.message) &&
+      g.some((r) => r.tacho_reason)
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            "타코 미연결 사유를 저장할 DB 준비가 안 됐습니다. 관리자에게 supabase/migration_dispatch_tacho_off.sql 실행을 요청해주세요.",
+        },
+        { status: 500 },
+      );
+    }
+    // 타코 사유·설치제외 컬럼 없는 DB(migration_dispatch_tacho_off.sql 전) — 빼고 재시도
+    if (error && /tacho_reason|excluded/i.test(error.message)) {
+      const stripped = g.map(({ tacho_reason: _t, excluded: _e, ...rest }) => rest);
       ({ error } = await supabase
         .from("dispatch_times")
         .upsert(stripped, { onConflict: "date,plate" }));
@@ -248,7 +261,7 @@ export async function POST(req: NextRequest) {
       }
     } else if (error && /checklist/i.test(error.message)) {
       const noCheck = g.map(
-        ({ checklist: _c, tacho_checked: _t, excluded: _e, ...rest }) => rest,
+        ({ checklist: _c, tacho_reason: _t, excluded: _e, ...rest }) => rest,
       );
       ({ error } = await supabase
         .from("dispatch_times")

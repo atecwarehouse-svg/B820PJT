@@ -380,6 +380,38 @@ export async function loadTodayExcludedPlates(date: string): Promise<string[]> {
   return plates.filter((p) => planned.has(p));
 }
 
+// 배차표에서 '타코 미연결' 사유가 적힌 금일 차량 — 금일완료 리포트 특이사항 자동 포함용.
+// 설치제외와 같은 규칙: 그날 예정(planned_date=date)인 차량과 교집합만 돌려준다
+// (일정 재업로드로 예정일이 바뀐 차량의 옛 배차표 행이 리포트에 올라오지 않도록).
+export async function loadTodayTachoOff(
+  date: string,
+): Promise<{ plate: string; reason: string }[]> {
+  const supabase = createServiceClient();
+  const { data, error } = await supabase
+    .from("dispatch_times")
+    .select("plate, tacho_reason")
+    .eq("date", date)
+    .not("tacho_reason", "is", null)
+    .order("plate")
+    .range(0, 999);
+  if (error || !data?.length) return [];
+  const rows = data
+    .map((r) => ({ plate: r.plate as string, reason: (r.tacho_reason ?? "").trim() }))
+    .filter((r) => r.plate && r.reason);
+  if (rows.length === 0) return [];
+  const planned = new Set<string>();
+  for (const part of chunk(rows.map((r) => r.plate))) {
+    const { data: veh, error: vehError } = await supabase
+      .from("vehicles")
+      .select("plate")
+      .eq("planned_date", date)
+      .in("plate", part);
+    if (vehError) return [];
+    for (const v of veh ?? []) planned.add(v.plate);
+  }
+  return rows.filter((r) => planned.has(r.plate));
+}
+
 export interface ScheduleDayOp {
   operator: string;
   count: number; // 그 날 이 운수사 예정 대수
