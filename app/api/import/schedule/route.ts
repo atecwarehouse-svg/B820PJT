@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { revalidateTag } from "next/cache";
 import { createServiceClient } from "@/lib/supabase/server";
 import { fetchAll } from "@/lib/supabase/paginate";
 import { parseScheduleBuffer } from "@/lib/import/parse-schedule";
@@ -236,6 +237,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: `제외 차량 삭제 실패: ${error.message}` }, { status: 500 });
     }
   }
+
+  // 대시보드 집계(60초 캐시)를 즉시 갱신 — 없으면 업로드 직후 총대수가 옛 숫자로 보인다.
+  revalidateTag("dashboard");
 
   // 다운로드 양식(템플릿) 자동 교체 — 업로드 파일이 완전한 양식이면 그 파일이 곧 최신 양식이다.
   // (노선명 변경·일정 재편성을 DB에만 반영하고 템플릿이 옛 버전으로 남으면
