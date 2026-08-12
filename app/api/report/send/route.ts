@@ -155,9 +155,11 @@ export async function POST(req: NextRequest) {
   }
 
   // 진행현황 엑셀 첨부 (실패해도 메일은 발송)
+  // 기준일은 리포트 날짜 — 안 넘기면 항상 '현재 업무일' 스냅샷이 붙어,
+  // 지난 날짜로 보고할 때 본문 수치와 첨부 파일이 어긋난다(파일명 날짜까지).
   const attachments: { filename: string; content: Buffer }[] = [];
   try {
-    const xlsx = await buildProgressXlsx();
+    const xlsx = await buildProgressXlsx({ asOfDate: date });
     attachments.push({ filename: xlsx.filename, content: xlsx.buffer });
   } catch (e) {
     console.warn("[report/send] 엑셀 첨부 생성 실패(첨부 없이 발송):", e instanceof Error ? e.message : e);

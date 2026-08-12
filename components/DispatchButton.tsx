@@ -490,7 +490,12 @@ export default function DispatchButton() {
 
   // list: 방금 바꾼 목록을 직접 넘길 수 있다(상태 반영을 기다리지 않고 저장할 때).
   async function handleSave(list: Entry[] = entries) {
-    if (saving) return;
+    // 저장이 진행 중이면 조용히 무시하지 않는다 — 타코 사유 팝업처럼 저장까지 끝내는
+    // 흐름에서 아무 표시 없이 넘어가면 반영된 줄 알고 창을 닫는다(수정분은 dirty로 남음).
+    if (saving) {
+      setSaveMsg({ ok: false, text: "저장 중입니다. 잠시 후 '저장'을 다시 눌러주세요." });
+      return;
+    }
     // 이 기기에서 바꾼 차량의 바꾼 항목만 저장 — 다른 기기가 먼저 저장한 값을
     // (다른 항목이라도) 로드 시점의 옛 값으로 덮어쓰지 않는다.
     const snapshot = new Map(
@@ -940,11 +945,19 @@ export default function DispatchButton() {
                                   </p>
                                 )}
                               </div>
-                              {/* 체크 3개는 왼쪽, 시간은 오른쪽 고정 — 행마다 시간 열이 같은 자리에 온다.
-                                  폭이 좁으면 '휴차'가 '검수완료' 바로 아래로 접히므로, 각 항목에
-                                  세로 여백(py-2)을 줘 손가락이 위/아래 항목을 잘못 누르지 않게 한다. */}
-                              <div className="mt-1 flex items-center justify-between gap-2">
-                                <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
+                              {/* 시간은 오른쪽 고정 — 행마다 같은 자리에 온다.
+                                  체크 3개는 아래 줄에서 행 전체 폭을 쓰고 절대 접지 않는다(flex-nowrap):
+                                  체크와 시간을 한 줄에 두면 폰 폭에서 '휴차'가 '검수완료' 바로 아래로
+                                  접혀 붙어(같은 x, 4px 간격) 휴차를 눌러도 검수완료가 눌린다. */}
+                              <div className="mt-1 flex justify-end">
+                                <RowTime
+                                  value={isOff ? null : e.outTime}
+                                  disabled={isOff || e.excluded}
+                                  onChange={(v) => setTime(e.plate, v)}
+                                />
+                              </div>
+                              <div className="flex items-center">
+                                <div className="flex flex-nowrap items-center gap-x-5">
                                   <label className="flex shrink-0 cursor-pointer items-center gap-1 py-2">
                                     <input
                                       type="checkbox"
@@ -1016,11 +1029,6 @@ export default function DispatchButton() {
                                     </span>
                                   </label>
                                 </div>
-                                <RowTime
-                                  value={isOff ? null : e.outTime}
-                                  disabled={isOff || e.excluded}
-                                  onChange={(v) => setTime(e.plate, v)}
-                                />
                               </div>
                             </li>
                           );
