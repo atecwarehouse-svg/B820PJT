@@ -24,6 +24,7 @@ import ReportHub from "@/components/ReportHub";
 import { inspectorNames } from "@/lib/teams";
 import TeamStatsModal from "@/components/TeamStatsModal";
 import ScheduleChart from "@/components/ScheduleChart";
+import ScheduleMoveModal from "@/components/ScheduleMoveModal";
 import InstallDateSearch from "@/components/InstallDateSearch";
 import DailyReportModal from "@/components/DailyReportModal";
 import KpiCards from "@/components/KpiCards";
@@ -309,10 +310,15 @@ export default async function DashboardPage() {
         schedule={
           detailUnlocked ? (
             <>
-              <p className="mb-2 text-sm font-bold text-gray-700">
-                설치 일정
-                <span className="ml-1 font-normal text-gray-400">(예정일 기준 계획 대비 실적)</span>
-              </p>
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <p className="min-w-0 text-sm font-bold text-gray-700">
+                  설치 일정
+                  <span className="ml-1 font-normal text-gray-400">
+                    (예정일 기준 계획 대비 실적)
+                  </span>
+                </p>
+                <ScheduleMoveModal />
+              </div>
               <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
                 {sch === null ? (
                   <p className="py-8 text-center text-sm text-gray-400">
