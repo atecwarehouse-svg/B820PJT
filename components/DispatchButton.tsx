@@ -940,10 +940,12 @@ export default function DispatchButton() {
                                   </p>
                                 )}
                               </div>
-                              {/* 체크 3개는 왼쪽, 시간은 오른쪽 고정 — 행마다 시간 열이 같은 자리에 온다 */}
+                              {/* 체크 3개는 왼쪽, 시간은 오른쪽 고정 — 행마다 시간 열이 같은 자리에 온다.
+                                  폭이 좁으면 '휴차'가 '검수완료' 바로 아래로 접히므로, 각 항목에
+                                  세로 여백(py-2)을 줘 손가락이 위/아래 항목을 잘못 누르지 않게 한다. */}
                               <div className="mt-1 flex items-center justify-between gap-2">
-                                <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-                                  <label className="flex shrink-0 cursor-pointer items-center gap-1">
+                                <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
+                                  <label className="flex shrink-0 cursor-pointer items-center gap-1 py-2">
                                     <input
                                       type="checkbox"
                                       checked={e.checklist}
@@ -965,7 +967,7 @@ export default function DispatchButton() {
                                       검수완료
                                     </span>
                                   </label>
-                                  <label className="flex shrink-0 cursor-pointer items-center gap-1">
+                                  <label className="flex shrink-0 cursor-pointer items-center gap-1 py-2">
                                     <input
                                       type="checkbox"
                                       checked={e.excluded}
@@ -988,7 +990,7 @@ export default function DispatchButton() {
                                     </span>
                                   </label>
                                   <label
-                                    className={`flex shrink-0 items-center gap-1 ${
+                                    className={`flex shrink-0 items-center gap-1 py-2 ${
                                       e.excluded
                                         ? "opacity-40"
                                         : "cursor-pointer"
