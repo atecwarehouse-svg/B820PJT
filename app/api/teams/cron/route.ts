@@ -18,9 +18,16 @@ const START_DATE = "2026-07-01";
 // GET /api/teams/cron  → Vercel 크론(매일 02:00 KST)이 호출.
 // "설치일(예정 수량>0) && 7/1 이후"일 때만 팀즈 카드 자동 발송.
 export async function GET(req: NextRequest) {
-  // Vercel 크론 보호: CRON_SECRET 설정 시 Authorization 헤더 검증
+  // Vercel 크론 보호.
+  //  - CRON_SECRET이 있으면 Authorization 헤더로 검증(권장 — Vercel이 자동으로 붙여준다).
+  //  - 없으면 최소한 Vercel 크론이 붙이는 x-vercel-cron 헤더라도 요구한다.
+  //    (예전엔 CRON_SECRET 미설정 시 아무나 호출해 팀즈 카드를 쏠 수 있었다.
+  //     완전한 차단은 Vercel 환경변수에 CRON_SECRET을 넣는 것)
   const secret = process.env.CRON_SECRET;
-  if (secret && req.headers.get("authorization") !== `Bearer ${secret}`) {
+  const authorized = secret
+    ? req.headers.get("authorization") === `Bearer ${secret}`
+    : !!req.headers.get("x-vercel-cron");
+  if (!authorized) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 

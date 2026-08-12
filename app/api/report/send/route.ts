@@ -91,14 +91,6 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // 받는사람: 요청값 > 관리자 페이지 저장값(DB) > env REPORT_MAIL_TO > 발신자 본인
-  let recipients = parseRecipients(body.to);
-  if (recipients.length === 0) {
-    recipients = parseRecipients((await getSetting(REPORT_MAIL_KEY)) ?? undefined);
-  }
-  if (recipients.length === 0) recipients = parseRecipients(process.env.REPORT_MAIL_TO);
-  if (recipients.length === 0) recipients = [user];
-
   // 리포트 데이터 — 진행현황/일정 통계 재사용
   let report;
   try {
@@ -153,6 +145,22 @@ export async function POST(req: NextRequest) {
     }
     return NextResponse.json({ ok: true, stage, to: [], teams: true, attached: false });
   }
+
+  // 받는사람(2차 메일 발송에서만 필요): 요청값 > 관리자 페이지 저장값(DB) >
+  // env REPORT_MAIL_TO > 발신자 본인.
+  // 단, 관리자 페이지에서 '저장은 했는데 비어 있는' 경우는 일부러 지운 것이므로
+  // env·발신자로 폴백하지 않는다 — 지웠는데도 옛 주소로 나가는 사고를 막는다.
+  let recipients = parseRecipients(body.to);
+  const savedTo = await getSetting(REPORT_MAIL_KEY);
+  if (recipients.length === 0) recipients = parseRecipients(savedTo ?? undefined);
+  if (recipients.length === 0 && savedTo !== null) {
+    return NextResponse.json(
+      { error: "받는사람이 비어 있습니다. 관리자 페이지에서 수신자를 등록해주세요." },
+      { status: 400 },
+    );
+  }
+  if (recipients.length === 0) recipients = parseRecipients(process.env.REPORT_MAIL_TO);
+  if (recipients.length === 0) recipients = [user];
 
   // 진행현황 엑셀 첨부 (실패해도 메일은 발송)
   // 기준일은 리포트 날짜 — 안 넘기면 항상 '현재 업무일' 스냅샷이 붙어,

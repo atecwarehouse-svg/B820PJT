@@ -98,10 +98,17 @@ function routeKey(route: string): string {
   return route.trim() || "미지정";
 }
 
-// 나가는 시간순 정렬 — 미입력은 뒤, 설치제외는 그 뒤, 휴차는 맨 뒤, 같은 시간은 차량번호순
-function sortEntries(list: Entry[]): Entry[] {
+// 나가는 시간순 정렬 — 미입력은 뒤, 설치제외는 그 뒤, 휴차는 맨 뒤, 같은 시간은 차량번호순.
+// holdKeys: 방금 화면에서 휴차로 바꾼 차량 → 원래 자리(체크 직전 정렬키)를 그대로 쓴다.
+// 체크하자마자 행이 맨 아래로 튀면 손가락 밑에서 목록이 밀려 다음 차량을 잘못 누른다.
+// 목록을 다시 불러오면(다른 날짜·새로고침) 이 기억은 비워져 휴차는 원래대로 맨 뒤로 간다.
+function sortEntries(list: Entry[], holdKeys?: Map<string, string>): Entry[] {
   const key = (e: Entry) =>
-    e.outTime === OFF ? "ZZ:ZZ" : e.excluded ? "ZY:ZY" : (e.outTime ?? "99:99");
+    e.outTime === OFF
+      ? (holdKeys?.get(e.plate) ?? "ZZ:ZZ")
+      : e.excluded
+        ? "ZY:ZY"
+        : (e.outTime ?? "99:99");
   return [...list].sort((a, b) => {
     const ka = key(a);
     const kb = key(b);
@@ -188,6 +195,9 @@ export default function DispatchButton() {
   // 차량 전체나 항목 전체를 보내면 다른 기기가 그 사이 저장한 값(예: 검수완료)을
   // 로드 시점의 옛 값으로 덮어쓴다.
   const dirtyRef = useRef<Map<string, Set<DirtyField>>>(new Map());
+  // 이 화면에서 방금 휴차로 바꾼 차량 → 체크 직전의 정렬키(원래 자리).
+  // 체크와 동시에 맨 아래로 튀지 않게 붙잡아 둔다. 목록을 다시 불러오면 비운다.
+  const holdOffRef = useRef<Map<string, string>>(new Map());
   // 목록 요청 순번 — 늦게 도착한 이전 응답이 최신 화면을 덮어쓰지 않게 한다.
   const loadSeqRef = useRef(0);
   const [listLoading, setListLoading] = useState(false);
@@ -242,6 +252,7 @@ export default function DispatchButton() {
       setEntries([]);
       setSaveMsg(null);
       dirtyRef.current = new Map();
+      holdOffRef.current = new Map();
     } else if (operators !== null) {
       return; // 같은 업무일에 다시 연 것 — 이미 불러온 일정·선택 유지
     }
@@ -359,6 +370,7 @@ export default function DispatchButton() {
     } finally {
       if (seq === loadSeqRef.current) {
         dirtyRef.current = new Map();
+        holdOffRef.current = new Map(); // 새로 불러온 목록에서는 휴차가 원래대로 맨 뒤
         setListLoading(false);
       }
     }
@@ -386,8 +398,15 @@ export default function DispatchButton() {
     setSaveMsg(null);
   }
 
-  // 휴차 토글 — 체크하면 시간은 지워지고 맨 뒤로 정렬
+  // 휴차 토글 — 체크하면 시간은 지워진다. 다만 그 자리에서 계속 작업할 수 있도록
+  // 목록을 다시 불러오기 전까지는 행을 원래 위치에 붙잡아 둔다(holdOffRef).
   function toggleOff(plate: string, checked: boolean) {
+    if (checked) {
+      const cur = entries.find((e) => e.plate === plate);
+      holdOffRef.current.set(plate, cur?.outTime && cur.outTime !== OFF ? cur.outTime : "99:99");
+    } else {
+      holdOffRef.current.delete(plate);
+    }
     setTime(plate, checked ? OFF : null);
   }
 
@@ -567,6 +586,7 @@ export default function DispatchButton() {
     routeFilter
       ? entries.filter((e) => routeKey(e.route) === routeFilter)
       : entries,
+    holdOffRef.current,
   );
   const timedCount = visible.filter(
     (e) => e.outTime && e.outTime !== OFF,
@@ -1436,7 +1456,8 @@ export default function DispatchButton() {
                     </tr>
                   </thead>
                   <tbody>
-                    {visible.map((e, i) => {
+                    {/* 캡쳐용 표는 붙잡아 둔 자리를 무시하고 항상 정식 시간순(휴차는 맨 뒤) */}
+                    {sortEntries(visible).map((e, i) => {
                       const isOff = e.outTime === OFF;
                       return (
                         <tr

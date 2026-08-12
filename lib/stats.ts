@@ -68,6 +68,14 @@ async function loadFromView(supabase: SB, target: number): Promise<DashboardStat
 // photos 테이블에는 사용자가 추가한 커스텀 칸(before_custom_*)도 함께 저장되므로
 // 필터 없이 세면 표준 칸이 비어도 완료로 잘못 집계된다.
 const STD_SLOT_KEYS = [...BEFORE_SLOTS, ...AFTER_SLOTS].map((s) => s.slotKey);
+const STD_SLOT_SET = new Set(STD_SLOT_KEYS);
+
+// '단말기 없음'(na_slots)도 표준 14칸만 센다 — '증차차량' 체크는 설치전 칸 전체를
+// na_slots에 넣는데 커스텀 칸(before_custom_*)까지 들어가, 길이를 그대로 세면
+// 표준 칸이 덜 찬 차량이 완료로 집계된다. (뷰도 migration_progress_std_na.sql로 동일 처리)
+function stdNaCount(na: unknown): number {
+  return Array.isArray(na) ? na.filter((k) => STD_SLOT_SET.has(k as string)).length : 0;
+}
 
 // 폴백: 차량/사진 전수 조회 후 앱에서 집계 (뷰가 아직 없을 때).
 // '단말기 없음'(records.na_slots) 칸은 사진 1장으로 간주해 합산.
@@ -95,7 +103,7 @@ async function loadByScan(supabase: SB, target: number): Promise<DashboardStats>
   }
   const naCount = new Map<string, number>();
   for (const r of naRows) {
-    naCount.set(r.plate, Array.isArray(r.na_slots) ? r.na_slots.length : 0);
+    naCount.set(r.plate, stdNaCount(r.na_slots));
   }
 
   const byOp = new Map<string, OperatorProgress>();
@@ -152,8 +160,7 @@ export async function loadInProgressList(): Promise<InProgressVehicle[]> {
   const count = new Map<string, number>();
   const teamOf = new Map<string, string>();
   for (const r of recRows) {
-    const na = Array.isArray(r.na_slots) ? r.na_slots.length : 0;
-    count.set(r.plate, (photoCnt.get(r.plate) ?? 0) + na);
+    count.set(r.plate, (photoCnt.get(r.plate) ?? 0) + stdNaCount(r.na_slots));
     teamOf.set(r.plate, (r.team ?? "").trim());
   }
 

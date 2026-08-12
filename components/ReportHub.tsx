@@ -391,8 +391,10 @@ function ShareStatPanel({
     }
   }
 
+  // 처음 열 때 1회만 — 보고 완료 운수사·담당자를 불러온다(이후는 보고/저장 시 갱신).
   useEffect(() => {
     if (isStart) loadSent(true).finally(() => setLoadingSent(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
 

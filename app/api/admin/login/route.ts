@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { ADMIN_COOKIE, ADMIN_MAX_AGE, adminPassword } from "@/lib/admin-auth";
+import {
+  ADMIN_COOKIE,
+  ADMIN_MAX_AGE,
+  adminCookieValue,
+  adminPassword,
+} from "@/lib/admin-auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -11,7 +16,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "비밀번호가 올바르지 않습니다." }, { status: 401 });
   }
   const res = NextResponse.json({ ok: true });
-  res.cookies.set(ADMIN_COOKIE, adminPassword(), {
+  // 쿠키에는 비밀번호가 아니라 해시를 담는다(평문 노출 방지)
+  res.cookies.set(ADMIN_COOKIE, adminCookieValue(), {
     httpOnly: true,
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",

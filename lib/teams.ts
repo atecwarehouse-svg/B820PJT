@@ -249,7 +249,7 @@ export async function sendStartReportCard(d: {
                   {
                     type: "TextBlock",
                     weight: "Bolder",
-                    text: `⏰ 시작시간 ${d.startTime}`,
+                    text: `시작시간 ${d.startTime}`,
                     wrap: true,
                   },
                 ]
@@ -273,7 +273,7 @@ export async function sendStartReportCard(d: {
               {
                 type: "TextBlock",
                 weight: "Bolder",
-                text: `🚍 ${op}${info.manager ? ` · 담당 ${info.manager}` : ""} — ${info.routes
+                text: `${op}${info.manager ? ` · 담당 ${info.manager}` : ""} — ${info.routes
                   .reduce((s, r) => s + r.planned, 0)
                   .toLocaleString()}대`,
                 wrap: true,
@@ -305,7 +305,7 @@ export async function sendStartReportCard(d: {
                   {
                     type: "TextBlock",
                     weight: "Bolder",
-                    text: "📝 특이사항",
+                    text: "특이사항",
                     wrap: true,
                   },
                   {
@@ -343,7 +343,7 @@ export async function sendCompletionReportCard(
         .split(/\r?\n/)
         .map((l) => l.trim())
         .filter(Boolean)
-        .map((l) => (l.startsWith("-") ? l : `- ${l}`))
+        .map((l) => (/^[-·]/.test(l) ? l : `- ${l}`))
         .join("\n")
     : "- 없음";
 
@@ -464,6 +464,7 @@ export async function sendCompletionReportCard(
 }
 
 // 특이사항 텍스트 → 카드 표기용 불릿 목록 (빈 값이면 "- 없음")
+// 이미 불릿(- 또는 ·)으로 시작하는 줄은 그대로 — 설치제외·타코 미연결 목록('· 차량번호') 겹침 방지.
 function bulletText(notes?: string): string {
   const s = notes?.trim();
   if (!s) return "- 없음";
@@ -471,7 +472,7 @@ function bulletText(notes?: string): string {
     .split(/\r?\n/)
     .map((l) => l.trim())
     .filter(Boolean)
-    .map((l) => (l.startsWith("-") ? l : `- ${l}`))
+    .map((l) => (/^[-·]/.test(l) ? l : `- ${l}`))
     .join("\n");
 }
 
@@ -1048,7 +1049,7 @@ export async function sendConsultationCard(
         .split(/\r?\n/)
         .map((l) => l.trim())
         .filter(Boolean)
-        .map((l) => (l.startsWith("-") ? l : `- ${l}`))
+        .map((l) => (/^[-·]/.test(l) ? l : `- ${l}`))
         .join("\n")
     : "- 없음";
 

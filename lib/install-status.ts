@@ -144,15 +144,26 @@ export async function notifyInstallProgress(opts: {
     na: [...na].sort(),
   });
 
-  // 발송 시각·지문 기록 (지문 컬럼 없는 DB면 시각만)
+  // 발송 시각·지문 기록 (지문 컬럼 없는 DB면 시각만).
+  // 이 기록이 실패하면 카드는 이미 나갔는데 '보냈다'는 표시가 없어, 다음 저장 때
+  // 같은 카드가 또 나간다. 그래서 한 번 재시도하고, 그래도 실패하면 로그를 남긴다.
   const stamp = async (fields: Record<string, string>) => {
-    let r = await supabase.from("records").update(fields).eq("plate", plate);
+    const run = async (f: Record<string, string>) =>
+      supabase.from("records").update(f).eq("plate", plate);
+    let r = await run(fields);
     if (r.error && /notified_sig/i.test(r.error.message)) {
       const timesOnly = Object.fromEntries(
         Object.entries(fields).filter(([k]) => k.endsWith("_at")),
       );
-      if (Object.keys(timesOnly).length > 0) {
-        r = await supabase.from("records").update(timesOnly).eq("plate", plate);
+      if (Object.keys(timesOnly).length > 0) r = await run(timesOnly);
+      if (r.error) return;
+    }
+    if (r.error) {
+      r = await run(fields); // 일시적 오류 대비 1회 재시도
+      if (r.error) {
+        console.warn(
+          `[install-status] ${plate} 발송기록 실패(카드 중복 발송 가능): ${r.error.message}`,
+        );
       }
     }
   };

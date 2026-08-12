@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   PROGRESS_COOKIE,
   PROGRESS_MAX_AGE,
+  progressCookieValue,
   progressDownloadPassword,
 } from "@/lib/admin-auth";
 
@@ -18,7 +19,8 @@ export async function POST(req: NextRequest) {
     );
   }
   const res = NextResponse.json({ ok: true });
-  res.cookies.set(PROGRESS_COOKIE, progressDownloadPassword(), {
+  // 쿠키에는 비밀번호가 아니라 해시를 담는다(평문 노출 방지)
+  res.cookies.set(PROGRESS_COOKIE, progressCookieValue(), {
     httpOnly: true,
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",
