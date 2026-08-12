@@ -146,13 +146,15 @@ export function buildReport(input: ReportInput): DailyReport {
 }
 
 // 특이사항 정규화 — 각 줄 앞에 '- ' 붙이고, 비면 '- 없음'
+// 이미 불릿(- 또는 ·)으로 시작하는 줄은 그대로 둔다 — 설치제외·타코 미연결 목록('· 차량번호')이
+// '- · 차량번호'로 겹쳐 보이지 않게.
 function noteLines(notes: string): string[] {
   const t = notes.trim();
   if (!t) return ["- 없음"];
   return t.split(/\r?\n/).map((l) => {
     const s = l.trim();
     if (!s) return "";
-    return s.startsWith("-") ? s : `- ${s}`;
+    return /^[-·]/.test(s) ? s : `- ${s}`;
   }).filter(Boolean);
 }
 
@@ -228,7 +230,8 @@ export function formatReportHtml(
       : r.groups
           .map((g) => `<li>${esc(g.operator)}${g.route ? " " + esc(g.route) + "노선" : ""} : <b>${g.count}대</b></li>`)
           .join("");
-  const notesHtml = noteLines(notes).map((l) => `<li>${esc(l.replace(/^-\s*/, ""))}</li>`).join("");
+  // <li>가 이미 점을 그리므로 줄 앞 불릿(- ·)은 떼고 넣는다.
+  const notesHtml = noteLines(notes).map((l) => `<li>${esc(l.replace(/^[-·]\s*/, ""))}</li>`).join("");
 
   // 운행시작 점검 섹션 (있을 때만) — 이상 항목은 붉게
   const checkRows = serviceCheckRows(check);

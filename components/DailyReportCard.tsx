@@ -110,9 +110,10 @@ function splitAutoBlocks(notes: string): { rest: string; reasons: Record<string,
       continue;
     }
     const isExcl = head[1] === "설치제외";
-    i++; // 헤더 줄은 버리고, 이어지는 "1. 차량번호 — 사유" 줄들을 흡수
+    i++; // 헤더 줄은 버리고, 이어지는 "· 차량번호 — 사유" 줄들을 흡수
     while (i < lines.length) {
-      const m = lines[i].match(/^\s*\d+\.\s*(\S+)(?:\s+—\s*(.*))?$/);
+      // 번호(1. )는 옛 형식 — 그때 보낸 1차 리포트도 2차에서 그대로 읽히게 함께 받는다.
+      const m = lines[i].match(/^\s*(?:·|\d+\.)\s*(\S+)(?:\s+—\s*(.*))?$/);
       if (!m) break;
       if (isExcl && m[2]?.trim()) reasons[m[1]] = m[2].trim();
       i++;
@@ -309,9 +310,9 @@ export default function DailyReportCard({
   // 리포트에 들어갈 설치제외 블록 — 번호를 매겨 줄을 맞춘다.
   const exclBlock = useMemo(() => {
     if (!showExclInputs) return "";
-    const lines = exclPlates.map((p, i) => {
+    const lines = exclPlates.map((p) => {
       const reason = (exclReasons[p] ?? "").trim();
-      return ` ${i + 1}. ${p}${reason ? ` — ${reason}` : ""}`;
+      return `· ${p}${reason ? ` — ${reason}` : ""}`;
     });
     return `[설치제외 ${exclPlates.length}대]\n${lines.join("\n")}`;
   }, [showExclInputs, exclPlates, exclReasons]);
@@ -321,9 +322,9 @@ export default function DailyReportCard({
   const tachoBlock = useMemo(() => {
     if (tachoOff.length === 0 || tachoInNotes) return "";
     // 사유를 지우는 중(빈 값)에는 설치제외 블록처럼 대시 없이 차량번호만
-    const lines = tachoOff.map((t, i) => {
+    const lines = tachoOff.map((t) => {
       const reason = t.reason.trim();
-      return ` ${i + 1}. ${t.plate}${reason ? ` — ${reason}` : ""}`;
+      return `· ${t.plate}${reason ? ` — ${reason}` : ""}`;
     });
     return `[타코 미연결 ${tachoOff.length}대]\n${lines.join("\n")}`;
   }, [tachoOff, tachoInNotes]);
