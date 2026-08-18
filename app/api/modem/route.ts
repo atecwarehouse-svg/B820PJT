@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
 import { uploadPhoto, deletePhoto, downloadPhoto } from "@/lib/gdrive";
 import { sendModemDefectCard } from "@/lib/teams";
-import { MODEM_FOLDER, MODEM_KINDS, needsPhoto } from "@/lib/modem";
+import { MODEM_FOLDER, MODEM_KINDS, needsAfterSn, needsPhoto } from "@/lib/modem";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -64,7 +64,7 @@ export async function POST(req: NextRequest) {
   const symptom = str("symptom", 100);
   const beforeSn = str("beforeSn", 50);
   const afterSn = str("afterSn", 50);
-  if (!afterSn) {
+  if (!afterSn && needsAfterSn(kind)) {
     return NextResponse.json({ error: "교체 후 모뎀 번호를 입력하세요." }, { status: 400 });
   }
 
@@ -125,7 +125,7 @@ export async function POST(req: NextRequest) {
     kind,
     symptom: symptom || null,
     before_sn: beforeSn || null,
-    after_sn: afterSn,
+    after_sn: afterSn || null,
     photo_plate: keep("photo_plate"),
     photo_after: keep("photo_after"),
     photo_info: keep("photo_info"),

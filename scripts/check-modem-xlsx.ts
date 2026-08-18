@@ -26,7 +26,7 @@ const saved: SavedModem[] = [
     date: "2026-08-18",
     operator: "영종운수",
     plate: "인천72바1342",
-    kind: "예비품불량",
+    kind: "현장교체",
     symptom: null,
     before_sn: null,
     after_sn: "1057259",
@@ -35,17 +35,48 @@ const saved: SavedModem[] = [
   },
 ];
 
+saved.push({
+  // 예비품불량 — 차량이 없어 plate 자리에 모뎀 번호를 키로 넣는다(엑셀 C열은 빈칸)
+  date: "2026-08-19",
+  operator: "영종운수",
+  plate: "예비품 1057400",
+  kind: "예비품불량",
+  symptom: "LTE통신불량(적색)",
+  before_sn: null,
+  after_sn: "1057400",
+  photo_after: null,
+  photo_info: null,
+});
+
+saved.push({
+  // 장애접수는 모뎀을 쓴 게 아니므로 사용내역 엑셀에서 빠져야 한다
+  date: "2026-08-19",
+  operator: "영종운수",
+  plate: "인천72바1352",
+  kind: "장애접수",
+  symptom: "LTE통신불량(적색)",
+  before_sn: "1046102",
+  after_sn: null,
+  photo_after: null,
+  photo_info: null,
+});
+
 const rows = mergeModemRows(saved);
-assert.equal(rows.length, history.length + 1, "새 기록 1건만 늘어야 한다");
+assert.equal(rows.length, history.length + 2, "새 기록 2건만 늘어야 한다(장애접수 제외)");
+assert.equal(rows.filter((r) => r.kind === "장애접수").length, 0, "장애접수는 엑셀에 없음");
+const spare = rows.find((r) => r.kind === "예비품불량")!;
+assert.equal(spare.plate, "", "예비품불량은 차량번호 칸이 빈다");
+assert.equal(spare.after, "1057400", "예비품불량 모뎀 번호는 교체 후 S/N 칸");
 assert.deepEqual(
   [...rows].map((r) => r.date),
   [...rows].map((r) => r.date).sort(),
   "날짜 오름차순 정렬",
 );
-assert.equal(rows[rows.length - 1].plate, "72-1350", "차량번호는 양식 표기(72-1350)");
-assert.equal(rows[rows.length - 1].photo, "O", "사진 있으면 O");
+const fixed = rows.find((r) => r.date === "2026-08-19" && r.kind === "현장교체")!;
+assert.equal(fixed.plate, "72-1350", "차량번호는 양식 표기(72-1350)");
+assert.equal(fixed.photo, "O", "사진 있으면 O");
 const dup = rows.find((r) => r.date === "2026-08-18" && r.plate === "72-1342")!;
-assert.equal(dup.kind, "예비품불량", "같은 날짜·차량은 앱 기록으로 덮어쓴다");
+assert.equal(dup.after, "1057259", "같은 날짜·차량은 앱 기록으로 덮어쓴다");
 assert.equal(dup.photo, "X", "사진 없으면 X");
 
 main();

@@ -8,7 +8,14 @@ import type { InstallTeam } from "@/lib/settings";
 import { loadTeamContacts, telHref } from "@/lib/team-call";
 import { compressImage } from "@/lib/image-compress";
 import { downloadUrl } from "@/lib/download";
-import { MODEM_KINDS, MODEM_SYMPTOMS, needsPhoto } from "@/lib/modem";
+import {
+  MODEM_SPARE_KIND,
+  MODEM_SYMPTOMS,
+  MODEM_VEHICLE_KINDS,
+  needsAfterSn,
+  needsPhoto,
+  sparePlate,
+} from "@/lib/modem";
 
 // 홈 화면 '배차표' 버튼 + 팝업 — 그날 설치할 운수사·노선을 골라 차량별
 // 나가는 시간을 입력한다. 시간은 DB(dispatch_times)에 공용 저장되어
@@ -344,6 +351,9 @@ export default function DispatchButton() {
   const [modemSaving, setModemSaving] = useState(false);
   const [modemErr, setModemErr] = useState("");
 
+  // 모뎀 예비품불량 등록 — 차량이 없는 건이라 차량 행이 아니라 배차표 팝업에서 따로 받는다.
+  const [spareEdit, setSpareEdit] = useState<{ sn: string; symptom: string } | null>(null);
+
   useEffect(() => {
     if (!open) return;
     const t = workDateString(new Date());
@@ -546,7 +556,7 @@ export default function DispatchButton() {
     setModemErr("");
     setModemEdit({
       plate: e.plate,
-      kind: e.modem?.kind || MODEM_KINDS[0],
+      kind: e.modem?.kind || MODEM_VEHICLE_KINDS[0],
       symptom: e.modem?.symptom ?? MODEM_SYMPTOMS[0],
       beforeSn: e.modem?.beforeSn ?? "",
       afterSn: e.modem?.afterSn ?? "",
@@ -561,7 +571,7 @@ export default function DispatchButton() {
   async function saveModem(clear: boolean) {
     if (!modemEdit) return;
     const f = modemEdit;
-    if (!clear && !f.afterSn.trim()) {
+    if (!clear && needsAfterSn(f.kind) && !f.afterSn.trim()) {
       setModemErr("교체 후 모뎀 번호를 입력해주세요.");
       return;
     }
@@ -607,6 +617,43 @@ export default function DispatchButton() {
           : clear
             ? "모뎀 정상으로 되돌렸습니다."
             : "모뎀 교체 내역이 저장되고 팀즈로 발송되었습니다 ✓",
+      });
+    } catch (e) {
+      setModemErr(e instanceof Error ? e.message : "저장에 실패했습니다.");
+    } finally {
+      setModemSaving(false);
+    }
+  }
+
+  // 예비품불량 등록 — 차량번호 자리에는 모뎀 번호를 키로 넣는다(sparePlate).
+  // 같은 날 같은 모뎀을 다시 등록하면 증상만 덮어쓴다.
+  async function saveSpare() {
+    if (!spareEdit) return;
+    const sn = spareEdit.sn.trim();
+    if (!sn) {
+      setModemErr("불량 모뎀 번호를 입력해주세요.");
+      return;
+    }
+    setModemSaving(true);
+    setModemErr("");
+    try {
+      const fd = new FormData();
+      fd.set("date", date);
+      fd.set("plate", sparePlate(sn));
+      fd.set("operator", operator);
+      fd.set("kind", MODEM_SPARE_KIND);
+      fd.set("symptom", spareEdit.symptom);
+      fd.set("beforeSn", "");
+      fd.set("afterSn", sn);
+      const res = await fetch("/api/modem", { method: "POST", body: fd });
+      const j = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(j?.error ?? "저장에 실패했습니다.");
+      setSpareEdit(null);
+      setSaveMsg({
+        ok: true,
+        text: j?.teamsError
+          ? `예비품불량 등록됨 ✓ (팀즈 전송 실패: ${j.teamsError})`
+          : "예비품불량이 등록되고 팀즈로 발송되었습니다 ✓",
       });
     } catch (e) {
       setModemErr(e instanceof Error ? e.message : "저장에 실패했습니다.");
@@ -837,6 +884,20 @@ export default function DispatchButton() {
                   📶 모뎀 사용내역
                 </button>
               </div>
+
+              {/* 모뎀 예비품불량 등록 — 차량과 무관한 재고 불량이라 저장 버튼 위에 따로 둔다 */}
+              {date && !listLoading && entries.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setModemErr("");
+                    setSpareEdit({ sn: "", symptom: MODEM_SYMPTOMS[0] });
+                  }}
+                  className="w-full rounded-lg border border-purple-300 bg-white px-4 py-2.5 text-sm font-semibold text-purple-700 active:bg-purple-50"
+                >
+                  🧰 모뎀 예비품불량 등록
+                </button>
+              )}
 
               {/* 저장 — 검수항목 보기 바로 아래 */}
               {date && !listLoading && entries.length > 0 && (
@@ -1331,6 +1392,89 @@ export default function DispatchButton() {
             </div>
           )}
 
+          {/* 모뎀 예비품불량 등록 — 차량번호 없이 모뎀 번호와 증상만 받는다.
+              사용내역 엑셀에는 차량번호 칸이 빈 행으로 들어간다. */}
+          {spareEdit && (
+            <div
+              className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 p-4"
+              onClick={(e) => {
+                e.stopPropagation();
+                if (!modemSaving) setSpareEdit(null);
+              }}
+            >
+              <div
+                className="w-full max-w-xs rounded-2xl bg-white p-5 shadow-xl"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <p className="text-center text-sm font-bold text-gray-800">
+                  🧰 모뎀 예비품불량 등록
+                </p>
+                <p className="mt-0.5 text-center text-xs text-gray-500">
+                  {operator} · {fmtDot(date)}
+                </p>
+
+                <label className="mt-3 block text-xs font-medium text-gray-500">
+                  불량 모뎀 번호
+                </label>
+                <input
+                  value={spareEdit.sn}
+                  onChange={(e) => setSpareEdit({ ...spareEdit, sn: e.target.value })}
+                  inputMode="numeric"
+                  maxLength={50}
+                  autoFocus
+                  placeholder="예) 1057034"
+                  className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-base focus:border-purple-500 focus:outline-none"
+                />
+
+                <label className="mt-3 block text-xs font-medium text-gray-500">
+                  증상
+                </label>
+                <select
+                  value={spareEdit.symptom}
+                  onChange={(e) =>
+                    setSpareEdit({ ...spareEdit, symptom: e.target.value })
+                  }
+                  className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-base focus:border-purple-500 focus:outline-none"
+                >
+                  <option value="">선택 안 함</option>
+                  {MODEM_SYMPTOMS.map((x) => (
+                    <option key={x} value={x}>
+                      {x}
+                    </option>
+                  ))}
+                </select>
+
+                <p className="mt-3 rounded-lg bg-gray-50 px-2 py-1.5 text-[11px] text-gray-500">
+                  차량에 달지 않은 재고 불량이라 차량번호·사진은 받지 않습니다.
+                  모뎀 사용내역 엑셀에 &lsquo;예비품불량&rsquo;으로 들어갑니다.
+                </p>
+
+                {modemErr && (
+                  <p className="mt-2 text-center text-xs text-red-500">{modemErr}</p>
+                )}
+
+                <div className="mt-3 flex gap-2">
+                  <button
+                    type="button"
+                    disabled={modemSaving}
+                    onClick={() => setSpareEdit(null)}
+                    className="flex-1 rounded-lg border border-gray-300 px-3 py-2.5 text-sm font-medium text-gray-600 active:bg-gray-100 disabled:opacity-40"
+                  >
+                    취소
+                  </button>
+                  <button
+                    type="button"
+                    disabled={modemSaving}
+                    onClick={() => saveSpare()}
+                    className="flex-1 rounded-lg bg-purple-600 px-3 py-2.5 text-sm font-semibold text-white active:bg-purple-700 disabled:opacity-40"
+                  >
+                    {modemSaving ? "저장 중…" : "등록"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* 모뎀불량 입력 — 기본은 '모뎀 정상'. 저장하면 Drive 업로드·DB 저장·팀즈 알림까지
               한 번에 끝난다. 예비품불량은 차량에 달지 않으므로 사진 칸을 감춘다. */}
           {modemEdit && (
@@ -1346,7 +1490,7 @@ export default function DispatchButton() {
                 onClick={(e) => e.stopPropagation()}
               >
                 <p className="text-center text-sm font-bold text-gray-800">
-                  📶 LTE 모뎀 교체
+                  📶 LTE 모뎀
                 </p>
                 <p className="mt-0.5 text-center text-xs text-gray-500">
                   {operator} · {modemEdit.plate}
@@ -1356,7 +1500,7 @@ export default function DispatchButton() {
                   구분
                 </label>
                 <div className="mt-1 grid grid-cols-3 gap-1">
-                  {MODEM_KINDS.map((k) => (
+                  {MODEM_VEHICLE_KINDS.map((k) => (
                     <button
                       key={k}
                       type="button"
@@ -1404,19 +1548,24 @@ export default function DispatchButton() {
                   className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-base focus:border-purple-500 focus:outline-none"
                 />
 
-                <label className="mt-3 block text-xs font-medium text-gray-500">
-                  교체 후 모뎀
-                </label>
-                <input
-                  value={modemEdit.afterSn}
-                  onChange={(e) =>
-                    setModemEdit({ ...modemEdit, afterSn: e.target.value })
-                  }
-                  inputMode="numeric"
-                  maxLength={50}
-                  placeholder="예) 1057034"
-                  className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-base focus:border-purple-500 focus:outline-none"
-                />
+                {/* 장애접수는 교체할 모뎀이 없어 접수하는 것 — 교체 후 칸을 아예 감춘다 */}
+                {needsAfterSn(modemEdit.kind) && (
+                  <>
+                    <label className="mt-3 block text-xs font-medium text-gray-500">
+                      교체 후 모뎀
+                    </label>
+                    <input
+                      value={modemEdit.afterSn}
+                      onChange={(e) =>
+                        setModemEdit({ ...modemEdit, afterSn: e.target.value })
+                      }
+                      inputMode="numeric"
+                      maxLength={50}
+                      placeholder="예) 1057034"
+                      className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-base focus:border-purple-500 focus:outline-none"
+                    />
+                  </>
+                )}
 
                 {needsPhoto(modemEdit.kind) ? (
                   <>
@@ -1444,7 +1593,8 @@ export default function DispatchButton() {
                   </>
                 ) : (
                   <p className="mt-3 rounded-lg bg-gray-50 px-2 py-1.5 text-[11px] text-gray-500">
-                    예비품불량은 사진을 촬영하지 않습니다.
+                    교체할 모뎀이 없어 업체(AI텔레콤)에 인계하는 건입니다. 사진은
+                    촬영하지 않고, 금일완료 리포트 특이사항에 자동으로 들어갑니다.
                   </p>
                 )}
 

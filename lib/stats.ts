@@ -6,6 +6,7 @@ import { fetchAll, chunk } from "@/lib/supabase/paginate";
 import { workDateString } from "@/lib/work-day";
 import { DEFAULT_PHOTO_COUNT, BEFORE_SLOTS, AFTER_SLOTS } from "@/lib/slots";
 import { loadOperatorAddresses } from "@/lib/operator-address";
+import { MODEM_FAULT_KIND } from "@/lib/modem";
 
 export interface OperatorProgress {
   operator: string;
@@ -417,6 +418,25 @@ export async function loadTodayTachoOff(
     for (const v of veh ?? []) planned.add(v.plate);
   }
   return rows.filter((r) => planned.has(r.plate));
+}
+
+// 금일 '장애접수' 모뎀 — 교체할 모뎀이 없어 업체(AI텔레콤)에 인계한 차량과 증상.
+// 금일완료 리포트 특이사항 블록용. 테이블이 없거나 조회 실패면 빈 목록(기능만 생략).
+export async function loadTodayModemFaults(
+  date: string,
+): Promise<{ plate: string; reason: string }[]> {
+  const supabase = createServiceClient();
+  const { data, error } = await supabase
+    .from("modem_defects")
+    .select("plate, symptom")
+    .eq("date", date)
+    .eq("kind", MODEM_FAULT_KIND)
+    .order("plate")
+    .range(0, 999);
+  if (error || !data?.length) return [];
+  return data
+    .map((r) => ({ plate: r.plate as string, reason: (r.symptom ?? "").trim() }))
+    .filter((r) => r.plate);
 }
 
 export interface ScheduleDayOp {

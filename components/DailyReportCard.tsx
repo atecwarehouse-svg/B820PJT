@@ -5,6 +5,7 @@ import type { CompletedVehicle, ScheduleDay } from "@/lib/stats";
 import { buildReport, formatReportText } from "@/lib/report";
 import type { ServiceCheck } from "@/lib/report";
 import type { VocOperatorSummary } from "@/lib/voc";
+import { MODEM_FAULT_LABEL } from "@/lib/modem";
 
 type Status = "" | "ok" | "issue";
 
@@ -93,11 +94,13 @@ function StatRow({
   );
 }
 
-// 특이사항 텍스트에서 자동 생성 블록([설치제외 N대] · [타코 미연결 N대])을 떼어낸다.
+// 특이사항 텍스트에서 자동 생성 블록([설치제외 N대] · [타코 미연결 N대] · [장애접수 N대])을 떼어낸다.
 // 2차 프리필이 1차의 블록을 그대로 상속하면 그 사이 바뀐 목록이 갱신되지 않으므로,
 // 블록은 버리고(현재 목록으로 재생성) 설치제외 사유만 입력칸에 되살린다.
 // (타코 미연결 사유는 배차표에 저장돼 있어 복원할 필요가 없다.)
-const AUTO_BLOCK_HEAD = /^\[(설치제외|타코 미연결) \d+대\]/;
+const AUTO_BLOCK_HEAD = new RegExp(
+  `^\\[(설치제외|타코 미연결|${MODEM_FAULT_LABEL}) \\d+대\\]`,
+);
 function splitAutoBlocks(notes: string): { rest: string; reasons: Record<string, string> } {
   const lines = notes.split(/\r?\n/);
   const reasons: Record<string, string> = {};
@@ -171,6 +174,9 @@ export default function DailyReportCard({
   // 고치면 배차표와 같은 곳(dispatch_times.tacho_reason)에 바로 반영한다 —
   // 리포트에만 반영하면 배차표와 값이 갈린다.
   const [tachoOff, setTachoOff] = useState<{ plate: string; reason: string }[]>([]);
+  // 배차표 모뎀불량 '장애접수' 차량 — 교체할 모뎀이 없어 업체에 인계한 건.
+  // 증상은 배차표 팝업에서 고른 값을 그대로 쓴다(여기서는 표기만).
+  const [modemFaults, setModemFaults] = useState<{ plate: string; reason: string }[]>([]);
   const savedTachoRef = useRef<Record<string, string>>({}); // 마지막으로 저장된 사유(변경 감지·실패 복구)
   const [tachoSaving, setTachoSaving] = useState<string | null>(null);
   const [tachoErr, setTachoErr] = useState<string | null>(null);
@@ -284,6 +290,7 @@ export default function DailyReportCard({
           setExclPlates((json.plates ?? []) as string[]);
           const list = (json.tachoOff ?? []) as { plate: string; reason: string }[];
           setTachoOff(list);
+          setModemFaults((json.modemFaults ?? []) as { plate: string; reason: string }[]);
           // 불러온 값이 곧 '저장된 값' — 이후 변경 감지·실패 복구의 기준
           savedTachoRef.current = Object.fromEntries(
             list.map((t) => [t.plate, t.reason]),
@@ -294,6 +301,7 @@ export default function DailyReportCard({
         if (alive) {
           setExclPlates([]);
           setTachoOff([]);
+          setModemFaults([]);
           savedTachoRef.current = {};
         }
       }
@@ -329,10 +337,21 @@ export default function DailyReportCard({
     return `[타코 미연결 ${tachoOff.length}대]\n${lines.join("\n")}`;
   }, [tachoOff, tachoInNotes]);
 
-  // 발송·미리보기용 특이사항 = 직접 입력 + 설치제외 블록 + 타코 미연결 블록
+  // 장애접수 블록 — 교체할 모뎀이 없어 업체(AI텔레콤)에 인계한 차량. 설치제외·타코와 같은 모양.
+  const faultInNotes = notes.includes(`[${MODEM_FAULT_LABEL}`);
+  const faultBlock = useMemo(() => {
+    if (modemFaults.length === 0 || faultInNotes) return "";
+    const lines = modemFaults.map((f) => {
+      const reason = f.reason.trim();
+      return `· ${f.plate}${reason ? ` — ${reason}` : ""}`;
+    });
+    return `[${MODEM_FAULT_LABEL} ${modemFaults.length}대]\n${lines.join("\n")}`;
+  }, [modemFaults, faultInNotes]);
+
+  // 발송·미리보기용 특이사항 = 직접 입력 + 설치제외 + 타코 미연결 + 장애접수 블록
   const mergedNotes = useMemo(
-    () => [notes.trim(), exclBlock, tachoBlock].filter(Boolean).join("\n"),
-    [notes, exclBlock, tachoBlock],
+    () => [notes.trim(), exclBlock, tachoBlock, faultBlock].filter(Boolean).join("\n"),
+    [notes, exclBlock, tachoBlock, faultBlock],
   );
 
   // 2차 미리보기용 VOC 요약 — 선택한 날짜가 바뀌면 다시 불러온다.

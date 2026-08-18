@@ -7,7 +7,7 @@
 import ExcelJS from "exceljs";
 import { createServiceClient } from "@/lib/supabase/server";
 import { fetchAll } from "@/lib/supabase/paginate";
-import { shortPlate } from "@/lib/modem";
+import { MODEM_FAULT_KIND, MODEM_SPARE_KIND, shortPlate } from "@/lib/modem";
 import { kstStamp } from "./filename";
 import history from "./modem-history.json";
 
@@ -75,7 +75,11 @@ export function mergeModemRows(saved: SavedModem[]): Row[] {
   const rows: Row[] = (history as Row[]).map((h) => ({ ...h }));
   const seen = new Set(rows.map((r) => `${r.date}|${r.plate}`));
   for (const s of saved) {
-    const plate = shortPlate(s.plate);
+    // 장애접수는 모뎀을 쓴 게 아니라 업체에 인계한 건 — '사용 현황'에는 넣지 않는다
+    // (금일완료 리포트 특이사항으로만 나간다).
+    if (s.kind === MODEM_FAULT_KIND) continue;
+    // 예비품불량은 차량이 없다 — 차량번호 칸을 비운다(plate에는 모뎀 번호가 키로 들어있다)
+    const plate = s.kind === MODEM_SPARE_KIND ? "" : shortPlate(s.plate);
     const key = `${s.date}|${plate}`;
     const row: Row = {
       date: s.date,
