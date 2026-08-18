@@ -6,6 +6,9 @@ import { workDateString } from "@/lib/work-day";
 import { DEFAULT_CHECKLIST, type Checklist } from "@/lib/checklist";
 import type { InstallTeam } from "@/lib/settings";
 import { loadTeamContacts, telHref } from "@/lib/team-call";
+import { compressImage } from "@/lib/image-compress";
+import { downloadUrl } from "@/lib/download";
+import { MODEM_KINDS, MODEM_SYMPTOMS, needsPhoto } from "@/lib/modem";
 
 // 홈 화면 '배차표' 버튼 + 팝업 — 그날 설치할 운수사·노선을 골라 차량별
 // 나가는 시간을 입력한다. 시간은 DB(dispatch_times)에 공용 저장되어
@@ -29,6 +32,16 @@ interface Entry {
   team: string; // 설치팀 팀명(records.team의 앞 토큰 — 서버 판정, 기록 없으면 빈값)
   tachoReason: string; // 타코 미연결 사유 — 빈 값이면 '타코 정상'(기본), 값이 있으면 미연결
   excluded: boolean; // 설치제외 — 나중에 설치(리스트에는 유지)
+  modem: ModemInfo | null; // LTE 모뎀 교체 기록 — null이면 '모뎀 정상'(기본)
+}
+
+// 배차표 '모뎀불량' 버튼에 붙는 LTE 모뎀 교체 내역
+interface ModemInfo {
+  kind: string; // 현장교체 | 증차 | 예비품불량
+  symptom: string;
+  beforeSn: string;
+  afterSn: string;
+  hasPhoto: boolean;
 }
 
 // 요약 타일 = 리스트 필터 버튼. 같은 타일을 다시 누르면 전체로 돌아온다.
@@ -77,12 +90,31 @@ const TILES: {
     match: (e) => !e.excluded && !!e.tachoReason,
   },
   {
+    key: "modem",
+    label: "LTE불량",
+    color: "text-purple-600",
+    match: (e) => !e.excluded && !!e.modem,
+  },
+  {
     key: "excluded",
     label: "설치제외",
     color: "text-gray-500",
     match: (e) => e.excluded,
   },
 ];
+
+// 모뎀불량 팝업 입력값 (사진은 파일 그대로 들고 있다가 저장 때 압축·업로드)
+interface ModemForm {
+  plate: string;
+  kind: string;
+  symptom: string;
+  beforeSn: string;
+  afterSn: string;
+  after: File | null; // LTE 교체 후 사진
+  info: File | null; // LTE 정보 사진
+  existing: boolean; // 이미 저장된 기록 수정 중인지
+  hasPhoto: boolean; // 이미 올려둔 사진이 있는지
+}
 
 // 저장 대상 항목 — 이 기기에서 실제로 바꾼 항목만 서버로 보낸다(기기 간 덮어쓰기 방지)
 type DirtyField = "outTime" | "checklist" | "tachoReason" | "excluded";
@@ -171,6 +203,73 @@ function RowTime({
   );
 }
 
+// 모뎀불량 팝업의 사진 한 칸 — 촬영/앨범 둘 다 (PhotoSlot과 같은 방식).
+// saved: 이미 올려둔 사진이 있으면 다시 찍지 않아도 그대로 유지된다.
+function ModemPhoto({
+  no,
+  label,
+  file,
+  saved,
+  onPick,
+}: {
+  no: number;
+  label: string;
+  file: File | null;
+  saved: boolean;
+  onPick: (f: File) => void;
+}) {
+  const cameraRef = useRef<HTMLInputElement>(null);
+  const galleryRef = useRef<HTMLInputElement>(null);
+  const pick = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    if (f) onPick(f);
+    e.target.value = ""; // 같은 파일을 다시 골라도 onChange가 뜨도록
+  };
+  return (
+    <div className="mt-1.5 flex items-center gap-2 rounded-lg border border-gray-300 px-3 py-2">
+      <span className="min-w-0 flex-1 truncate text-xs text-gray-600">
+        {no}. {label}
+        <span
+          className={`ml-1 font-semibold ${
+            file ? "text-purple-600" : saved ? "text-green-600" : "text-gray-300"
+          }`}
+        >
+          {file ? "선택됨 ✓" : saved ? "저장됨" : ""}
+        </span>
+      </span>
+      <button
+        type="button"
+        onClick={() => cameraRef.current?.click()}
+        className="shrink-0 rounded border border-gray-300 px-2 py-1 text-[11px] font-semibold text-gray-600 active:bg-gray-100"
+      >
+        📷 촬영
+      </button>
+      <button
+        type="button"
+        onClick={() => galleryRef.current?.click()}
+        className="shrink-0 rounded border border-gray-300 px-2 py-1 text-[11px] font-semibold text-gray-600 active:bg-gray-100"
+      >
+        🖼 앨범
+      </button>
+      <input
+        ref={cameraRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        className="hidden"
+        onChange={pick}
+      />
+      <input
+        ref={galleryRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={pick}
+      />
+    </div>
+  );
+}
+
 export default function DispatchButton() {
   const [open, setOpen] = useState(false);
 
@@ -239,6 +338,11 @@ export default function DispatchButton() {
 
   // 타코 미연결 사유 입력 팝업 — {차량번호, 입력 중인 사유}
   const [tachoEdit, setTachoEdit] = useState<{ plate: string; reason: string } | null>(null);
+
+  // 모뎀불량 입력 팝업 — 저장은 이 팝업에서 바로 끝난다(/api/modem)
+  const [modemEdit, setModemEdit] = useState<ModemForm | null>(null);
+  const [modemSaving, setModemSaving] = useState(false);
+  const [modemErr, setModemErr] = useState("");
 
   useEffect(() => {
     if (!open) return;
@@ -435,6 +539,80 @@ export default function DispatchButton() {
       return;
     }
     window.location.href = telHref(hit.phone);
+  }
+
+  // 모뎀불량 팝업 열기 — 기록이 있으면 그 값으로 채운다(수정)
+  function openModem(e: Entry) {
+    setModemErr("");
+    setModemEdit({
+      plate: e.plate,
+      kind: e.modem?.kind || MODEM_KINDS[0],
+      symptom: e.modem?.symptom ?? MODEM_SYMPTOMS[0],
+      beforeSn: e.modem?.beforeSn ?? "",
+      afterSn: e.modem?.afterSn ?? "",
+      after: null,
+      info: null,
+      existing: !!e.modem,
+      hasPhoto: e.modem?.hasPhoto ?? false,
+    });
+  }
+
+  // 저장 / 정상으로 되돌리기(clear) — 사진은 Google Drive로 올라가고 DB엔 파일 ID만 남는다
+  async function saveModem(clear: boolean) {
+    if (!modemEdit) return;
+    const f = modemEdit;
+    if (!clear && !f.afterSn.trim()) {
+      setModemErr("교체 후 모뎀 번호를 입력해주세요.");
+      return;
+    }
+    setModemSaving(true);
+    setModemErr("");
+    try {
+      const fd = new FormData();
+      fd.set("date", date);
+      fd.set("plate", f.plate);
+      fd.set("operator", operator);
+      if (clear) {
+        fd.set("clear", "1");
+      } else {
+        fd.set("kind", f.kind);
+        fd.set("symptom", f.symptom);
+        fd.set("beforeSn", f.beforeSn.trim());
+        fd.set("afterSn", f.afterSn.trim());
+        if (needsPhoto(f.kind)) {
+          if (f.after) fd.set("photoAfter", await compressImage(f.after));
+          if (f.info) fd.set("photoInfo", await compressImage(f.info));
+        }
+      }
+      const res = await fetch("/api/modem", { method: "POST", body: fd });
+      const j = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(j?.error ?? "저장에 실패했습니다.");
+      const next: ModemInfo | null = clear
+        ? null
+        : {
+            kind: f.kind,
+            symptom: f.symptom,
+            beforeSn: f.beforeSn.trim(),
+            afterSn: f.afterSn.trim(),
+            hasPhoto: needsPhoto(f.kind) && (!!f.after || !!f.info || f.hasPhoto),
+          };
+      setEntries((list) =>
+        list.map((e) => (e.plate === f.plate ? { ...e, modem: next } : e)),
+      );
+      setModemEdit(null);
+      setSaveMsg({
+        ok: true,
+        text: j?.teamsError
+          ? `저장됨 ✓ (팀즈 전송 실패: ${j.teamsError})`
+          : clear
+            ? "모뎀 정상으로 되돌렸습니다."
+            : "모뎀 교체 내역이 저장되고 팀즈로 발송되었습니다 ✓",
+      });
+    } catch (e) {
+      setModemErr(e instanceof Error ? e.message : "저장에 실패했습니다.");
+    } finally {
+      setModemSaving(false);
+    }
   }
 
   // 타코 미연결 — 기본은 '정상'이고, 배지를 누르면 사유 입력 팝업이 뜬다.
@@ -642,13 +820,23 @@ export default function DispatchButton() {
 
             <div className="space-y-3 px-4 py-4">
               {/* 검수항목 — 검수자가 보면서 확인하는 고정 리스트 */}
-              <button
-                type="button"
-                onClick={() => setChecklistView(true)}
-                className="w-full rounded-lg border border-emerald-300 bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-700 active:bg-emerald-100"
-              >
-                ✅ 검수항목 보기
-              </button>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setChecklistView(true)}
+                  className="rounded-lg border border-emerald-300 bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-700 active:bg-emerald-100"
+                >
+                  ✅ 검수항목 보기
+                </button>
+                {/* AI텔레콤 'LTE모뎀 사용 현황' 양식 — 지난 내역 아래에 앱 기록이 이어 붙는다 */}
+                <button
+                  type="button"
+                  onClick={() => downloadUrl("/api/export/modem")}
+                  className="rounded-lg border border-purple-300 bg-purple-50 px-4 py-2.5 text-sm font-semibold text-purple-700 active:bg-purple-100"
+                >
+                  📶 모뎀 사용내역
+                </button>
+              </div>
 
               {/* 저장 — 검수항목 보기 바로 아래 */}
               {date && !listLoading && entries.length > 0 && (
@@ -862,8 +1050,6 @@ export default function DispatchButton() {
                             </button>
                           );
                         })}
-                        {/* 7칸이라 4열 격자의 마지막 한 칸을 메운다(안 채우면 회색 구멍) */}
-                        <span className="bg-gray-50" />
                       </div>
                       <p className="mb-1 text-[11px] text-gray-400">
                         {tileFilter ? (
@@ -902,8 +1088,10 @@ export default function DispatchButton() {
                               }`}
                             >
                               <div className="min-w-0">
-                                <p
-                                  className={`text-sm font-medium ${
+                                {/* 배지·버튼이 줄바꿈될 때 낱말이 쪼개지지 않도록 flex-wrap으로 묶는다
+                                    (인라인이면 '부천1' 같은 팀명이 '부' / '천1'로 갈린다) */}
+                                <div
+                                  className={`flex flex-wrap items-center gap-x-1.5 gap-y-1 text-sm font-medium ${
                                     isOff
                                       ? "text-red-400"
                                       : e.excluded
@@ -911,14 +1099,14 @@ export default function DispatchButton() {
                                         : "text-gray-800"
                                   }`}
                                 >
-                                  {e.plate}
+                                  <span>{e.plate}</span>
                                   {e.completed && (
-                                    <span className="ml-1.5 rounded bg-green-100 px-1.5 py-0.5 align-middle text-[10px] font-semibold text-green-700">
+                                    <span className="rounded bg-green-100 px-1.5 py-0.5 text-[10px] font-semibold text-green-700">
                                       설치완료
                                     </span>
                                   )}
                                   {!e.completed && e.installing && (
-                                    <span className="ml-1.5 rounded bg-blue-100 px-1.5 py-0.5 align-middle text-[10px] font-semibold text-blue-700">
+                                    <span className="rounded bg-blue-100 px-1.5 py-0.5 text-[10px] font-semibold text-blue-700">
                                       설치중
                                     </span>
                                   )}
@@ -930,7 +1118,7 @@ export default function DispatchButton() {
                                         reason: e.tachoReason,
                                       })
                                     }
-                                    className={`ml-1.5 rounded border px-1.5 py-0.5 align-middle text-[10px] font-semibold ${
+                                    className={`rounded border px-1.5 py-0.5 text-[10px] font-semibold ${
                                       e.tachoReason
                                         ? "border-amber-400 bg-amber-100 text-amber-700"
                                         : "border-gray-300 bg-gray-50 text-gray-500"
@@ -938,27 +1126,38 @@ export default function DispatchButton() {
                                   >
                                     {e.tachoReason ? "⚠ 타코 미연결" : "타코 정상"}
                                   </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => openModem(e)}
+                                    className={`rounded border px-1.5 py-0.5 text-[10px] font-semibold ${
+                                      e.modem
+                                        ? "border-purple-400 bg-purple-100 text-purple-700"
+                                        : "border-gray-300 bg-gray-50 text-gray-500"
+                                    }`}
+                                  >
+                                    {e.modem ? `⚠ ${e.modem.kind}` : "모뎀 정상"}
+                                  </button>
                                   {e.team && (
-                                    <>
-                                      <span className="ml-1.5 align-middle text-[11px] text-gray-500">
+                                    <span className="flex items-center gap-1 whitespace-nowrap">
+                                      <span className="text-[11px] text-gray-500">
                                         {e.team}
                                       </span>
                                       <button
                                         type="button"
                                         onClick={() => callTeam(e.team)}
-                                        className="ml-1 rounded border border-green-300 bg-green-50 px-1.5 py-0.5 align-middle text-[10px] font-semibold text-green-700 active:bg-green-100"
+                                        className="rounded border border-green-300 bg-green-50 px-1.5 py-0.5 text-[10px] font-semibold text-green-700 active:bg-green-100"
                                         aria-label={`${e.team} 전화걸기`}
                                       >
                                         📞
                                       </button>
-                                    </>
+                                    </span>
                                   )}
                                   {e.excluded && (
-                                    <span className="ml-1.5 rounded bg-gray-200 px-1.5 py-0.5 align-middle text-[10px] font-semibold text-gray-600">
+                                    <span className="rounded bg-gray-200 px-1.5 py-0.5 text-[10px] font-semibold text-gray-600">
                                       설치제외
                                     </span>
                                   )}
-                                </p>
+                                </div>
                                 {!routeFilter && e.route && (
                                   <p className="text-[11px] text-gray-400">
                                     {e.route}
@@ -1128,6 +1327,165 @@ export default function DispatchButton() {
                     미연결 저장
                   </button>
                 </div>
+              </div>
+            </div>
+          )}
+
+          {/* 모뎀불량 입력 — 기본은 '모뎀 정상'. 저장하면 Drive 업로드·DB 저장·팀즈 알림까지
+              한 번에 끝난다. 예비품불량은 차량에 달지 않으므로 사진 칸을 감춘다. */}
+          {modemEdit && (
+            <div
+              className="fixed inset-0 z-[70] flex items-start justify-center overflow-y-auto bg-black/40 p-4"
+              onClick={(e) => {
+                e.stopPropagation();
+                if (!modemSaving) setModemEdit(null);
+              }}
+            >
+              <div
+                className="my-8 w-full max-w-xs rounded-2xl bg-white p-5 shadow-xl"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <p className="text-center text-sm font-bold text-gray-800">
+                  📶 LTE 모뎀 교체
+                </p>
+                <p className="mt-0.5 text-center text-xs text-gray-500">
+                  {operator} · {modemEdit.plate}
+                </p>
+
+                <label className="mt-3 block text-xs font-medium text-gray-500">
+                  구분
+                </label>
+                <div className="mt-1 grid grid-cols-3 gap-1">
+                  {MODEM_KINDS.map((k) => (
+                    <button
+                      key={k}
+                      type="button"
+                      onClick={() => setModemEdit({ ...modemEdit, kind: k })}
+                      className={`rounded-lg border px-1 py-2 text-xs font-semibold ${
+                        modemEdit.kind === k
+                          ? "border-purple-500 bg-purple-50 text-purple-700"
+                          : "border-gray-300 bg-white text-gray-500"
+                      }`}
+                    >
+                      {k}
+                    </button>
+                  ))}
+                </div>
+
+                <label className="mt-3 block text-xs font-medium text-gray-500">
+                  증상
+                </label>
+                <select
+                  value={modemEdit.symptom}
+                  onChange={(e) =>
+                    setModemEdit({ ...modemEdit, symptom: e.target.value })
+                  }
+                  className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-base focus:border-purple-500 focus:outline-none"
+                >
+                  <option value="">선택 안 함</option>
+                  {MODEM_SYMPTOMS.map((x) => (
+                    <option key={x} value={x}>
+                      {x}
+                    </option>
+                  ))}
+                </select>
+
+                <label className="mt-3 block text-xs font-medium text-gray-500">
+                  교체 전 모뎀
+                </label>
+                <input
+                  value={modemEdit.beforeSn}
+                  onChange={(e) =>
+                    setModemEdit({ ...modemEdit, beforeSn: e.target.value })
+                  }
+                  inputMode="numeric"
+                  maxLength={50}
+                  placeholder="예) 1023921"
+                  className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-base focus:border-purple-500 focus:outline-none"
+                />
+
+                <label className="mt-3 block text-xs font-medium text-gray-500">
+                  교체 후 모뎀
+                </label>
+                <input
+                  value={modemEdit.afterSn}
+                  onChange={(e) =>
+                    setModemEdit({ ...modemEdit, afterSn: e.target.value })
+                  }
+                  inputMode="numeric"
+                  maxLength={50}
+                  placeholder="예) 1057034"
+                  className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-base focus:border-purple-500 focus:outline-none"
+                />
+
+                {needsPhoto(modemEdit.kind) ? (
+                  <>
+                    <label className="mt-3 block text-xs font-medium text-gray-500">
+                      사진 (3장)
+                    </label>
+                    <p className="mt-1 rounded-lg bg-gray-50 px-2 py-1.5 text-[11px] text-gray-500">
+                      1. 차량번호 — 작업자가 찍어둔 설치전 사진을 자동으로 함께
+                      올립니다.
+                    </p>
+                    <ModemPhoto
+                      no={2}
+                      label="LTE 교체 후"
+                      file={modemEdit.after}
+                      saved={modemEdit.hasPhoto}
+                      onPick={(f) => setModemEdit({ ...modemEdit, after: f })}
+                    />
+                    <ModemPhoto
+                      no={3}
+                      label="LTE 정보"
+                      file={modemEdit.info}
+                      saved={modemEdit.hasPhoto}
+                      onPick={(f) => setModemEdit({ ...modemEdit, info: f })}
+                    />
+                  </>
+                ) : (
+                  <p className="mt-3 rounded-lg bg-gray-50 px-2 py-1.5 text-[11px] text-gray-500">
+                    예비품불량은 사진을 촬영하지 않습니다.
+                  </p>
+                )}
+
+                {modemErr && (
+                  <p className="mt-2 text-center text-xs text-red-500">
+                    {modemErr}
+                  </p>
+                )}
+
+                <div className="mt-3 flex gap-2">
+                  {modemEdit.existing ? (
+                    <button
+                      type="button"
+                      disabled={modemSaving}
+                      onClick={() => saveModem(true)}
+                      className="flex-1 rounded-lg border border-gray-300 px-3 py-2.5 text-sm font-medium text-gray-600 active:bg-gray-100 disabled:opacity-40"
+                    >
+                      정상으로 되돌리기
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled={modemSaving}
+                      onClick={() => setModemEdit(null)}
+                      className="flex-1 rounded-lg border border-gray-300 px-3 py-2.5 text-sm font-medium text-gray-600 active:bg-gray-100 disabled:opacity-40"
+                    >
+                      취소
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    disabled={modemSaving}
+                    onClick={() => saveModem(false)}
+                    className="flex-1 rounded-lg bg-purple-600 px-3 py-2.5 text-sm font-semibold text-white active:bg-purple-700 disabled:opacity-40"
+                  >
+                    {modemSaving ? "저장 중…" : "저장"}
+                  </button>
+                </div>
+                <p className="mt-1.5 text-center text-[11px] text-gray-400">
+                  저장하면 팀즈 관리자 호출 방으로 알림이 발송됩니다.
+                </p>
               </div>
             </div>
           )}

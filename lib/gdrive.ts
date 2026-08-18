@@ -81,8 +81,9 @@ async function ensureFolderCached(d: Drive, name: string, parentId: string): Pro
   return id;
 }
 
-// 업로드. 경로: 루트(GDRIVE_FOLDER_ID) / 운수사 / 차량번호 [/ subfolder] / {fileName}
+// 업로드. 경로: 루트(GDRIVE_FOLDER_ID) [/ topFolder] / 운수사 / 차량번호 [/ subfolder] / {fileName}
 // subfolder: 차량 폴더 안 하위 폴더명 (예: "차량이상유무(인천70바1273)")
+// topFolder: 루트 바로 아래 별도 갈래 (예: "LTE모뎀불량" — 설치 사진첩과 섞이지 않게)
 // 항상 '새 파일'을 만들고 그 Drive 파일 ID를 반환한다. (기존 파일 삭제는 호출부가
 // DB 저장 성공을 확인한 뒤 deletePhoto로 수행 — 부분 실패로 인한 깨짐/고아 방지)
 export async function uploadPhoto(opts: {
@@ -92,6 +93,7 @@ export async function uploadPhoto(opts: {
   body: Buffer;
   contentType?: string;
   subfolder?: string;
+  topFolder?: string;
 }): Promise<string> {
   const d = drive();
   try {
@@ -113,10 +115,14 @@ async function createPhotoFile(
     body: Buffer;
     contentType?: string;
     subfolder?: string;
+    topFolder?: string;
   },
 ): Promise<string> {
-  const { plate, operator, fileName, body, contentType = "image/jpeg", subfolder } = opts;
-  const operatorFolder = await ensureFolderCached(d, operator || "미지정", rootFolderId());
+  const { plate, operator, fileName, body, contentType = "image/jpeg", subfolder, topFolder } = opts;
+  const base = topFolder
+    ? await ensureFolderCached(d, topFolder, rootFolderId())
+    : rootFolderId();
+  const operatorFolder = await ensureFolderCached(d, operator || "미지정", base);
   const plateFolder = await ensureFolderCached(d, plate, operatorFolder);
   const parentFolder = subfolder
     ? await ensureFolderCached(d, subfolder, plateFolder)

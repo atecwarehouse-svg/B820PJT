@@ -92,6 +92,34 @@ export async function GET(req: NextRequest) {
     }
   }
 
+  // 모뎀불량(LTE 모뎀 교체 내역) — 배차표 버튼 상태·팝업 프리필용.
+  // 테이블이 아직 없거나 조회가 실패해도 배차표 자체는 동작해야 하므로 표시만 생략한다.
+  const modems = new Map<
+    string,
+    { kind: string; symptom: string; beforeSn: string; afterSn: string; hasPhoto: boolean }
+  >();
+  try {
+    for (const part of chunk(plates)) {
+      const res = await supabase
+        .from("modem_defects")
+        .select("plate, kind, symptom, before_sn, after_sn, photo_after, photo_info")
+        .eq("date", date)
+        .in("plate", part);
+      if (res.error) break;
+      for (const m of res.data ?? []) {
+        modems.set(m.plate, {
+          kind: m.kind ?? "",
+          symptom: m.symptom ?? "",
+          beforeSn: m.before_sn ?? "",
+          afterSn: m.after_sn ?? "",
+          hasPhoto: !!(m.photo_after || m.photo_info),
+        });
+      }
+    }
+  } catch {
+    // 모뎀불량 표시는 부가 정보 — 실패해도 무시
+  }
+
   // 설치완료 여부 — 대시보드 완료 판정과 동일(saved_at + 설치전7·설치후7 충족, fetchCompletedMap 로직)
   // 설치중 = 기록이 있고 사진(또는 '단말기 없음')을 1칸 이상 채웠지만 아직 완료 아님
   // (대시보드 진행중 판정과 동일 기준). 조회 실패해도 배차표 자체는 동작해야 하므로 표시만 생략.
@@ -154,6 +182,8 @@ export async function GET(req: NextRequest) {
       // 타코 미연결 사유 — 빈 문자열이면 '타코 정상'(기본값)
       tachoReason: tachoReasons.get(v.plate) ?? "",
       excluded: excludes.has(v.plate), // 설치제외(나중에 설치 — 리스트에는 유지)
+      // LTE 모뎀 교체 기록 — 없으면 null(= 모뎀 정상, 버튼 기본 상태)
+      modem: modems.get(v.plate) ?? null,
     })),
     dbReady,
   });

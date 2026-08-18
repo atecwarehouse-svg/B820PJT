@@ -145,17 +145,21 @@ export function buildReport(input: ReportInput): DailyReport {
   };
 }
 
-// 특이사항 정규화 — 각 줄 앞에 '- ' 붙이고, 비면 '- 없음'
-// 이미 불릿(- 또는 ·)으로 시작하는 줄은 그대로 둔다 — 설치제외·타코 미연결 목록('· 차량번호')이
-// '- · 차량번호'로 겹쳐 보이지 않게.
+// 특이사항 한 줄 정규화 — 메일 평문·HTML·팀즈 카드가 공유한다.
+// 자유 입력 줄에는 '- '를 붙이고, 설치제외·타코 미연결 자동 목록('· 차량번호')은
+// 가운데 점을 떼고 차량번호만 적는다(입력창에는 '·'가 남아 2차 프리필이 그대로 읽는다).
+export function noteBullet(line: string): string {
+  const s = line.trim();
+  if (!s) return "";
+  if (s.startsWith("·")) return s.replace(/^·\s*/, "");
+  return s.startsWith("-") ? s : `- ${s}`;
+}
+
+// 특이사항 정규화 — 줄 단위로 noteBullet 적용, 비면 '- 없음'
 function noteLines(notes: string): string[] {
   const t = notes.trim();
   if (!t) return ["- 없음"];
-  return t.split(/\r?\n/).map((l) => {
-    const s = l.trim();
-    if (!s) return "";
-    return /^[-·]/.test(s) ? s : `- ${s}`;
-  }).filter(Boolean);
+  return t.split(/\r?\n/).map(noteBullet).filter(Boolean);
 }
 
 const HR = "━━━━━━━━━━━━━━━";

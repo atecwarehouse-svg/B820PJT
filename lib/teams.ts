@@ -1,7 +1,7 @@
 // 팀즈 설치 진행 현황 카드 전송 — 공유 버튼/크론이 공유하는 로직.
 
 import type { DailyReport, ServiceCheck } from "./report";
-import { serviceCheckRows } from "./report";
+import { noteBullet, serviceCheckRows } from "./report";
 import type { VocOperatorSummary } from "./voc";
 import { VOC_RATINGS, starBar } from "./voc";
 
@@ -338,13 +338,7 @@ export async function sendCompletionReportCard(
     throw new Error("팀즈 웹후크가 설정되지 않았습니다. (TEAMS_WEBHOOK_URL)");
 
   const noteText = notes.trim()
-    ? notes
-        .trim()
-        .split(/\r?\n/)
-        .map((l) => l.trim())
-        .filter(Boolean)
-        .map((l) => (/^[-·]/.test(l) ? l : `- ${l}`))
-        .join("\n")
+    ? notes.trim().split(/\r?\n/).map(noteBullet).filter(Boolean).join("\n")
     : "- 없음";
 
   // 운행시작 점검 섹션 (있을 때만) — 특이사항 위에 표기
@@ -464,16 +458,10 @@ export async function sendCompletionReportCard(
 }
 
 // 특이사항 텍스트 → 카드 표기용 불릿 목록 (빈 값이면 "- 없음")
-// 이미 불릿(- 또는 ·)으로 시작하는 줄은 그대로 — 설치제외·타코 미연결 목록('· 차량번호') 겹침 방지.
 function bulletText(notes?: string): string {
   const s = notes?.trim();
   if (!s) return "- 없음";
-  return s
-    .split(/\r?\n/)
-    .map((l) => l.trim())
-    .filter(Boolean)
-    .map((l) => (/^[-·]/.test(l) ? l : `- ${l}`))
-    .join("\n");
+  return s.split(/\r?\n/).map(noteBullet).filter(Boolean).join("\n");
 }
 
 // 첫 운행시작 전 점검사항 공유 카드 — 설치 진행중 공유방(TEAMS_WEBHOOK_URL).
@@ -1346,4 +1334,56 @@ export async function sendPlanReportCard(
     }
   }
   return { sent, errors };
+}
+
+// 배차표 '모뎀불량' 저장 시 보내는 알림 카드.
+// 웹후크: TEAMS_ADMIN_CALL_WEBHOOK_URL — 관리자 호출과 같은 방에만 보낸다
+// (진행현황 공유방에는 보내지 않는다). 금일완료 리포트에도 넣지 않는다.
+export async function sendModemDefectCard(d: {
+  kind: string; // 현장교체 | 증차 | 예비품불량
+  operator: string;
+  plate: string;
+  beforeSn?: string;
+  afterSn?: string;
+}): Promise<void> {
+  const url = process.env.TEAMS_ADMIN_CALL_WEBHOOK_URL;
+  if (!url)
+    throw new Error(
+      "관리자 호출 웹후크가 설정되지 않았습니다. (TEAMS_ADMIN_CALL_WEBHOOK_URL)",
+    );
+
+  const card = {
+    type: "message",
+    attachments: [
+      {
+        contentType: "application/vnd.microsoft.card.adaptive",
+        content: {
+          $schema: "http://adaptivecards.io/schemas/adaptive-card.json",
+          type: "AdaptiveCard",
+          version: "1.4",
+          body: [
+            {
+              type: "TextBlock",
+              size: "Large",
+              weight: "Bolder",
+              text: "📶 LTE 모뎀 교체",
+              wrap: true,
+            },
+            {
+              type: "FactSet",
+              facts: [
+                { title: "구분", value: d.kind },
+                { title: "운수사", value: d.operator || "-" },
+                { title: "차량번호", value: d.plate },
+                { title: "교체 전 모뎀", value: d.beforeSn || "-" },
+                { title: "교체 후 모뎀", value: d.afterSn || "-" },
+              ],
+            },
+          ],
+        },
+      },
+    ],
+  };
+
+  await post(url, card, "모뎀교체");
 }

@@ -13,7 +13,8 @@
     "delete:vehicle": "tsx scripts/delete-vehicle.ts",
     "backfill:tacho": "tsx scripts/backfill-tacho.ts",
     "upload:template": "tsx scripts/upload-template.ts",
-    "gdrive:setup": "tsx scripts/gdrive-setup.ts"
+    "gdrive:setup": "tsx scripts/gdrive-setup.ts",
+    "check:modem": "tsx scripts/check-modem-xlsx.ts"
   },
   "dependencies": {
     "@sparticuz/chromium": "^149.0.0",
