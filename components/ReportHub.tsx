@@ -933,6 +933,10 @@ export default function ReportHub(props: {
   complete: number;
   inProgress: number;
   remain: number;
+  // 설치시작 보고 전용 — '금일 작업 시작 전(전일까지)' 누적완료·잔여.
+  // 시작보고 전에 작업자가 먼저 시작해도 시작 카드 숫자가 흔들리지 않게 따로 받는다.
+  startComplete: number;
+  startRemain: number;
   inspectorList: string[]; // 등록된 검수자 이름 (TEAMS_INSPECTOR_WEBHOOKS 키) — 설치시작 보고 담당 선택지
 }) {
   const [open, setOpen] = useState(false);
@@ -1007,9 +1011,9 @@ export default function ReportHub(props: {
                   today={props.shareToday}
                   todayPlanned={props.todayPlanned}
                   todayDone={props.todayDone}
-                  complete={props.complete}
+                  complete={props.startComplete}
                   inProgress={props.inProgress}
-                  remain={props.remain}
+                  remain={props.startRemain}
                   planGroups={props.planGroups}
                   inspectorList={props.inspectorList}
                   onClose={close}

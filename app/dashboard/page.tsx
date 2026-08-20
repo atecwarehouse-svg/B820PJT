@@ -168,6 +168,14 @@ export default async function DashboardPage() {
   const todayExcluded = excludedPlates.filter((p) => !completedTodaySet.has(p)).length;
   const todayTarget = Math.max(0, todayPlanned - todayExcluded);
 
+  // 설치시작 보고에 넣을 누적완료·잔여 — '금일 작업 시작 전(= 전일까지)' 기준.
+  // 시작보고를 보내기 전에 작업자가 먼저 설치를 시작·완료해 버리면 금일 완료분이
+  // 누적에 섞이고 진행중만큼 잔여가 줄어 시작 시점 숫자가 틀어진다. 그래서 금일
+  // 완료분은 빼고, 잔여는 진행중을 빼지 않는다(= 전체 − 전일까지 누적완료).
+  const startTotal = ip?.totalVehicles ?? s.totalVehicles;
+  const startComplete = Math.max(0, (ip?.complete ?? s.complete) - todayDone);
+  const startRemain = Math.max(0, startTotal - startComplete);
+
   return (
     <main className="mx-auto max-w-3xl px-3 pb-16 pt-4">
       <div className="mb-4 flex items-center justify-between">
@@ -202,6 +210,8 @@ export default async function DashboardPage() {
             complete={s.complete}
             inProgress={inProgressCount}
             remain={remainCount}
+            startComplete={startComplete}
+            startRemain={startRemain}
             inspectorList={inspectorNames()}
           />
           {ip && (
