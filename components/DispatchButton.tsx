@@ -12,6 +12,7 @@ import {
   MODEM_SPARE_KIND,
   MODEM_SYMPTOMS,
   MODEM_VEHICLE_KINDS,
+  isNewModem,
   needsAfterSn,
   needsPhoto,
   sparePlate,
@@ -117,7 +118,8 @@ interface ModemForm {
   symptom: string;
   beforeSn: string;
   afterSn: string;
-  after: File | null; // LTE 교체 후 사진
+  back: File | null; // 모뎀 뒷면 사진 (증차만)
+  after: File | null; // LTE 교체 후(증차는 LTE 설치) 사진
   info: File | null; // LTE 정보 사진
   existing: boolean; // 이미 저장된 기록 수정 중인지
   hasPhoto: boolean; // 이미 올려둔 사진이 있는지
@@ -560,6 +562,7 @@ export default function DispatchButton() {
       symptom: e.modem?.symptom ?? MODEM_SYMPTOMS[0],
       beforeSn: e.modem?.beforeSn ?? "",
       afterSn: e.modem?.afterSn ?? "",
+      back: null,
       after: null,
       info: null,
       existing: !!e.modem,
@@ -572,7 +575,7 @@ export default function DispatchButton() {
     if (!modemEdit) return;
     const f = modemEdit;
     if (!clear && needsAfterSn(f.kind) && !f.afterSn.trim()) {
-      setModemErr("교체 후 모뎀 번호를 입력해주세요.");
+      setModemErr(`${isNewModem(f.kind) ? "설치" : "교체 후"} 모뎀 번호를 입력해주세요.`);
       return;
     }
     setModemSaving(true);
@@ -585,11 +588,14 @@ export default function DispatchButton() {
       if (clear) {
         fd.set("clear", "1");
       } else {
+        const isNew = isNewModem(f.kind);
         fd.set("kind", f.kind);
-        fd.set("symptom", f.symptom);
-        fd.set("beforeSn", f.beforeSn.trim());
+        // 증차는 새로 다는 것이라 증상·교체 전 번호가 없다
+        fd.set("symptom", isNew ? "" : f.symptom);
+        fd.set("beforeSn", isNew ? "" : f.beforeSn.trim());
         fd.set("afterSn", f.afterSn.trim());
         if (needsPhoto(f.kind)) {
+          if (isNew && f.back) fd.set("photoBack", await compressImage(f.back));
           if (f.after) fd.set("photoAfter", await compressImage(f.after));
           if (f.info) fd.set("photoInfo", await compressImage(f.info));
         }
@@ -601,10 +607,11 @@ export default function DispatchButton() {
         ? null
         : {
             kind: f.kind,
-            symptom: f.symptom,
-            beforeSn: f.beforeSn.trim(),
+            symptom: isNewModem(f.kind) ? "" : f.symptom,
+            beforeSn: isNewModem(f.kind) ? "" : f.beforeSn.trim(),
             afterSn: f.afterSn.trim(),
-            hasPhoto: needsPhoto(f.kind) && (!!f.after || !!f.info || f.hasPhoto),
+            hasPhoto:
+              needsPhoto(f.kind) && (!!f.back || !!f.after || !!f.info || f.hasPhoto),
           };
       setEntries((list) =>
         list.map((e) => (e.plate === f.plate ? { ...e, modem: next } : e)),
@@ -1516,43 +1523,48 @@ export default function DispatchButton() {
                   ))}
                 </div>
 
-                <label className="mt-3 block text-xs font-medium text-gray-500">
-                  증상
-                </label>
-                <select
-                  value={modemEdit.symptom}
-                  onChange={(e) =>
-                    setModemEdit({ ...modemEdit, symptom: e.target.value })
-                  }
-                  className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-base focus:border-purple-500 focus:outline-none"
-                >
-                  <option value="">선택 안 함</option>
-                  {MODEM_SYMPTOMS.map((x) => (
-                    <option key={x} value={x}>
-                      {x}
-                    </option>
-                  ))}
-                </select>
+                {/* 증차는 새로 다는 것 — 고장 증상도, 교체 전 모뎀도 없다 */}
+                {!isNewModem(modemEdit.kind) && (
+                  <>
+                    <label className="mt-3 block text-xs font-medium text-gray-500">
+                      증상
+                    </label>
+                    <select
+                      value={modemEdit.symptom}
+                      onChange={(e) =>
+                        setModemEdit({ ...modemEdit, symptom: e.target.value })
+                      }
+                      className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-base focus:border-purple-500 focus:outline-none"
+                    >
+                      <option value="">선택 안 함</option>
+                      {MODEM_SYMPTOMS.map((x) => (
+                        <option key={x} value={x}>
+                          {x}
+                        </option>
+                      ))}
+                    </select>
 
-                <label className="mt-3 block text-xs font-medium text-gray-500">
-                  교체 전 모뎀
-                </label>
-                <input
-                  value={modemEdit.beforeSn}
-                  onChange={(e) =>
-                    setModemEdit({ ...modemEdit, beforeSn: e.target.value })
-                  }
-                  inputMode="numeric"
-                  maxLength={50}
-                  placeholder="예) 1023921"
-                  className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-base focus:border-purple-500 focus:outline-none"
-                />
+                    <label className="mt-3 block text-xs font-medium text-gray-500">
+                      교체 전 모뎀
+                    </label>
+                    <input
+                      value={modemEdit.beforeSn}
+                      onChange={(e) =>
+                        setModemEdit({ ...modemEdit, beforeSn: e.target.value })
+                      }
+                      inputMode="numeric"
+                      maxLength={50}
+                      placeholder="예) 1023921"
+                      className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-base focus:border-purple-500 focus:outline-none"
+                    />
+                  </>
+                )}
 
                 {/* 장애접수는 교체할 모뎀이 없어 접수하는 것 — 교체 후 칸을 아예 감춘다 */}
                 {needsAfterSn(modemEdit.kind) && (
                   <>
                     <label className="mt-3 block text-xs font-medium text-gray-500">
-                      교체 후 모뎀
+                      {isNewModem(modemEdit.kind) ? "설치 모뎀" : "교체 후 모뎀"}
                     </label>
                     <input
                       value={modemEdit.afterSn}
@@ -1569,22 +1581,32 @@ export default function DispatchButton() {
 
                 {needsPhoto(modemEdit.kind) ? (
                   <>
+                    {/* 증차는 모뎀 뒷면이 한 장 더 — 차량번호 · 모뎀 뒷면 · LTE 설치 · LTE 정보 */}
                     <label className="mt-3 block text-xs font-medium text-gray-500">
-                      사진 (3장)
+                      사진 ({isNewModem(modemEdit.kind) ? 4 : 3}장)
                     </label>
                     <p className="mt-1 rounded-lg bg-gray-50 px-2 py-1.5 text-[11px] text-gray-500">
                       1. 차량번호 — 작업자가 찍어둔 설치전 사진을 자동으로 함께
                       올립니다.
                     </p>
+                    {isNewModem(modemEdit.kind) && (
+                      <ModemPhoto
+                        no={2}
+                        label="모뎀 뒷면"
+                        file={modemEdit.back}
+                        saved={modemEdit.hasPhoto}
+                        onPick={(f) => setModemEdit({ ...modemEdit, back: f })}
+                      />
+                    )}
                     <ModemPhoto
-                      no={2}
-                      label="LTE 교체 후"
+                      no={isNewModem(modemEdit.kind) ? 3 : 2}
+                      label={isNewModem(modemEdit.kind) ? "LTE 설치" : "LTE 교체 후"}
                       file={modemEdit.after}
                       saved={modemEdit.hasPhoto}
                       onPick={(f) => setModemEdit({ ...modemEdit, after: f })}
                     />
                     <ModemPhoto
-                      no={3}
+                      no={isNewModem(modemEdit.kind) ? 4 : 3}
                       label="LTE 정보"
                       file={modemEdit.info}
                       saved={modemEdit.hasPhoto}

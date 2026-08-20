@@ -4,6 +4,7 @@ import type { DailyReport, ServiceCheck } from "./report";
 import { noteBullet, serviceCheckRows } from "./report";
 import type { VocOperatorSummary } from "./voc";
 import { VOC_RATINGS, starBar } from "./voc";
+import { isNewModem } from "./modem";
 
 // 운수사 VOC 요약 → 팀즈 카드 블록. 항목별 평균 별점은 FactSet(라벨·별점 2열)로
 // 그려 별점 열이 세로로 정렬되게 한다. 개별 의견·특이사항은 자유 텍스트라 TextBlock.
@@ -1366,7 +1367,7 @@ export async function sendModemDefectCard(d: {
               type: "TextBlock",
               size: "Large",
               weight: "Bolder",
-              text: "📶 LTE 모뎀 교체",
+              text: isNewModem(d.kind) ? "📶 LTE 모뎀 설치(증차)" : "📶 LTE 모뎀 교체",
               wrap: true,
             },
             {
@@ -1375,8 +1376,14 @@ export async function sendModemDefectCard(d: {
                 { title: "구분", value: d.kind },
                 { title: "운수사", value: d.operator || "-" },
                 { title: "차량번호", value: d.plate },
-                { title: "교체 전 모뎀", value: d.beforeSn || "-" },
-                { title: "교체 후 모뎀", value: d.afterSn || "-" },
+                // 증차는 떼어낸 모뎀이 없으니 '교체 전'을 빼고 '설치 모뎀'만 적는다
+                ...(isNewModem(d.kind)
+                  ? []
+                  : [{ title: "교체 전 모뎀", value: d.beforeSn || "-" }]),
+                {
+                  title: isNewModem(d.kind) ? "설치 모뎀" : "교체 후 모뎀",
+                  value: d.afterSn || "-",
+                },
               ],
             },
           ],

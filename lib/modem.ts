@@ -31,6 +31,13 @@ export function needsPhoto(kind: string): boolean {
   return kind !== "예비품불량" && kind !== MODEM_FAULT_KIND;
 }
 
+// 증차 = 새로 다는 것이라 고장 증상·교체 전 번호가 없다. 번호는 '설치 모뎀' 하나뿐이고,
+// 사진은 4장(차량번호 · 모뎀 뒷면 · LTE 설치 · LTE 정보)으로 뒷면이 한 장 더 들어간다.
+export const MODEM_NEW_KIND = "증차";
+export function isNewModem(kind: string): boolean {
+  return kind === MODEM_NEW_KIND;
+}
+
 // 장애접수는 교체할 모뎀이 없어 접수하는 것 — 교체 후 번호를 요구하지 않는다.
 export function needsAfterSn(kind: string): boolean {
   return kind !== MODEM_FAULT_KIND;
