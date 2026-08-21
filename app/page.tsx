@@ -2,6 +2,7 @@ import Link from "next/link";
 import PlateSearch from "@/components/PlateSearch";
 import AdminCallButton from "@/components/AdminCallButton";
 import DispatchButton from "@/components/DispatchButton";
+import RouteShotButton from "@/components/RouteShotButton";
 import VocModal from "@/components/VocModal";
 import TeamCallButton from "@/components/TeamCallButton";
 import ReloadButton from "@/components/ReloadButton";
@@ -32,6 +33,7 @@ export default function HomePage() {
       <p className="mt-6 text-center text-xs text-gray-400">예) 인천70바4005</p>
       <AdminCallButton />
       <DispatchButton />
+      <RouteShotButton />
       <VocModal />
       <TeamCallButton />
       <Link
