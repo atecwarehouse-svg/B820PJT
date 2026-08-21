@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { downloadUrl } from "@/lib/download";
 import { workDateString } from "@/lib/work-day";
 
 // 홈 '노선 스크린샷' 버튼 — 그날 설치한 노선을 골라, 인천버스정보 + 카카오맵 두 화면을
@@ -41,8 +40,8 @@ export default function RouteShotButton() {
   const [busy, setBusy] = useState<string | null>(null); // 캡처 중인 노선
   const [done, setDone] = useState<string[]>([]);
   const [failed, setFailed] = useState<Record<string, string>>({});
-  // 받은 캡처 — 미리보기 + '폰에 저장'(공유시트) 용
-  const [shots, setShots] = useState<{ key: string; name: string; url: string; file: File }[]>([]);
+  // 받은 캡처 — 미리보기 + '폰에 저장'(바로 다운로드) 용
+  const [shots, setShots] = useState<{ key: string; name: string; url: string }[]>([]);
 
   useEffect(() => {
     if (!open) return;
@@ -103,8 +102,7 @@ export default function RouteShotButton() {
         }
         const blob = await res.blob();
         const name = `노선확인_${r.operator || "노선"}_${r.routeNo}.png`;
-        const file = new File([blob], name, { type: "image/png" });
-        setShots((list) => [...list, { key, name, url: URL.createObjectURL(blob), file }]);
+        setShots((list) => [...list, { key, name, url: URL.createObjectURL(blob) }]);
         setDone((d) => [...d, key]);
       } catch (e) {
         setFailed((f) => ({ ...f, [key]: e instanceof Error ? e.message : "캡처 실패" }));
@@ -113,22 +111,15 @@ export default function RouteShotButton() {
     setBusy(null);
   }
 
-  // 폰에 저장 — 공유시트(사진 앱 저장)를 우선 쓰고, 안 되면 파일 다운로드.
-  // (사진 촬영 화면과 같은 방식 — 홈화면 앱에서 자동 다운로드는 화면을 덮어버린다)
-  async function saveShot(shot: { name: string; url: string; file: File }) {
-    if (
-      typeof navigator.share === "function" &&
-      typeof navigator.canShare === "function" &&
-      navigator.canShare({ files: [shot.file] })
-    ) {
-      try {
-        await navigator.share({ files: [shot.file] });
-        return;
-      } catch {
-        return; // 공유시트를 닫은 경우
-      }
-    }
-    downloadUrl(shot.url);
+  // 폰에 바로 저장 — 공유시트를 거치지 않고 다운로드 폴더로 내려받는다(사용자 요구).
+  function saveShot(shot: { name: string; url: string }) {
+    const a = document.createElement("a");
+    a.href = shot.url;
+    a.download = shot.name; // 파일명 지정 + 화면 전환 없이 저장
+    a.rel = "noopener";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
   }
 
   const pickedCount = picked.size;
@@ -270,7 +261,7 @@ export default function RouteShotButton() {
                   {shots.length > 0 && (
                     <div className="space-y-3 border-t border-gray-200 pt-3">
                       <p className="text-xs font-semibold text-gray-600">
-                        캡처 {shots.length}장 — 눌러서 폰에 저장
+                        캡처 {shots.length}장 — 눌러서 폰에 저장(다운로드 폴더)
                       </p>
                       {shots.map((s) => (
                         <div key={s.key} className="rounded-lg border border-gray-200 p-2">
