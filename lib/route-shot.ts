@@ -21,13 +21,36 @@ function isServerless(): boolean {
   return Boolean(process.env.AWS_LAMBDA_FUNCTION_NAME || process.env.VERCEL || process.env.VERCEL_ENV);
 }
 
+// 서버리스 크롬에는 한글 폰트가 없어 캡처에서 한글이 통째로 빈칸으로 나온다.
+// 저장소에 넣어 둔 Pretendard를 폰트 경로(/tmp/fonts)에 복사해 두면 한글이 렌더된다.
+async function ensureKoreanFont(): Promise<void> {
+  const { copyFile, mkdir, access } = await import("node:fs/promises");
+  const { join } = await import("node:path");
+  const dir = process.env.FONTCONFIG_PATH || "/tmp/fonts";
+  const dest = join(dir, "Pretendard-Regular.otf");
+  try {
+    await access(dest);
+    return; // 같은 인스턴스에서 이미 복사됨
+  } catch {
+    // 계속
+  }
+  try {
+    await mkdir(dir, { recursive: true });
+    await copyFile(join(process.cwd(), "fonts", "Pretendard-Regular.otf"), dest);
+  } catch (e) {
+    console.warn("[route-shot] 한글 폰트 준비 실패:", e instanceof Error ? e.message : e);
+  }
+}
+
 async function launch(): Promise<Browser> {
   const puppeteer = (await import("puppeteer-core")).default;
   if (isServerless()) {
     const chromium = (await import("@sparticuz/chromium")).default;
+    const executablePath = await chromium.executablePath(); // 폰트 설정도 이때 풀린다
+    await ensureKoreanFont();
     return puppeteer.launch({
       args: chromium.args,
-      executablePath: await chromium.executablePath(),
+      executablePath,
       headless: true,
       defaultViewport: PANE,
     });
