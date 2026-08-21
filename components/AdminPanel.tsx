@@ -8,6 +8,7 @@ import TeamNamesManager from "@/components/TeamNamesManager";
 import ChecklistManager from "@/components/ChecklistManager";
 import ConsultationManager from "@/components/ConsultationManager";
 import VocManager from "@/components/VocManager";
+import ModemManager from "@/components/ModemManager";
 
 interface AdminRecord {
   plate: string;
@@ -25,6 +26,7 @@ const TABS = [
   "메일 수신자",
   "협의사항",
   "VOC",
+  "모뎀불량",
   "차량 삭제",
   "DB 삭제",
 ] as const;
@@ -133,6 +135,7 @@ export default function AdminPanel() {
       {tab === "메일 수신자" && <ReportRecipientsManager />}
       {tab === "협의사항" && <ConsultationManager />}
       {tab === "VOC" && <VocManager />}
+      {tab === "모뎀불량" && <ModemManager />}
 
       {(tab === "차량 삭제" || isDb) && (
         <>
