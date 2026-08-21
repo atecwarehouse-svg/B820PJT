@@ -7,6 +7,8 @@
 import type { Browser, Page } from "puppeteer-core";
 
 const PANE = { width: 480, height: 1040, deviceScaleFactor: 2, isMobile: true, hasTouch: true };
+// 카카오맵은 지도·정류장 목록 두 화면을 위아래로 붙이므로 각각 절반 높이
+const KAKAO_PANE = { ...PANE, height: 520 };
 const MOBILE_UA =
   "Mozilla/5.0 (Linux; Android 14; SM-F956N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Mobile Safari/537.36";
 
@@ -80,10 +82,10 @@ async function launch(): Promise<Browser> {
 
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-async function newPane(browser: Browser): Promise<Page> {
+async function newPane(browser: Browser, viewport = PANE): Promise<Page> {
   const page = await browser.newPage();
   await page.setUserAgent(MOBILE_UA);
-  await page.setViewport(PANE);
+  await page.setViewport(viewport);
   return page;
 }
 
@@ -111,9 +113,15 @@ async function shotBis(browser: Browser, routeNo: string, routeId: string): Prom
   }
 }
 
-// 오른쪽: 카카오맵 노선 지도(경로 + 실시간 버스 마커)
-async function shotKakao(browser: Browser, routeNo: string): Promise<string> {
-  const page = await newPane(browser);
+// 오른쪽 위/아래: 카카오맵 노선 지도(경로 + 실시간 버스 마커)와 노선 상세(정류장 목록).
+// 모바일 웹은 지도와 정류장 목록이 다른 화면이라 두 장을 찍어 위아래로 붙인다.
+// (폰 앱에서는 지도 위에 시트로 겹쳐 보이던 그 두 가지)
+async function shotKakao(
+  browser: Browser,
+  routeNo: string,
+  view: "map" | "list",
+): Promise<string> {
+  const page = await newPane(browser, KAKAO_PANE);
   try {
     const q = `인천 ${routeNo}번버스`;
     await page.goto(`https://m.map.kakao.com/actions/searchView?q=${encodeURIComponent(q)}`, {
@@ -121,14 +129,14 @@ async function shotKakao(browser: Browser, routeNo: string): Promise<string> {
       timeout: 45000,
     });
     await wait(2000);
-    // 검색 결과에서 노선번호가 정확히 같은 버스의 '지도' 버튼 클릭
+    // 검색 결과에서 노선번호가 정확히 같은 버스를 고른다 — '지도' 버튼 또는 노선 행(상세)
     const ok = await page.evaluate(
       `(() => {
         const items = document.querySelectorAll('li.search_item[data-type="bus"]');
         for (const li of items) {
           if ((li.getAttribute("data-title") || "").trim() !== ${JSON.stringify(routeNo)}) continue;
-          const btn = li.querySelector(".link_map");
-          if (btn) { btn.click(); return true; }
+          const el = li.querySelector(${view === "map" ? '".link_map"' : '".link_result"'});
+          if (el) { el.click(); return true; }
         }
         return false;
       })()`,
@@ -136,6 +144,18 @@ async function shotKakao(browser: Browser, routeNo: string): Promise<string> {
     if (!ok) throw new Error(`카카오맵에서 ${routeNo}번 노선을 찾지 못했습니다.`);
     await wait(4000);
     await page.evaluate(KAKAO_KILL);
+    // 목록 화면은 상단 헤더·검색창이 자리를 먹어 정류장이 3개밖에 안 보인다 — 걷어낸다
+    if (view === "list") {
+      await page.evaluate(
+        `(() => {
+          const head = document.querySelector("#daumHead");
+          if (head) head.remove();
+          const input = document.querySelector("#search_keyword, .box_searchbar, .search_area");
+          if (input) (input.closest("form") || input).remove();
+        })()`,
+      );
+      await wait(300);
+    }
     await wait(500);
     return (await page.screenshot({ encoding: "base64" })) as string;
   } finally {
@@ -157,14 +177,15 @@ export async function captureRouteShot(opts: {
 }): Promise<RouteShot> {
   const browser = await launch();
   try {
-    const [bis, kakao] = await Promise.all([
+    const [bis, kakaoMap, kakaoList] = await Promise.all([
       shotBis(browser, opts.routeNo, opts.routeId).catch((e: unknown) => e as Error),
-      shotKakao(browser, opts.routeNo).catch((e: unknown) => e as Error),
+      shotKakao(browser, opts.routeNo, "map").catch((e: unknown) => e as Error),
+      shotKakao(browser, opts.routeNo, "list").catch((e: unknown) => e as Error),
     ]);
-    const paneHtml = (shot: string | Error, name: string) =>
+    const paneHtml = (shot: string | Error, name: string, cls: string) =>
       typeof shot === "string"
-        ? `<img src="data:image/png;base64,${shot}" alt="${name}">`
-        : `<div class="err"><b>${name}</b><br>${shot.message}</div>`;
+        ? `<img class="${cls}" src="data:image/png;base64,${shot}" alt="${name}">`
+        : `<div class="err ${cls}"><b>${name}</b><br>${shot.message}</div>`;
 
     const page = await browser.newPage();
     await page.setViewport({ width: 960, height: 1090, deviceScaleFactor: 2 });
@@ -174,12 +195,22 @@ export async function captureRouteShot(opts: {
         body{width:960px;font-family:'Malgun Gothic',sans-serif;background:#fff}
         h1{font-size:15px;padding:8px 10px;background:#1d4ed8;color:#fff}
         .row{display:flex}
-        .row>*{width:480px;height:1040px;object-fit:cover;display:block;border-right:1px solid #ddd}
+        .col{display:flex;flex-direction:column;width:480px}
+        .full{width:480px;height:1040px;object-fit:cover;object-position:top;display:block;
+              border-right:1px solid #ddd}
+        .half{width:480px;height:520px;object-fit:cover;object-position:top;display:block}
+        .half+.half{border-top:2px solid #1d4ed8}
         .err{display:flex;align-items:center;justify-content:center;text-align:center;
              background:#f8fafc;color:#b91c1c;font-size:13px;line-height:1.6;padding:20px}
       </style>
       <h1>${opts.title}</h1>
-      <div class="row">${paneHtml(bis, "인천버스정보")}${paneHtml(kakao, "카카오맵")}</div>`,
+      <div class="row">
+        ${paneHtml(bis, "인천버스정보", "full")}
+        <div class="col">
+          ${paneHtml(kakaoMap, "카카오맵 지도", "half")}
+          ${paneHtml(kakaoList, "카카오맵 노선목록", "half")}
+        </div>
+      </div>`,
       { waitUntil: "load" },
     );
     const png = (await page.screenshot({ type: "png" })) as Buffer;
@@ -187,7 +218,9 @@ export async function captureRouteShot(opts: {
     return {
       png: Buffer.from(png),
       bisFailed: bis instanceof Error ? bis.message : undefined,
-      kakaoFailed: kakao instanceof Error ? kakao.message : undefined,
+      // 지도·목록 둘 다 실패해야 카카오 실패로 본다
+      kakaoFailed:
+        kakaoMap instanceof Error && kakaoList instanceof Error ? kakaoMap.message : undefined,
     };
   } finally {
     await browser.close();
