@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
-  loadTodayExcludedPlates,
+  loadTodayExcluded,
   loadTodayModemFaults,
   loadTodayTachoOff,
 } from "@/lib/stats";
@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 
 // GET /api/dispatch/excluded?date=YYYY-MM-DD
 // 배차표에서 금일완료 리포트 특이사항으로 넘길 항목:
-//   plates   — '설치제외' 체크된 차량 (사유는 리포트 화면에서 입력)
+//   plates   — '설치제외' 체크된 차량 / excluded — 차량+저장된 제외 사유
 //   tachoOff — '타코 미연결' 차량과 사유 (사유는 배차표에서 이미 입력됨)
 //   modemFaults — 모뎀 '장애접수' 차량과 증상 (배차표 모뎀불량 팝업에서 입력됨)
 // 판정은 대시보드 금일 타일과 같은 함수를 쓴다(두 벌로 두면 기준이 갈린다).
@@ -18,12 +18,17 @@ export const dynamic = "force-dynamic";
 export async function GET(req: NextRequest) {
   const date = (req.nextUrl.searchParams.get("date") ?? "").trim();
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-    return NextResponse.json({ plates: [], tachoOff: [], modemFaults: [] });
+    return NextResponse.json({ plates: [], excluded: [], tachoOff: [], modemFaults: [] });
   }
-  const [plates, tachoOff, modemFaults] = await Promise.all([
-    loadTodayExcludedPlates(date).catch(() => []),
+  const [excluded, tachoOff, modemFaults] = await Promise.all([
+    loadTodayExcluded(date).catch(() => []),
     loadTodayTachoOff(date).catch(() => []),
     loadTodayModemFaults(date).catch(() => []),
   ]);
-  return NextResponse.json({ plates, tachoOff, modemFaults });
+  return NextResponse.json({
+    plates: excluded.map((e) => e.plate),
+    excluded,
+    tachoOff,
+    modemFaults,
+  });
 }

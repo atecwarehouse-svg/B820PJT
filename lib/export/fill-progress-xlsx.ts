@@ -92,6 +92,67 @@ function setCellNumber(xml: string, ref: string, val: number): string {
   });
 }
 
+// 셀 값만 비우고 스타일은 유지 (설치제외 사유를 지울 때)
+function clearCellText(xml: string, ref: string): string {
+  const re = new RegExp(`<c r="${ref}"([^>]*?)(?:/>|>[\\s\\S]*?</c>)`);
+  return xml.replace(re, (_m, attrs: string) => {
+    const s = (attrs.match(/\bs="(\d+)"/) || [])[1];
+    return `<c r="${ref}"${s ? ` s="${s}"` : ""}/>`;
+  });
+}
+
+// styles.xml 도우미 — "채움색만 바꾼 셀 스타일(xf)"을 만들어 준다.
+// 글꼴·테두리·서식은 그대로 두고 fillId만 갈아끼운 xf를 복제해 새 인덱스를 돌려주므로,
+// 어느 열에 적용해도 원래 서식이 유지된다. 색은 템플릿에 이미 있는 채움을 재사용한다.
+function makeRestyler(stylesXml: string) {
+  const xfsM = stylesXml.match(/<cellXfs count="\d+">([\s\S]*?)<\/cellXfs>/);
+  const fillsM = stylesXml.match(/<fills count="\d+">([\s\S]*?)<\/fills>/);
+  if (!xfsM || !fillsM) return null;
+  // xf는 자식(<alignment/>)이 있을 수 있어 "빈 태그" 또는 "여는~닫는 태그"를 각각 잡는다
+  const xfs = xfsM[1].match(/<xf\b[^>]*\/>|<xf\b[^>]*>[\s\S]*?<\/xf>/g);
+  const fills = fillsM[1].match(/<fill>[\s\S]*?<\/fill>/g);
+  if (!xfs || !fills) return null;
+
+  // 템플릿에 있는 채움 찾기(없으면 같은 색으로 새로 추가) — theme 9=녹색, theme 7=베이지
+  const fillFor = (theme: number): number => {
+    const found = fills.findIndex((f) =>
+      new RegExp(`<fgColor theme="${theme}" tint="0\\.79`).test(f),
+    );
+    if (found >= 0) return found;
+    fills.push(
+      `<fill><patternFill patternType="solid"><fgColor theme="${theme}" tint="0.79979857783745845"/><bgColor indexed="64"/></patternFill></fill>`,
+    );
+    return fills.length - 1;
+  };
+  const cache = new Map<string, number>();
+  const restyle = (styleIdx: number, fillId: number): number => {
+    const base = xfs[styleIdx];
+    if (!base) return styleIdx;
+    if (new RegExp(`fillId="${fillId}"`).test(base)) return styleIdx;
+    const key = `${styleIdx}|${fillId}`;
+    const hit = cache.get(key);
+    if (hit != null) return hit;
+    let xf = base.replace(/fillId="\d+"/, `fillId="${fillId}"`);
+    if (!/fillId="/.test(xf)) return styleIdx; // 예상 밖 구조 — 원본 유지
+    if (!/applyFill="1"/.test(xf)) xf = xf.replace(/<xf /, '<xf applyFill="1" ');
+    xfs.push(xf);
+    const idx = xfs.length - 1;
+    cache.set(key, idx);
+    return idx;
+  };
+  const serialize = () =>
+    stylesXml
+      .replace(
+        /<fills count="\d+">[\s\S]*?<\/fills>/,
+        `<fills count="${fills.length}">${fills.join("")}</fills>`,
+      )
+      .replace(
+        /<cellXfs count="\d+">[\s\S]*?<\/cellXfs>/,
+        `<cellXfs count="${xfs.length}">${xfs.join("")}</cellXfs>`,
+      );
+  return { green: fillFor(9), beige: fillFor(7), restyle, serialize };
+}
+
 // sharedStrings.xml → 문자열 배열 (각 <si>의 <t>들을 이어붙임)
 function parseSharedStrings(xml: string): string[] {
   const out: string[] = [];
@@ -121,6 +182,14 @@ export interface CompletedInfo {
   serial: number; // 완료일 Excel 직렬값
   operator: string; // 증차 append/매칭용 운수사
   route: string; // 증차 append/매칭용 노선
+}
+
+// 배차표에서 '설치제외' 체크된 차량 — 진행현황 시트 행 색칠·비고(I:N)용.
+export interface ExclusionInfo {
+  plate: string;
+  operator: string; // 진행현황 B열(영업소) 매칭용
+  route: string; // 진행현황 C열(노선) 매칭용
+  reason: string; // 금일완료 리포트에서 적은 제외 사유(빈 값이면 비고를 안 적는다)
 }
 
 export interface VehicleDbInfo {
@@ -185,6 +254,135 @@ function sortVehicleRows(
   return { xml: xml.slice(0, bodyStart) + out + xml.slice(close), removed };
 }
 
+// 같은 사유는 한 줄로 묶는다 — "4507, 4781 선폐차로 추후 설치 예정" 모양.
+// 차량번호는 사용자가 쓰던 대로 뒤 4자리만.
+function formatExclusionNote(list: { plate: string; reason: string }[]): string {
+  const byReason = new Map<string, string[]>();
+  for (const e of list) {
+    const reason = e.reason.trim();
+    if (!reason) continue;
+    const short = (e.plate.match(/(\d{4})\s*$/) || [])[1] ?? e.plate;
+    byReason.set(reason, [...(byReason.get(reason) ?? []), short]);
+  }
+  return [...byReason]
+    .map(([reason, plates]) => `${plates.join(", ")} ${reason}`)
+    .join(" / ");
+}
+
+// 진행현황 시트 데이터 행(11행 헤더 아래)을 훑어 색칠·비고를 적용한다.
+// 누적완료는 시트 수식(전개일정 F)과 같은 방식으로 계산: (운수사|노선) 완료 대수를
+// 같은 조합의 행들에 위에서부터 대상대수만큼 채워 나눈다(시범설치 행 → 본설치 행).
+function paintProgressRows(opts: {
+  pXml: string;
+  shared: string[];
+  completed: Map<string, CompletedInfo>;
+  dbInfo?: Map<string, VehicleDbInfo>;
+  exclusions: ExclusionInfo[];
+  schedAdjust: Map<number, number>;
+  restyler: NonNullable<ReturnType<typeof makeRestyler>>;
+}): { pXml: string; changed: boolean } {
+  const { shared, completed, dbInfo, exclusions, schedAdjust, restyler } = opts;
+
+  // (운수사|||노선)별 누적 완료 대수 — 차량리스트 B/C와 같은 값으로 센다
+  const doneByGroup = new Map<string, number>();
+  for (const [plate, info] of completed) {
+    const db = dbInfo?.get(plate);
+    const key = `${(db?.operator ?? info.operator).trim()}|||${(db?.route ?? info.route).trim()}`;
+    doneByGroup.set(key, (doneByGroup.get(key) ?? 0) + 1);
+  }
+
+  // 설치제외 이력: 그룹별 (아직 미완료인) 제외 차량 + 제외 차량번호 뒤 4자리 목록
+  const exclByGroup = new Map<string, { plate: string; reason: string }[]>();
+  const exclTails = new Map<string, string[]>();
+  for (const e of exclusions) {
+    const db = dbInfo?.get(e.plate);
+    const key = `${(db?.operator ?? e.operator).trim()}|||${(db?.route ?? e.route).trim()}`;
+    const tail = (e.plate.match(/(\d{4})\s*$/) || [])[1];
+    if (tail) exclTails.set(key, [...(exclTails.get(key) ?? []), tail]);
+    if (completed.has(e.plate)) continue; // 나중에 설치된 차량은 사유에서 뺀다
+    exclByGroup.set(key, [...(exclByGroup.get(key) ?? []), { plate: e.plate, reason: e.reason }]);
+  }
+
+  // 1) 데이터 행 스캔 (영업소·노선·대상대수·비고)
+  const rowRe = /<row r="(\d+)"[^>]*>([\s\S]*?)<\/row>/g;
+  const cellRe = /<c r="([A-Z]+)\d+"([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/g;
+  const rows: { row: number; key: string; target: number; note: string }[] = [];
+  for (const m of opts.pXml.matchAll(rowRe)) {
+    const row = Number(m[1]);
+    if (row <= 11) continue; // 11행까지는 머리말
+    const cells = new Map<string, { attrs: string; inner: string }>();
+    for (const cm of m[2].matchAll(cellRe)) {
+      cells.set(cm[1], { attrs: cm[2], inner: cm[3] ?? "" });
+    }
+    const b = cells.get("B");
+    const c = cells.get("C");
+    const d = cells.get("D");
+    if (!b || !c || !d) continue;
+    const op = cellValue(b.attrs, b.inner, shared).trim();
+    const rt = cellValue(c.attrs, c.inner, shared).trim();
+    if (!op || !rt) continue;
+    // 대상대수: 값 셀이면 그 값, 전개일정 E를 참조하는 수식이면 캐시값 + 이번 보정(Δ)
+    let target = Number((d.inner.match(/<v>([\d.]+)<\/v>/) || [])[1]);
+    const sched = d.inner.match(/'?전개일정'?!\$?E\$?(\d+)/);
+    if (sched) target += schedAdjust.get(Number(sched[1])) ?? 0;
+    if (!Number.isFinite(target)) continue;
+    const i = cells.get("I");
+    rows.push({
+      row,
+      key: `${op}|||${rt}`,
+      target,
+      note: i ? cellValue(i.attrs, i.inner, shared).trim() : "",
+    });
+  }
+  if (rows.length === 0) return { pXml: opts.pXml, changed: false };
+
+  // 2) 행별 판정 — 제외 차량은 같은 조합의 마지막 행(=아직 설치 중인 행)에 붙인다
+  const lastRowOfKey = new Map<string, number>();
+  for (const r of rows) lastRowOfKey.set(r.key, r.row);
+  const remain = new Map(doneByGroup);
+  const actions = new Map<number, { fillId: number; note?: string | null }>();
+  for (const r of rows) {
+    const rem = remain.get(r.key) ?? 0;
+    const done = Math.max(0, Math.min(r.target, rem));
+    remain.set(r.key, rem - done);
+    if (r.target <= 0) continue;
+    const isLast = lastRowOfKey.get(r.key) === r.row;
+    const excl = isLast ? exclByGroup.get(r.key) ?? [] : [];
+    // 제외 차량번호가 적힌 비고만 '제외 사유'로 본다 — '시범설치' 같은 다른 메모는 남긴다
+    const isExclNote =
+      isLast && !!r.note && (exclTails.get(r.key) ?? []).some((t) => r.note.includes(t));
+    if (done >= r.target) {
+      // 대상 = 누적완료 → 녹색. 제외 사유가 적혀 있던 자리는 비운다.
+      actions.set(r.row, { fillId: restyler.green, note: isExclNote ? null : undefined });
+    } else if (done > 0 || excl.length > 0) {
+      // 부족(설치제외 등) → 베이지. 비고가 비어 있을 때만 사유를 적는다.
+      const note = r.note ? "" : formatExclusionNote(excl);
+      actions.set(r.row, { fillId: restyler.beige, note: note || undefined });
+    }
+  }
+  if (actions.size === 0) return { pXml: opts.pXml, changed: false };
+
+  // 3) 적용 — A~N 셀의 스타일을 "채움만 바꾼" 스타일로 교체
+  const pXml = opts.pXml.replace(rowRe, (whole, rowStr: string, inner: string) => {
+    const act = actions.get(Number(rowStr));
+    if (!act) return whole;
+    const row = Number(rowStr);
+    let newInner = inner.replace(
+      /<c r="([A-N])\d+"([^>]*?)(?:\/>|>[\s\S]*?<\/c>)/g,
+      (cellWhole: string, _col: string, attrs: string) => {
+        const s = Number((attrs.match(/\bs="(\d+)"/) || [])[1]);
+        if (!Number.isFinite(s)) return cellWhole;
+        const ns = restyler.restyle(s, act.fillId);
+        return ns === s ? cellWhole : cellWhole.replace(/\bs="\d+"/, `s="${ns}"`);
+      },
+    );
+    if (act.note === null) newInner = clearCellText(newInner, `I${row}`);
+    else if (act.note) newInner = replaceCellText(newInner, `I${row}`, act.note);
+    return whole.replace(inner, () => newInner);
+  });
+  return { pXml, changed: true };
+}
+
 interface FillResult {
   buffer: Buffer;
   filled: number; // 차량리스트 기존 행에 G/H 채운 수
@@ -207,6 +405,7 @@ export async function fillProgressXlsx(
   dailyPlan?: number, // 금일 계획수량(A6:B6 병합) — 기준일 당일 설치예정 대수
   cumPlan?: number, // 누적 계획수량(F6) — 기준일까지 설치예정 누적 대수
   dbInfo?: Map<string, VehicleDbInfo>, // 차량별 DB 최신값 (운수사·노선·설치 예정일)
+  exclusions?: ExclusionInfo[], // 배차표 설치제외 이력 (기준일까지)
 ): Promise<FillResult> {
   const zip = await JSZip.loadAsync(templateBuffer);
 
@@ -461,6 +660,8 @@ export async function fillProgressXlsx(
   //      해당 행의 C열과 정적 E열에 더한다(E가 수식 "$C행"이면 재계산이 처리).
   //      진행현황 시트의 대상대수(D열)·총대수(I6)는 전개일정 E열을 참조하므로 자동 연동.
   const schedRelabels: { schedRow: number; label: string }[] = [];
+  // 전개일정 행 → 대상수량 보정(Δ). 진행현황 D열이 이 행의 E를 참조하므로 색칠 판정에도 쓴다.
+  const schedAdjust = new Map<number, number>();
   if (sFile) {
     // 실제 대수 = DB 차량 전체 + DB에 없는 완료 차량(증차 완료분)
     const realGroup = new Map<string, number>();
@@ -512,7 +713,7 @@ export async function fillProgressXlsx(
       }
 
       // 델타 → 행 배정. 같은 (운수사|노선)이 여러 행이면 마지막 행에 반영.
-      const rowAdjust = new Map<number, number>();
+      const rowAdjust = schedAdjust;
       const rowLabel = new Map<number, string>();
       for (const [key, delta] of deltas) {
         const [op, rt] = key.split("|||");
@@ -599,6 +800,29 @@ export async function fillProgressXlsx(
           /(<mergeCells count=")(\d+)(")/,
           (_m, pre: string, n: string, post: string) => `${pre}${Number(n) - 1}${post}`,
         );
+      }
+
+      // 3-d) 행 색칠 + 설치제외 사유(I:N) — 사용자가 손으로 칠하던 규칙 그대로.
+      //   누적완료 ≥ 대상대수 → 녹색 / 대상에 못 미치면(설치제외 등) → 베이지.
+      //   아직 한 대도 완료 안 된 행(제외도 없음)은 그대로 둔다.
+      //   비고는 비어 있을 때만 제외 사유를 적고(기존 문구는 건드리지 않음),
+      //   나중에 설치돼 누적=대상이 되면 그 자리를 비운다.
+      const stylesFile = zip.file("xl/styles.xml");
+      if (stylesFile) {
+        const restyler = makeRestyler(await stylesFile.async("string"));
+        if (restyler) {
+          const painted = paintProgressRows({
+            pXml,
+            shared,
+            completed,
+            dbInfo,
+            exclusions: exclusions ?? [],
+            schedAdjust,
+            restyler,
+          });
+          pXml = painted.pXml;
+          if (painted.changed) zip.file("xl/styles.xml", restyler.serialize());
+        }
       }
 
       zip.file(sheetPaths.progress, pXml);

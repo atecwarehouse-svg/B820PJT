@@ -8,6 +8,7 @@ import { fetchCompletedMap } from "@/lib/stats";
 import {
   fillProgressXlsx,
   type CompletedInfo,
+  type ExclusionInfo,
   type VehicleDbInfo,
 } from "@/lib/export/fill-progress-xlsx";
 import { workDateString, workDateExcelSerial, excelSerialFromDate } from "@/lib/work-day";
@@ -77,6 +78,43 @@ export async function buildProgressXlsx(opts?: { asOfDate?: string }): Promise<{
     if (pd === asOfDate) dailyPlan++;
   }
 
+  // 배차표 '설치제외' 이력(기준일까지) — 진행현황 시트 행 색칠·비고(I:N)용.
+  // 사유 컬럼이 없는 DB(migration_exclude_reason.sql 미실행)면 사유 없이 목록만.
+  const exclusions: ExclusionInfo[] = [];
+  {
+    const query = (cols: string) =>
+      fetchAll<{ plate: string; date: string; exclude_reason?: string | null }>((from, to) =>
+        supabase
+          .from("dispatch_times")
+          .select(cols)
+          .eq("excluded", true)
+          .lte("date", asOfDate)
+          .order("date")
+          .order("plate")
+          .range(from, to) as never,
+      );
+    let rows: { plate: string; date: string; exclude_reason?: string | null }[] = [];
+    try {
+      rows = await query("plate, date, exclude_reason");
+    } catch (e) {
+      if (e instanceof Error && /exclude_reason/i.test(e.message)) {
+        rows = await query("plate, date").catch(() => []);
+      }
+    }
+    // 같은 차량이 여러 날 제외됐으면 가장 최근 사유만 남긴다(날짜 오름차순 조회 → 뒤가 최신)
+    const byPlate = new Map<string, string>();
+    for (const r of rows) byPlate.set(r.plate, (r.exclude_reason ?? "").trim());
+    for (const [plate, reason] of byPlate) {
+      const v = vmap.get(plate);
+      exclusions.push({
+        plate,
+        operator: (v?.operator ?? "").trim(),
+        route: (v?.route ?? "").trim(),
+        reason,
+      });
+    }
+  }
+
   // 비공개 버킷에서 템플릿 내려받기
   const { data: file, error: dlError } = await supabase.storage
     .from(TEMPLATE_BUCKET)
@@ -94,6 +132,7 @@ export async function buildProgressXlsx(opts?: { asOfDate?: string }): Promise<{
     dailyPlan,
     cumPlan,
     dbInfo,
+    exclusions,
   );
 
   // 파일명: 기준일 YYMMDD

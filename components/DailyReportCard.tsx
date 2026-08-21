@@ -177,9 +177,27 @@ export default function DailyReportCard({
   // 배차표 모뎀불량 '장애접수' 차량 — 교체할 모뎀이 없어 업체에 인계한 건.
   // 증상은 배차표 팝업에서 고른 값을 그대로 쓴다(여기서는 표기만).
   const [modemFaults, setModemFaults] = useState<{ plate: string; reason: string }[]>([]);
+  const savedExclRef = useRef<Record<string, string>>({}); // 저장된 설치제외 사유
   const savedTachoRef = useRef<Record<string, string>>({}); // 마지막으로 저장된 사유(변경 감지·실패 복구)
   const [tachoSaving, setTachoSaving] = useState<string | null>(null);
   const [tachoErr, setTachoErr] = useState<string | null>(null);
+
+  // 설치제외 사유 저장 — 칸을 벗어날 때. 진행현황 엑셀 비고(I:N)가 이 값을 쓴다.
+  // (저장 실패해도 리포트 발송은 그대로 — 엑셀 비고만 비게 된다)
+  async function saveExclReason(plate: string) {
+    const cur = (exclReasons[plate] ?? "").trim();
+    if (cur === (savedExclRef.current[plate] ?? "")) return;
+    savedExclRef.current[plate] = cur;
+    try {
+      await fetch("/api/dispatch/exclude-reason", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ date, plate, reason: cur }),
+      });
+    } catch {
+      // 네트워크 실패 — 다시 고치면 저장된다
+    }
+  }
 
   // 입력칸을 떠날 때 저장 — 값이 그대로면 아무것도 하지 않는다.
   async function saveTachoReason(plate: string) {
@@ -287,7 +305,11 @@ export default function DailyReportCard({
         });
         const json = await res.json();
         if (alive) {
-          setExclPlates((json.plates ?? []) as string[]);
+          const excl = (json.excluded ?? []) as { plate: string; reason: string }[];
+          setExclPlates(excl.length ? excl.map((e) => e.plate) : ((json.plates ?? []) as string[]));
+          // 이미 저장된 제외 사유를 되살린다(엑셀 비고에 쓰이는 값과 같은 곳)
+          setExclReasons(Object.fromEntries(excl.filter((e) => e.reason).map((e) => [e.plate, e.reason])));
+          savedExclRef.current = Object.fromEntries(excl.map((e) => [e.plate, e.reason]));
           const list = (json.tachoOff ?? []) as { plate: string; reason: string }[];
           setTachoOff(list);
           setModemFaults((json.modemFaults ?? []) as { plate: string; reason: string }[]);
@@ -302,6 +324,7 @@ export default function DailyReportCard({
           setExclPlates([]);
           setTachoOff([]);
           setModemFaults([]);
+          savedExclRef.current = {};
           savedTachoRef.current = {};
         }
       }
@@ -575,6 +598,7 @@ export default function DailyReportCard({
                   onChange={(e) =>
                     setExclReasons((m) => ({ ...m, [p]: e.target.value }))
                   }
+                  onBlur={() => saveExclReason(p)}
                   placeholder="제외 사유 (예: 배차시간 부족)"
                   className="min-w-0 flex-1 rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-sm focus:border-amber-500 focus:outline-none"
                 />

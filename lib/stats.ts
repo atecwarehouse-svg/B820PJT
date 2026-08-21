@@ -363,15 +363,32 @@ export async function loadTodayPlanGroups(date: string): Promise<TodayPlanGroup[
 // 일정 재업로드로 예정일이 바뀌었거나 삭제된 차량의 옛 배차표 행이 남아 있어도
 // 차감되지 않도록, 그날 예정(planned_date=date)인 차량과 교집합만 돌려준다.
 export async function loadTodayExcludedPlates(date: string): Promise<string[]> {
+  return (await loadTodayExcluded(date)).map((e) => e.plate);
+}
+
+// 위와 같은 목록에 제외 사유(금일완료 리포트에서 입력)를 붙여서. 사유 컬럼이 없는
+// DB(migration_exclude_reason.sql 미실행)면 사유는 빈 문자열.
+export async function loadTodayExcluded(
+  date: string,
+): Promise<{ plate: string; reason: string }[]> {
   const supabase = createServiceClient();
-  const { data, error } = await supabase
-    .from("dispatch_times")
-    .select("plate")
-    .eq("date", date)
-    .eq("excluded", true)
-    .order("plate")
-    .range(0, 999);
+  const query = (cols: string) =>
+    supabase
+      .from("dispatch_times")
+      .select(cols)
+      .eq("date", date)
+      .eq("excluded", true)
+      .order("plate")
+      .range(0, 999);
+  type Row = { plate: string; exclude_reason?: string | null };
+  type Res = { data: Row[] | null; error: { message: string } | null };
+  let res = (await query("plate, exclude_reason")) as unknown as Res;
+  if (res.error && /exclude_reason/i.test(res.error.message)) {
+    res = (await query("plate")) as unknown as Res;
+  }
+  const { data, error } = res;
   if (error || !data?.length) return [];
+  const reasons = new Map(data.map((r) => [r.plate, (r.exclude_reason ?? "").trim()]));
   const plates = data.map((r) => r.plate).filter(Boolean);
   // 100대씩 나눠 조회 — 한 번에 보내면 URL 길이 초과로 실패하고,
   // 앞부분만 자르면 그 뒤 제외 차량이 조용히 빠진다.
@@ -385,7 +402,9 @@ export async function loadTodayExcludedPlates(date: string): Promise<string[]> {
     if (vehError) return [];
     for (const v of veh ?? []) planned.add(v.plate);
   }
-  return plates.filter((p) => planned.has(p));
+  return plates
+    .filter((p) => planned.has(p))
+    .map((plate) => ({ plate, reason: reasons.get(plate) ?? "" }));
 }
 
 // 배차표에서 '타코 미연결' 사유가 적힌 금일 차량 — 금일완료 리포트 특이사항 자동 포함용.
