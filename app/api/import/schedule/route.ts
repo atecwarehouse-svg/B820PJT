@@ -25,6 +25,16 @@ interface ChangeGroup {
   count: number;
 }
 
+// 기존 DB에 없던 신규 차량 — 운수사·예정일로 묶어 차량번호까지 보여준다.
+interface AddedGroup {
+  operator: string;
+  date: string | null;
+  count: number;
+  plates: string[]; // 최대 PLATE_LIMIT대 (초과분은 count로만)
+}
+
+const PLATE_LIMIT = 50;
+
 // POST /api/import/schedule  (multipart/form-data: file=수정한 진행현황 xlsx, apply=true|false, pw=관리자 비밀번호)
 //   관리자 비밀번호(pw) 또는 관리자 페이지 로그인 쿠키가 있어야 한다.
 //   apply!=="true" → 미리보기: 파싱+변경내역만 계산(DB 미변경).
@@ -108,11 +118,22 @@ export async function POST(req: NextRequest) {
 
   // 2) 변경 내역 집계: 예정일이 바뀐 차량을 운수사·(기존→변경) 날짜로 묶는다.
   const groupMap = new Map<string, ChangeGroup>();
+  const addedMap = new Map<string, AddedGroup>();
   let added = 0; // 기존에 없던 신규 차량
   let changedCount = 0;
   for (const r of parsed.rows) {
     if (!before.has(r.plate)) {
       added++;
+      const akey = `${r.operator}|${r.planned_date}`;
+      const a = addedMap.get(akey) ?? {
+        operator: r.operator,
+        date: r.planned_date,
+        count: 0,
+        plates: [],
+      };
+      a.count++;
+      if (a.plates.length < PLATE_LIMIT) a.plates.push(r.plate);
+      addedMap.set(akey, a);
       continue;
     }
     const from = before.get(r.plate)?.planned ?? null;
@@ -125,6 +146,9 @@ export async function POST(req: NextRequest) {
     groupMap.set(key, g);
   }
   const changes = [...groupMap.values()].sort(
+    (a, b) => b.count - a.count || a.operator.localeCompare(b.operator),
+  );
+  const addedList = [...addedMap.values()].sort(
     (a, b) => b.count - a.count || a.operator.localeCompare(b.operator),
   );
 
@@ -182,6 +206,7 @@ export async function POST(req: NextRequest) {
     pilot: parsed.pilotCount,
     skipped: parsed.skipped,
     added,
+    addedList,
     changedCount,
     changes,
     removedCount: toRemove.length,

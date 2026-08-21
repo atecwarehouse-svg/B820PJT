@@ -10,6 +10,13 @@ interface ChangeGroup {
   count: number;
 }
 
+interface AddedGroup {
+  operator: string;
+  date: string | null;
+  count: number;
+  plates: string[]; // 최대 50대(초과분은 count로만)
+}
+
 interface RemovedGroup {
   operator: string;
   count: number;
@@ -24,6 +31,7 @@ interface UploadResult {
   pilot: number;
   skipped: number;
   added: number;
+  addedList?: AddedGroup[]; // 신규 차량 상세(운수사·예정일·차량번호)
   changedCount: number;
   changes: ChangeGroup[];
   removedCount?: number; // 차량리스트에서 빠져 삭제(예정)된 차량 수
@@ -193,6 +201,36 @@ export default function ScheduleUploadModal() {
     );
   }
 
+  // 신규(기존 DB에 없던) 차량 목록 (preview·done 공용)
+  function AddedList() {
+    if (!result?.addedList?.length) return null;
+    return (
+      <div className="mt-3 max-h-60 overflow-y-auto rounded-lg border border-green-100">
+        <p className="border-b border-green-100 bg-green-50 px-3 py-1.5 text-[11px] font-semibold text-green-600">
+          신규 차량 {result.added.toLocaleString()}대
+          {result.applied ? " — 추가됨" : " — 반영 시 추가됩니다"}
+        </p>
+        <ul className="divide-y divide-green-50">
+          {result.addedList.map((g, i) => (
+            <li key={i} className="px-3 py-2 text-xs">
+              <span className="flex items-center justify-between gap-2">
+                <span className="min-w-0 truncate font-medium text-gray-700">
+                  {g.operator}
+                  <span className="ml-1 font-normal text-gray-400">{g.count}대</span>
+                </span>
+                <b className="shrink-0 tabular-nums text-green-700">{fmtDate(g.date)}</b>
+              </span>
+              <p className="mt-0.5 break-all text-gray-500">
+                {g.plates.join(", ")}
+                {g.count > g.plates.length && ` 외 ${g.count - g.plates.length}대`}
+              </p>
+            </li>
+          ))}
+        </ul>
+      </div>
+    );
+  }
+
   // 차량리스트에서 빠진(제외) 차량 목록 + 보호 차량 알림 (preview·done 공용)
   function RemovedList() {
     if (!result) return null;
@@ -353,6 +391,7 @@ export default function ScheduleUploadModal() {
 
                   <TemplateNote />
                   <ChangeList />
+                  <AddedList />
                   <RemovedList />
 
                   {error && <p className="mt-3 text-xs text-red-500">{error}</p>}
@@ -400,6 +439,7 @@ export default function ScheduleUploadModal() {
 
                   <TemplateNote />
                   <ChangeList />
+                  <AddedList />
                   <RemovedList />
 
                   <button
