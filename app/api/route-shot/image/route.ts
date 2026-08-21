@@ -19,16 +19,16 @@ export async function GET(req: NextRequest) {
   const routeNo = routeNoOf(route);
 
   try {
-    if (!routeId) {
-      const bis = await findRoute(routeNo, operator);
-      if (!bis) {
-        return NextResponse.json(
-          { error: `버스정보시스템에서 ${routeNo}번 노선을 찾지 못했습니다.` },
-          { status: 404 },
-        );
-      }
-      routeId = bis.routeId;
+    // 기점·종점은 카카오맵에서 같은 번호의 다른 지역 노선을 걸러내는 데 쓰므로 항상 조회한다
+    // (예: '인천 20번버스' 검색에 경기 부천 20번이 잡힘)
+    const bis = await findRoute(routeNo, operator);
+    if (!bis && !routeId) {
+      return NextResponse.json(
+        { error: `버스정보시스템에서 ${routeNo}번 노선을 찾지 못했습니다.` },
+        { status: 404 },
+      );
     }
+    if (!routeId && bis) routeId = bis.routeId;
     const stamp = new Intl.DateTimeFormat("ko-KR", {
       timeZone: "Asia/Seoul",
       month: "2-digit",
@@ -41,6 +41,8 @@ export async function GET(req: NextRequest) {
       routeNo,
       routeId,
       title: `${operator ? operator + " · " : ""}${routeNo}번 노선 확인 — ${stamp}`,
+      origin: bis?.origin,
+      dest: bis?.dest,
     });
     // 두 화면 다 실패했으면 빈 이미지를 내려보내지 말고 사유를 알려준다
     if (bisFailed && kakaoFailed) {

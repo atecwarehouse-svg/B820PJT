@@ -120,6 +120,8 @@ async function shotKakao(
   browser: Browser,
   routeNo: string,
   view: "map" | "list",
+  origin = "",
+  dest = "",
 ): Promise<string> {
   const page = await newPane(browser, KAKAO_PANE);
   try {
@@ -129,16 +131,30 @@ async function shotKakao(
       timeout: 45000,
     });
     await wait(2000);
-    // 검색 결과에서 노선번호가 정확히 같은 버스를 고른다 — '지도' 버튼 또는 노선 행(상세)
+    // 검색 결과에서 노선 고르기 — 번호만 맞추면 다른 지역 같은 번호가 걸린다
+    // (실제로 '인천 20번버스' 검색에 경기 부천 20번이 잡혔음).
+    // 그래서 기점·종점 이름과 '인천' 지역 표기로 점수를 매겨 가장 잘 맞는 것을 고른다.
     const ok = await page.evaluate(
       `(() => {
-        const items = document.querySelectorAll('li.search_item[data-type="bus"]');
-        for (const li of items) {
-          if ((li.getAttribute("data-title") || "").trim() !== ${JSON.stringify(routeNo)}) continue;
-          const el = li.querySelector(${view === "map" ? '".link_map"' : '".link_result"'});
-          if (el) { el.click(); return true; }
-        }
-        return false;
+        const no = ${JSON.stringify(routeNo)};
+        const origin = ${JSON.stringify(origin)};
+        const dest = ${JSON.stringify(dest)};
+        let best = null;
+        let bestScore = -1;
+        document.querySelectorAll('li.search_item[data-type="bus"]').forEach(function (li) {
+          if ((li.getAttribute("data-title") || "").trim() !== no) return;
+          const t = (li.textContent || "").replace(/\\s+/g, "");
+          let score = 0;
+          if (origin && t.indexOf(origin.replace(/\\s+/g, "")) >= 0) score += 2;
+          if (dest && t.indexOf(dest.replace(/\\s+/g, "")) >= 0) score += 2;
+          if (t.indexOf("인천") >= 0) score += 1;
+          if (score > bestScore) { bestScore = score; best = li; }
+        });
+        if (!best) return false;
+        const el = best.querySelector(${view === "map" ? '".link_map"' : '".link_result"'});
+        if (!el) return false;
+        el.click();
+        return true;
       })()`,
     );
     if (!ok) throw new Error(`카카오맵에서 ${routeNo}번 노선을 찾지 못했습니다.`);
@@ -174,13 +190,15 @@ export async function captureRouteShot(opts: {
   routeNo: string;
   routeId: string;
   title: string; // 예: "삼환교통 · 4번 (2026-08-22 03:10)"
+  origin?: string; // 기점 — 카카오맵에서 같은 번호의 다른 지역 노선을 걸러내는 데 쓴다
+  dest?: string; // 종점
 }): Promise<RouteShot> {
   const browser = await launch();
   try {
     const [bis, kakaoMap, kakaoList] = await Promise.all([
       shotBis(browser, opts.routeNo, opts.routeId).catch((e: unknown) => e as Error),
-      shotKakao(browser, opts.routeNo, "map").catch((e: unknown) => e as Error),
-      shotKakao(browser, opts.routeNo, "list").catch((e: unknown) => e as Error),
+      shotKakao(browser, opts.routeNo, "map", opts.origin, opts.dest).catch((e: unknown) => e as Error),
+      shotKakao(browser, opts.routeNo, "list", opts.origin, opts.dest).catch((e: unknown) => e as Error),
     ]);
     const paneHtml = (shot: string | Error, name: string, cls: string) =>
       typeof shot === "string"
