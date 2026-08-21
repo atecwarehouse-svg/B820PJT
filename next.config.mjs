@@ -13,6 +13,8 @@ const nextConfig = {
     outputFileTracingIncludes: {
       "/api/export/pdf": ["./node_modules/@sparticuz/chromium/**"],
       "/api/export/pdf/[plate]": ["./node_modules/@sparticuz/chromium/**"],
+      // 노선 스크린샷(인천버스정보 + 카카오맵 캡처)도 같은 크로미움을 쓴다
+      "/api/route-shot/image": ["./node_modules/@sparticuz/chromium/**"],
     },
   },
 };

@@ -41,6 +41,8 @@ export default function RouteShotButton() {
   const [busy, setBusy] = useState<string | null>(null); // 캡처 중인 노선
   const [done, setDone] = useState<string[]>([]);
   const [failed, setFailed] = useState<Record<string, string>>({});
+  // 받은 캡처 — 미리보기 + '폰에 저장'(공유시트) 용
+  const [shots, setShots] = useState<{ key: string; name: string; url: string; file: File }[]>([]);
 
   useEffect(() => {
     if (!open) return;
@@ -50,6 +52,7 @@ export default function RouteShotButton() {
     setPicked(new Set());
     setDone([]);
     setFailed({});
+    setShots([]);
     (async () => {
       try {
         const res = await fetch(`/api/route-shot?date=${encodeURIComponent(date)}`, {
@@ -99,15 +102,33 @@ export default function RouteShotButton() {
           throw new Error(j?.error ?? "캡처 실패");
         }
         const blob = await res.blob();
-        const objectUrl = URL.createObjectURL(blob);
-        downloadUrl(objectUrl);
-        setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+        const name = `노선확인_${r.operator || "노선"}_${r.routeNo}.png`;
+        const file = new File([blob], name, { type: "image/png" });
+        setShots((list) => [...list, { key, name, url: URL.createObjectURL(blob), file }]);
         setDone((d) => [...d, key]);
       } catch (e) {
         setFailed((f) => ({ ...f, [key]: e instanceof Error ? e.message : "캡처 실패" }));
       }
     }
     setBusy(null);
+  }
+
+  // 폰에 저장 — 공유시트(사진 앱 저장)를 우선 쓰고, 안 되면 파일 다운로드.
+  // (사진 촬영 화면과 같은 방식 — 홈화면 앱에서 자동 다운로드는 화면을 덮어버린다)
+  async function saveShot(shot: { name: string; url: string; file: File }) {
+    if (
+      typeof navigator.share === "function" &&
+      typeof navigator.canShare === "function" &&
+      navigator.canShare({ files: [shot.file] })
+    ) {
+      try {
+        await navigator.share({ files: [shot.file] });
+        return;
+      } catch {
+        return; // 공유시트를 닫은 경우
+      }
+    }
+    downloadUrl(shot.url);
   }
 
   const pickedCount = picked.size;
@@ -245,6 +266,26 @@ export default function RouteShotButton() {
                   <p className="text-center text-[11px] text-gray-400">
                     노선 1개당 20~30초 걸립니다 · 받는 동안 창을 닫지 마세요
                   </p>
+
+                  {shots.length > 0 && (
+                    <div className="space-y-3 border-t border-gray-200 pt-3">
+                      <p className="text-xs font-semibold text-gray-600">
+                        캡처 {shots.length}장 — 눌러서 폰에 저장
+                      </p>
+                      {shots.map((s) => (
+                        <div key={s.key} className="rounded-lg border border-gray-200 p-2">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={s.url} alt={s.name} className="w-full rounded" />
+                          <button
+                            onClick={() => saveShot(s)}
+                            className="mt-2 w-full rounded-lg border border-indigo-300 bg-indigo-50 px-3 py-2 text-sm font-semibold text-indigo-700 active:bg-indigo-100"
+                          >
+                            📥 폰에 저장
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </>
               )}
             </div>

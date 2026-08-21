@@ -17,6 +17,8 @@ async function post(path: string, body: Record<string, string>): Promise<unknown
     },
     body: new URLSearchParams(body).toString(),
     cache: "no-store",
+    // 상대 서버가 응답을 안 주면 화면 전체가 멈추므로 8초에서 끊는다
+    signal: AbortSignal.timeout(8000),
   });
   const text = await res.text();
   try {

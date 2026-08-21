@@ -37,11 +37,15 @@ export async function GET(req: NextRequest) {
       minute: "2-digit",
       hour12: false,
     }).format(new Date());
-    const { png } = await captureRouteShot({
+    const { png, bisFailed, kakaoFailed } = await captureRouteShot({
       routeNo,
       routeId,
       title: `${operator ? operator + " · " : ""}${routeNo}번 노선 확인 — ${stamp}`,
     });
+    // 두 화면 다 실패했으면 빈 이미지를 내려보내지 말고 사유를 알려준다
+    if (bisFailed && kakaoFailed) {
+      return NextResponse.json({ error: `${bisFailed} / ${kakaoFailed}` }, { status: 502 });
+    }
     const filename = `노선확인_${operator || "노선"}_${routeNo}.png`;
     return new NextResponse(png as unknown as BodyInit, {
       status: 200,
