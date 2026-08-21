@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
 import { CHECK_SLOTS, REQUIRED_CHECK_KEYS, type CustomSlot } from "@/lib/slots";
 import { notifyInstallProgress, originFromRequest } from "@/lib/install-status";
+import { autoEndPledgeSessions } from "@/lib/pledge-end";
 import { runAfterResponse } from "@/lib/background";
 import { adminPassword, isAdmin } from "@/lib/admin-auth";
 import { kstDateString } from "@/lib/work-day";
@@ -217,7 +218,11 @@ export async function POST(req: NextRequest) {
   // 응답을 먼저 돌려보내고 백그라운드로 처리해 저장 버튼 반응을 빠르게 한다.
   if (body.saved) {
     const origin = originFromRequest(req) || req.nextUrl.origin;
-    runAfterResponse(() => notifyInstallProgress({ supabase, plate, origin }));
+    runAfterResponse(async () => {
+      await notifyInstallProgress({ supabase, plate, origin });
+      // 금일 예정 차량이 전부 완료·설치제외면 서약서 세션을 자동 종료
+      await autoEndPledgeSessions(supabase);
+    });
   }
 
   return NextResponse.json({ record: data });

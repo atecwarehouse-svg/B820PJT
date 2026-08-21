@@ -863,13 +863,34 @@ export default function DispatchButton() {
                   차량별 나가는 시간 — 시간순 자동 정렬
                 </p>
               </div>
-              <button
-                onClick={() => setOpen(false)}
-                className="rounded-md px-2 py-0.5 text-lg leading-none text-blue-100 active:bg-blue-700"
-                aria-label="닫기"
-              >
-                ✕
-              </button>
+              <div className="flex items-center gap-1">
+                {/* 새로고침 — 다른 기기에서 바꾼 내용을 다시 불러온다.
+                    저장 안 한 이 기기 수정은 사라지므로 먼저 확인한다. */}
+                <button
+                  onClick={() => {
+                    if (!operator || !date || listLoading) return;
+                    if (
+                      dirtyRef.current.size > 0 &&
+                      !confirm("저장하지 않은 수정이 사라집니다. 새로고침할까요?")
+                    )
+                      return;
+                    setSaveMsg(null);
+                    loadList(operator, date);
+                  }}
+                  disabled={!operator || !date || listLoading}
+                  className="rounded-md px-2 py-0.5 text-lg leading-none text-blue-100 active:bg-blue-700 disabled:opacity-40"
+                  aria-label="새로고침"
+                >
+                  🔄
+                </button>
+                <button
+                  onClick={() => setOpen(false)}
+                  className="rounded-md px-2 py-0.5 text-lg leading-none text-blue-100 active:bg-blue-700"
+                  aria-label="닫기"
+                >
+                  ✕
+                </button>
+              </div>
             </div>
 
             <div className="space-y-3 px-4 py-4">
