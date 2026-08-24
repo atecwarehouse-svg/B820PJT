@@ -1002,6 +1002,7 @@ export interface ConsultationCardData {
   mountDisplay?: string; // 14. 표출기
   mountMain?: string; // 14. 통합단말기
   mountBoard?: string; // 14. 승차
+  mountAlight?: string; // 14. 하차 방향
   handleRemoval?: string; // 14. 격벽 손잡이(얇은봉) 탈거 유무
   terminalStorage?: string; // 15. 단말기 보관 위치
   notes?: string; // 16. 특이사항
@@ -1122,6 +1123,7 @@ export async function sendConsultationCard(
                 { title: "표출기", value: v(d.mountDisplay) },
                 { title: "통합단말기", value: v(d.mountMain) },
                 { title: "승차", value: v(d.mountBoard) },
+                { title: "하차(방향)", value: v(d.mountAlight) },
                 { title: "격벽 손잡이 탈거", value: v(d.handleRemoval) },
                 { title: "단말기 보관 위치", value: v(d.terminalStorage) },
               ],
@@ -1164,6 +1166,7 @@ export interface PlanReportGroup {
   mountDisplay?: string; // 표출기
   mountMain?: string; // 통합단말기
   mountBoard?: string; // 승차
+  mountAlight?: string; // 하차 방향
   handleRemoval?: string; // 격벽 손잡이 탈거
   notes?: string; // 특이사항
 }
@@ -1291,6 +1294,7 @@ export async function sendPlanReportCard(
           { title: "표출기", value: v(g.mountDisplay) },
           { title: "통합단말기", value: v(g.mountMain) },
           { title: "승차", value: v(g.mountBoard) },
+          { title: "하차(방향)", value: v(g.mountAlight) },
           { title: "격벽 손잡이 탈거", value: v(g.handleRemoval) },
           { title: "특이사항", value: v(g.notes) },
         ],

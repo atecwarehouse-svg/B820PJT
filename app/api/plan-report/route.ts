@@ -77,9 +77,8 @@ export async function POST(req: NextRequest) {
       const supabase = createServiceClient();
       const { data, error } = await supabase
         .from("consultations")
-        .select(
-          "operator, arrival, key_method, engine_on, fuel, mount_display, mount_main, mount_board, handle_removal, notes",
-        )
+        // 컬럼을 나열하면 마이그레이션 전 DB에서 통째로 실패해 병합이 전부 빠진다
+        .select("*")
         .eq("date", date);
       if (!error) {
         const byOp = new Map((data ?? []).map((c) => [c.operator, c]));
@@ -93,6 +92,7 @@ export async function POST(req: NextRequest) {
           g.mountDisplay = c.mount_display ?? undefined;
           g.mountMain = c.mount_main ?? undefined;
           g.mountBoard = c.mount_board ?? undefined;
+          g.mountAlight = c.mount_alight ?? undefined;
           g.handleRemoval = c.handle_removal ?? undefined;
           // 특이사항은 폼이 보낸 값 우선 — 폼에 칸이 없던 옛 클라이언트만 협의사항으로 채움
           if (!clientNotesOps.has(g.operator)) g.notes = c.notes ?? undefined;

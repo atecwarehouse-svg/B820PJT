@@ -17,6 +17,7 @@ const ENGINE_OPTIONS = ["가능", "불가능"];
 const FUEL_OPTIONS = ["가스 충분", "부족(에어컨 조절 필요)"];
 const MOUNT_MAIN_OPTIONS = ["운전석 위", "직접입력"];
 const MOUNT_BOARD_OPTIONS = ["격벽 ㄷ봉 사용", "표출기 뒤", "직접입력"];
+const MOUNT_ALIGHT_OPTIONS = ["마주보게", "45도", "승객방향", "기존위치", "직접입력"];
 const HANDLE_REMOVAL_OPTIONS = ["가능(탈거후 정비과 반납요청)", "불가능"];
 
 // "2026-07-15" → "2026.07.15"
@@ -248,6 +249,8 @@ export default function ConsultationModal({
   const [mountMainCustom, setMountMainCustom] = useState("");
   const [mountBoardOpt, setMountBoardOpt] = useState("");
   const [mountBoardCustom, setMountBoardCustom] = useState("");
+  const [mountAlightOpt, setMountAlightOpt] = useState("");
+  const [mountAlightCustom, setMountAlightCustom] = useState("");
   const [handleRemoval, setHandleRemoval] = useState("");
   const [terminalStorage, setTerminalStorage] = useState(""); // 15. 단말기 보관 위치
   const [listCheck, setListCheck] = useState(""); // 차량리스트·수량 확인 (이상 없음/변동 있음)
@@ -294,6 +297,8 @@ export default function ConsultationModal({
     setMountMainCustom("");
     setMountBoardOpt("");
     setMountBoardCustom("");
+    setMountAlightOpt("");
+    setMountAlightCustom("");
     setHandleRemoval("");
     setTerminalStorage("");
     setListCheck("");
@@ -352,6 +357,10 @@ export default function ConsultationModal({
       setError("승차 단말기 위치의 직접입력 내용을 입력하세요.");
       return;
     }
+    if (mountAlightOpt === "직접입력" && !mountAlightCustom.trim()) {
+      setError("하차 단말기 방향의 직접입력 내용을 입력하세요.");
+      return;
+    }
     if (listCheck === "변동 있음" && !listChange.trim()) {
       setError("차량리스트 변동사항 내용을 입력하세요.");
       return;
@@ -389,6 +398,8 @@ export default function ConsultationModal({
             mountMainOpt === "직접입력" ? mountMainCustom : mountMainOpt,
           mountBoard:
             mountBoardOpt === "직접입력" ? mountBoardCustom : mountBoardOpt,
+          mountAlight:
+            mountAlightOpt === "직접입력" ? mountAlightCustom : mountAlightOpt,
           handleRemoval,
           terminalStorage,
           notes,
@@ -734,6 +745,15 @@ export default function ConsultationModal({
                         onCustomChange={setMountBoardCustom}
                         placeholder="설치 위치 직접 입력"
                       />
+                      <OptionField
+                        label="하차 (방향)"
+                        options={MOUNT_ALIGHT_OPTIONS}
+                        value={mountAlightOpt}
+                        onChange={setMountAlightOpt}
+                        custom={mountAlightCustom}
+                        onCustomChange={setMountAlightCustom}
+                        placeholder="방향 직접 입력"
+                      />
                       <label className="block">
                         <span className={LABEL}>
                           격벽 손잡이(얇은봉) 탈거 유무
@@ -939,6 +959,15 @@ export default function ConsultationModal({
                           (mountBoardOpt === "직접입력"
                             ? mountBoardCustom
                             : mountBoardOpt
+                          ).trim() || "-"
+                        }
+                      />
+                      <PreviewRow
+                        title="하차(방향)"
+                        value={
+                          (mountAlightOpt === "직접입력"
+                            ? mountAlightCustom
+                            : mountAlightOpt
                           ).trim() || "-"
                         }
                       />

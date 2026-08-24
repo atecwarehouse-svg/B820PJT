@@ -93,6 +93,7 @@ export async function POST(req: NextRequest) {
     mountDisplay: text("mountDisplay"),
     mountMain: text("mountMain"),
     mountBoard: text("mountBoard"),
+    mountAlight: text("mountAlight"),
     handleRemoval: text("handleRemoval", 50),
     terminalStorage: text("terminalStorage"),
     notes: text("notes", 500),
@@ -138,6 +139,7 @@ export async function POST(req: NextRequest) {
       mount_display: card.mountDisplay ?? null,
       mount_main: card.mountMain ?? null,
       mount_board: card.mountBoard ?? null,
+      mount_alight: card.mountAlight ?? null,
       handle_removal: card.handleRemoval ?? null,
       terminal_storage: card.terminalStorage ?? null,
       notes: card.notes ?? null,
@@ -148,7 +150,12 @@ export async function POST(req: NextRequest) {
       .from("consultations")
       .upsert(row, { onConflict: "operator,date" });
     // 나중에 추가된 컬럼(마이그레이션 전 DB) — 그 컬럼만 빼고 재시도(기존 항목 저장은 유지)
-    const OPTIONAL_COLS = ["terminal_storage", "simul_start", "early_plates"];
+    const OPTIONAL_COLS = [
+      "terminal_storage",
+      "simul_start",
+      "early_plates",
+      "mount_alight",
+    ];
     while (error) {
       const msg = error.message;
       const col = OPTIONAL_COLS.find((c) => c in row && msg.includes(c));

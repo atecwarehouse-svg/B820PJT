@@ -57,6 +57,7 @@ const EDITABLE_TEXT = [
   "mount_display",
   "mount_main",
   "mount_board",
+  "mount_alight",
   "handle_removal",
   "terminal_storage",
   "notes",
