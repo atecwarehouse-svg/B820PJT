@@ -4,6 +4,7 @@ import {
   getInstallTeamsFull,
   setSetting,
   INSTALL_TEAMS_KEY,
+  TEAM_COMPANIES,
   type InstallTeam,
 } from "@/lib/settings";
 
@@ -33,11 +34,18 @@ export async function PUT(req: NextRequest) {
       team: String((v as InstallTeam)?.team ?? "").trim(),
       name: String((v as InstallTeam)?.name ?? "").trim(),
       phone: String((v as InstallTeam)?.phone ?? "").trim(),
+      company: String((v as InstallTeam)?.company ?? "").trim(),
     }))
     .filter((v) => v.team)
     .slice(0, 50);
   if (list.some((v) => v.team.length > 40 || v.name.length > 40)) {
     return NextResponse.json({ error: "팀명·이름은 40자 이하로 입력하세요." }, { status: 400 });
+  }
+  if (list.some((v) => v.company && !(TEAM_COMPANIES as readonly string[]).includes(v.company))) {
+    return NextResponse.json(
+      { error: `소속은 ${TEAM_COMPANIES.join("·")} 중에서 선택하세요.` },
+      { status: 400 },
+    );
   }
   const badPhone = list.find((v) => v.phone && !/^[0-9+\-() ]{7,20}$/.test(v.phone));
   if (badPhone) {

@@ -6,6 +6,7 @@ interface Row {
   team: string;
   name: string;
   phone: string;
+  company?: string; // 소속사 — '소속' 탭에서 관리, 여기서는 저장 시 값만 보존
 }
 
 // 설치팀 관리(팀명·이름·전화번호) — 관리자 페이지 섹션. (app_settings.install_teams)
@@ -52,7 +53,7 @@ export default function TeamNamesManager() {
   async function save() {
     if (!rows || saving) return;
     const list = rows
-      .map((r) => ({ team: r.team.trim(), name: r.name.trim(), phone: r.phone.trim() }))
+      .map((r) => ({ ...r, team: r.team.trim(), name: r.name.trim(), phone: r.phone.trim() }))
       .filter((r) => r.team);
     setSaving(true);
     setMsg(null);

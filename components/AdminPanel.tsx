@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import ReportRecipientsManager from "@/components/ReportRecipientsManager";
 import TeamNamesManager from "@/components/TeamNamesManager";
+import TeamCompanyManager from "@/components/TeamCompanyManager";
 import ChecklistManager from "@/components/ChecklistManager";
 import ConsultationManager from "@/components/ConsultationManager";
 import VocManager from "@/components/VocManager";
@@ -22,6 +23,7 @@ interface AdminRecord {
 
 const TABS = [
   "설치팀",
+  "소속",
   "검수항목",
   "메일 수신자",
   "협의사항",
@@ -131,6 +133,7 @@ export default function AdminPanel() {
       </div>
 
       {tab === "설치팀" && <TeamNamesManager />}
+      {tab === "소속" && <TeamCompanyManager />}
       {tab === "검수항목" && <ChecklistManager />}
       {tab === "메일 수신자" && <ReportRecipientsManager />}
       {tab === "협의사항" && <ConsultationManager />}

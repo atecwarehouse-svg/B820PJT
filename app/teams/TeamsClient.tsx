@@ -22,13 +22,15 @@ function addDays(ymd: string, n: number): string {
   return new Date(Date.UTC(y, m - 1, d + n)).toISOString().slice(0, 10);
 }
 
-// 설치팀 그룹 — 팀명 앞부분(지역명)으로 소속사 구분. 팀 구성이 바뀌면 여기만 수정.
+// 설치팀 그룹(소속사) — 관리자 '소속' 탭에서 지정한 companyMap(팀 라벨→소속사) 우선,
+// 미지정 팀은 팀명 앞부분(지역명)으로 구분하는 기존 규칙으로 폴백.
 const TEAM_GROUPS: [string, string[]][] = [
   ["아림기술", ["김포", "부천", "금화", "대구", "의정부", "아림"]],
-  ["모리원", ["용인", "광명", "평택", "인천"]],
+  ["모리온", ["용인", "광명", "평택", "인천"]],
 ];
 
-function groupOf(team: string): string | null {
+function groupOf(team: string, companyMap: Record<string, string>): string | null {
+  if (companyMap[team]) return companyMap[team];
   for (const [g, prefixes] of TEAM_GROUPS) {
     if (prefixes.some((p) => team.startsWith(p))) return g;
   }
@@ -37,7 +39,13 @@ function groupOf(team: string): string | null {
 
 // 설치팀별 확인 — 기간·운수사·노선 필터 후 팀별 대수 + 차량 목록(차량번호) 표시.
 // 데이터는 서버에서 전체를 받아(최대 수천 행) 클라이언트에서 필터링한다.
-export default function TeamsClient({ vehicles }: { vehicles: Vehicle[] }) {
+export default function TeamsClient({
+  vehicles,
+  companyMap,
+}: {
+  vehicles: Vehicle[];
+  companyMap: Record<string, string>;
+}) {
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [operator, setOperator] = useState("");
@@ -79,9 +87,9 @@ export default function TeamsClient({ vehicles }: { vehicles: Vehicle[] }) {
           (!operator || v.operator === operator) &&
           (!route || v.route === route) &&
           (!q || v.team.includes(q)) &&
-          (!group || groupOf(v.team) === group),
+          (!group || groupOf(v.team, companyMap) === group),
       ),
-    [vehicles, from, to, operator, route, q, group],
+    [vehicles, from, to, operator, route, q, group, companyMap],
   );
 
   const teams = useMemo(() => {

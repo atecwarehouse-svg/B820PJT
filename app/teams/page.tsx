@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { createServiceClient } from "@/lib/supabase/server";
 import { fetchAll } from "@/lib/supabase/paginate";
-import { getInstallTeamsFull, makeTeamNormalizer } from "@/lib/settings";
+import { getInstallTeamsFull, makeTeamNormalizer, teamLabel } from "@/lib/settings";
 import { workDateString } from "@/lib/work-day";
 import TeamsClient from "./TeamsClient";
 
@@ -12,7 +12,12 @@ export const dynamic = "force-dynamic";
 // 집계 기준은 대시보드 '설치팀 확인' 팝업(/api/install-teams)과 동일: saved_at != null.
 export default async function TeamsPage() {
   const supabase = createServiceClient();
-  const norm = makeTeamNormalizer(await getInstallTeamsFull());
+  const installTeams = await getInstallTeamsFull();
+  const norm = makeTeamNormalizer(installTeams);
+  // 관리자 '소속' 탭에서 지정한 팀별 소속사 — 정규화된 팀 라벨("팀명 이름") 기준
+  const companyMap = Object.fromEntries(
+    installTeams.filter((t) => t.company).map((t) => [teamLabel(t), t.company]),
+  );
   const rows = await fetchAll<{
     plate: string;
     operator: string | null;
@@ -45,7 +50,7 @@ export default async function TeamsPage() {
       <p className="mt-1 text-xs text-gray-500">
         설치(저장) 완료 기준 · 설치일은 업무일(20시~익일 12시) 기준
       </p>
-      <TeamsClient vehicles={vehicles} />
+      <TeamsClient vehicles={vehicles} companyMap={companyMap} />
     </main>
   );
 }

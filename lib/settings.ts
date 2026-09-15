@@ -58,10 +58,13 @@ export async function getStartReportForUpdate(date: string): Promise<Record<stri
   return parseStartReport(typeof data?.value === "string" ? data.value : null);
 }
 
+export const TEAM_COMPANIES = ["아림기술", "모리온"] as const; // 설치팀 소속사 선택지
+
 export interface InstallTeam {
   team: string; // 팀명 (예: 1팀)
   name: string; // 이름
   phone: string; // 전화번호 (설치팀 호출 버튼에서만 사용, 카드·드롭다운 미노출)
+  company: string; // 소속사 (TEAM_COMPANIES 중 하나 또는 "" = 미지정)
 }
 
 // 팀 표시 라벨 = "팀명 이름" — 기록 페이지 드롭다운·팀즈 카드에 쓰이는 문자열
@@ -93,11 +96,12 @@ export async function getInstallTeamsFull(): Promise<InstallTeam[]> {
     return arr
       .map((v) =>
         typeof v === "string"
-          ? { team: v.trim(), name: "", phone: "" }
+          ? { team: v.trim(), name: "", phone: "", company: "" }
           : {
               team: String(v?.team ?? "").trim(),
               name: String(v?.name ?? "").trim(),
               phone: String(v?.phone ?? "").trim(),
+              company: String(v?.company ?? "").trim(),
             },
       )
       .filter((v) => v.team);
