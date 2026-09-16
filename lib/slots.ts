@@ -51,6 +51,12 @@ export const AFTER_SLOTS: SlotDef[] = [
   { slotKey: "after_alight2", label: "하차2 단말기", section: "after" },
 ];
 
+// 설치 후 추가 촬영 항목 — DB(photos)·Drive에는 저장하되
+// PDF/엑셀·완료 판정(표준 14칸)·KPI 집계에는 포함하지 않는다.
+export const AFTER_EXTRA_SLOTS: SlotDef[] = [
+  { slotKey: "after_tacho_y", label: "타코케이블 Y자유무", section: "after" },
+];
+
 // 기본 촬영 장수 = 설치 전(7) + 설치 후(7) = 14장.
 // 완료 판정/대시보드/목록 표시의 단일 기준값.
 export const DEFAULT_PHOTO_COUNT = BEFORE_SLOTS.length + AFTER_SLOTS.length;

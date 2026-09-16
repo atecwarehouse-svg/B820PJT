@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import type { RecordBundle } from "@/lib/types";
 import {
   AFTER_SLOTS,
+  AFTER_EXTRA_SLOTS,
   buildBeforeSlots,
   buildCheckSlots,
   makeCustomSlotKey,
@@ -31,6 +32,9 @@ function todayStr(): string {
 
 // 페이지(단계) 순서: 차량번호 입력(홈) → 이상유무 → 설치 전 → 설치 후
 const STEPS = ["차량 이상유무", "설치 전", "설치 후"] as const;
+
+// 타코케이블 Y자 사진 촬영 시 특이사항에 자동으로 넣는 문구
+const TACHO_Y_NOTE = "타코케이블 Y자 있음";
 
 export default function RecordEditor({ plate, initial, teamOptions = [] }: Props) {
   const vehicle = initial.vehicle!;
@@ -239,7 +243,11 @@ export default function RecordEditor({ plate, initial, teamOptions = [] }: Props
     const beforeKeys = beforeSlots.map((s) => s.slotKey);
     let next: string[];
     if (value) {
-      const added = beforeKeys.filter((k) => !urls[k] && !naSlots.includes(k));
+      // 차량번호 칸은 증차차량도 실제 촬영해야 하므로 자동 '없음' 처리에서 제외
+      // (없음 처리되면 촬영 버튼이 사라져 차량번호 사진이 스킵되는 문제)
+      const added = beforeKeys.filter(
+        (k) => k !== "before_plate" && !urls[k] && !naSlots.includes(k),
+      );
       addedNaRef.current = added;
       next = Array.from(new Set([...naSlots, ...added]));
     } else {
@@ -481,8 +489,15 @@ export default function RecordEditor({ plate, initial, teamOptions = [] }: Props
     (slotKey: string, url: string) => {
       setUrls((u) => ({ ...u, [slotKey]: url }));
       showToast("사진이 저장되었습니다");
+      // 타코케이블 Y자 사진이 올라오면 특이사항에 자동 기재 (이미 적혀 있으면 생략)
+      if (slotKey === "after_tacho_y" && !extraNote.includes(TACHO_Y_NOTE)) {
+        const base = extraNote.trim();
+        const next = !base || base === "없음" ? TACHO_Y_NOTE : `${base}\n${TACHO_Y_NOTE}`;
+        setExtraNote(next);
+        saveRecord({ extra_note: next });
+      }
     },
-    [showToast],
+    [showToast, extraNote, saveRecord],
   );
   const handleDeleted = useCallback(
     (slotKey: string) => {
@@ -839,6 +854,11 @@ export default function RecordEditor({ plate, initial, teamOptions = [] }: Props
               증차차량 (폐차 후 증차 — 설치 전 사진 없음)
             </span>
           </label>
+          {addedVehicle && (
+            <p className="mb-2 -mt-1 text-[11px] font-semibold text-red-500">
+              증차차량도 차량번호 사진은 꼭 촬영해주세요.
+            </p>
+          )}
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
             {beforeSlots.map((slot, i) => (
               <PhotoSlot
@@ -851,7 +871,11 @@ export default function RecordEditor({ plate, initial, teamOptions = [] }: Props
                 onDeleted={handleDeleted}
                 onError={handleSlotError}
                 onRemoveSlot={removeCustomSlot}
-                allowNoTerminal={slot.slotKey.includes("alight")}
+                // 차량번호 칸: 기존 증차 레코드에 남은 '없음' 체크를 해제할 수 있게만 허용
+                allowNoTerminal={
+                  slot.slotKey.includes("alight") ||
+                  (slot.slotKey === "before_plate" && naSlots.includes(slot.slotKey))
+                }
                 noTerminal={naSlots.includes(slot.slotKey)}
                 onToggleNoTerminal={toggleNoTerminal}
                 naLabel={addedVehicle ? "증차차량" : "단말기 없음"}
@@ -873,21 +897,25 @@ export default function RecordEditor({ plate, initial, teamOptions = [] }: Props
         <>
           <SectionHeader title="설치 후" />
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-            {AFTER_SLOTS.map((slot, i) => (
-              <PhotoSlot
-                key={slot.slotKey}
-                plate={plate}
-                slot={slot}
-                sortOrder={i}
-                initialUrl={urls[slot.slotKey] ?? null}
-                onUploaded={handleUploaded}
-                onDeleted={handleDeleted}
-                onError={handleSlotError}
-                allowNoTerminal={slot.slotKey.includes("alight")}
-                noTerminal={naSlots.includes(slot.slotKey)}
-                onToggleNoTerminal={toggleNoTerminal}
-              />
-            ))}
+            {[...AFTER_SLOTS, ...AFTER_EXTRA_SLOTS].map((slot, i) => {
+              const isExtra = slot.slotKey === "after_tacho_y";
+              return (
+                <PhotoSlot
+                  key={slot.slotKey}
+                  plate={plate}
+                  slot={slot}
+                  sortOrder={i}
+                  initialUrl={urls[slot.slotKey] ?? null}
+                  onUploaded={handleUploaded}
+                  onDeleted={handleDeleted}
+                  onError={handleSlotError}
+                  allowNoTerminal={slot.slotKey.includes("alight") || isExtra}
+                  noTerminal={naSlots.includes(slot.slotKey)}
+                  onToggleNoTerminal={toggleNoTerminal}
+                  naLabel={isExtra ? "없음" : undefined}
+                />
+              );
+            })}
           </div>
 
           <SectionHeader title="특이사항 *" />
