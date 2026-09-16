@@ -215,7 +215,10 @@ function sortVehicleRows(
   const bodyStart = open + "<sheetData>".length;
   const body = xml.slice(bodyStart, close);
 
-  const blocks = body.match(/<row r="\d+"[^>]*(?:\/>|>[\s\S]*?<\/row>)/g);
+  // [^>]*는 게으르게([^>]*?) — 탐욕이면 self-closing 행(ht=… customHeight="1"/>)의 '/'까지
+  // 삼킨 뒤 '>[\s\S]*?</row>' 분기로 넘어가, 빈 서식 행들+다음 실제 행이 한 블록으로 붙어
+  // 행 번호·셀 주소가 어긋난 XML(엑셀 '복구' 오류)이 된다.
+  const blocks = body.match(/<row r="\d+"[^>]*?(?:\/>|>[\s\S]*?<\/row>)/g);
   if (!blocks || blocks.length < 3) return { xml, removed: 0 };
   // 행 사이 공백/개행은 무시하고 비교 — 공백만으로 정렬(삭제 차량 제거 포함)이 통째로
   // 건너뛰어지면 전개일정 대상수량 델타와 어긋나 총대수 불일치가 생긴다.
