@@ -16,7 +16,7 @@
 
 import { createHash } from "node:crypto";
 import { createServiceClient } from "@/lib/supabase/server";
-import { BEFORE_SLOTS, AFTER_SLOTS, CHECK_SLOTS } from "@/lib/slots";
+import { BEFORE_SLOTS, AFTER_SLOTS, AFTER_EXTRA_SLOTS, CHECK_SLOTS } from "@/lib/slots";
 import { sendStartCard, sendCompletionCard } from "@/lib/teams";
 import { getStartReport } from "@/lib/settings";
 import { workDateString } from "@/lib/work-day";
@@ -138,10 +138,13 @@ export async function notifyInstallProgress(opts: {
     na: [...na].filter((k) => k.startsWith("before")).sort(),
     checkNa: [...checkNa].sort(),
   });
+  // 추가 촬영 칸(타코케이블 Y자 등)의 '없음' 체크는 카드 내용에 안 나타나므로
+  // 지문에서 제외 — 체크만 바뀌었는데 완료 카드가 재발송되는 것을 막는다.
+  const extraKeys = new Set(AFTER_EXTRA_SLOTS.map((s) => s.slotKey));
   const completeSig = fingerprint({
     ...header,
     photos: slotIds(photoRows ?? []),
-    na: [...na].sort(),
+    na: [...na].filter((k) => !extraKeys.has(k)).sort(),
   });
 
   // 발송 시각·지문 기록 (지문 컬럼 없는 DB면 시각만).

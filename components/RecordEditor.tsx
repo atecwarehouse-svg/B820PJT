@@ -67,6 +67,10 @@ export default function RecordEditor({ plate, initial, teamOptions = [] }: Props
   );
   const [checkNote, setCheckNote] = useState(initial.record?.check_note ?? ""); // 이상유무 비고
   const [extraNote, setExtraNote] = useState(initial.record?.extra_note ?? ""); // 설치 특이사항
+  // 특이사항 최신값 미러 — 사진 업로드가 수 초 걸려 콜백이 잡은 state가 낡을 수 있다.
+  // (업로드 중 타이핑한 내용을 낡은 값으로 덮어쓰지 않도록 자동 기재/삭제는 ref로 읽는다)
+  const extraNoteRef = useRef(extraNote);
+  extraNoteRef.current = extraNote;
   const [editInfo, setEditInfo] = useState(false); // 운수사/노선 수정 모드
 
   // 현재 단계 (0=이상유무 · 1=설치 전 · 2=설치 후)
@@ -420,6 +424,13 @@ export default function RecordEditor({ plate, initial, teamOptions = [] }: Props
       );
       return;
     }
+    // 증차차량은 차량번호 사진이 필수 — 없으면 저장(완료) 불가.
+    // (예전에 '없음' 처리로 저장된 기존 레코드는 na_slots에 남아 있어 그대로 통과)
+    if (addedVehicle && !urls["before_plate"] && !naSlots.includes("before_plate")) {
+      setStep(1);
+      showToast("증차차량도 차량번호 사진은 필수입니다. 촬영해주세요", "error");
+      return;
+    }
     if (!extraNote.trim()) {
       showToast("특이사항을 입력해주세요. 없으면 '없음'", "error");
       return;
@@ -490,14 +501,17 @@ export default function RecordEditor({ plate, initial, teamOptions = [] }: Props
       setUrls((u) => ({ ...u, [slotKey]: url }));
       showToast("사진이 저장되었습니다");
       // 타코케이블 Y자 사진이 올라오면 특이사항에 자동 기재 (이미 적혀 있으면 생략)
-      if (slotKey === "after_tacho_y" && !extraNote.includes(TACHO_Y_NOTE)) {
-        const base = extraNote.trim();
-        const next = !base || base === "없음" ? TACHO_Y_NOTE : `${base}\n${TACHO_Y_NOTE}`;
-        setExtraNote(next);
-        saveRecord({ extra_note: next });
+      if (slotKey === "after_tacho_y") {
+        const cur = extraNoteRef.current;
+        if (!cur.includes(TACHO_Y_NOTE)) {
+          const base = cur.trim();
+          const next = !base || base === "없음" ? TACHO_Y_NOTE : `${base}\n${TACHO_Y_NOTE}`;
+          setExtraNote(next);
+          saveRecord({ extra_note: next });
+        }
       }
     },
-    [showToast, extraNote, saveRecord],
+    [showToast, saveRecord],
   );
   const handleDeleted = useCallback(
     (slotKey: string) => {
@@ -507,8 +521,18 @@ export default function RecordEditor({ plate, initial, teamOptions = [] }: Props
         return n;
       });
       showToast("사진이 삭제되었습니다");
+      // Y자 사진을 지우면 자동 기재했던 문구도 함께 걷어낸다 (잘못 올린 사진 대비)
+      if (slotKey === "after_tacho_y" && extraNoteRef.current.includes(TACHO_Y_NOTE)) {
+        const next = extraNoteRef.current
+          .split("\n")
+          .filter((l) => l.trim() !== TACHO_Y_NOTE)
+          .join("\n")
+          .trim();
+        setExtraNote(next);
+        saveRecord({ extra_note: next });
+      }
     },
-    [showToast],
+    [showToast, saveRecord],
   );
   const handleSlotError = useCallback(
     (msg: string) => showToast(msg, "error"),
@@ -898,7 +922,7 @@ export default function RecordEditor({ plate, initial, teamOptions = [] }: Props
           <SectionHeader title="설치 후" />
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
             {[...AFTER_SLOTS, ...AFTER_EXTRA_SLOTS].map((slot, i) => {
-              const isExtra = slot.slotKey === "after_tacho_y";
+              const isExtra = AFTER_EXTRA_SLOTS.some((s) => s.slotKey === slot.slotKey);
               return (
                 <PhotoSlot
                   key={slot.slotKey}

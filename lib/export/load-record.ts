@@ -24,22 +24,26 @@ export async function loadPrintData(plate: string): Promise<PrintData | null> {
   const record = recordRes.data as RecordRow | null;
   const photos = (photosRes.data as PhotoRow[]) ?? [];
 
-  // PDF는 puppeteer가 origin 없이(setContent) 렌더링하므로 상대 URL이 안 먹는다.
-  // 사진을 직접 내려받아 base64 data URI로 박아 넣는다(인쇄 페이지에서도 동일하게 동작).
-  const urlBySlot = new Map<string, string>();
-  await Promise.all(
-    photos.map(async (p) => {
-      try {
-        const buf = await downloadPhoto(p.storage_path);
-        urlBySlot.set(p.slot_key, `data:image/jpeg;base64,${buf.toString("base64")}`);
-      } catch {
-        // 누락 사진은 건너뜀
-      }
-    }),
-  );
-
   const customSlots: CustomSlot[] = record?.custom_slots ?? [];
   const beforeSlots = buildBeforeSlots(customSlots);
+
+  // PDF는 puppeteer가 origin 없이(setContent) 렌더링하므로 상대 URL이 안 먹는다.
+  // 사진을 직접 내려받아 base64 data URI로 박아 넣는다(인쇄 페이지에서도 동일하게 동작).
+  // 렌더링되는 칸만 내려받는다 — 추가 촬영 칸(타코케이블 Y자 등)은 사진첩 미포함.
+  const rendered = new Set([...beforeSlots, ...AFTER_SLOTS].map((s) => s.slotKey));
+  const urlBySlot = new Map<string, string>();
+  await Promise.all(
+    photos
+      .filter((p) => rendered.has(p.slot_key))
+      .map(async (p) => {
+        try {
+          const buf = await downloadPhoto(p.storage_path);
+          urlBySlot.set(p.slot_key, `data:image/jpeg;base64,${buf.toString("base64")}`);
+        } catch {
+          // 누락 사진은 건너뜀
+        }
+      }),
+  );
   // 증차차량(폐차 후 증차) — 설치전 사진이 없는 칸은 '증차차량' 텍스트로 표시
   const addedVehicle = record?.added_vehicle === true;
 

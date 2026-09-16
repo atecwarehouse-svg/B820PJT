@@ -28,16 +28,20 @@ export async function loadBuildInput(plate: string): Promise<BuildInput | null> 
   const customSlots: CustomSlot[] = record?.custom_slots ?? [];
   const beforeSlots = buildBeforeSlots(customSlots);
 
+  // 렌더링되는 칸만 내려받는다 — 추가 촬영 칸(타코케이블 Y자 등)은 사진첩 미포함.
+  const rendered = new Set([...beforeSlots, ...AFTER_SLOTS].map((s) => s.slotKey));
   const images = new Map<string, SlotImage>();
   await Promise.all(
-    photos.map(async (p) => {
-      try {
-        const buf = await downloadPhoto(p.storage_path);
-        images.set(p.slot_key, { buffer: buf, ext: "jpeg" });
-      } catch {
-        // 누락 사진은 건너뜀
-      }
-    }),
+    photos
+      .filter((p) => rendered.has(p.slot_key))
+      .map(async (p) => {
+        try {
+          const buf = await downloadPhoto(p.storage_path);
+          images.set(p.slot_key, { buffer: buf, ext: "jpeg" });
+        } catch {
+          // 누락 사진은 건너뜀
+        }
+      }),
   );
 
   // 증차차량(폐차 후 증차) — 설치전 사진이 없는 칸은 '증차차량' 텍스트로 표시
