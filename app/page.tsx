@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { getProjects } from "@/lib/settings";
-import ProjectManager from "@/components/ProjectManager";
 import { CARD_COLORS, PROJECT_ICONS, Svg, UI, type ColorKey } from "@/components/ProjectIcon";
 
 export const dynamic = "force-dynamic";
@@ -16,7 +15,7 @@ const tile =
   "flex h-16 w-16 items-center justify-center rounded-2xl bg-white/15 transition-transform duration-200 group-active:scale-110";
 
 // 첫 화면 — 프로젝트 선택. B820은 이 앱 자체(/b820)라 고정 카드,
-// 그 외 프로젝트는 관리자가 등록한 앱 주소로 이동하는 카드.
+// 그 외 프로젝트는 관리자가 /projects 에서 등록한 앱 주소로 이동하는 카드.
 // 카드는 위에서부터 순서대로 떠오르고(animate-rise + 지연), 누르면 살짝 눌린다.
 export default async function ProjectSelectPage() {
   const projects = await getProjects();
@@ -31,10 +30,10 @@ export default async function ProjectSelectPage() {
       />
 
       <div className="relative mx-auto max-w-md px-4 pb-16 pt-14">
-        {/* 우측 상단 톱니바퀴 → 관리자 페이지 (누르면 90도 돈다) */}
+        {/* 우측 상단 톱니바퀴 → 프로젝트 관리(추가·수정·삭제, 관리자 비밀번호) */}
         <Link
-          href="/admin"
-          aria-label="관리자 페이지"
+          href="/projects"
+          aria-label="프로젝트 관리"
           className="absolute right-4 top-4 flex h-10 w-10 items-center justify-center rounded-full bg-white/80 text-gray-500 shadow-sm ring-1 ring-black/5 backdrop-blur transition-transform duration-300 active:rotate-90 active:text-blue-600 motion-safe:animate-fade-in"
         >
           <Svg d={UI.gear} className="h-5 w-5" />
@@ -75,10 +74,17 @@ export default async function ProjectSelectPage() {
             </li>
           ))}
 
-          {/* 등장 애니메이션은 카드 버튼에만 — li에 transform이 걸리면 그 안의 fixed 시트가
-              화면이 아니라 li 기준으로 붙어 버린다 */}
-          <li>
-            <ProjectManager projects={projects} riseStyle={rise(projects.length + 1)} />
+          <li className="motion-safe:animate-rise" style={rise(projects.length + 1)}>
+            <Link
+              href="/projects"
+              className="group flex aspect-square flex-col items-center justify-center gap-2.5 rounded-2xl border-2 border-dashed border-gray-300 bg-white/60 p-3 text-center transition-all duration-150 active:scale-[.97] active:bg-white"
+            >
+              <span className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gray-100 text-gray-500 transition-transform duration-300 group-active:rotate-90">
+                <Svg d={UI.plus} className="h-8 w-8" />
+              </span>
+              <span className="block text-sm font-semibold text-gray-700">새 프로젝트</span>
+              <span className="block text-[11px] text-gray-400">추가 · 수정 · 삭제</span>
+            </Link>
           </li>
         </ul>
       </div>

@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 
 // 관리자 비밀번호 입력 게이트. 성공 시 쿠키 발급 후 페이지 새로고침.
-export default function AdminLogin() {
+// backHref: 로그인 화면의 "처음으로" 링크 — 관리자 페이지는 B820 홈, 프로젝트 관리는 첫 화면
+export default function AdminLogin({ backHref = "/b820" }: { backHref?: string }) {
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -58,7 +59,7 @@ export default function AdminLogin() {
           {busy ? "확인 중…" : "입장"}
         </button>
       </form>
-      <Link href="/b820" className="mt-6 text-center text-sm text-blue-600">
+      <Link href={backHref} className="mt-6 text-center text-sm text-blue-600">
         ← 처음으로
       </Link>
     </main>
