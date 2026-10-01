@@ -10,7 +10,7 @@ import {
   projectHome,
 } from "@/lib/project";
 import { colorKey, iconKey } from "@/components/ProjectIcon";
-import { createProjectFolder, trashFile } from "@/lib/gdrive";
+import { createProjectFolder, deleteFolder, folderLink, renameFile, trashFile } from "@/lib/gdrive";
 import { TEMPLATE_BUCKET } from "@/lib/template-path";
 import { INSTALL_TEAMS_KEY, INSPECT_CHECKLIST_KEY, REPORT_MAIL_KEY } from "@/lib/settings";
 
@@ -22,9 +22,9 @@ export const maxDuration = 60;
 //   POST   { kind:"link",  name, description, icon, color, url }                       → 링크 카드 추가
 //   POST   { kind:"album", slug, name, description, icon, color, admin_password, copySettings? } → 앨범 프로젝트 생성 (copySettings: B820 설치팀·검수항목·리포트 수신자 복사)
 //            (드라이브 폴더 → DB 스키마 복제(create_project_schema) → 레지스트리 행. 실패 시 되감기)
-//   PUT    { slug, name?, description?, icon?, color?, url?, admin_password? }           → 수정 (b820은 색만)
+//   PUT    { slug, name?, description?, icon?, color?, url?, admin_password? }           → 수정 (b820은 색만, 앨범 이름 변경 시 드라이브 폴더명도 변경)
 //   DELETE { slug }                     → 링크 카드 삭제
-//   DELETE { slug, confirm: <slug> }    → 앨범 프로젝트 삭제 (DB 스키마·양식 삭제, 드라이브 폴더 휴지통. B820 불가)
+//   DELETE { slug, confirm: <slug> }    → 앨범 프로젝트 삭제 (DB 스키마·양식 삭제, 드라이브 사진 폴더 영구 삭제. B820 불가)
 
 type Body = Record<string, unknown>;
 
@@ -136,7 +136,7 @@ export async function POST(req: NextRequest) {
     // 2) DB 스키마 복제 (public → <slug>)
     const { data: rpc, error: rpcErr } = await sb.rpc("create_project_schema", { slug });
     if (rpcErr) {
-      await trashFile(folderId).catch(() => {}); // 되감기는 휴지통으로(영구 삭제 금지)
+      await deleteFolder(folderId).catch(() => {}); // 방금 만든 빈 폴더 되감기
       return bad("프로젝트 DB 생성 실패: " + hint(rpcErr.message), 500);
     }
     let exposed = !!(rpc as { exposed?: boolean } | null)?.exposed;
@@ -164,7 +164,7 @@ export async function POST(req: NextRequest) {
     });
     if (insErr) {
       const { error: dropErr } = await sb.rpc("drop_project_schema", { slug });
-      await trashFile(folderId).catch(() => {});
+      await deleteFolder(folderId).catch(() => {});
       return bad(
         "프로젝트 등록 실패: " +
           hint(insErr.message) +
@@ -195,7 +195,7 @@ export async function POST(req: NextRequest) {
         }
       }
     }
-    return NextResponse.json({ ok: true, slug, home: projectHome(slug), exposed, warning, copied });
+    return NextResponse.json({ ok: true, slug, home: projectHome(slug), exposed, warning, copied, driveFolder: folderLink(folderId) });
   }
 
   // 링크 카드
@@ -224,7 +224,7 @@ export async function PUT(req: NextRequest) {
   const sb = createServiceClient(DEFAULT_SLUG);
   const { data: row, error: rowErr } = await sb
     .from("projects")
-    .select("slug, kind")
+    .select("slug, kind, name, drive_folder_id")
     .eq("slug", slug)
     .maybeSingle();
   if (rowErr) return bad(hint(rowErr.message), 500);
@@ -259,7 +259,14 @@ export async function PUT(req: NextRequest) {
   const { error } = await sb.from("projects").update(patch).eq("slug", slug);
   if (error) return bad("저장 실패: " + hint(error.message), 500);
   invalidateProjectCache(slug);
-  return NextResponse.json({ ok: true });
+  // 앨범 프로젝트명이 바뀌면 드라이브 사진 폴더 이름도 같이 (실패해도 프로젝트 수정은 유지)
+  let warning: string | undefined;
+  if (row.kind === "album" && row.drive_folder_id && typeof patch.name === "string" && patch.name !== row.name) {
+    await renameFile(row.drive_folder_id, patch.name).catch(() => {
+      warning = "프로젝트는 수정됐지만 구글드라이브 폴더 이름 변경에 실패했습니다. 드라이브에서 직접 바꿔 주세요.";
+    });
+  }
+  return NextResponse.json({ ok: true, warning });
 }
 
 export async function DELETE(req: NextRequest) {
@@ -278,7 +285,7 @@ export async function DELETE(req: NextRequest) {
   if (!row) return bad("해당 프로젝트가 없습니다.");
 
   if (row.kind === "album") {
-    // 앨범 프로젝트 삭제 = DB 스키마(차량·기록·사진 메타·서약서…) 통째 삭제 + 양식 삭제 + 드라이브 폴더 휴지통.
+    // 앨범 프로젝트 삭제 = DB 스키마(차량·기록·사진 메타·서약서…) 통째 삭제 + 양식 삭제 + 드라이브 사진 폴더 영구 삭제.
     // 되돌릴 수 없으므로 프로젝트 ID를 그대로 입력해 확인받는다. B820은 불가.
     if (isDefault(slug)) return bad("B820은 삭제할 수 없습니다.");
     if (String(body.confirm ?? "").trim() !== slug) {
@@ -290,9 +297,15 @@ export async function DELETE(req: NextRequest) {
     const st = sb.storage.from(TEMPLATE_BUCKET);
     const { data: objs } = await st.list(slug);
     if (objs?.length) await st.remove(objs.map((o) => `${slug}/${o.name}`)).catch(() => {});
-    if (row.drive_folder_id) await trashFile(row.drive_folder_id).catch(() => {});
+    // 드라이브 사진 폴더(운수사·차량 폴더·사진 포함) 영구 삭제 — 안 되면 휴지통으로라도 옮기고 결과를 알린다
+    let drive: "deleted" | "trashed" | "failed" | "none" = "none";
+    if (row.drive_folder_id) {
+      drive = await deleteFolder(row.drive_folder_id)
+        .then(() => "deleted" as const)
+        .catch(() => trashFile(row.drive_folder_id as string).then(() => "trashed" as const).catch(() => "failed" as const));
+    }
     invalidateProjectCache(slug);
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ ok: true, drive });
   }
 
   const { error } = await sb.from("projects").delete().eq("slug", slug);

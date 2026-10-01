@@ -49,13 +49,31 @@ async function projectRoot(): Promise<string> {
   return p.driveFolderId ?? rootFolderId();
 }
 
-// 파일/폴더를 휴지통으로 (30일 복구 가능). 프로젝트 삭제 시 사진 폴더에 사용 — 영구 삭제는 하지 않는다.
+// 파일/폴더를 휴지통으로 (30일 복구 가능). 영구 삭제가 실패했을 때의 폴백.
 export async function trashFile(fileId: string): Promise<void> {
   try {
     await drive().files.update({ fileId, requestBody: { trashed: true } });
   } catch (e) {
     if (!isNotFound(e)) throw e;
   }
+}
+
+// 폴더 영구 삭제 — 안의 운수사·차량 폴더와 사진까지 전부 지워진다(복구 불가). 프로젝트 삭제·생성 되감기에 사용.
+export async function deleteFolder(fileId: string): Promise<void> {
+  try {
+    await drive().files.delete({ fileId });
+  } catch (e) {
+    if (!isNotFound(e)) throw e;
+  }
+}
+
+// 폴더 이름 변경 — 프로젝트명을 바꾸면 드라이브 폴더명도 따라간다.
+export async function renameFile(fileId: string, name: string): Promise<void> {
+  await drive().files.update({ fileId, requestBody: { name } });
+}
+
+export function folderLink(folderId: string): string {
+  return `https://drive.google.com/drive/folders/${folderId}`;
 }
 
 // 새 앨범 프로젝트의 드라이브 폴더(내 드라이브 루트, B820 사진 폴더와 형제). 프로젝트 생성 시 1회.

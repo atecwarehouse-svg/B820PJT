@@ -67,6 +67,7 @@ export default function ProjectAdmin({ projects }: { projects: Project[] }) {
     exposed: boolean;
     warning?: string;
     copied?: string[];
+    driveFolder?: string; // 구글드라이브 사진 폴더 링크
   } | null>(null);
 
   function resetForm() {
@@ -127,7 +128,11 @@ export default function ProjectAdmin({ projects }: { projects: Project[] }) {
         if (editing.kind === "link") body.url = url;
         if (editing.kind === "album" && adminPw) body.admin_password = adminPw;
       }
-      if (await call("PUT", body)) resetForm();
+      const j = await call("PUT", body);
+      if (j) {
+        resetForm();
+        if (j.warning) setError(String(j.warning));
+      }
       return;
     }
     const common = { name, description, icon, color };
@@ -146,6 +151,7 @@ export default function ProjectAdmin({ projects }: { projects: Project[] }) {
           exposed: !!j.exposed,
           warning: j.warning ? String(j.warning) : undefined,
           copied: Array.isArray(j.copied) ? (j.copied as string[]) : undefined,
+          driveFolder: j.driveFolder ? String(j.driveFolder) : undefined,
         });
         resetForm();
       }
@@ -188,7 +194,11 @@ export default function ProjectAdmin({ projects }: { projects: Project[] }) {
       body.confirm = confirmText.trim();
     }
     setConfirmSlug("");
-    if ((await call("DELETE", body)) && editing?.slug === p.slug) resetForm();
+    const j = await call("DELETE", body);
+    if (!j) return;
+    if (editing?.slug === p.slug) resetForm();
+    if (j.drive === "trashed") setError("프로젝트는 삭제됐지만 구글드라이브 폴더는 영구 삭제가 안 돼 휴지통으로 옮겼습니다.");
+    else if (j.drive === "failed") setError("프로젝트는 삭제됐지만 구글드라이브 폴더 삭제에 실패했습니다. 드라이브에서 직접 지워 주세요.");
   }
 
   async function logout() {
@@ -227,6 +237,15 @@ export default function ProjectAdmin({ projects }: { projects: Project[] }) {
             {created.name} 프로젝트를 만들었습니다
           </p>
           {created.warning && <p className="mt-2 text-xs leading-relaxed text-amber-800">{created.warning}</p>}
+          {created.driveFolder && (
+            <p className="mt-1.5 text-xs leading-relaxed">
+              구글드라이브에{" "}
+              <a href={created.driveFolder} target="_blank" rel="noreferrer" className="font-semibold underline">
+                「{created.name}」 폴더
+              </a>
+              를 만들었습니다. 사진은 그 안에 운수사/차량번호 폴더로 저장됩니다.
+            </p>
+          )}
           <ol className="mt-2 list-decimal space-y-1 pl-5 text-xs leading-relaxed">
             <li>
               <a href={created.home} className="font-semibold underline">
@@ -499,6 +518,16 @@ export default function ProjectAdmin({ projects }: { projects: Project[] }) {
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-sm font-semibold text-gray-800">{p.name}</span>
                 <span className="block truncate text-xs text-gray-400">{sub}</span>
+                {p.kind === "album" && p.driveFolderId && (
+                  <a
+                    href={`https://drive.google.com/drive/folders/${p.driveFolderId}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="block truncate text-xs text-blue-500"
+                  >
+                    구글드라이브 「{p.name}」 폴더 열기
+                  </a>
+                )}
               </span>
               <span
                 aria-label={`색상 ${CARD_COLORS[p.color].label}`}
@@ -534,8 +563,8 @@ export default function ProjectAdmin({ projects }: { projects: Project[] }) {
                 <div className="mt-2 w-full basis-full rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-800">
                   <p className="font-semibold">⚠️ 이 프로젝트의 차량·설치기록·사진·서약서 데이터가 전부 삭제됩니다.</p>
                   <p className="mt-1 text-red-700/80">
-                    구글드라이브 사진 폴더는 휴지통으로 이동합니다(30일 안에 복구 가능). 되돌릴 수 없으니 확인을
-                    위해 프로젝트 ID <b>{p.slug}</b> 를 입력하세요.
+                    구글드라이브의 「{p.name}」 사진 폴더(운수사·차량 폴더와 사진 전부)도 함께 <b>영구 삭제</b>됩니다.
+                    되돌릴 수 없으니 확인을 위해 프로젝트 ID <b>{p.slug}</b> 를 입력하세요.
                   </p>
                   <div className="mt-2 flex gap-2">
                     <input
