@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { getProjects } from "@/lib/settings";
+import { getB820Color, getProjects } from "@/lib/settings";
 import { CARD_COLORS, PROJECT_ICONS, Svg, UI, type ColorKey } from "@/components/ProjectIcon";
 
 export const dynamic = "force-dynamic";
@@ -18,7 +18,7 @@ const tile =
 // 그 외 프로젝트는 관리자가 /projects 에서 등록한 앱 주소로 이동하는 카드.
 // 카드는 위에서부터 순서대로 떠오르고(animate-rise + 지연), 누르면 살짝 눌린다.
 export default async function ProjectSelectPage() {
-  const projects = await getProjects();
+  const [projects, b820Color] = await Promise.all([getProjects(), getB820Color()]);
   const rise = (i: number) => ({ animationDelay: `${100 + i * 70}ms` });
 
   return (
@@ -30,7 +30,7 @@ export default async function ProjectSelectPage() {
       />
 
       <div className="relative mx-auto max-w-md px-4 pb-16 pt-14">
-        {/* 우측 상단 톱니바퀴 → 프로젝트 관리(추가·수정·삭제, 관리자 비밀번호) */}
+        {/* 우측 상단 톱니바퀴 → 프로젝트 관리(추가·수정·삭제, 관리자 비밀번호). 첫 화면에 별도 추가 버튼은 두지 않는다 */}
         <Link
           href="/projects"
           aria-label="프로젝트 관리"
@@ -49,7 +49,7 @@ export default async function ProjectSelectPage() {
 
         <ul className="grid grid-cols-2 gap-3">
           <li className="motion-safe:animate-rise" style={rise(0)}>
-            <Link href="/b820" className={card("blue")}>
+            <Link href="/b820" className={card(b820Color)}>
               <span className={tile}>
                 <Svg d={PROJECT_ICONS.bus.d} className="h-9 w-9" />
               </span>
@@ -73,19 +73,6 @@ export default async function ProjectSelectPage() {
               </a>
             </li>
           ))}
-
-          <li className="motion-safe:animate-rise" style={rise(projects.length + 1)}>
-            <Link
-              href="/projects"
-              className="group flex aspect-square flex-col items-center justify-center gap-2.5 rounded-2xl border-2 border-dashed border-gray-300 bg-white/60 p-3 text-center transition-all duration-150 active:scale-[.97] active:bg-white"
-            >
-              <span className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gray-100 text-gray-500 transition-transform duration-300 group-active:rotate-90">
-                <Svg d={UI.plus} className="h-8 w-8" />
-              </span>
-              <span className="block text-sm font-semibold text-gray-700">새 프로젝트</span>
-              <span className="block text-[11px] text-gray-400">추가 · 수정 · 삭제</span>
-            </Link>
-          </li>
         </ul>
       </div>
     </main>

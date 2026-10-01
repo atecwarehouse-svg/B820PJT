@@ -1,5 +1,5 @@
 import { isAdmin } from "@/lib/admin-auth";
-import { getProjects } from "@/lib/settings";
+import { getB820Color, getProjects } from "@/lib/settings";
 import AdminLogin from "@/components/AdminLogin";
 import ProjectAdmin from "@/components/ProjectAdmin";
 
@@ -12,5 +12,6 @@ export const metadata = { title: "프로젝트 관리 — 산출물 관리" };
 // B820 관리자와 같은 비밀번호(쿠키 30분)로 잠근다.
 export default async function ProjectsPage() {
   if (!isAdmin()) return <AdminLogin backHref="/" />;
-  return <ProjectAdmin projects={await getProjects()} />;
+  const [projects, b820Color] = await Promise.all([getProjects(), getB820Color()]);
+  return <ProjectAdmin projects={projects} b820Color={b820Color} />;
 }

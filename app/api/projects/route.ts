@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { adminPassword, isAdmin } from "@/lib/admin-auth";
-import { getProjects, setSetting, PROJECTS_KEY, type Project } from "@/lib/settings";
+import { getProjects, setSetting, PROJECTS_KEY, B820_COLOR_KEY, type Project } from "@/lib/settings";
 import { colorKey, iconKey } from "@/components/ProjectIcon";
 
 export const runtime = "nodejs";
@@ -11,6 +11,7 @@ export const dynamic = "force-dynamic";
 //   POST   { icon, color, name, description, url, pw }     → 추가
 //   PUT    { id, icon, color, name, description, url, pw } → 수정
 //   DELETE { id, pw }                                       → 삭제
+//   PATCH  { color, pw }                                    → B820 고정 카드 색만 변경
 // ponytail: 목록을 통째로 읽고 덮어쓴다 — 동시에 두 명이 저장하면 하나가 유실될 수 있음.
 // 관리자 한 명이 가끔 쓰는 기능이라 그대로 둠. 잦아지면 projects 테이블로.
 
@@ -86,6 +87,21 @@ export async function PUT(req: NextRequest) {
   if (i < 0) return bad("해당 프로젝트가 없습니다.");
   list[i] = { ...list[i], ...fields };
   return save(list);
+}
+
+export async function PATCH(req: NextRequest) {
+  const body = await readBody(req);
+  if (!body) return bad("요청 형식이 잘못되었습니다.");
+  if (!authorized(body.pw)) return unauthorized();
+  try {
+    await setSetting(B820_COLOR_KEY, colorKey(body.color));
+  } catch (e) {
+    return NextResponse.json(
+      { error: "저장 실패: " + (e instanceof Error ? e.message : "알 수 없는 오류") },
+      { status: 500 },
+    );
+  }
+  return NextResponse.json({ ok: true });
 }
 
 export async function DELETE(req: NextRequest) {

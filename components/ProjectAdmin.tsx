@@ -18,7 +18,13 @@ import {
 // 프로젝트 관리 페이지(/projects) 본문 — 관리자 쿠키가 있는 상태에서만 렌더된다.
 // 위: 추가/수정 폼(미리보기 포함), 아래: 등록된 프로젝트 목록(연필=수정, 휴지통=삭제).
 // 프로젝트는 별도 배포된 앱 주소(url)로 이동하는 카드일 뿐 — 데이터는 각 앱이 가진다.
-export default function ProjectAdmin({ projects }: { projects: Project[] }) {
+export default function ProjectAdmin({
+  projects,
+  b820Color,
+}: {
+  projects: Project[];
+  b820Color: ColorKey; // B820 고정 카드의 현재 색 (app_settings.b820_card_color)
+}) {
   const router = useRouter();
   const formRef = useRef<HTMLElement>(null);
   const [busy, setBusy] = useState(false);
@@ -41,7 +47,7 @@ export default function ProjectAdmin({ projects }: { projects: Project[] }) {
     setError("");
   }
 
-  async function call(method: "POST" | "PUT" | "DELETE", body: Record<string, string>) {
+  async function call(method: "POST" | "PUT" | "PATCH" | "DELETE", body: Record<string, string>) {
     if (busy) return false;
     setBusy(true);
     setError("");
@@ -242,15 +248,37 @@ export default function ProjectAdmin({ projects }: { projects: Project[] }) {
         등록된 프로젝트 <span className="font-normal text-gray-400">· 연필을 누르면 수정</span>
       </h2>
       <ul className="space-y-2">
-        <li className="flex items-center gap-3 rounded-2xl bg-white px-3 py-2.5 shadow-sm ring-1 ring-black/5">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-100 text-blue-600">
-            <Svg d={PROJECT_ICONS.bus.d} className="h-5 w-5" />
-          </span>
-          <span className="min-w-0 flex-1">
-            <span className="block truncate text-sm font-semibold text-gray-800">B820 설치 사진첩</span>
-            <span className="block text-xs text-gray-400">이 앱 자체 (/b820) · 기본 카드라 수정 불가</span>
-          </span>
-          <span className="h-3.5 w-3.5 shrink-0 rounded-full bg-blue-600" aria-label="색상 파랑" />
+        {/* B820 고정 카드 — 이름·주소는 코드에 박혀 있고 색만 고른다(탭 즉시 저장) */}
+        <li className="rounded-2xl bg-white px-3 py-2.5 shadow-sm ring-1 ring-black/5">
+          <div className="flex items-center gap-3">
+            <span
+              className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br text-white ${CARD_COLORS[b820Color].card}`}
+            >
+              <Svg d={PROJECT_ICONS.bus.d} className="h-5 w-5" />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-sm font-semibold text-gray-800">B820 설치 사진첩</span>
+              <span className="block text-xs text-gray-400">이 앱 자체 (/b820) · 기본 카드, 색만 변경</span>
+            </span>
+          </div>
+          <div className="mt-2.5 flex items-center justify-between px-1">
+            {COLOR_KEYS.map((k) => {
+              const on = b820Color === k;
+              return (
+                <button
+                  key={k}
+                  type="button"
+                  onClick={() => call("PATCH", { color: k })}
+                  disabled={busy}
+                  aria-label={`B820 카드 ${CARD_COLORS[k].label}`}
+                  aria-pressed={on}
+                  className={`h-6 w-6 rounded-full transition-transform duration-150 ${CARD_COLORS[k].dot} ${
+                    on ? "scale-125 ring-2 ring-gray-800 ring-offset-2" : "active:scale-110"
+                  }`}
+                />
+              );
+            })}
+          </div>
         </li>
         {projects.map((p) => {
           const ic = PROJECT_ICONS[p.icon];

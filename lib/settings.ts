@@ -8,6 +8,7 @@ export const REPORT_MAIL_KEY = "report_mail_to";
 export const INSTALL_TEAMS_KEY = "install_teams"; // 설치팀 목록 (JSON [{team,name,phone}], 구버전 문자열 배열 호환)
 export const INSPECT_CHECKLIST_KEY = "inspect_checklist"; // 배차표 검수항목 (JSON {vehicle,device})
 export const PROJECTS_KEY = "projects"; // 첫 화면 프로젝트 목록 (JSON Project[]) — B820은 코드에 고정, 여기엔 추가 프로젝트만
+export const B820_COLOR_KEY = "b820_card_color"; // 첫 화면 B820 고정 카드의 색 키 (CARD_COLORS, 기본 blue)
 
 // 첫 화면(프로젝트 선택)에 추가로 띄우는 프로젝트. 각 프로젝트는 별도 배포된 앱이라
 // 카드는 url로 이동만 한다(이 앱 안에 데이터를 두지 않음).
@@ -179,4 +180,9 @@ export async function setSetting(key: string, value: string): Promise<void> {
       : "";
     throw new Error(error.message + hint);
   }
+}
+
+// 첫 화면 B820 카드 색 — 미설정이면 blue.
+export async function getB820Color(): Promise<ColorKey> {
+  return colorKey(await getSetting(B820_COLOR_KEY));
 }
