@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
-import { CHECK_SLOTS, REQUIRED_CHECK_KEYS, type CustomSlot } from "@/lib/slots";
+import type { CustomSlot } from "@/lib/slots";
+import { getSlotConfig } from "@/lib/settings";
 import { notifyInstallProgress, originFromRequest } from "@/lib/install-status";
 import { autoEndPledgeSessions } from "@/lib/pledge-end";
 import { currentSlug } from "@/lib/project";
@@ -64,15 +65,16 @@ export async function POST(req: NextRequest) {
   // '저장'(중간 저장 포함) 시 필수 확인 사진(전광판·차량계기판·CCTV) 검증 —
   // '없음' 체크로 대체 불가. (check_photos 테이블 미생성 등 조회 오류는 통과)
   if (body.saved) {
+    const cfg = await getSlotConfig(); // 프로젝트별 사진 양식
     const { data: reqPhotos, error: rpErr } = await supabase
       .from("check_photos")
       .select("slot_key")
       .eq("plate", plate)
-      .in("slot_key", REQUIRED_CHECK_KEYS);
+      .in("slot_key", cfg.requiredCheckKeys);
     if (!rpErr) {
       const have = new Set((reqPhotos ?? []).map((p) => p.slot_key));
-      const missing = CHECK_SLOTS.filter(
-        (s) => REQUIRED_CHECK_KEYS.includes(s.slotKey) && !have.has(s.slotKey),
+      const missing = cfg.check.filter(
+        (s) => cfg.requiredCheckKeys.includes(s.slotKey) && !have.has(s.slotKey),
       );
       if (missing.length > 0) {
         return NextResponse.json(

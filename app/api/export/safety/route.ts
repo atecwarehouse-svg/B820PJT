@@ -106,6 +106,8 @@ export async function GET(req: Request) {
 // 파일명: {운수사}_안전관리서약서_{YYMMDD}.pdf (같은 운수사·같은 날짜는 (2) 접미).
 // 드라이브 보관은 세션별 PDF가 담당하므로 여기서는 업로드하지 않는다.
 async function exportAll() {
+  const project = await currentProject();
+  const pledgeTitle = isDefault(project.slug) ? PLEDGE_TITLE : `${project.name} 안전관리 서약서`;
   const supabase = createServiceClient();
 
   const { data: sessions, error: sErr } = await supabase
@@ -151,6 +153,7 @@ async function exportAll() {
         buildPledgeHtml(
           s as unknown as PledgeSessionData,
           bySession.get(s.id as string) ?? [],
+          pledgeTitle,
         ),
       ),
     );

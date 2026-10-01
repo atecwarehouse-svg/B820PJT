@@ -1,5 +1,6 @@
 "use client";
 
+import { clientProjectPath } from "@/components/PLink";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Vehicle } from "@/lib/types";
@@ -44,7 +45,7 @@ export default function PlateSearch() {
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "추가 실패");
-      router.push(`/record/${encodeURIComponent(plate)}`);
+      router.push(clientProjectPath(`/record/${encodeURIComponent(plate)}`));
     } catch (e) {
       setAddErr(e instanceof Error ? e.message : "추가 실패");
       setAdding(false);
@@ -78,7 +79,7 @@ export default function PlateSearch() {
   }, [q]);
 
   function open(plate: string) {
-    router.push(`/record/${encodeURIComponent(plate)}`);
+    router.push(clientProjectPath(`/record/${encodeURIComponent(plate)}`));
   }
 
   return (

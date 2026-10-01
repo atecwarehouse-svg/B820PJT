@@ -1,6 +1,15 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  // 빌드(배포) 시각 — 프로젝트 홈 하단 버전 표기용 (KST "2026-08-09 22:10").
+  // 홈이 동적 페이지가 되어 모듈 상수로는 빌드 시각을 못 잡으므로 빌드 때 env로 박아 둔다.
+  env: {
+    NEXT_PUBLIC_BUILD_TIME: new Date().toLocaleString("sv-SE", {
+      timeZone: "Asia/Seoul",
+      dateStyle: "short",
+      timeStyle: "short",
+    }),
+  },
   experimental: {
     // Node 런타임 서버 라우트 전용 패키지. 서버 번들에서 외부 모듈로 취급.
     serverComponentsExternalPackages: [

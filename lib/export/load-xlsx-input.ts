@@ -3,7 +3,8 @@
 
 import { createServiceClient } from "@/lib/supabase/server";
 import { downloadPhoto } from "@/lib/gdrive";
-import { AFTER_SLOTS, buildBeforeSlots, type CustomSlot } from "@/lib/slots";
+import { buildBeforeSlots, type CustomSlot } from "@/lib/slots";
+import { getSlotConfig } from "@/lib/settings";
 import type { PhotoRow, RecordRow } from "@/lib/types";
 import type { BuildInput, SlotImage } from "@/lib/export/xlsx-builder";
 import { kstDateString } from "@/lib/work-day";
@@ -26,10 +27,11 @@ export async function loadBuildInput(plate: string): Promise<BuildInput | null> 
   const photos = (photosRes.data as PhotoRow[]) ?? [];
 
   const customSlots: CustomSlot[] = record?.custom_slots ?? [];
-  const beforeSlots = buildBeforeSlots(customSlots);
+  const cfg = await getSlotConfig(); // 프로젝트별 사진 양식
+  const beforeSlots = buildBeforeSlots(customSlots, cfg.before);
 
   // 렌더링되는 칸만 내려받는다 — 추가 촬영 칸(타코케이블 Y자 등)은 사진첩 미포함.
-  const rendered = new Set([...beforeSlots, ...AFTER_SLOTS].map((s) => s.slotKey));
+  const rendered = new Set([...beforeSlots, ...cfg.after].map((s) => s.slotKey));
   const images = new Map<string, SlotImage>();
   await Promise.all(
     photos
@@ -60,7 +62,7 @@ export async function loadBuildInput(plate: string): Promise<BuildInput | null> 
     year: record?.year ?? "",
     model: record?.model ?? "",
     beforeSlots,
-    afterSlots: AFTER_SLOTS,
+    afterSlots: cfg.after,
     images,
     marks,
   };

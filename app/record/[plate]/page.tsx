@@ -1,7 +1,7 @@
 import Link from "@/components/PLink";
 import { brandName, currentProject } from "@/lib/project";
 import { createServiceClient } from "@/lib/supabase/server";
-import { getInstallTeams } from "@/lib/settings";
+import { getInstallTeams, getSlotConfig } from "@/lib/settings";
 import { workDateString } from "@/lib/work-day";
 import type { RecordBundle } from "@/lib/types";
 import RecordEditor from "@/components/RecordEditor";
@@ -98,7 +98,7 @@ export default async function RecordPage({
       {notToday && (
         <PlanDateGuard plate={plate} plannedDate={vehicle.planned_date ?? null} />
       )}
-      <RecordEditor plate={plate} initial={bundle} teamOptions={teamOptions} brand={brandName(await currentProject())} />
+      <RecordEditor plate={plate} initial={bundle} teamOptions={teamOptions} brand={brandName(await currentProject())} slotConfig={await getSlotConfig()} />
     </>
   );
 }

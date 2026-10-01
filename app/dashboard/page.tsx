@@ -126,7 +126,9 @@ const getOperatorSchedules = unstable_cache(
 export default async function DashboardPage() {
   // 상세 섹션(설치 일정·운수사별·영업소별·날짜별)은 잠금 해제 전에는 서버가 아예 안 내려준다.
   const slug = currentSlug();
-  const brand = brandName(await currentProject()); // 카드 미리보기 제목용 프로젝트명
+  const projectInfo = await currentProject();
+  const brand = brandName(projectInfo); // 카드 미리보기 제목용 프로젝트명
+  const projectLabel = isDefault(slug) ? undefined : `${projectInfo.name} 프로젝트`; // 리포트 머리말
   const detailUnlocked = isProgressUnlocked();
   const todayWork = workDateString(new Date()); // 현재 업무일
   const [s, ip, sch, inProgressList, operatorSchedules] = await Promise.all([
@@ -156,7 +158,7 @@ export default async function DashboardPage() {
   const inProgressCount = inProgressList.length;
   const remainCount = Math.max(0, s.totalVehicles - s.complete - inProgressCount);
   // 새 프로젝트(B820 아님)에서 아직 설치 기록이 하나도 없으면 "최초 업로드" 모드
-  const initialUpload = !isDefault(slug) && s.complete === 0 && inProgressList.length === 0;
+  const initialUpload = !isDefault(slug) && s.totalVehicles === 0;
 
   // 진행현황 다운로드 기준일 기본값 = 현재 업무일. 팝업에서 날짜를 바꾸면
   // 그 날짜까지의 스냅샷(계획·기준일·완료)으로 받는다. 계획수량은 예정일(planned_date)에서 파생.
@@ -229,6 +231,7 @@ export default async function DashboardPage() {
               cumPlanned={sch?.totalPlanned ?? 0}
               today={ip.today}
               inProgress={inProgressCount}
+              projectLabel={projectLabel}
             />
           )}
           <ProgressDownloadButton today={today} scheduleDays={scheduleDays} />

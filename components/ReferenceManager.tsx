@@ -2,15 +2,17 @@
 
 import { useRef, useState } from "react";
 import Link from "@/components/PLink";
-import { BEFORE_SLOTS, AFTER_SLOTS, type SlotDef } from "@/lib/slots";
+import type { SlotDef } from "@/lib/slots";
 import { compressImage } from "@/lib/image-compress";
 
 interface Props {
   initialUrls: Record<string, string>;
+  before: SlotDef[]; // 프로젝트 사진 양식(설치 전)
+  after: SlotDef[]; // 프로젝트 사진 양식(설치 후)
 }
 
 // 기준(양식) 사진 관리 — 슬롯별 올바른 예시 사진 1장 업로드/교체/삭제.
-export default function ReferenceManager({ initialUrls }: Props) {
+export default function ReferenceManager({ initialUrls, before, after }: Props) {
   const [urls, setUrls] = useState<Record<string, string>>(initialUrls);
 
   return (
@@ -30,14 +32,14 @@ export default function ReferenceManager({ initialUrls }: Props) {
 
       <SectionHeader title="설치 전" />
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-        {BEFORE_SLOTS.map((slot) => (
+        {before.map((slot) => (
           <ReferenceSlot key={slot.slotKey} slot={slot} url={urls[slot.slotKey]} setUrls={setUrls} />
         ))}
       </div>
 
       <SectionHeader title="설치 후" />
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-        {AFTER_SLOTS.map((slot) => (
+        {after.map((slot) => (
           <ReferenceSlot key={slot.slotKey} slot={slot} url={urls[slot.slotKey]} setUrls={setUrls} />
         ))}
       </div>

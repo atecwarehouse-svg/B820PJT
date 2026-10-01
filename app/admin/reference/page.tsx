@@ -2,6 +2,7 @@ import { isAdmin } from "@/lib/admin-auth";
 import { createServiceClient } from "@/lib/supabase/server";
 import { publicPhotoUrl } from "@/lib/photo-url";
 import AdminLogin from "@/components/AdminLogin";
+import { getSlotConfig } from "@/lib/settings";
 import ReferenceManager from "@/components/ReferenceManager";
 
 export const runtime = "nodejs";
@@ -22,5 +23,6 @@ export default async function ReferencePage() {
     }
   }
 
-  return <ReferenceManager initialUrls={urls} />;
+  const cfg = await getSlotConfig();
+  return <ReferenceManager initialUrls={urls} before={cfg.before} after={cfg.after} />;
 }

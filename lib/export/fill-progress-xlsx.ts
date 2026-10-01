@@ -170,9 +170,14 @@ export function cellValue(attrs: string, inner: string, shared: string[]): strin
     const v = inner.match(/<v>(\d+)<\/v>/);
     return v ? shared[Number(v[1])] ?? "" : "";
   }
-  if (/t="(inlineStr|str)"/.test(attrs)) {
+  if (/t="inlineStr"/.test(attrs)) {
     const t = inner.match(/<t[^>]*>([\s\S]*?)<\/t>/);
     return t ? unescapeXml(t[1]) : "";
+  }
+  if (/t="str"/.test(attrs)) {
+    // 수식 결과 문자열은 <t>가 아니라 <v>에 들어 있다 (예: 운수사 칸이 =A4 같은 수식일 때)
+    const v = inner.match(/<v>([\s\S]*?)<\/v>/);
+    return v ? unescapeXml(v[1]) : "";
   }
   const v = inner.match(/<v>([\s\S]*?)<\/v>/);
   return v ? v[1] : "";
@@ -307,12 +312,12 @@ function paintProgressRows(opts: {
   }
 
   // 1) 데이터 행 스캔 (영업소·노선·대상대수·비고)
-  const rowRe = /<row r="(\d+)"[^>]*>([\s\S]*?)<\/row>/g;
+  const rowRe = /<row r="(\d+)"[^>]*?(?:\/>|>([\s\S]*?)<\/row>)/g;
   const cellRe = /<c r="([A-Z]+)\d+"([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/g;
   const rows: { row: number; key: string; target: number; note: string }[] = [];
   for (const m of opts.pXml.matchAll(rowRe)) {
     const row = Number(m[1]);
-    if (row <= 11) continue; // 11행까지는 머리말
+    if (row <= 11 || m[2] === undefined) continue; // 11행까지는 머리말, self-closing 빈 행 제외
     const cells = new Map<string, { attrs: string; inner: string }>();
     for (const cm of m[2].matchAll(cellRe)) {
       cells.set(cm[1], { attrs: cm[2], inner: cm[3] ?? "" });
@@ -431,9 +436,9 @@ export async function fillProgressXlsx(
   const rowPlate = new Map<number, string>();
   const matchedPlates = new Set<string>();
   const tplGroupCount = new Map<string, number>();
-  for (const rowM of sheetXml.matchAll(/<row r="(\d+)"[^>]*>([\s\S]*?)<\/row>/g)) {
+  for (const rowM of sheetXml.matchAll(/<row r="(\d+)"[^>]*?(?:\/>|>([\s\S]*?)<\/row>)/g)) {
     const row = Number(rowM[1]);
-    if (row < 2) continue; // 1행=헤더
+    if (row < 2 || rowM[2] === undefined) continue; // 1행=헤더, self-closing 빈 행 제외
     let plate = "";
     let op = "";
     let rt = "";
@@ -460,7 +465,7 @@ export async function fillProgressXlsx(
   const defaultStyleOf = (col: string) => (sheetXml.match(new RegExp(`<c r="${col}\\d+" s="(\\d+)"`)) || [])[1];
   const defaultGH = { G: defaultStyleOf("G"), H: defaultStyleOf("H") } as Record<string, string | undefined>;
   sheetXml = sheetXml.replace(
-    /<row r="(\d+)"[^>]*>([\s\S]*?)<\/row>/g,
+    /<row r="(\d+)"[^>]*?(?:\/>|>([\s\S]*?)<\/row>)/g,
     (whole, rowStr: string, inner: string) => {
       const row = Number(rowStr);
       if (!rowPlate.has(row)) return whole; // 차량 행이 아니면(헤더 등) 그대로
@@ -505,7 +510,7 @@ export async function fillProgressXlsx(
   if (dbInfo && dbInfo.size > 0) {
     const defaultIStyle = (sheetXml.match(/<c r="I\d+" s="(\d+)"/) || [])[1];
     sheetXml = sheetXml.replace(
-      /<row r="(\d+)"[^>]*>([\s\S]*?)<\/row>/g,
+      /<row r="(\d+)"[^>]*?(?:\/>|>([\s\S]*?)<\/row>)/g,
       (whole, rowStr: string, inner: string) => {
         const row = Number(rowStr);
         const plate = rowPlate.get(row);
@@ -700,11 +705,11 @@ export async function fillProgressXlsx(
       const exactIdx = new Map<string, number[]>();
       const normIdx = new Map<string, number[]>();
       const opIdx = new Map<string, number[]>();
-      for (const rm of schedXml.matchAll(/<row r="(\d+)"[^>]*>([\s\S]*?)<\/row>/g)) {
+      for (const rm of schedXml.matchAll(/<row r="(\d+)"[^>]*?(?:\/>|>([\s\S]*?)<\/row>)/g)) {
         const rn = Number(rm[1]);
         if (rn < 5) continue;
-        const aCell = rm[2].match(/<c r="A\d+"([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/);
-        const bCell = rm[2].match(/<c r="B\d+"([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/);
+        const aCell = (rm[2] ?? "").match(/<c r="A\d+"([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/);
+        const bCell = (rm[2] ?? "").match(/<c r="B\d+"([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/);
         if (!aCell || !bCell) continue;
         const op = cellValue(aCell[1], aCell[2] ?? "", shared).trim();
         const rt = cellValue(bCell[1], bCell[2] ?? "", shared).trim();
@@ -738,7 +743,7 @@ export async function fillProgressXlsx(
         if (renamed) rowLabel.set(rn, rt);
       }
 
-      schedXml = schedXml.replace(/<row r="(\d+)"[^>]*>[\s\S]*?<\/row>/g, (whole, rnStr: string) => {
+      schedXml = schedXml.replace(/<row r="(\d+)"[^>]*?(?:\/>|>[\s\S]*?<\/row>)/g, (whole, rnStr: string) => {
         const rn = Number(rnStr);
         const adj = rowAdjust.get(rn) ?? 0;
         const label = rowLabel.get(rn);

@@ -4,6 +4,7 @@ import { createServiceClient } from "@/lib/supabase/server";
 import { chunk } from "@/lib/supabase/paginate";
 import { PILOT_CUTOFF } from "@/lib/import/parse-schedule";
 import { checkAdminPassword, isAdmin } from "@/lib/admin-auth";
+import { currentSlug, isDefault } from "@/lib/project";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -35,7 +36,7 @@ export async function POST(req: NextRequest) {
   }
 
   // 시범설치 판정은 업로드 파서와 같은 기준(예정일 < 컷오프)으로 다시 계산해 어긋나지 않게 한다.
-  const patch = { planned_date: date, is_pilot: date < PILOT_CUTOFF };
+  const patch = { planned_date: date, is_pilot: isDefault(currentSlug()) && date < PILOT_CUTOFF }; // 시범설치 컷오프는 B820 전용
   const moved: string[] = [];
   for (const part of chunk(plates)) {
     const { data, error } = await supabaseUpdate(part, patch);

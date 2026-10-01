@@ -2,6 +2,7 @@
 // 관리자 페이지에서 수정하는 값(완료리포트 수신자 등)을 저장한다.
 
 import { createServiceClient } from "@/lib/supabase/server";
+import { parseSlotConfig, type SlotConfig } from "@/lib/slots";
 
 export const REPORT_MAIL_KEY = "report_mail_to";
 export const INSTALL_TEAMS_KEY = "install_teams"; // 설치팀 목록 (JSON [{team,name,phone}], 구버전 문자열 배열 호환)
@@ -143,4 +144,10 @@ export async function setSetting(key: string, value: string, slug?: string): Pro
       : "";
     throw new Error(error.message + hint);
   }
+}
+
+// ── 사진 양식(칸 구성) — 프로젝트별. 없으면 B820 기본값(lib/slots.ts) ──
+export const PHOTO_SLOTS_KEY = "photo_slots";
+export async function getSlotConfig(slug?: string): Promise<SlotConfig> {
+  return parseSlotConfig(await getSetting(PHOTO_SLOTS_KEY, slug));
 }

@@ -64,7 +64,7 @@ export function currentSlug(): string {
   }
   const v = h.get("x-project");
   if (!v) return DEFAULT_SLUG;
-  if (!SLUG_RE.test(v)) notFound();
+  if (!SLUG_RE.test(v) || v === "public" || v === "graphql_public") notFound();
   return v;
 }
 
@@ -103,7 +103,7 @@ const ROW_COLS =
 
 // 모듈 캐시(웜 인스턴스, 60초) — 요청마다 레지스트리를 다시 읽지 않도록
 const cache = new Map<string, { at: number; p: Project | null }>();
-const TTL = 60_000;
+const TTL = 5_000; // 짧게 — 서버리스 인스턴스마다 캐시가 따로라 이름·비밀번호 변경이 오래 남지 않게
 
 /** 레지스트리 조회. b820은 행이 없어도 코드 기본값으로 돌려준다. 그 외는 없으면 null. */
 export async function getProject(slug: string): Promise<Project | null> {
@@ -112,14 +112,16 @@ export async function getProject(slug: string): Promise<Project | null> {
   if (hit && Date.now() - hit.at < TTL) return hit.p;
   let p: Project | null = null;
   try {
-    const { data } = await createServiceClient(DEFAULT_SLUG)
+    const { data, error } = await createServiceClient(DEFAULT_SLUG)
       .from("projects")
       .select(ROW_COLS)
       .eq("slug", slug)
       .maybeSingle();
+    if (error) throw error;
     p = data ? fromRow(data as Row) : null;
   } catch {
-    p = null;
+    // 일시적 DB 오류 — 캐시에 "없음"으로 남기지 않는다(그 사이 404·관리자 잠금 방지)
+    return isDefault(slug) ? B820 : null;
   }
   if (!p && isDefault(slug)) p = B820;
   cache.set(slug, { at: Date.now(), p });

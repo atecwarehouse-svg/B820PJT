@@ -144,8 +144,16 @@ declare
   cur  text;
   rest text;
 begin
-  if slug !~ '^[a-z][a-z0-9_]{1,19}$' or slug in ('public','b820') or slug like 'pg\_%' then
+  if slug !~ '^[a-z][a-z0-9_]{1,19}$' or slug like 'pg\_%'
+     or slug = any (array['public','b820','storage','auth','extensions','graphql','graphql_public',
+                          'realtime','vault','net','pgsodium','pgsodium_masks','supabase_functions',
+                          'supabase_migrations','information_schema','cron','pgbouncer','repack','tiger','topology']) then
     raise exception '삭제할 수 없는 이름: %', slug;
+  end if;
+  -- 이 함수가 만든 프로젝트 스키마만 지운다: 복제된 vehicles 테이블이 있어야 한다
+  if exists (select 1 from pg_namespace where nspname = slug)
+     and not exists (select 1 from pg_tables where schemaname = slug and tablename = 'vehicles') then
+    raise exception '프로젝트 스키마가 아닙니다(vehicles 없음): %', slug;
   end if;
   execute format('drop schema if exists %I cascade', slug);
   begin

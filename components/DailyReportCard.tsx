@@ -136,6 +136,7 @@ export default function DailyReportCard({
   inProgress = 0,
   stage = 2,
   onSent,
+  projectLabel,
 }: {
   completedList: CompletedVehicle[];
   scheduleDays: ScheduleDay[];
@@ -146,6 +147,7 @@ export default function DailyReportCard({
   inProgress?: number; // 진행중(미완료) 차량 수 — 발송 전 경고용
   stage?: 1 | 2; // 1차=팀즈 알림만, 2차=VOC 포함 + 메일 발송
   onSent?: (recipients: string[], teamsSent?: boolean) => void; // 발송 성공 시 부모가 완료 팝업 표시 (팀즈 카드 전송 여부 포함)
+  projectLabel?: string; // 미리보기 머리말 "[…]" — 프로젝트명(기본 B820 문구)
 }) {
   const [date, setDate] = useState(today);
   const [planned, setPlanned] = useState(""); // 금일 계획 수량 직접 입력
@@ -441,8 +443,8 @@ export default function DailyReportCard({
     [date, completedList, scheduleDays, totalVehicles, cumDone, cumPlanned, plannedOverride],
   );
   const text = useMemo(
-    () => formatReportText(report, mergedNotes, check, stage === 2 ? vocs : undefined),
-    [report, mergedNotes, check, stage, vocs],
+    () => formatReportText(report, mergedNotes, check, stage === 2 ? vocs : undefined, projectLabel),
+    [report, mergedNotes, check, stage, vocs, projectLabel],
   );
 
   async function send() {

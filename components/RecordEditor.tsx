@@ -5,20 +5,23 @@ import Link from "@/components/PLink";
 import { useRouter } from "next/navigation";
 import type { RecordBundle } from "@/lib/types";
 import {
-  AFTER_SLOTS,
-  AFTER_EXTRA_SLOTS,
+
+
   buildBeforeSlots,
   buildCheckSlots,
   makeCustomSlotKey,
   makeCheckCustomSlotKey,
-  REQUIRED_CHECK_KEYS,
+  DEFAULT_SLOT_CONFIG,
+  type SlotConfig,
   type CustomSlot,
 } from "@/lib/slots";
 import { publicPhotoUrl } from "@/lib/photo-url";
 import PhotoSlot from "@/components/PhotoSlot";
+import { clientProjectPath } from "@/components/PLink";
 
 interface Props {
   brand?: string; // 제목 "<brand> 설치 사진" — 프로젝트명(기본 B820)
+  slotConfig?: SlotConfig; // 사진 양식(칸 구성) — 관리자 '사진 양식' 탭 설정, 기본 B820
   plate: string;
   initial: RecordBundle;
   teamOptions?: string[]; // 설치팀 선택지 (관리자 페이지에서 관리, 비면 직접 입력)
@@ -37,7 +40,8 @@ const STEPS = ["차량 이상유무", "설치 전", "설치 후"] as const;
 // 타코케이블 Y자 사진 촬영 시 특이사항에 자동으로 넣는 문구
 const TACHO_Y_NOTE = "타코케이블 Y자 있음";
 
-export default function RecordEditor({ plate, initial, teamOptions = [], brand = "B820" }: Props) {
+export default function RecordEditor({ plate, initial, teamOptions = [], brand = "B820", slotConfig = DEFAULT_SLOT_CONFIG }: Props) {
+  const cfg = slotConfig; // 프로젝트별 사진 양식(칸 구성)
   const vehicle = initial.vehicle!;
   const installDate = initial.record?.install_date ?? todayStr();
 
@@ -87,13 +91,13 @@ export default function RecordEditor({ plate, initial, teamOptions = [], brand =
     const checkDone =
       !!(rec?.team ?? "").trim() &&
       !!(rec?.check_note ?? "").trim() &&
-      buildCheckSlots(customs).every(
+      buildCheckSlots(customs, cfg.check).every(
         (s) =>
           photoKeys.has(s.slotKey) ||
-          (checkNa.has(s.slotKey) && !REQUIRED_CHECK_KEYS.includes(s.slotKey)),
+          (checkNa.has(s.slotKey) && !cfg.requiredCheckKeys.includes(s.slotKey)),
       );
     if (!checkDone) return 0;
-    const beforeDone = buildBeforeSlots(customs).every(
+    const beforeDone = buildBeforeSlots(customs, cfg.before).every(
       (s) => photoKeys.has(s.slotKey) || na.has(s.slotKey),
     );
     return beforeDone ? 2 : 1;
@@ -133,8 +137,8 @@ export default function RecordEditor({ plate, initial, teamOptions = [], brand =
     [],
   );
   const router = useRouter();
-  const beforeSlots = useMemo(() => buildBeforeSlots(customSlots), [customSlots]);
-  const checkSlots = useMemo(() => buildCheckSlots(customSlots), [customSlots]);
+  const beforeSlots = useMemo(() => buildBeforeSlots(customSlots, cfg.before), [customSlots, cfg.before]);
+  const checkSlots = useMemo(() => buildCheckSlots(customSlots, cfg.check), [customSlots, cfg.check]);
 
   const saveRecord = useCallback(
     async (
@@ -316,10 +320,10 @@ export default function RecordEditor({ plate, initial, teamOptions = [], brand =
   // 전광판·차량계기판·CCTV는 사진 필수 — 비어 있으면 라벨 목록 반환('없음' 대체 불가)
   const missingRequiredCheck = useCallback(() => {
     const missing = checkSlots.filter(
-      (s) => REQUIRED_CHECK_KEYS.includes(s.slotKey) && !urls[s.slotKey],
+      (s) => cfg.requiredCheckKeys.includes(s.slotKey) && !urls[s.slotKey],
     );
     return missing.length ? missing.map((s) => s.label).join("·") : null;
-  }, [checkSlots, urls]);
+  }, [checkSlots, urls, cfg.requiredCheckKeys]);
 
   const [submitting, setSubmitting] = useState(false);
   const [savedPopup, setSavedPopup] = useState(false); // 저장 완료 팝업
@@ -606,7 +610,7 @@ export default function RecordEditor({ plate, initial, teamOptions = [], brand =
               {plate} · 목록에서 확인·다운로드할 수 있습니다.
             </p>
             <button
-              onClick={() => router.push("/list")}
+              onClick={() => router.push(clientProjectPath("/list"))}
               className="mt-4 w-full rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white active:bg-blue-700"
             >
               확인
@@ -635,7 +639,7 @@ export default function RecordEditor({ plate, initial, teamOptions = [], brand =
                 계속 촬영
               </button>
               <button
-                onClick={() => router.push("/list")}
+                onClick={() => router.push(clientProjectPath("/list"))}
                 className="flex-1 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white active:bg-blue-700"
               >
                 목록으로
@@ -802,7 +806,7 @@ export default function RecordEditor({ plate, initial, teamOptions = [], brand =
           </p>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
             {checkSlots.map((slot, i) => {
-              const req = REQUIRED_CHECK_KEYS.includes(slot.slotKey);
+              const req = cfg.requiredCheckKeys.includes(slot.slotKey);
               return (
                 <PhotoSlot
                   key={slot.slotKey}
@@ -922,8 +926,8 @@ export default function RecordEditor({ plate, initial, teamOptions = [], brand =
         <>
           <SectionHeader title="설치 후" />
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-            {[...AFTER_SLOTS, ...AFTER_EXTRA_SLOTS].map((slot, i) => {
-              const isExtra = AFTER_EXTRA_SLOTS.some((s) => s.slotKey === slot.slotKey);
+            {[...cfg.after, ...cfg.afterExtra].map((slot, i) => {
+              const isExtra = cfg.afterExtra.some((s) => s.slotKey === slot.slotKey);
               return (
                 <PhotoSlot
                   key={slot.slotKey}
@@ -1017,7 +1021,7 @@ export default function RecordEditor({ plate, initial, teamOptions = [], brand =
           {step === 2 && (
             <button
               onClick={() =>
-                confirmAlightThen(AFTER_SLOTS, (na) => handleSave(na))
+                confirmAlightThen(cfg.after, (na) => handleSave(na))
               }
               disabled={submitting}
               className="flex-1 rounded-lg bg-blue-600 px-4 py-3 text-sm font-semibold text-white active:bg-blue-700 disabled:opacity-50"

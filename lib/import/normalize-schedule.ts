@@ -45,9 +45,10 @@ export async function normalizeScheduleQuantities(
   let xml = await sFile.async("string");
   const matched = new Set<string>();
   let rows = 0;
-  xml = xml.replace(/<row r="(\d+)"[^>]*>[\s\S]*?<\/row>/g, (whole, rnStr: string) => {
+  // 빈 행은 self-closing(<row …/>)일 수 있다 — 탐욕적 [^>]* 로 잡으면 다음 행까지 한 덩어리로 먹는다
+  xml = xml.replace(/<row r="(\d+)"[^>]*?(?:\/>|>[\s\S]*?<\/row>)/g, (whole, rnStr: string) => {
     const rn = Number(rnStr);
-    if (rn < 5) return whole;
+    if (rn < 5 || whole.endsWith("/>")) return whole;
     const aCell = whole.match(/<c r="A\d+"([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/);
     const bCell = whole.match(/<c r="B\d+"([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/);
     if (!aCell || !bCell) return whole;

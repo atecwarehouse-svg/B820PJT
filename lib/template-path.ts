@@ -12,5 +12,5 @@ export function templateObject(slug: string): string {
 
 /** 일정 업로드가 교체 전 보관하는 백업본 (같은 폴더, .backup.xlsx) */
 export function templateBackup(slug: string): string {
-  return templateObject(slug).replace(/\.xlsx$/, ".backup.xlsx");
+  return templateObject(slug).replace(/\.xlsx$/, "") + ".backup.xlsx";
 }

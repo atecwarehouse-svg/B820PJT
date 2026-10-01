@@ -2,13 +2,14 @@
 
 import { createServiceClient } from "@/lib/supabase/server";
 import { fetchAll, chunk } from "@/lib/supabase/paginate";
-import { BEFORE_SLOTS, AFTER_SLOTS } from "@/lib/slots";
+import { stdSlotKeys } from "@/lib/slots";
+import { getSlotConfig } from "@/lib/settings";
 import { loadTodayExcludedPlates } from "@/lib/stats";
 import { workDateString } from "@/lib/work-day";
 
 type SB = ReturnType<typeof createServiceClient>;
 
-const STD_SLOTS = [...BEFORE_SLOTS, ...AFTER_SLOTS].map((s) => s.slotKey);
+
 
 // 현재 시각 KST HH:mm
 export function kstHm(now: Date = new Date()): string {
@@ -28,6 +29,7 @@ export function endHm(installDate: string, now: Date = new Date()): string {
 // 금일 설치 완료 = 금일 예정 차량이 전부 '설치완료' 또는 '배차표 설치제외'.
 // (완료 판정은 대시보드와 같은 기준 — 표준 14칸이 사진 또는 '없음' 체크로 충족 + 저장됨)
 export async function todayInstallDone(supabase: SB, slug: string, date: string): Promise<boolean> {
+  const STD_SLOTS = stdSlotKeys(await getSlotConfig(slug)); // 프로젝트별 완료 판정 칸
   const planned = await fetchAll<{ plate: string }>((from, to) =>
     supabase
       .from("vehicles")

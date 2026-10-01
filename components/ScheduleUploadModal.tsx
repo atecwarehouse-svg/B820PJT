@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { prefixOf } from "@/components/PLink";
 
 interface ChangeGroup {
   operator: string;
@@ -41,6 +42,10 @@ interface UploadResult {
   templateReplaced?: boolean; // 적용: 다운로드 양식(템플릿) 교체 여부
   templateNote?: string; // 적용: 미교체 사유 또는 경고
 }
+
+// 현재 화면의 프로젝트 ID (/p/<slug>/… 이면 slug, 아니면 b820)
+const projectSlug = () =>
+  typeof window === "undefined" ? "b820" : prefixOf(window.location.pathname).slice("/p/".length) || "b820";
 
 // "2026-07-10" → "7/10", null → "미정"
 function fmtDate(d: string | null): string {
@@ -88,6 +93,7 @@ export default function ScheduleUploadModal({ initial = false }: { initial?: boo
       form.append("file", f);
       form.append("pw", pw);
       form.append("initial", String(initial));
+      form.append("slug", projectSlug()); // 서버가 현재 프로젝트와 대조(리퍼러 없는 환경에서 B820으로 새는 사고 방지)
       const res = await fetch("/api/import/schedule", { method: "POST", body: form });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "업로드 실패");
@@ -112,6 +118,7 @@ export default function ScheduleUploadModal({ initial = false }: { initial?: boo
       form.append("apply", "true");
       form.append("pw", pw);
       form.append("initial", String(initial));
+      form.append("slug", projectSlug());
       const res = await fetch("/api/import/schedule", { method: "POST", body: form });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "반영 실패");

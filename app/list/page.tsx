@@ -3,7 +3,8 @@ import { brandName, currentProject } from "@/lib/project";
 import { createServiceClient } from "@/lib/supabase/server";
 import { fetchAll } from "@/lib/supabase/paginate";
 import { workDateString } from "@/lib/work-day";
-import { AFTER_SLOTS, BEFORE_SLOTS, DEFAULT_PHOTO_COUNT } from "@/lib/slots";
+import { isDefaultSlotConfig, photoCount as slotPhotoCount, stdSlotKeys } from "@/lib/slots";
+import { getSlotConfig } from "@/lib/settings";
 import type { RecordRow } from "@/lib/types";
 import ListClient, { type ListItem } from "@/components/ListClient";
 import { isAdmin } from "@/lib/admin-auth";
@@ -12,13 +13,16 @@ import AdminLogin from "@/components/AdminLogin";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// 완료 판정 기준 = 설치전 7 + 설치후 7 표준 슬롯 (lib/stats.ts와 같은 기준)
-const STD_SLOT_KEYS = [...BEFORE_SLOTS, ...AFTER_SLOTS].map((s) => s.slotKey);
+// 완료 판정 기준 = 프로젝트 사진 양식의 설치전 + 설치후 칸 (lib/stats.ts와 같은 기준)
+
 
 export default async function ListPage() {
   if (!(await isAdmin())) return <AdminLogin />;
 
   const supabase = createServiceClient();
+  const cfg = await getSlotConfig();
+  const STD_SLOT_KEYS = stdSlotKeys(cfg);
+  const TARGET = slotPhotoCount(cfg); // 프로젝트 양식의 설치 전+후 칸 수(B820은 14)
 
   // 1,000행 제한 회피 — 저장 레코드/사진을 전수 조회. 운수사 목록은 집계뷰에서.
   const [records, photoRows, opRes] = await Promise.all([
@@ -70,14 +74,17 @@ export default async function ListPage() {
       year: r.year ?? "",
       model: r.model ?? "",
       photoCount: photoCount.get(r.plate) ?? 0,
-      target: Math.max(1, DEFAULT_PHOTO_COUNT - naCount),
+      target: Math.max(1, TARGET - naCount),
     };
   });
 
   // 작업 시작된(사진 있는) 운수사만 — 운수사별 저장 드롭다운용
-  const operators = ((opRes.data ?? []) as { operator: string; complete: number; in_progress: number }[])
-    .filter((o) => (o.complete ?? 0) + (o.in_progress ?? 0) > 0)
-    .map((o) => o.operator)
+  // 집계 뷰는 B820 표준 14칸을 하드코딩했으므로 양식을 바꾼 프로젝트는 저장 목록에서 직접 뽑는다
+  const operators = (isDefaultSlotConfig(cfg)
+    ? ((opRes.data ?? []) as { operator: string; complete: number; in_progress: number }[])
+        .filter((o) => (o.complete ?? 0) + (o.in_progress ?? 0) > 0)
+        .map((o) => o.operator)
+    : Array.from(new Set(items.filter((i) => i.photoCount > 0).map((i) => i.operator))))
     .sort((a, b) => a.localeCompare(b, "ko"));
 
   return (

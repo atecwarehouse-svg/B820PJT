@@ -1,5 +1,6 @@
 "use client";
 
+import { clientProjectPath } from "@/components/PLink";
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { downloadUrl } from "@/lib/download";
@@ -41,7 +42,7 @@ export default function SafetyManager({ sessions }: { sessions: PledgeSessionRow
 
   // 설치 전/후 서명 링크 — 같은 세션이라 서명 취합·PDF는 함께 된다.
   function signLink(id: string, phase: "before" | "after") {
-    return `${window.location.origin}/safety/${id}${phase === "after" ? "?phase=after" : ""}`;
+    return `${window.location.origin}${clientProjectPath(`/safety/${id}${phase === "after" ? "?phase=after" : ""}`)}`;
   }
 
   async function create() {

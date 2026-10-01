@@ -2,7 +2,8 @@
 
 import { createServiceClient } from "@/lib/supabase/server";
 import { downloadPhoto } from "@/lib/gdrive";
-import { AFTER_SLOTS, buildBeforeSlots, type CustomSlot } from "@/lib/slots";
+import { buildBeforeSlots, type CustomSlot } from "@/lib/slots";
+import { getSlotConfig } from "@/lib/settings";
 import type { PhotoRow, RecordRow } from "@/lib/types";
 import type { PrintData } from "@/lib/export/print-html";
 import { kstDateString } from "@/lib/work-day";
@@ -25,12 +26,13 @@ export async function loadPrintData(plate: string): Promise<PrintData | null> {
   const photos = (photosRes.data as PhotoRow[]) ?? [];
 
   const customSlots: CustomSlot[] = record?.custom_slots ?? [];
-  const beforeSlots = buildBeforeSlots(customSlots);
+  const cfg = await getSlotConfig(); // 프로젝트별 사진 양식
+  const beforeSlots = buildBeforeSlots(customSlots, cfg.before);
 
   // PDF는 puppeteer가 origin 없이(setContent) 렌더링하므로 상대 URL이 안 먹는다.
   // 사진을 직접 내려받아 base64 data URI로 박아 넣는다(인쇄 페이지에서도 동일하게 동작).
   // 렌더링되는 칸만 내려받는다 — 추가 촬영 칸(타코케이블 Y자 등)은 사진첩 미포함.
-  const rendered = new Set([...beforeSlots, ...AFTER_SLOTS].map((s) => s.slotKey));
+  const rendered = new Set([...beforeSlots, ...cfg.after].map((s) => s.slotKey));
   const urlBySlot = new Map<string, string>();
   await Promise.all(
     photos
@@ -62,7 +64,7 @@ export async function loadPrintData(plate: string): Promise<PrintData | null> {
     model: record?.model ?? "",
     sections: [
       { title: "설치 전", slots: toSlots(beforeSlots, addedVehicle ? "증차차량" : undefined) },
-      { title: "설치 후", slots: toSlots(AFTER_SLOTS) },
+      { title: "설치 후", slots: toSlots(cfg.after) },
     ],
   };
 }

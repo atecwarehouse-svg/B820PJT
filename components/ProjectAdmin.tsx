@@ -24,6 +24,24 @@ type Kind = "album" | "link";
 const SLUG_RE = /^[a-z][a-z0-9_]{1,19}$/;
 const projectHome = (slug: string) => (slug === "b820" ? "/b820" : `/p/${slug}`);
 
+// 프로젝트 ID 입력 정리 — 소문자화, 허용 밖 문자는 _ 로, 20자 제한
+function sanitizeSlug(v: string): string {
+  return v.toLowerCase().replace(/[^a-z0-9_]+/g, "_").replace(/^_+/, "").slice(0, 20);
+}
+
+// 프로젝트명으로 ID 제안 — 영문·숫자만 뽑아 소문자로(예: "B900 설치 사진첩" → "b900"),
+// 영문이 없으면 p+월일(예: p1001). 사용자가 ID 칸을 직접 건드리기 전까지만 자동으로 채운다.
+function suggestSlug(name: string): string {
+  const ascii = name.toLowerCase().replace(/[^a-z0-9]+/g, "").slice(0, 20);
+  if (ascii && /^[a-z]/.test(ascii) && ascii.length >= 2) return ascii;
+  if (ascii && /^[0-9]/.test(ascii)) return ("p" + ascii).slice(0, 20);
+  const d = new Date();
+  return `p${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}`;
+}
+
+// 새 프로젝트에 복사할 B820 설정 (app_settings 키)
+const COPY_SETTINGS_LABEL = "B820의 설치팀 목록·배차표 검수항목·리포트 수신자를 복사";
+
 export default function ProjectAdmin({ projects }: { projects: Project[] }) {
   const router = useRouter();
   const formRef = useRef<HTMLElement>(null);
@@ -38,6 +56,9 @@ export default function ProjectAdmin({ projects }: { projects: Project[] }) {
   const [description, setDescription] = useState("");
   const [url, setUrl] = useState("");
   const [adminPw, setAdminPw] = useState("");
+  const [showPw, setShowPw] = useState(false);
+  const [slugTouched, setSlugTouched] = useState(false); // ID를 직접 편집했으면 자동 제안 중단
+  const [copySettings, setCopySettings] = useState(true);
   const [confirmSlug, setConfirmSlug] = useState(""); // 삭제 확인 대기 중인 프로젝트
   const [confirmText, setConfirmText] = useState(""); // 앨범 삭제 확인용 ID 입력
   const [created, setCreated] = useState<{
@@ -45,19 +66,28 @@ export default function ProjectAdmin({ projects }: { projects: Project[] }) {
     home: string;
     exposed: boolean;
     warning?: string;
+    copied?: string[];
   } | null>(null);
 
   function resetForm() {
     setEditing(null);
     setKind("album");
     setSlug("");
+    setSlugTouched(false);
     setIcon("folder");
     setColor("blue");
     setName("");
     setDescription("");
     setUrl("");
     setAdminPw("");
+    setShowPw(false);
+    setCopySettings(true);
     setError("");
+  }
+
+  function onNameChange(v: string) {
+    setName(v);
+    if (!editing && kind === "album" && !slugTouched) setSlug(suggestSlug(v));
   }
 
   async function call(method: "POST" | "PUT" | "DELETE", body: Record<string, unknown>) {
@@ -102,13 +132,20 @@ export default function ProjectAdmin({ projects }: { projects: Project[] }) {
     }
     const common = { name, description, icon, color };
     if (kind === "album") {
-      const j = await call("POST", { kind, ...common, slug: slug.trim().toLowerCase(), admin_password: adminPw });
+      const j = await call("POST", {
+        kind,
+        ...common,
+        slug: slug.trim().toLowerCase(),
+        admin_password: adminPw,
+        copySettings,
+      });
       if (j) {
         setCreated({
           name,
           home: String(j.home ?? projectHome(slug)),
           exposed: !!j.exposed,
           warning: j.warning ? String(j.warning) : undefined,
+          copied: Array.isArray(j.copied) ? (j.copied as string[]) : undefined,
         });
         resetForm();
       }
@@ -122,6 +159,7 @@ export default function ProjectAdmin({ projects }: { projects: Project[] }) {
     setEditing(p);
     setKind(p.kind);
     setSlug(p.slug);
+    setSlugTouched(true);
     setIcon(p.icon);
     setColor(p.color);
     setName(p.name);
@@ -160,7 +198,7 @@ export default function ProjectAdmin({ projects }: { projects: Project[] }) {
 
   const isB820 = editing?.slug === "b820";
   const input =
-    "w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-sm transition-colors focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-100";
+    "w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-base transition-colors focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-100";
   const canSubmit =
     !busy &&
     (editing
@@ -196,16 +234,30 @@ export default function ProjectAdmin({ projects }: { projects: Project[] }) {
               </a>{" "}
               에서 프로젝트 홈을 엽니다. (첫 화면 카드로도 들어갈 수 있습니다)
             </li>
-            <li>대시보드 → <b>일정 업로드</b>로 전개현황 엑셀을 올려 차량리스트를 등록합니다.</li>
-            <li>관리자(방금 정한 비밀번호) → 설치팀·리포트 수신자를 등록합니다.</li>
+            <li>
+              대시보드 → <b>최초 업로드</b>로 전개현황 엑셀을 올려 차량리스트를 등록합니다.
+            </li>
+            <li>
+              {created.copied?.length
+                ? "B820 설정(설치팀·검수항목·리포트 수신자)을 복사했습니다. 관리자(방금 정한 비밀번호)에서 확인·수정하세요."
+                : "관리자(방금 정한 비밀번호) → 설치팀·리포트 수신자를 등록합니다."}
+            </li>
           </ol>
-          <button
-            type="button"
-            onClick={() => setCreated(null)}
-            className="mt-3 rounded-lg bg-white px-3 py-1.5 text-xs text-emerald-800 ring-1 ring-emerald-200"
-          >
-            닫기
-          </button>
+          <div className="mt-3 flex gap-2">
+            <a
+              href={`${created.home}/dashboard`}
+              className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white"
+            >
+              대시보드에서 최초 업로드 →
+            </a>
+            <button
+              type="button"
+              onClick={() => setCreated(null)}
+              className="rounded-lg bg-white px-3 py-1.5 text-xs text-emerald-800 ring-1 ring-emerald-200"
+            >
+              닫기
+            </button>
+          </div>
         </section>
       )}
 
@@ -303,7 +355,7 @@ export default function ProjectAdmin({ projects }: { projects: Project[] }) {
           {!isB820 && (
             <input
               value={name}
-              onChange={(e) => setName(e.target.value)}
+              onChange={(e) => onNameChange(e.target.value)}
               maxLength={40}
               placeholder="프로젝트명 (예: B900 설치 사진첩)"
               className={input}
@@ -320,24 +372,60 @@ export default function ProjectAdmin({ projects }: { projects: Project[] }) {
           )}
           {kind === "album" && !isB820 && (
             <>
-              <input
-                value={slug}
-                onChange={(e) => setSlug(e.target.value)}
-                disabled={!!editing}
-                maxLength={20}
-                autoCapitalize="none"
-                autoCorrect="off"
-                spellCheck={false}
-                placeholder="프로젝트 ID — 영문 소문자로 시작, 2~20자 (예: b900)"
-                className={`${input} disabled:text-gray-400`}
-              />
-              <input
-                value={adminPw}
-                onChange={(e) => setAdminPw(e.target.value)}
-                type="password"
-                placeholder={editing ? "관리자 비밀번호 변경 (비우면 유지)" : "이 프로젝트의 관리자 비밀번호 (4자 이상)"}
-                className={input}
-              />
+              <div>
+                <input
+                  value={slug}
+                  onChange={(e) => {
+                    setSlugTouched(true);
+                    setSlug(sanitizeSlug(e.target.value));
+                  }}
+                  disabled={!!editing}
+                  maxLength={20}
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  placeholder="프로젝트 ID (영문) — 이름을 쓰면 자동으로 채워집니다"
+                  className={`${input} disabled:text-gray-400`}
+                />
+                <p className={`mt-1 px-1 text-[11px] ${slug && !SLUG_RE.test(slug) ? "text-red-500" : "text-gray-400"}`}>
+                  {slug
+                    ? SLUG_RE.test(slug)
+                      ? `주소: /p/${slug}`
+                      : "영문 소문자로 시작하는 2~20자 (소문자·숫자·_)"
+                    : "주소에 쓰이는 영문 ID (예: b900 → /p/b900)"}
+                </p>
+              </div>
+              <div className="relative">
+                <input
+                  value={adminPw}
+                  onChange={(e) => setAdminPw(e.target.value)}
+                  type={showPw ? "text" : "password"}
+                  autoComplete="new-password"
+                  placeholder={editing ? "관리자 비밀번호 변경 (비우면 유지)" : "이 프로젝트의 관리자 비밀번호 (4자 이상)"}
+                  className={`${input} pr-14`}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPw((v) => !v)}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md px-2 py-1 text-[11px] text-gray-500 active:bg-gray-100"
+                >
+                  {showPw ? "숨기기" : "보기"}
+                </button>
+              </div>
+              {!editing && (
+                <label className="flex items-start gap-2 rounded-xl bg-gray-50 px-3 py-2.5 text-xs text-gray-600">
+                  <input
+                    type="checkbox"
+                    checked={copySettings}
+                    onChange={(e) => setCopySettings(e.target.checked)}
+                    className="mt-0.5 h-4 w-4"
+                  />
+                  <span>
+                    {COPY_SETTINGS_LABEL}
+                    <span className="block text-[11px] text-gray-400">같은 설치팀이 작업하면 켜 두세요. 나중에 관리자에서 바꿀 수 있습니다.</span>
+                  </span>
+                </label>
+              )}
             </>
           )}
           {kind === "link" && !isB820 && (
@@ -457,7 +545,7 @@ export default function ProjectAdmin({ projects }: { projects: Project[] }) {
                       autoCapitalize="none"
                       autoCorrect="off"
                       spellCheck={false}
-                      className="min-w-0 flex-1 rounded-lg border border-red-200 bg-white px-3 py-2 text-sm focus:border-red-500 focus:outline-none"
+                      className="min-w-0 flex-1 rounded-lg border border-red-200 bg-white px-3 py-2 text-base focus:border-red-500 focus:outline-none"
                     />
                     <button
                       type="button"

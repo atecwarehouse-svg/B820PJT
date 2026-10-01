@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
 import { fetchAll, chunk } from "@/lib/supabase/paginate";
-import { BEFORE_SLOTS, AFTER_SLOTS } from "@/lib/slots";
+import { stdSlotKeys } from "@/lib/slots";
+import { getSlotConfig } from "@/lib/settings";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -128,7 +129,7 @@ export async function GET(req: NextRequest) {
   // 설치팀 — records.team은 "팀명 이름"으로 저장, 배차표에는 팀명만 표시
   const teamOf = new Map<string, string>();
   try {
-    const stdSlots = [...BEFORE_SLOTS, ...AFTER_SLOTS].map((s) => s.slotKey);
+    const stdSlots = stdSlotKeys(await getSlotConfig()); // 프로젝트별 사진 양식
     for (const part of chunk(plates)) {
       // 사진은 fetchAll 페이지네이션으로 — Supabase Max Rows 설정값에 의존해
       // 조용히 잘리면 일부 완료 차량의 배지가 빠진다.

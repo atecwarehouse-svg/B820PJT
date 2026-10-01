@@ -15,6 +15,8 @@ import { workDateString, workDateExcelSerial, excelSerialFromDate } from "@/lib/
 
 import { TEMPLATE_BUCKET, templateObject } from "@/lib/template-path";
 import { currentSlug, getProject, isDefault } from "@/lib/project";
+import { stdSlotKeys } from "@/lib/slots";
+import { getSlotConfig } from "@/lib/settings";
 
 
 // asOfDate: 기준일(업무일 "YYYY-MM-DD"). 지정 없으면 현재 업무일.
@@ -38,7 +40,7 @@ export async function buildProgressXlsx(opts?: { asOfDate?: string; slug?: strin
   // 완료(저장 + 슬롯 충족) 맵 + 차량 운수사/노선/예정일 전수 조회
   // — 완료 판정은 팀즈 카드·대시보드와 같은 fetchCompletedMap 기준(진행현황 일치).
   const [completedMap, vrows] = await Promise.all([
-    fetchCompletedMap(supabase),
+    fetchCompletedMap(supabase, stdSlotKeys(await getSlotConfig(slug))),
     // select("*"): list_no 컬럼이 아직 없는 DB(migration_list_no.sql 미실행)에서도 동작
     fetchAll<{
       plate: string;

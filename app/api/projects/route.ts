@@ -10,8 +10,9 @@ import {
   projectHome,
 } from "@/lib/project";
 import { colorKey, iconKey } from "@/components/ProjectIcon";
-import { createProjectFolder, deletePhoto, trashFile } from "@/lib/gdrive";
+import { createProjectFolder, trashFile } from "@/lib/gdrive";
 import { TEMPLATE_BUCKET } from "@/lib/template-path";
+import { INSTALL_TEAMS_KEY, INSPECT_CHECKLIST_KEY, REPORT_MAIL_KEY } from "@/lib/settings";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -19,7 +20,7 @@ export const maxDuration = 60;
 
 // 프로젝트 레지스트리(public.projects) 관리 — 런처(마스터=B820) 관리자 쿠키 또는 body.pw 필수.
 //   POST   { kind:"link",  name, description, icon, color, url }                       → 링크 카드 추가
-//   POST   { kind:"album", slug, name, description, icon, color, admin_password }       → 앨범 프로젝트 생성
+//   POST   { kind:"album", slug, name, description, icon, color, admin_password, copySettings? } → 앨범 프로젝트 생성 (copySettings: B820 설치팀·검수항목·리포트 수신자 복사)
 //            (드라이브 폴더 → DB 스키마 복제(create_project_schema) → 레지스트리 행. 실패 시 되감기)
 //   PUT    { slug, name?, description?, icon?, color?, url?, admin_password? }           → 수정 (b820은 색만)
 //   DELETE { slug }                     → 링크 카드 삭제
@@ -32,6 +33,9 @@ const RESERVED = new Set([
   "vault", "net", "pgsodium", "pgsodium_masks", "supabase_functions", "supabase_migrations",
   "information_schema", "cron", "pgbouncer", "repack", "tiger", "topology", "api", "p", "projects",
 ]);
+
+// 새 프로젝트에 복사해 주는 B820 설정 키 (app_settings)
+const COPY_KEYS = [INSTALL_TEAMS_KEY, INSPECT_CHECKLIST_KEY, REPORT_MAIL_KEY];
 
 const bad = (error: string, status = 400) => NextResponse.json({ error }, { status });
 const unauthorized = () => bad("관리자 비밀번호가 올바르지 않습니다.", 401);
@@ -132,7 +136,7 @@ export async function POST(req: NextRequest) {
     // 2) DB 스키마 복제 (public → <slug>)
     const { data: rpc, error: rpcErr } = await sb.rpc("create_project_schema", { slug });
     if (rpcErr) {
-      await deletePhoto(folderId).catch(() => {});
+      await trashFile(folderId).catch(() => {}); // 되감기는 휴지통으로(영구 삭제 금지)
       return bad("프로젝트 DB 생성 실패: " + hint(rpcErr.message), 500);
     }
     let exposed = !!(rpc as { exposed?: boolean } | null)?.exposed;
@@ -159,16 +163,39 @@ export async function POST(req: NextRequest) {
       admin_password_hash: cookieToken(slug, pw),
     });
     if (insErr) {
-      try {
-        await sb.rpc("drop_project_schema", { slug });
-      } catch {
-        // 되감기 실패는 무시 — 메시지로 안내
-      }
-      await deletePhoto(folderId).catch(() => {});
-      return bad("프로젝트 등록 실패: " + hint(insErr.message), 500);
+      const { error: dropErr } = await sb.rpc("drop_project_schema", { slug });
+      await trashFile(folderId).catch(() => {});
+      return bad(
+        "프로젝트 등록 실패: " +
+          hint(insErr.message) +
+          (dropErr ? ` (되감기 실패: ${dropErr.message} — SQL에서 select drop_project_schema('${slug}') 실행 필요)` : ""),
+        500,
+      );
     }
     invalidateProjectCache();
-    return NextResponse.json({ ok: true, slug, home: projectHome(slug), exposed, warning });
+
+    // 4) (선택) B820 설정 복사 — 설치팀·검수항목·리포트 수신자. 새 스키마가 PostgREST에
+    //    막 노출된 직후라 캐시 갱신 전이면 실패할 수 있어 짧게 재시도한다.
+    let copied: string[] = [];
+    if (body.copySettings === true && exposed) {
+      const { data: src } = await sb.from("app_settings").select("key, value").in("key", COPY_KEYS);
+      const rows = (src ?? []).filter((r: { key: string; value: string }) => r.value);
+      if (rows.length) {
+        const dst = createServiceClient(slug);
+        for (let attempt = 0; attempt < 4 && !copied.length; attempt++) {
+          if (attempt) await new Promise((r) => setTimeout(r, 700));
+          const { error } = await dst.from("app_settings").upsert(
+            rows.map((r: { key: string; value: string }) => ({ key: r.key, value: r.value, updated_at: new Date().toISOString() })),
+            { onConflict: "key" },
+          );
+          if (!error) copied = rows.map((r: { key: string }) => r.key);
+        }
+        if (!copied.length) {
+          warning = (warning ? warning + " " : "") + "B820 설정 복사는 실패했습니다. 관리자 페이지에서 직접 등록하세요.";
+        }
+      }
+    }
+    return NextResponse.json({ ok: true, slug, home: projectHome(slug), exposed, warning, copied });
   }
 
   // 링크 카드
@@ -242,11 +269,12 @@ export async function DELETE(req: NextRequest) {
 
   const slug = String(body.slug ?? "");
   const sb = createServiceClient(DEFAULT_SLUG);
-  const { data: row } = await sb
+  const { data: row, error: rowErr } = await sb
     .from("projects")
     .select("slug, kind, drive_folder_id")
     .eq("slug", slug)
     .maybeSingle();
+  if (rowErr) return bad(hint(rowErr.message), 500);
   if (!row) return bad("해당 프로젝트가 없습니다.");
 
   if (row.kind === "album") {
@@ -256,12 +284,13 @@ export async function DELETE(req: NextRequest) {
     if (String(body.confirm ?? "").trim() !== slug) {
       return bad("확인을 위해 프로젝트 ID를 똑같이 입력하세요.");
     }
-    const st = sb.storage.from(TEMPLATE_BUCKET);
-    const { data: objs } = await st.list(slug);
-    if (objs?.length) await st.remove(objs.map((o) => `${slug}/${o.name}`));
-    if (row.drive_folder_id) await trashFile(row.drive_folder_id).catch(() => {});
+    // 실패할 수 있는 DB 삭제를 먼저 — 성공한 뒤에만 양식·드라이브를 정리(반쯤 지워진 상태 방지)
     const { error } = await sb.rpc("drop_project_schema", { slug }); // 스키마 + 레지스트리 행
     if (error) return bad("삭제 실패: " + hint(error.message), 500);
+    const st = sb.storage.from(TEMPLATE_BUCKET);
+    const { data: objs } = await st.list(slug);
+    if (objs?.length) await st.remove(objs.map((o) => `${slug}/${o.name}`)).catch(() => {});
+    if (row.drive_folder_id) await trashFile(row.drive_folder_id).catch(() => {});
     invalidateProjectCache(slug);
     return NextResponse.json({ ok: true });
   }

@@ -13,6 +13,7 @@ export default function DailyReportModal(props: {
   cumPlanned: number;
   today: string;
   inProgress?: number;
+  projectLabel?: string; // 리포트 미리보기 머리말(프로젝트명)
 }) {
   const [open, setOpen] = useState(false);
   const [stage, setStage] = useState<1 | 2>(1);

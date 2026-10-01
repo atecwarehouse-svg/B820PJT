@@ -4,7 +4,8 @@
 import { createServiceClient } from "@/lib/supabase/server";
 import { fetchAll, chunk } from "@/lib/supabase/paginate";
 import { workDateString } from "@/lib/work-day";
-import { DEFAULT_PHOTO_COUNT, BEFORE_SLOTS, AFTER_SLOTS } from "@/lib/slots";
+import { BEFORE_SLOTS, AFTER_SLOTS, isDefaultSlotConfig, photoCount, stdSlotKeys } from "@/lib/slots";
+import { getSlotConfig } from "@/lib/settings";
 import { loadOperatorAddresses } from "@/lib/operator-address";
 import { MODEM_FAULT_KIND } from "@/lib/modem";
 
@@ -74,13 +75,14 @@ const STD_SLOT_SET = new Set(STD_SLOT_KEYS);
 // '단말기 없음'(na_slots)도 표준 14칸만 센다 — '증차차량' 체크는 설치전 칸 전체를
 // na_slots에 넣는데 커스텀 칸(before_custom_*)까지 들어가, 길이를 그대로 세면
 // 표준 칸이 덜 찬 차량이 완료로 집계된다. (뷰도 migration_progress_std_na.sql로 동일 처리)
-function stdNaCount(na: unknown): number {
-  return Array.isArray(na) ? na.filter((k) => STD_SLOT_SET.has(k as string)).length : 0;
+function stdNaCount(na: unknown, set: Set<string> = STD_SLOT_SET): number {
+  return Array.isArray(na) ? na.filter((k) => set.has(k as string)).length : 0;
 }
 
 // 폴백: 차량/사진 전수 조회 후 앱에서 집계 (뷰가 아직 없을 때).
 // '단말기 없음'(records.na_slots) 칸은 사진 1장으로 간주해 합산.
-async function loadByScan(supabase: SB, target: number): Promise<DashboardStats> {
+async function loadByScan(supabase: SB, target: number, keys: string[] = STD_SLOT_KEYS): Promise<DashboardStats> {
+  const keySet = new Set(keys);
   const [vehicles, photoRows, naRows] = await Promise.all([
     fetchAll<{ plate: string; operator: string | null }>((from, to) =>
       supabase.from("vehicles").select("plate, operator").order("plate").range(from, to),
@@ -89,7 +91,7 @@ async function loadByScan(supabase: SB, target: number): Promise<DashboardStats>
       supabase
         .from("photos")
         .select("plate")
-        .in("slot_key", STD_SLOT_KEYS)
+        .in("slot_key", keys)
         .order("id")
         .range(from, to),
     ),
@@ -104,7 +106,7 @@ async function loadByScan(supabase: SB, target: number): Promise<DashboardStats>
   }
   const naCount = new Map<string, number>();
   for (const r of naRows) {
-    naCount.set(r.plate, stdNaCount(r.na_slots));
+    naCount.set(r.plate, stdNaCount(r.na_slots, keySet));
   }
 
   const byOp = new Map<string, OperatorProgress>();
@@ -122,9 +124,13 @@ async function loadByScan(supabase: SB, target: number): Promise<DashboardStats>
 
 export async function loadStats(slug: string): Promise<DashboardStats> {
   const supabase = createServiceClient(slug);
-  const target = DEFAULT_PHOTO_COUNT;
+  const cfg = await getSlotConfig(slug); // 프로젝트별 사진 양식
+  const target = photoCount(cfg);
+  const keys = stdSlotKeys(cfg);
+  const keySet = new Set(keys);
   // 집계 뷰 우선, 없으면 전수 스캔으로 폴백
-  return (await loadFromView(supabase, target)) ?? (await loadByScan(supabase, target));
+  // 집계 뷰는 B820 표준 14칸을 하드코딩했으므로 양식이 기본일 때만 쓴다
+  return (isDefaultSlotConfig(cfg) ? await loadFromView(supabase, target) : null) ?? (await loadByScan(supabase, target, keys));
 }
 
 // 진행중 = 사진을 1장 이상 올렸고 아직 13장 미만인 차량.
@@ -139,7 +145,10 @@ export interface InProgressVehicle {
 
 export async function loadInProgressList(slug: string): Promise<InProgressVehicle[]> {
   const supabase = createServiceClient(slug);
-  const target = DEFAULT_PHOTO_COUNT;
+  const cfg = await getSlotConfig(slug); // 프로젝트별 사진 양식
+  const target = photoCount(cfg);
+  const keys = stdSlotKeys(cfg);
+  const keySet = new Set(keys);
 
   // 시작된 차량 = records 존재. + plate별 사진 장수. '단말기 없음'은 사진 1장으로 간주.
   const [recRows, photoRows] = await Promise.all([
@@ -150,7 +159,7 @@ export async function loadInProgressList(slug: string): Promise<InProgressVehicl
       supabase
         .from("photos")
         .select("plate")
-        .in("slot_key", STD_SLOT_KEYS)
+        .in("slot_key", keys)
         .order("id")
         .range(from, to),
     ),
@@ -161,7 +170,7 @@ export async function loadInProgressList(slug: string): Promise<InProgressVehicl
   const count = new Map<string, number>();
   const teamOf = new Map<string, string>();
   for (const r of recRows) {
-    count.set(r.plate, (photoCnt.get(r.plate) ?? 0) + stdNaCount(r.na_slots));
+    count.set(r.plate, (photoCnt.get(r.plate) ?? 0) + stdNaCount(r.na_slots, keySet));
     teamOf.set(r.plate, (r.team ?? "").trim());
   }
 
@@ -207,8 +216,8 @@ export async function loadInProgressList(slug: string): Promise<InProgressVehicl
 // 완료된 plate → saved_at(ISO) 맵.
 // 설치 시작 단계(설치전 사진만 올리고 저장 — 설치시작 카드 발송용)에서도 saved_at이
 // 찍히므로, 저장 여부만으로 완료로 집계하면 안 된다. 설치후 사진까지 모두 충족해야 완료.
-export async function fetchCompletedMap(supabase: SB): Promise<Map<string, string>> {
-  const stdSlots = STD_SLOT_KEYS;
+export async function fetchCompletedMap(supabase: SB, keys: string[] = STD_SLOT_KEYS): Promise<Map<string, string>> {
+  const stdSlots = keys;
   const [recs, photoRows] = await Promise.all([
     fetchAll<{ plate: string; saved_at: string; na_slots: string[] | null }>((from, to) =>
       supabase
@@ -276,7 +285,7 @@ export async function loadInstallProgress(slug: string): Promise<InstallProgress
     fetchAll<{ plate: string; operator: string | null; route: string | null }>((from, to) =>
       supabase.from("vehicles").select("plate, operator, route").order("plate").range(from, to),
     ),
-    fetchCompletedMap(supabase),
+    fetchCompletedMap(supabase, stdSlotKeys(await getSlotConfig(slug))),
   ]);
 
   const today = workDateString(new Date()); // 현재 업무일(20:00~익일 12:00 기준)
@@ -505,7 +514,7 @@ export async function loadScheduleStats(slug: string): Promise<ScheduleStats> {
         .order("plate")
         .range(from, to),
     ),
-    fetchCompletedMap(supabase),
+    fetchCompletedMap(supabase, stdSlotKeys(await getSlotConfig(slug))),
     // 주소(템플릿 E열)는 부가 정보 — 실패해도 일정 집계는 그대로 진행
     loadOperatorAddresses(slug).catch(() => ({}) as Record<string, string>),
   ]);

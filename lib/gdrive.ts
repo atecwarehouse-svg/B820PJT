@@ -59,9 +59,15 @@ export async function trashFile(fileId: string): Promise<void> {
 }
 
 // 새 앨범 프로젝트의 드라이브 폴더(내 드라이브 루트, B820 사진 폴더와 형제). 프로젝트 생성 시 1회.
-// 같은 이름 폴더가 이미 있으면(앱이 만든 것) 재사용. 반환: 폴더 ID
+// 이름으로 찾아 재사용하지 않고 항상 새로 만든다 — 이름 검색은 운수사·차량 폴더 등 앱이 만든
+// 모든 폴더에 걸리므로, 같은 이름의 기존 폴더를 프로젝트 폴더로 잡았다가 삭제/휴지통 처리될 수 있다.
 export async function createProjectFolder(name: string): Promise<string> {
-  return ensureNamedFolder(drive(), name);
+  const created = await drive().files.create({
+    requestBody: { name, mimeType: FOLDER_MIME },
+    fields: "id",
+  });
+  if (!created.data.id) throw new Error(`폴더 생성 실패: ${name}`);
+  return created.data.id;
 }
 
 function isNotFound(e: unknown): boolean {

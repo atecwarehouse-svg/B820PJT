@@ -47,7 +47,16 @@ export async function POST(req: NextRequest) {
   const apply = form.get("apply") === "true";
   const pw = String(form.get("pw") ?? "");
   // 최초 업로드(새 프로젝트 전용): 시범설치 판정 없음 + 전개일정 대상수량을 차량리스트에 맞춰 정리
-  const initial = form.get("initial") === "true" && !isDefault(currentSlug());
+  const foreign = !isDefault(currentSlug()); // B820이 아닌 프로젝트
+  const initial = form.get("initial") === "true" && foreign;
+  // 화면이 보낸 프로젝트 ID와 서버가 판별한 프로젝트가 다르면 거부 — 다른 프로젝트 DB·양식을 덮어쓰는 사고 방지
+  const claimed = String(form.get("slug") ?? "").trim();
+  if (claimed && claimed !== currentSlug()) {
+    return NextResponse.json(
+      { error: "프로젝트가 일치하지 않습니다(화면 " + claimed + ", 서버 " + currentSlug() + "). 페이지를 새로고침한 뒤 다시 올려주세요." },
+      { status: 400 },
+    );
+  }
   if (!(await checkAdminPassword(pw)) && !(await isAdmin())) {
     return NextResponse.json({ error: "관리자 비밀번호가 올바르지 않습니다." }, { status: 401 });
   }
@@ -66,7 +75,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  if (initial) {
+  if (foreign) {
     for (const r of parsed.rows) r.is_pilot = false; // B820 시범설치 컷오프(2026-07-30)는 이 프로젝트와 무관
     parsed.pilotCount = 0;
   }
@@ -231,9 +240,9 @@ export async function POST(req: NextRequest) {
       template: {
         ok: t.ok,
         reason: t.reason,
-        warn: initial ? undefined : t.warn,
+        warn: foreign ? undefined : t.warn,
         initialNote:
-          initial && t.ok
+          foreign && t.ok
             ? `전개일정 대상수량을 차량리스트(${parsed.rows.length.toLocaleString()}대) 기준으로 자동 정리합니다.`
             : undefined,
       },
@@ -294,7 +303,7 @@ export async function POST(req: NextRequest) {
     } else {
       let tplBuffer = prep.buffer;
       let initialNote: string | undefined;
-      if (initial) {
+      if (foreign) {
         const n = await normalizeScheduleQuantities(prep.buffer, groupCounts(parsed.rows));
         tplBuffer = n.buffer;
         initialNote =
@@ -322,7 +331,7 @@ export async function POST(req: NextRequest) {
         templateNote = `다운로드 양식 교체 실패(${upError.message}) — 일정만 반영되었습니다.`;
       } else {
         templateReplaced = true;
-        templateNote = initial ? initialNote : prep.warn;
+        templateNote = foreign ? initialNote : prep.warn;
       }
     }
   } catch (e) {

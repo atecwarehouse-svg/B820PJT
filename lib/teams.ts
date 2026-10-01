@@ -709,6 +709,7 @@ export async function sendStartCard(d: {
   extraNote?: string; // 특이사항 (records.extra_note)
   startedAt?: string; // 설치 시작 시각(ISO) — 카드에 "시작시간 HH:MM" 표기
   inspectors?: string[]; // 담당 검수자 (개인 채팅방 라우팅)
+  projectName?: string; // B820이 아닌 프로젝트면 카드 제목에 표기
 }): Promise<void> {
   const url = process.env.TEAMS_COMPLETE_WEBHOOK_URL;
   if (!url) return;
@@ -727,7 +728,7 @@ export async function sendStartCard(d: {
               type: "TextBlock",
               size: "Large",
               weight: "Bolder",
-              text: "🚧 설치 시작",
+              text: d.projectName ? `🚧 ${d.projectName} 설치 시작` : "🚧 설치 시작",
               wrap: true,
             },
             {
@@ -878,6 +879,7 @@ export async function sendCompletionCard(d: {
   completedAt?: string; // 설치 종료 시각(ISO) — "종료시간 HH:MM" 표기
   photos?: { url: string; label: string }[];
   inspectors?: string[]; // 담당 검수자 (개인 채팅방 라우팅)
+  projectName?: string; // B820이 아닌 프로젝트면 카드 제목에 표기
 }): Promise<void> {
   const url = process.env.TEAMS_COMPLETE_WEBHOOK_URL;
   if (!url) return; // 웹후크 미설정 → 발송 생략
@@ -906,7 +908,7 @@ export async function sendCompletionCard(d: {
               type: "TextBlock",
               size: "Large",
               weight: "Bolder",
-              text: "✅ 설치 완료",
+              text: d.projectName ? `✅ ${d.projectName} 설치 완료` : "✅ 설치 완료",
               wrap: true,
             },
             {
