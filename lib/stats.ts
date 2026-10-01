@@ -489,6 +489,7 @@ export interface ScheduleDay {
 
 export interface ScheduleStats {
   days: ScheduleDay[];
+  doneByDate: { date: string; done: number }[]; // 완료 업무일(saved_at 기준)별 실적 대수 — 진척율 탭용, 날짜 오름차순
   cumPlanned: number[]; // days 순서의 누적 계획
   cumDone: number[]; // days 순서의 누적 실적
   totalPlanned: number;
@@ -525,12 +526,19 @@ export async function loadScheduleStats(slug: string): Promise<ScheduleStats> {
   let pilotTotal = 0;
   let pilotDone = 0;
 
+  const doneDates = new Map<string, number>(); // 완료 업무일 → 대수 (계획에 포함된 차량만)
+
   for (const v of vehicles) {
     if (!v.planned_date) continue; // 예정일 없는 차량은 일정 집계 제외
     const date = v.planned_date.slice(0, 10);
     const d = byDate.get(date) ?? { date, planned: 0, pilot: 0, done: 0 };
     d.planned++;
-    const isDone = completed.has(v.plate);
+    const savedAt = completed.get(v.plate);
+    const isDone = savedAt !== undefined;
+    if (savedAt) {
+      const wd = workDateString(savedAt);
+      doneDates.set(wd, (doneDates.get(wd) ?? 0) + 1);
+    }
     if (v.is_pilot) {
       d.pilot++;
       pilotTotal++;
@@ -592,7 +600,11 @@ export async function loadScheduleStats(slug: string): Promise<ScheduleStats> {
     cumDone.push(cd);
   }
 
-  return { days, cumPlanned, cumDone, totalPlanned: cp, totalDone: cd, pilotTotal, pilotDone };
+  const doneByDate = [...doneDates.entries()]
+    .map(([date, done]) => ({ date, done }))
+    .sort((a, b) => a.date.localeCompare(b.date));
+
+  return { days, doneByDate, cumPlanned, cumDone, totalPlanned: cp, totalDone: cd, pilotTotal, pilotDone };
 }
 
 export interface OperatorScheduleDate {

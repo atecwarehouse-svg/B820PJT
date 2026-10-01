@@ -3,11 +3,12 @@
 import { useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 
-// 대시보드 상세 섹션(설치 일정 / 운수사별 / 영업소별 / 날짜별 검색)을 탭으로 묶고,
+// 대시보드 상세 섹션(설치 일정 / 진척율 / 운수사별 / 영업소별 / 날짜별 검색)을 탭으로 묶고,
 // 비밀번호(진행현황 다운로드와 동일)로 잠금 해제해야 보이게 한다.
 // 잠겨 있을 땐 서버가 내용 자체를 내려주지 않는다(children이 없음).
 const TABS = [
   { key: "schedule", label: "설치 일정" },
+  { key: "rate", label: "진척율" },
   { key: "operator", label: "운수사별 진행 현황" },
   { key: "branch", label: "영업소별" },
   { key: "date", label: "날짜별 검색" },
@@ -18,12 +19,14 @@ type TabKey = (typeof TABS)[number]["key"];
 export default function DashboardDetailTabs({
   unlocked,
   schedule,
+  rate,
   operator,
   branch,
   date,
 }: {
   unlocked: boolean;
   schedule?: ReactNode;
+  rate?: ReactNode;
   operator?: ReactNode;
   branch?: ReactNode;
   date?: ReactNode;
@@ -69,7 +72,7 @@ export default function DashboardDetailTabs({
       <section className="mt-6 rounded-2xl border border-dashed border-gray-300 bg-white p-6 text-center">
         <div className="text-2xl">🔒</div>
         <p className="mt-2 text-sm font-bold text-gray-700">
-          설치 일정 · 운수사별 · 영업소별 · 날짜별 검색
+          설치 일정 · 진척율 · 운수사별 · 영업소별 · 날짜별 검색
         </p>
         <p className="mt-1 text-xs text-gray-400">
           비밀번호를 입력하면 상세 현황을 볼 수 있습니다.
@@ -120,12 +123,12 @@ export default function DashboardDetailTabs({
     );
   }
 
-  const content: Record<TabKey, ReactNode> = { schedule, operator, branch, date };
+  const content: Record<TabKey, ReactNode> = { schedule, rate, operator, branch, date };
 
   return (
     <section className="mt-6">
       <div className="flex items-center justify-between gap-2">
-        {/* 탭 — 모바일에서 4개가 넘치면 가로 스크롤 */}
+        {/* 탭 — 모바일에서 5개가 넘치면 가로 스크롤 */}
         <div className="-mx-1 flex gap-1 overflow-x-auto px-1 pb-1">
           {TABS.map((t) => (
             <button

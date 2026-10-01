@@ -24,6 +24,7 @@ import ReportHub from "@/components/ReportHub";
 import { inspectorNames } from "@/lib/teams";
 import TeamStatsModal from "@/components/TeamStatsModal";
 import ScheduleChart from "@/components/ScheduleChart";
+import ProgressRateChart from "@/components/ProgressRateChart";
 import ScheduleMoveModal from "@/components/ScheduleMoveModal";
 import InstallDateSearch from "@/components/InstallDateSearch";
 import DailyReportModal from "@/components/DailyReportModal";
@@ -323,7 +324,7 @@ export default async function DashboardPage() {
         </div>
       </div>
 
-      {/* ===== 상세 4개 섹션 — 비밀번호 잠금 해제 후 탭으로 열람 ===== */}
+      {/* ===== 상세 5개 섹션 — 비밀번호 잠금 해제 후 탭으로 열람 ===== */}
       <DashboardDetailTabs
         unlocked={detailUnlocked}
         schedule={
@@ -345,6 +346,25 @@ export default async function DashboardPage() {
                   </p>
                 ) : (
                   <ScheduleChart stats={sch} />
+                )}
+              </section>
+            </>
+          ) : undefined
+        }
+        rate={
+          detailUnlocked ? (
+            <>
+              <p className="mb-2 text-sm font-bold text-gray-700">
+                진척율
+                <span className="ml-1 font-normal text-gray-400">(주별 · 월별 계획 대비 실적)</span>
+              </p>
+              <section className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+                {sch === null ? (
+                  <p className="py-8 text-center text-sm text-gray-400">
+                    설치 일정 데이터가 없습니다. (예정일 임포트 필요)
+                  </p>
+                ) : (
+                  <ProgressRateChart days={sch.days} doneByDate={sch.doneByDate} />
                 )}
               </section>
             </>
