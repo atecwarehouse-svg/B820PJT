@@ -15,7 +15,7 @@ const BUILD_TIME = new Date().toLocaleString("sv-SE", {
 });
 const COMMIT = process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? "";
 
-// 탭 제목 — 루트 기본값은 "산출물 관리"라 B820 홈은 자기 이름을 쓴다
+// 탭 제목 — 루트 기본값은 "프로젝트 산출물 관리"라 B820 홈은 자기 이름을 쓴다
 export const metadata = { title: "B820 설치 사진첩" };
 
 export default function HomePage() {

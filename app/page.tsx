@@ -5,7 +5,7 @@ import { CARD_COLORS, PROJECT_ICONS, Svg, UI, type ColorKey } from "@/components
 export const dynamic = "force-dynamic";
 
 export const metadata = {
-  title: "프로젝트 선택 — 산출물 관리",
+  title: "프로젝트 산출물 관리",
 };
 
 // 정사각형 색 카드 — 색은 CARD_COLORS 키(등록 시 선택), 글씨·아이콘은 흰색
@@ -43,7 +43,7 @@ export default async function ProjectSelectPage() {
           <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500 to-blue-700 text-white shadow-lg shadow-blue-200">
             <Svg d={UI.grid} className="h-7 w-7" />
           </div>
-          <h1 className="text-2xl font-bold tracking-tight text-gray-900">산출물 관리</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-gray-900">프로젝트 산출물 관리</h1>
           <p className="mt-1.5 text-sm text-gray-500">작업할 프로젝트를 선택하세요</p>
         </header>
 
