@@ -43,7 +43,7 @@ export default async function SafetySignPage({
     return (
       <main className="mx-auto min-h-screen max-w-md px-4 pt-16 text-center">
         <p className="text-sm text-gray-500">서약서 링크를 찾을 수 없습니다.</p>
-        <Link href="/" className="mt-4 inline-block text-sm text-blue-600">
+        <Link href="/b820" className="mt-4 inline-block text-sm text-blue-600">
           ← 처음으로
         </Link>
       </main>

@@ -55,7 +55,7 @@ export default async function RecordPage({
         <p className="mt-2 text-sm text-gray-500">
           네트워크 상태를 확인한 뒤 새로고침 해주세요.
         </p>
-        <Link href="/" className="mt-6 inline-block text-blue-600 underline">
+        <Link href="/b820" className="mt-6 inline-block text-blue-600 underline">
           ← 처음으로
         </Link>
       </main>
@@ -67,7 +67,7 @@ export default async function RecordPage({
       <main className="mx-auto max-w-md px-4 pt-16 text-center">
         <p className="text-lg font-medium">차량을 찾을 수 없습니다.</p>
         <p className="mt-2 text-sm text-gray-500">{plate}</p>
-        <Link href="/" className="mt-6 inline-block text-blue-600 underline">
+        <Link href="/b820" className="mt-6 inline-block text-blue-600 underline">
           ← 처음으로
         </Link>
       </main>

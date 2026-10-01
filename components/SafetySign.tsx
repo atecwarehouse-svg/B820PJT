@@ -90,7 +90,7 @@ export default function SafetySign({
   // 창 닫기 시도 → 브라우저가 거부하면(PC에서 직접 연 탭 등) 홈(차량번호 입력)으로 이동
   function closeOrHome() {
     window.close();
-    setTimeout(() => router.push("/"), 250);
+    setTimeout(() => router.push("/b820"), 250);
   }
 
   async function submit() {

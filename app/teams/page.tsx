@@ -43,7 +43,7 @@ export default async function TeamsPage() {
 
   return (
     <main className="mx-auto min-h-screen max-w-md px-4 pb-16 pt-6">
-      <Link href="/" className="text-sm text-blue-600 hover:underline">
+      <Link href="/b820" className="text-sm text-blue-600 hover:underline">
         ← 홈
       </Link>
       <h1 className="mt-2 text-xl font-bold text-sky-700">👷 설치팀별 확인</h1>

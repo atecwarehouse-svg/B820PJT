@@ -10,7 +10,7 @@ export default function AboutPage() {
   return (
     <main className="mx-auto max-w-2xl px-4 pb-20 pt-6">
       <div className="mb-6 flex items-center justify-between">
-        <Link href="/" className="text-sm text-blue-600">
+        <Link href="/b820" className="text-sm text-blue-600">
           ← 처음으로
         </Link>
         <h1 className="text-lg font-bold text-blue-700">앱 소개</h1>

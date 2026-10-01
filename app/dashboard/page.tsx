@@ -179,7 +179,7 @@ export default async function DashboardPage() {
   return (
     <main className="mx-auto max-w-3xl px-3 pb-16 pt-4">
       <div className="mb-4 flex items-center justify-between">
-        <Link href="/" className="text-sm text-blue-600">
+        <Link href="/b820" className="text-sm text-blue-600">
           ← 차량 입력
         </Link>
         <h1 className="text-lg font-bold text-blue-700">진행 현황</h1>

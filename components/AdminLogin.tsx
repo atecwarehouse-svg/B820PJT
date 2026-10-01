@@ -58,7 +58,7 @@ export default function AdminLogin() {
           {busy ? "확인 중…" : "입장"}
         </button>
       </form>
-      <Link href="/" className="mt-6 text-center text-sm text-blue-600">
+      <Link href="/b820" className="mt-6 text-center text-sm text-blue-600">
         ← 처음으로
       </Link>
     </main>

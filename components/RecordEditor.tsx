@@ -646,7 +646,7 @@ export default function RecordEditor({ plate, initial, teamOptions = [] }: Props
 
       {/* 상단 바 */}
       <div className="mb-3 flex items-center justify-between">
-        <Link href="/" className="text-sm text-blue-600">
+        <Link href="/b820" className="text-sm text-blue-600">
           ← 차량 변경
         </Link>
         <span className="text-xs text-gray-400">

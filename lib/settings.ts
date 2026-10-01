@@ -2,10 +2,46 @@
 // 관리자 페이지에서 수정하는 값(완료리포트 수신자 등)을 저장한다.
 
 import { createServiceClient } from "@/lib/supabase/server";
+import { colorKey, iconKey, type ColorKey, type IconKey } from "@/components/ProjectIcon";
 
 export const REPORT_MAIL_KEY = "report_mail_to";
 export const INSTALL_TEAMS_KEY = "install_teams"; // 설치팀 목록 (JSON [{team,name,phone}], 구버전 문자열 배열 호환)
 export const INSPECT_CHECKLIST_KEY = "inspect_checklist"; // 배차표 검수항목 (JSON {vehicle,device})
+export const PROJECTS_KEY = "projects"; // 첫 화면 프로젝트 목록 (JSON Project[]) — B820은 코드에 고정, 여기엔 추가 프로젝트만
+
+// 첫 화면(프로젝트 선택)에 추가로 띄우는 프로젝트. 각 프로젝트는 별도 배포된 앱이라
+// 카드는 url로 이동만 한다(이 앱 안에 데이터를 두지 않음).
+export interface Project {
+  id: string;
+  icon: IconKey; // 아이콘 키 (components/ProjectIcon.tsx의 PROJECT_ICONS, 기본 folder)
+  color: ColorKey; // 카드 배경색 키 (CARD_COLORS, 기본 blue)
+  name: string;
+  description: string;
+  url: string; // https://… 또는 이 앱 안의 경로(/…)
+  created_at: string;
+}
+
+export async function getProjects(): Promise<Project[]> {
+  const raw = await getSetting(PROJECTS_KEY);
+  if (!raw) return [];
+  try {
+    const arr = JSON.parse(raw);
+    if (!Array.isArray(arr)) return [];
+    return arr
+      .map((v) => ({
+        id: String(v?.id ?? ""),
+        icon: iconKey(v?.icon),
+        color: colorKey(v?.color),
+        name: String(v?.name ?? "").trim(),
+        description: String(v?.description ?? "").trim(),
+        url: String(v?.url ?? "").trim(),
+        created_at: String(v?.created_at ?? ""),
+      }))
+      .filter((v) => v.id && v.name && v.url);
+  } catch {
+    return [];
+  }
+}
 
 // 업무일별 설치시작 보고 현황 — JSON {운수사: [담당 검수자…]}.
 // 두 가지를 겸한다: (1) 보고 완료 운수사 잠금(키 존재 여부), (2) 그날 담당 검수자 배정

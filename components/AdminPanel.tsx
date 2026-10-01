@@ -99,7 +99,7 @@ export default function AdminPanel() {
   return (
     <main className="mx-auto max-w-2xl px-4 pb-16 pt-6">
       <div className="mb-4 flex items-center justify-between">
-        <Link href="/" className="text-sm text-blue-600">
+        <Link href="/b820" className="text-sm text-blue-600">
           ← 처음으로
         </Link>
         <h1 className="text-lg font-bold text-blue-700">관리자</h1>
