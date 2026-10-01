@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { brandName, currentProject } from "@/lib/project";
+import { titleText } from "@/lib/export/layout-spec";
 import { loadManyPrintData } from "@/lib/export/load-record";
 import { buildMultiDocument } from "@/lib/export/print-html";
 import { renderPdf } from "@/lib/export/pdf-render";
@@ -11,12 +13,12 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-const PDF_FOLDER = "인천B820 PDF";
+
 
 // POST /api/export/pdf  body: { plates: string[], title?: string }
 // 선택한 차량들을 차량당 1페이지씩 묶은 PDF 1파일 → 드라이브 "인천B820 PDF" 폴더에 업로드.
 export async function POST(req: NextRequest) {
-  if (!isAdmin()) {
+  if (!(await isAdmin())) {
     return NextResponse.json({ error: "관리자 인증이 필요합니다." }, { status: 401 });
   }
   const { plates, title, noStamp } = (await req.json()) as {
@@ -40,14 +42,15 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const html = buildMultiDocument(items);
+    const brand = brandName(await currentProject());
+    const html = buildMultiDocument(items, titleText(brand));
     const pdf = await renderPdf(html);
-    const base = (title || "B820_설치사진첩").replace(/[\\/]/g, "-");
+    const base = (title || `${brand}_설치사진첩`).replace(/[\\/]/g, "-");
     const fileName = noStamp
       ? `${base}_${items.length}대.pdf`
       : `${base}_${items.length}대_${kstStamp()}.pdf`;
-    const { link, folderLink } = await uploadExport(PDF_FOLDER, fileName, pdf, "application/pdf");
-    return NextResponse.json({ ok: true, folder: PDF_FOLDER, name: fileName, link, folderLink, count: items.length });
+    const { link, folderLink, folderName } = await uploadExport("PDF", fileName, pdf, "application/pdf");
+    return NextResponse.json({ ok: true, folder: folderName, name: fileName, link, folderLink, count: items.length });
   } catch (e) {
     return NextResponse.json(
       { error: e instanceof Error ? e.message : "PDF 생성 실패" },

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
-import Link from "next/link";
+import { currentProject, isDefault } from "@/lib/project";
+import Link from "@/components/PLink";
 import { createServiceClient } from "@/lib/supabase/server";
 import SafetySign, {
   type Phase,
@@ -11,14 +12,17 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 // 링크 공유 시 미리보기 제목 — 사진첩 공통 제목 대신 서약서로 표시
-export function generateMetadata({
+export async function generateMetadata({
   searchParams,
 }: {
   searchParams: { phase?: string };
-}): Metadata {
+}): Promise<Metadata> {
   const phaseLabel = searchParams.phase === "after" ? "설치 후" : "설치 전";
   const title = `안전관리 서약서 · ${phaseLabel} 서명`;
-  const description = "인천버스 단말기 설치 안전관리 서약서 — 작업자 서명 링크";
+  const project = await currentProject();
+  const description = isDefault(project.slug)
+    ? "인천버스 단말기 설치 안전관리 서약서 — 작업자 서명 링크"
+    : `${project.name} 안전관리 서약서 — 작업자 서명 링크`;
   return { title, description, openGraph: { title, description } };
 }
 

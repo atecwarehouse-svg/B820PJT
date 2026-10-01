@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { adminPassword, isAdmin } from "@/lib/admin-auth";
+import { checkAdminPassword, isAdmin } from "@/lib/admin-auth";
 import { getInstallTeamsFull } from "@/lib/settings";
 
 export const runtime = "nodejs";
@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 // 관리자 비밀번호(pw) 또는 관리자 로그인 쿠키 필수.
 export async function GET(req: NextRequest) {
   const pw = req.nextUrl.searchParams.get("pw") ?? "";
-  if (!isAdmin() && pw !== adminPassword()) {
+  if (!(await isAdmin()) && !(await checkAdminPassword(pw))) {
     return NextResponse.json({ error: "관리자 비밀번호가 올바르지 않습니다." }, { status: 401 });
   }
   const list = (await getInstallTeamsFull()).filter((t) => t.phone);

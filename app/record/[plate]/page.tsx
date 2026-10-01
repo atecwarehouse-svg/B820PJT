@@ -1,4 +1,5 @@
-import Link from "next/link";
+import Link from "@/components/PLink";
+import { brandName, currentProject } from "@/lib/project";
 import { createServiceClient } from "@/lib/supabase/server";
 import { getInstallTeams } from "@/lib/settings";
 import { workDateString } from "@/lib/work-day";
@@ -97,7 +98,7 @@ export default async function RecordPage({
       {notToday && (
         <PlanDateGuard plate={plate} plannedDate={vehicle.planned_date ?? null} />
       )}
-      <RecordEditor plate={plate} initial={bundle} teamOptions={teamOptions} />
+      <RecordEditor plate={plate} initial={bundle} teamOptions={teamOptions} brand={brandName(await currentProject())} />
     </>
   );
 }

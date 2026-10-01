@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/PLink";
 import { createServiceClient } from "@/lib/supabase/server";
 import { fetchAll } from "@/lib/supabase/paginate";
 import { isAdmin } from "@/lib/admin-auth";
@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 
 export default async function SafetyPage() {
   // 작업자 서명 링크(/safety/[id])는 게이트 없이 열리고, 관리 화면만 잠근다.
-  if (!isAdmin()) return <AdminLogin />;
+  if (!(await isAdmin())) return <AdminLogin />;
 
   const supabase = createServiceClient();
 

@@ -4,6 +4,7 @@
 
 import { google } from "googleapis";
 import { Readable } from "node:stream";
+import { currentProject, isDefault } from "@/lib/project";
 
 // drive.file: 이 앱이 생성/열람한 파일에만 접근 (검증 불필요한 비민감 스코프).
 export const GDRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file";
@@ -40,6 +41,27 @@ function rootFolderId(): string {
   const id = process.env.GDRIVE_FOLDER_ID;
   if (!id) throw new Error("GDRIVE_FOLDER_ID 환경변수 누락");
   return id;
+}
+
+// 현재 프로젝트의 사진 루트 — B820은 env 루트, 그 외 프로젝트는 만들 때 생성한 프로젝트 폴더
+async function projectRoot(): Promise<string> {
+  const p = await currentProject();
+  return p.driveFolderId ?? rootFolderId();
+}
+
+// 파일/폴더를 휴지통으로 (30일 복구 가능). 프로젝트 삭제 시 사진 폴더에 사용 — 영구 삭제는 하지 않는다.
+export async function trashFile(fileId: string): Promise<void> {
+  try {
+    await drive().files.update({ fileId, requestBody: { trashed: true } });
+  } catch (e) {
+    if (!isNotFound(e)) throw e;
+  }
+}
+
+// 새 앨범 프로젝트의 드라이브 폴더(내 드라이브 루트, B820 사진 폴더와 형제). 프로젝트 생성 시 1회.
+// 같은 이름 폴더가 이미 있으면(앱이 만든 것) 재사용. 반환: 폴더 ID
+export async function createProjectFolder(name: string): Promise<string> {
+  return ensureNamedFolder(drive(), name);
 }
 
 function isNotFound(e: unknown): boolean {
@@ -119,9 +141,8 @@ async function createPhotoFile(
   },
 ): Promise<string> {
   const { plate, operator, fileName, body, contentType = "image/jpeg", subfolder, topFolder } = opts;
-  const base = topFolder
-    ? await ensureFolderCached(d, topFolder, rootFolderId())
-    : rootFolderId();
+  const root = await projectRoot();
+  const base = topFolder ? await ensureFolderCached(d, topFolder, root) : root;
   const operatorFolder = await ensureFolderCached(d, operator || "미지정", base);
   const plateFolder = await ensureFolderCached(d, plate, operatorFolder);
   const parentFolder = subfolder
@@ -156,16 +177,24 @@ async function ensureNamedFolder(d: Drive, name: string): Promise<string> {
   return created.data.id;
 }
 
-// 내보내기 파일(엑셀/PDF)을 지정 이름 폴더(예: "인천B820 PDF")에 업로드.
-// {id, link(파일), folderLink(폴더)} 반환.
+export type ExportKind = "PDF" | "엑셀" | "서약서";
+
+// 내보내기 파일(엑셀/PDF/서약서)을 프로젝트별 보관 폴더에 업로드. {id, link(파일), folderLink(폴더), folderName} 반환.
+//   B820: 지금처럼 내 드라이브의 "인천B820 PDF" / "인천B820 엑셀" / "인천B820 서약서" (이름으로 찾기)
+//   그 외: 프로젝트 폴더 아래 "<프로젝트명> PDF" 등 (전역 이름 검색 안 함 — 프로젝트끼리 섞이지 않게)
 export async function uploadExport(
-  folderName: string,
+  kind: ExportKind,
   fileName: string,
   body: Buffer,
   mimeType: string,
-): Promise<{ id: string; link: string; folderLink: string }> {
+): Promise<{ id: string; link: string; folderLink: string; folderName: string }> {
   const d = drive();
-  const folderId = await ensureNamedFolder(d, folderName);
+  const p = await currentProject();
+  const folderName = isDefault(p.slug) ? `인천B820 ${kind}` : `${p.name} ${kind}`;
+  const folderId =
+    isDefault(p.slug) || !p.driveFolderId
+      ? await ensureNamedFolder(d, folderName)
+      : await ensureFolderCached(d, folderName, p.driveFolderId);
   const res = await d.files.create({
     requestBody: { name: fileName, parents: [folderId] },
     media: { mimeType, body: Readable.from(body) },
@@ -176,6 +205,7 @@ export async function uploadExport(
     id: res.data.id,
     link: res.data.webViewLink ?? "",
     folderLink: `https://drive.google.com/drive/folders/${folderId}`,
+    folderName,
   };
 }
 

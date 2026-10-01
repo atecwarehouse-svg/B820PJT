@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import Link from "next/link";
+import Link from "@/components/PLink";
 import type { CompletedVehicle } from "@/lib/stats";
 
 // 완료 KPI 카드 클릭 → 운수사 선택 → 해당 운수사 설치완료 차량 목록 팝업.

@@ -17,7 +17,7 @@ type Row = {
 // GET /api/admin/records?q=차량번호  → 업로드된(기록 있는) 차량 목록 + 사진수
 //     &added=1 → 기록 유무와 무관하게 증차(is_added) 차량 목록 (잘못 등록한 증차 삭제용)
 export async function GET(req: NextRequest) {
-  if (!isAdmin()) {
+  if (!(await isAdmin())) {
     return NextResponse.json({ error: "관리자 인증이 필요합니다." }, { status: 401 });
   }
   const q = req.nextUrl.searchParams.get("q")?.trim() ?? "";

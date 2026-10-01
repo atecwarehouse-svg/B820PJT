@@ -1,16 +1,18 @@
 // 운수사 → 야간 박차지 주소 (진행현황 템플릿 차량리스트 E열, 운수사별 첫 행).
 // 날씨 위젯(구/동 추출)과 일정 달력 팝업(주소 표시)이 공유. 1시간 캐시.
+// 프로젝트(slug)가 캐시 키 인자에 포함되므로 프로젝트별로 따로 캐시된다.
 
 import { unstable_cache } from "next/cache";
 import ExcelJS from "exceljs";
 import { createServiceClient } from "@/lib/supabase/server";
+import { TEMPLATE_BUCKET, templateObject } from "@/lib/template-path";
 
 export const loadOperatorAddresses = unstable_cache(
-  async (): Promise<Record<string, string>> => {
-    const supabase = createServiceClient();
-    const bucket = process.env.TEMPLATE_BUCKET ?? "templates";
-    const object = process.env.TEMPLATE_OBJECT ?? "progress-template.xlsx";
-    const { data, error } = await supabase.storage.from(bucket).download(object);
+  async (slug: string): Promise<Record<string, string>> => {
+    const supabase = createServiceClient(slug);
+    const { data, error } = await supabase.storage
+      .from(TEMPLATE_BUCKET)
+      .download(templateObject(slug));
     if (error || !data) return {};
     const wb = new ExcelJS.Workbook();
     await wb.xlsx.load(Buffer.from(await data.arrayBuffer()) as unknown as ArrayBuffer);

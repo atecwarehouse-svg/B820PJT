@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { currentSlug } from "@/lib/project";
 import { loadInstallProgress } from "@/lib/stats";
 import { createServiceClient } from "@/lib/supabase/server";
 import { fetchAll } from "@/lib/supabase/paginate";
@@ -11,7 +12,7 @@ export const dynamic = "force-dynamic";
 // 현장에서 가장 많이 쓰는 첫 화면이 느려지지 않는다.
 export async function GET() {
   try {
-    const ip = await loadInstallProgress();
+    const ip = await loadInstallProgress(currentSlug());
 
     // 배차표(dispatch_times)의 '나가는 시간'을 붙여 팝업에서 그 순서로 정렬한다.
     // 배차표가 없거나 조회 실패해도 목록 자체는 그대로 내려준다.

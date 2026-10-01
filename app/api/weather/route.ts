@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { unstable_cache } from "next/cache";
 import { createServiceClient } from "@/lib/supabase/server";
+import { currentSlug } from "@/lib/project";
 import { fetchAll } from "@/lib/supabase/paginate";
 import { workDateString } from "@/lib/work-day";
 import { loadOperatorAddresses } from "@/lib/operator-address";
@@ -46,8 +47,8 @@ function parseAddress(addr: string): { gu: string; dong: string | null } | null 
 }
 
 // 운수사 → 구/동 맵 — 공용 주소 로더(템플릿 E열, 1시간 캐시)에서 파싱
-async function loadOperatorLoc(): Promise<Record<string, { gu: string; dong: string | null }>> {
-  const addrs = await loadOperatorAddresses();
+async function loadOperatorLoc(slug: string): Promise<Record<string, { gu: string; dong: string | null }>> {
+  const addrs = await loadOperatorAddresses(slug);
   const map: Record<string, { gu: string; dong: string | null }> = {};
   for (const [op, addr] of Object.entries(addrs)) {
     const loc = parseAddress(addr);
@@ -116,8 +117,8 @@ export interface WeatherItem {
 
 // 금일 설치 예정 운수사들의 위치별 작업 시간대 예보 (10분 캐시)
 const loadWeather = unstable_cache(
-  async (date: string): Promise<WeatherItem[]> => {
-    const supabase = createServiceClient();
+  async (slug: string, date: string): Promise<WeatherItem[]> => {
+    const supabase = createServiceClient(slug);
     const vehicles = await fetchAll<{ operator: string | null }>((from, to) =>
       supabase
         .from("vehicles")
@@ -129,7 +130,7 @@ const loadWeather = unstable_cache(
     const operators = [...new Set(vehicles.map((v) => v.operator?.trim()).filter(Boolean))] as string[];
     if (operators.length === 0) return [];
 
-    const opLoc = await loadOperatorLoc();
+    const opLoc = await loadOperatorLoc(slug);
     // 위치(구+동) → 운수사들 (주소 없는 운수사는 표시 제외)
     const byLoc = new Map<string, { gu: string; dong: string | null; operators: string[] }>();
     for (const op of operators) {
@@ -205,7 +206,7 @@ const loadWeather = unstable_cache(
 export async function GET() {
   try {
     const today = workDateString(new Date());
-    const list = await loadWeather(today);
+    const list = await loadWeather(currentSlug(), today);
     return NextResponse.json({ date: today, list });
   } catch {
     // 날씨는 부가 정보 — 실패 시 위젯만 숨긴다

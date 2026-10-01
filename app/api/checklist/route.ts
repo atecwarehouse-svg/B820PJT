@@ -15,7 +15,7 @@ export async function GET() {
 
 // PUT { vehicle, device: {t,s}[] } → 검수항목 저장 (전체 교체, 관리자 전용)
 export async function PUT(req: NextRequest) {
-  if (!isAdmin()) {
+  if (!(await isAdmin())) {
     return NextResponse.json({ error: "관리자 인증이 필요합니다." }, { status: 401 });
   }
   const body = (await req.json().catch(() => null)) as {

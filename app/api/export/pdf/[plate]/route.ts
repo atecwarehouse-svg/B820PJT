@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { brandName, currentProject } from "@/lib/project";
+import { titleText } from "@/lib/export/layout-spec";
 import { loadPrintData } from "@/lib/export/load-record";
 import { buildPrintDocument } from "@/lib/export/print-html";
 import { renderPdf } from "@/lib/export/pdf-render";
@@ -19,9 +21,10 @@ export async function GET(
   }
 
   try {
-    const html = buildPrintDocument(data);
+    const brand = brandName(await currentProject());
+    const html = buildPrintDocument(data, titleText(brand));
     const pdf = await renderPdf(html);
-    const filename = encodeURIComponent(`B820_설치사진첩_${plate}.pdf`);
+    const filename = encodeURIComponent(`${brand}_설치사진첩_${plate}.pdf`);
     return new NextResponse(pdf as unknown as BodyInit, {
       status: 200,
       headers: {

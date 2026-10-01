@@ -4,18 +4,20 @@ import { fetchAll } from "@/lib/supabase/paginate";
 import { renderPdf, renderPdfMany } from "@/lib/export/pdf-render";
 import {
   buildPledgeHtml,
+  PLEDGE_TITLE,
   type PledgeSessionData,
   type PledgeSignatureData,
 } from "@/lib/export/pledge-html";
 import JSZip from "jszip";
 import { uploadExport, deletePhoto } from "@/lib/gdrive";
 import { isAdmin } from "@/lib/admin-auth";
+import { currentProject, isDefault } from "@/lib/project";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-const PLEDGE_FOLDER = "인천B820 서약서";
+
 const PDF_MIME = "application/pdf";
 
 // GET /api/export/safety?session=<id>
@@ -23,7 +25,7 @@ const PDF_MIME = "application/pdf";
 //  - 구글드라이브 "인천B820 서약서" 폴더에 업로드(보관) 하고
 //  - 동시에 attachment 로 스트림(다운로드) 한다. (사진첩 진행현황 다운로드와 동일 방식)
 export async function GET(req: Request) {
-  if (!isAdmin()) {
+  if (!(await isAdmin())) {
     return NextResponse.json({ error: "관리자 인증이 필요합니다." }, { status: 401 });
   }
   const params = new URL(req.url).searchParams;
@@ -57,7 +59,12 @@ export async function GET(req: Request) {
 
   let buffer: Buffer;
   try {
-    const html = buildPledgeHtml(session, rows ?? []);
+    const project = await currentProject();
+    const html = buildPledgeHtml(
+      session,
+      rows ?? [],
+      isDefault(project.slug) ? PLEDGE_TITLE : `${project.name} 안전관리 서약서`,
+    );
     buffer = await renderPdf(html);
   } catch (e) {
     return NextResponse.json(
@@ -73,7 +80,7 @@ export async function GET(req: Request) {
   // 구글드라이브 보관 (best-effort — 실패해도 다운로드는 진행)
   // 세션당 PDF 1개만 유지: 새로 올린 뒤 이전 파일을 삭제하고 파일 ID를 세션에 기록.
   try {
-    const { id: newFileId } = await uploadExport(PLEDGE_FOLDER, filename, buffer, PDF_MIME);
+    const { id: newFileId } = await uploadExport("서약서", filename, buffer, PDF_MIME);
     const oldFileId = (session.drive_file_id as string | null) ?? null;
     if (oldFileId && oldFileId !== newFileId) {
       await deletePhoto(oldFileId).catch(() => {}); // 이전 PDF 정리

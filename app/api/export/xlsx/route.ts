@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { brandName, currentProject } from "@/lib/project";
+import { titleText } from "@/lib/export/layout-spec";
 import { loadBuildInput } from "@/lib/export/load-xlsx-input";
 import { buildWorkbookMulti, type BuildInput } from "@/lib/export/xlsx-builder";
 import { uploadExport } from "@/lib/gdrive";
@@ -10,14 +12,14 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-const XLSX_FOLDER = "인천B820 엑셀";
+
 const XLSX_MIME =
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
 // POST /api/export/xlsx  body: { plates: string[], title?: string }
 // 선택 차량을 묶은 엑셀 1파일 → 드라이브 "인천B820 엑셀" 폴더에 업로드.
 export async function POST(req: NextRequest) {
-  if (!isAdmin()) {
+  if (!(await isAdmin())) {
     return NextResponse.json({ error: "관리자 인증이 필요합니다." }, { status: 401 });
   }
   const { plates, title, noStamp } = (await req.json()) as {
@@ -44,14 +46,15 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const wb = await buildWorkbookMulti(inputs);
+    const brand = brandName(await currentProject());
+    const wb = await buildWorkbookMulti(inputs, titleText(brand));
     const buf = Buffer.from(await wb.xlsx.writeBuffer());
-    const base = (title || "B820_설치사진첩").replace(/[\\/]/g, "-");
+    const base = (title || `${brand}_설치사진첩`).replace(/[\\/]/g, "-");
     const fileName = noStamp
       ? `${base}_${inputs.length}대.xlsx`
       : `${base}_${inputs.length}대_${kstStamp()}.xlsx`;
-    const { link, folderLink } = await uploadExport(XLSX_FOLDER, fileName, buf, XLSX_MIME);
-    return NextResponse.json({ ok: true, folder: XLSX_FOLDER, name: fileName, link, folderLink, count: inputs.length });
+    const { link, folderLink, folderName } = await uploadExport("엑셀", fileName, buf, XLSX_MIME);
+    return NextResponse.json({ ok: true, folder: folderName, name: fileName, link, folderLink, count: inputs.length });
   } catch (e) {
     return NextResponse.json(
       { error: e instanceof Error ? e.message : "엑셀 생성 실패" },

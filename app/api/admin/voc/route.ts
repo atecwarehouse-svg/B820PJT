@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 
 // GET /api/admin/voc → 저장된 운수사 VOC 목록 (설치일 최신순)
 export async function GET() {
-  if (!isAdmin()) {
+  if (!(await isAdmin())) {
     return NextResponse.json({ error: "관리자 인증이 필요합니다." }, { status: 401 });
   }
   const supabase = createServiceClient();
@@ -31,7 +31,7 @@ export async function GET() {
 // PATCH /api/admin/voc → 저장된 VOC 수정 (id + items/day_off/notes)
 // operator·date는 식별키라 수정 불가.
 export async function PATCH(req: NextRequest) {
-  if (!isAdmin()) {
+  if (!(await isAdmin())) {
     return NextResponse.json({ error: "관리자 인증이 필요합니다." }, { status: 401 });
   }
   let body: Record<string, unknown>;
@@ -90,7 +90,7 @@ export async function PATCH(req: NextRequest) {
 
 // DELETE /api/admin/voc?id=123 → VOC 삭제
 export async function DELETE(req: NextRequest) {
-  if (!isAdmin()) {
+  if (!(await isAdmin())) {
     return NextResponse.json({ error: "관리자 인증이 필요합니다." }, { status: 401 });
   }
   const id = Number(req.nextUrl.searchParams.get("id"));

@@ -3,8 +3,9 @@ import { createServiceClient } from "@/lib/supabase/server";
 import { CHECK_SLOTS, REQUIRED_CHECK_KEYS, type CustomSlot } from "@/lib/slots";
 import { notifyInstallProgress, originFromRequest } from "@/lib/install-status";
 import { autoEndPledgeSessions } from "@/lib/pledge-end";
+import { currentSlug } from "@/lib/project";
 import { runAfterResponse } from "@/lib/background";
-import { adminPassword, isAdmin } from "@/lib/admin-auth";
+import { checkAdminPassword, isAdmin } from "@/lib/admin-auth";
 import { kstDateString } from "@/lib/work-day";
 
 export const runtime = "nodejs";
@@ -114,7 +115,7 @@ export async function POST(req: NextRequest) {
   const prevTeam = ((existing?.team as string | null) ?? "").trim();
   let effectiveTeam = body.team !== undefined ? team : undefined;
   if (effectiveTeam !== undefined && prevTeam && effectiveTeam !== prevTeam) {
-    const authorized = (body.admin_pw ?? "") === adminPassword() || isAdmin();
+    const authorized = (await checkAdminPassword(body.admin_pw)) || (await isAdmin());
     if (body.team_change) {
       if (!authorized) {
         return NextResponse.json(
@@ -218,10 +219,11 @@ export async function POST(req: NextRequest) {
   // 응답을 먼저 돌려보내고 백그라운드로 처리해 저장 버튼 반응을 빠르게 한다.
   if (body.saved) {
     const origin = originFromRequest(req) || req.nextUrl.origin;
+    const slug = currentSlug(); // 응답 후에는 headers()를 못 읽으므로 여기서 확보
     runAfterResponse(async () => {
-      await notifyInstallProgress({ supabase, plate, origin });
+      await notifyInstallProgress({ supabase, plate, origin, slug });
       // 금일 예정 차량이 전부 완료·설치제외면 서약서 세션을 자동 종료
-      await autoEndPledgeSessions(supabase);
+      await autoEndPledgeSessions(supabase, slug);
     });
   }
 

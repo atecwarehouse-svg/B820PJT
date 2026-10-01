@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 // GET /api/admin/modem → 등록된 LTE 모뎀불량 목록 (최신순)
 // 삭제는 배차표와 같은 경로(POST /api/modem, clear=1 — DB 행 + Drive 사진)를 쓴다.
 export async function GET() {
-  if (!isAdmin()) {
+  if (!(await isAdmin())) {
     return NextResponse.json({ error: "관리자 인증이 필요합니다." }, { status: 401 });
   }
   const supabase = createServiceClient();

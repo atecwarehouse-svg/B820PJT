@@ -4,7 +4,10 @@ import { createServiceClient } from "@/lib/supabase/server";
 import { fetchAll } from "@/lib/supabase/paginate";
 import { parseScheduleBuffer } from "@/lib/import/parse-schedule";
 import { prepareTemplateBuffer } from "@/lib/import/prepare-template";
-import { adminPassword, isAdmin } from "@/lib/admin-auth";
+import { checkAdminPassword, isAdmin } from "@/lib/admin-auth";
+import { currentSlug, isDefault } from "@/lib/project";
+import { TEMPLATE_BUCKET, templateObject, templateBackup } from "@/lib/template-path";
+import { normalizeScheduleQuantities, groupCounts } from "@/lib/import/normalize-schedule";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -14,9 +17,6 @@ const CHUNK = 500;
 const PAGE = 1000;
 
 // 다운로드 템플릿 위치 (build-progress-xlsx.ts와 동일 규칙)
-const TEMPLATE_BUCKET = process.env.TEMPLATE_BUCKET ?? "templates";
-const TEMPLATE_OBJECT = process.env.TEMPLATE_OBJECT ?? "progress-template.xlsx";
-const TEMPLATE_BACKUP = TEMPLATE_OBJECT.replace(/\.xlsx$/, "") + ".backup.xlsx";
 
 interface ChangeGroup {
   operator: string;
@@ -46,7 +46,9 @@ export async function POST(req: NextRequest) {
   const file = form.get("file") as File | null;
   const apply = form.get("apply") === "true";
   const pw = String(form.get("pw") ?? "");
-  if (pw !== adminPassword() && !isAdmin()) {
+  // 최초 업로드(새 프로젝트 전용): 시범설치 판정 없음 + 전개일정 대상수량을 차량리스트에 맞춰 정리
+  const initial = form.get("initial") === "true" && !isDefault(currentSlug());
+  if (!(await checkAdminPassword(pw)) && !(await isAdmin())) {
     return NextResponse.json({ error: "관리자 비밀번호가 올바르지 않습니다." }, { status: 401 });
   }
   if (!file) {
@@ -64,6 +66,10 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  if (initial) {
+    for (const r of parsed.rows) r.is_pilot = false; // B820 시범설치 컷오프(2026-07-30)는 이 프로젝트와 무관
+    parsed.pilotCount = 0;
+  }
   if (parsed.rows.length === 0) {
     return NextResponse.json(
       { error: "차량리스트에서 차량을 찾지 못했습니다. 양식을 확인해주세요." },
@@ -221,7 +227,16 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       applied: false,
       ...summary,
-      template: { ok: t.ok, reason: t.reason, warn: t.warn },
+      initial,
+      template: {
+        ok: t.ok,
+        reason: t.reason,
+        warn: initial ? undefined : t.warn,
+        initialNote:
+          initial && t.ok
+            ? `전개일정 대상수량을 차량리스트(${parsed.rows.length.toLocaleString()}대) 기준으로 자동 정리합니다.`
+            : undefined,
+      },
     });
   }
 
@@ -277,7 +292,19 @@ export async function POST(req: NextRequest) {
     if (!prep.ok || !prep.buffer) {
       templateNote = prep.reason;
     } else {
+      let tplBuffer = prep.buffer;
+      let initialNote: string | undefined;
+      if (initial) {
+        const n = await normalizeScheduleQuantities(prep.buffer, groupCounts(parsed.rows));
+        tplBuffer = n.buffer;
+        initialNote =
+          `전개일정 대상수량을 차량리스트 기준으로 정리했습니다(${n.rows}행).` +
+          (n.unmatched.length ? ` 전개일정에 행이 없는 노선 ${n.unmatched.length}개: ${n.unmatched.slice(0, 5).join(", ")}${n.unmatched.length > 5 ? " …" : ""}` : "");
+      }
       const storage = supabase.storage.from(TEMPLATE_BUCKET);
+      // 프로젝트별 양식 경로 — B820은 progress-template.xlsx, 그 외는 <slug>/progress-template.xlsx
+      const TEMPLATE_OBJECT = templateObject(currentSlug());
+      const TEMPLATE_BACKUP = templateBackup(currentSlug());
       // 직전 템플릿 백업 — copy는 대상이 있으면 실패하므로 임시 이름으로 뜬 뒤 갈아끼운다.
       // 백업을 먼저 지우고 copy가 실패하면 백업 없이 덮어쓰게 되므로 순서가 중요하다.
       const tmpBackup = TEMPLATE_BACKUP.replace(/\.xlsx$/, ".new.xlsx");
@@ -287,7 +314,7 @@ export async function POST(req: NextRequest) {
         await storage.remove([TEMPLATE_BACKUP]);
         await storage.move(tmpBackup, TEMPLATE_BACKUP);
       }
-      const { error: upError } = await storage.upload(TEMPLATE_OBJECT, prep.buffer, {
+      const { error: upError } = await storage.upload(TEMPLATE_OBJECT, tplBuffer, {
         contentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         upsert: true,
       });
@@ -295,7 +322,7 @@ export async function POST(req: NextRequest) {
         templateNote = `다운로드 양식 교체 실패(${upError.message}) — 일정만 반영되었습니다.`;
       } else {
         templateReplaced = true;
-        templateNote = prep.warn;
+        templateNote = initial ? initialNote : prep.warn;
       }
     }
   } catch (e) {

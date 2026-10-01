@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 
 // GET /api/admin/consultations → 저장된 운수사 협의사항 목록 (설치일 최신순)
 export async function GET() {
-  if (!isAdmin()) {
+  if (!(await isAdmin())) {
     return NextResponse.json(
       { error: "관리자 인증이 필요합니다." },
       { status: 401 },
@@ -66,7 +66,7 @@ const EDITABLE_TEXT = [
 
 // PATCH /api/admin/consultations → 저장된 협의사항 내용 수정 (id + 수정 필드)
 export async function PATCH(req: NextRequest) {
-  if (!isAdmin()) {
+  if (!(await isAdmin())) {
     return NextResponse.json(
       { error: "관리자 인증이 필요합니다." },
       { status: 401 },
@@ -120,7 +120,7 @@ export async function PATCH(req: NextRequest) {
 
 // DELETE /api/admin/consultations?id=123 → 협의사항 삭제
 export async function DELETE(req: NextRequest) {
-  if (!isAdmin()) {
+  if (!(await isAdmin())) {
     return NextResponse.json(
       { error: "관리자 인증이 필요합니다." },
       { status: 401 },

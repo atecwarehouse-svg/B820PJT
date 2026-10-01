@@ -342,6 +342,7 @@ function ShareStatPanel({
   remain,
   planGroups,
   inspectorList,
+  brand = "B820",
   onClose,
 }: {
   kind: "start" | "progress";
@@ -353,6 +354,7 @@ function ShareStatPanel({
   remain: number;
   planGroups: PlanGroup[];
   inspectorList: string[]; // 등록된 검수자 이름 — 운수사별 담당 선택지
+  brand?: string;
   onClose: () => void;
 }) {
   const label = fmtLabel(today);
@@ -524,7 +526,7 @@ function ShareStatPanel({
       <p className="mb-2 text-[11px] text-gray-400">아래 내용으로 설치 진행중 공유방에 전송됩니다.</p>
       <div className={`rounded-xl px-4 py-3 text-white ${headBg}`}>
         <p className="text-sm font-bold">
-          {isStart ? "B820 단말기 설치 시작 보고" : "🚌 B820 단말기 설치 진행 현황"}
+          {isStart ? `${brand} 단말기 설치 시작 보고` : `🚌 ${brand} 단말기 설치 진행 현황`}
         </p>
         <p className={`text-xs ${headSub}`}>
           {isStart ? `${label} ${startTime} 설치 시작` : `${label} 기준`}
@@ -938,6 +940,7 @@ export default function ReportHub(props: {
   startComplete: number;
   startRemain: number;
   inspectorList: string[]; // 등록된 검수자 이름 (TEAMS_INSPECTOR_WEBHOOKS 키) — 설치시작 보고 담당 선택지
+  brand?: string; // 카드 제목의 프로젝트명 (기본 B820)
 }) {
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<TabKey>("plan");
@@ -1016,6 +1019,7 @@ export default function ReportHub(props: {
                   remain={props.startRemain}
                   planGroups={props.planGroups}
                   inspectorList={props.inspectorList}
+                  brand={props.brand}
                   onClose={close}
                 />
               )}
@@ -1031,6 +1035,7 @@ export default function ReportHub(props: {
                   remain={props.remain}
                   planGroups={props.planGroups}
                   inspectorList={[]} /* 진행중 공유 탭은 운수사·담당 선택 없음 */
+                  brand={props.brand}
                   onClose={close}
                 />
               )}

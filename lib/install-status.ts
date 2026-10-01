@@ -29,24 +29,25 @@ const fingerprint = (v: unknown) =>
 // 그날 이 운수사를 맡은 검수자 — 설치시작 보고에서 지정한 값. 없으면 공용방으로만 간다.
 // 기준 업무일은 "설치를 시작한 시각"(start_notified_at). 완료 카드는 대개 값이 있으므로
 // 업무일 경계(12시)를 넘겨 마무리 저장해도 시작한 날의 담당자에게 그대로 간다.
-async function inspectorsFor(operator: string, startedAt: string | null): Promise<string[]> {
+async function inspectorsFor(slug: string, operator: string, startedAt: string | null): Promise<string[]> {
   const op = operator.trim();
   if (!op) return [];
   const now = new Date();
-  const found = (await getStartReport(workDateString(startedAt ?? now)))[op];
+  const found = (await getStartReport(workDateString(startedAt ?? now), slug))[op];
   if (found || startedAt) return found ?? [];
   // 시작 카드 없이 한 번에 저장해 완료된 차량(start_notified_at 없음)은 기준 시각이 '지금'이라,
   // 12시를 넘겨 마무리하면 다음 업무일 키를 보게 된다. 그 경우만 직전 업무일을 한 번 더 본다.
   const prev = new Date(now.getTime() - 24 * 3600 * 1000);
-  return (await getStartReport(workDateString(prev)))[op] ?? [];
+  return (await getStartReport(workDateString(prev), slug))[op] ?? [];
 }
 
 export async function notifyInstallProgress(opts: {
   supabase: SB;
   plate: string;
   origin: string;
+  slug: string; // 프로젝트 — 응답 후 백그라운드에서 실행되므로 호출자가 명시
 }): Promise<void> {
-  const { supabase, plate, origin } = opts;
+  const { supabase, plate, origin, slug } = opts;
 
   // 이상유무·지문 컬럼이 아직 없는 DB면 기존 컬럼만으로 재시도(폴백)
   let recRes = await supabase
@@ -213,7 +214,7 @@ export async function notifyInstallProgress(opts: {
         startedAt: rec.start_notified_at,
         completedAt,
         photos,
-        inspectors: await inspectorsFor(operator, rec.start_notified_at),
+        inspectors: await inspectorsFor(slug, operator, rec.start_notified_at),
       });
     } catch {
       return; // 발송 실패 시 지문 미기록 → 다음 저장 때 재시도
@@ -248,7 +249,7 @@ export async function notifyInstallProgress(opts: {
         checkNote,
         extraNote,
         startedAt,
-        inspectors: await inspectorsFor(operator, rec.start_notified_at),
+        inspectors: await inspectorsFor(slug, operator, rec.start_notified_at),
       });
     } catch {
       return; // 발송 실패 시 지문 미기록 → 다음 저장 때 재시도

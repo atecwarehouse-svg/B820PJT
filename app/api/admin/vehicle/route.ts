@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 // DELETE /api/admin/vehicle?plate=...
 //   업로드 사진(Drive 파일 + DB) + 레코드 삭제. 증차(is_added) 차량은 차량리스트에서도 제거.
 export async function DELETE(req: NextRequest) {
-  if (!isAdmin()) {
+  if (!(await isAdmin())) {
     return NextResponse.json({ error: "관리자 인증이 필요합니다." }, { status: 401 });
   }
   const plate = req.nextUrl.searchParams.get("plate")?.trim();

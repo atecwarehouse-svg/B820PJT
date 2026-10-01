@@ -144,3 +144,24 @@ lib/
 scripts/import-vehicles.ts      CSV(CP949) 적재
 supabase/schema.sql             DB 스키마
 ```
+
+---
+
+## 멀티 프로젝트 (프로젝트 산출물 관리)
+
+첫 화면(`/`)은 프로젝트 선택 런처입니다. 톱니바퀴(`/projects`, 마스터=B820 관리자 비밀번호)에서
+**앨범 프로젝트**(B820 설치 사진첩과 같은 기능, 자기 데이터)와 **링크 카드**(다른 앱 주소)를 만듭니다.
+
+- **데이터 격리**: B820은 지금처럼 `public` 스키마, 새 앨범 프로젝트는 `public`을 복제한 자기 스키마(프로젝트 ID = 스키마명).
+  `createServiceClient()`가 요청의 프로젝트(`x-project` 헤더)에 맞는 스키마를 고르므로 쿼리 코드는 공통입니다.
+- **주소**: B820은 접두사 없음(`/b820`, `/dashboard` …). 다른 프로젝트는 `/p/<slug>/…` (`middleware.ts`가 접두사를 떼고 헤더를 붙임).
+  앱 안의 링크는 `components/PLink.tsx`(next/link 대체)가 접두사를 자동으로 붙입니다.
+- **1회 준비**: `supabase/migration_projects.sql`을 SQL Editor에서 실행 (`public.projects` 레지스트리 + `create_project_schema()`).
+  스키마가 PostgREST에 자동 노출되지 않으면(함수 결과 `exposed=false`) Dashboard → Settings → API → Exposed schemas에 추가하거나,
+  Vercel 환경변수 `SUPABASE_ACCESS_TOKEN`(개인 액세스 토큰)·`SUPABASE_PROJECT_REF`를 넣으면 앱이 Management API로 자동 노출합니다.
+- **새 프로젝트 시작**: 생성 후 `/p/<slug>` → 대시보드 '일정 업로드'로 전개현황 엑셀을 올리면 차량리스트·진행현황 양식(`templates/<slug>/progress-template.xlsx`)이 생깁니다.
+  관리자 페이지(프로젝트 비밀번호, 쿠키 `admin_auth_<slug>`)에서 설치팀·리포트 수신자를 등록합니다.
+- **공통/별도**: 팀즈 웹훅·메일 발신·Gemini는 환경변수로 전 프로젝트 공통(카드 제목·메일 제목에 프로젝트명 표기). 사진은 같은 구글 계정의 `<프로젝트명>` 폴더, 내보내기는 그 아래 `<프로젝트명> PDF/엑셀/서약서`.
+- **주의 — 이후 마이그레이션**: `public`에 컬럼/테이블을 추가하는 마이그레이션은 각 앨범 스키마에도 같은 SQL을 실행해야 합니다
+  (`set search_path to <slug>;` 후 실행, 또는 `select slug from public.projects where kind='album' and slug<>'b820'`로 목록을 뽑아 반복).
+- **삭제**: 앨범 프로젝트는 데이터가 통째로 지워지므로 UI에 없고, SQL `select public.drop_project_schema('<slug>');`로만 삭제합니다.

@@ -55,6 +55,7 @@ function writeVehicleBlock(
   ws: ExcelJS.Worksheet,
   input: BuildInput,
   baseRow: number,
+  title: string = TITLE_TEXT,
 ): number {
   const layout: FullLayout = computeLayout(
     input.beforeSlots,
@@ -65,7 +66,7 @@ function writeVehicleBlock(
   // 제목
   ws.mergeCells(rangeRef(layout.title.range));
   const titleCell = ws.getCell(cellRef(layout.title.row, COL_FIRST));
-  titleCell.value = TITLE_TEXT;
+  titleCell.value = title;
   titleCell.font = { bold: true, size: 14 };
   titleCell.alignment = CENTER;
   ws.getRow(layout.title.row).height = LABEL_ROW_HEIGHT;
@@ -142,13 +143,14 @@ function writeVehicleBlock(
 }
 
 // 단일 차량
-export async function buildWorkbook(input: BuildInput): Promise<ExcelJS.Workbook> {
-  return buildWorkbookMulti([input]);
+export async function buildWorkbook(input: BuildInput, title = TITLE_TEXT): Promise<ExcelJS.Workbook> {
+  return buildWorkbookMulti([input], title);
 }
 
 // 다중 차량 — 한 시트에 차량별 블록을 쌓고 차량마다 페이지 분할.
 export async function buildWorkbookMulti(
   inputs: BuildInput[],
+  title = TITLE_TEXT,
 ): Promise<ExcelJS.Workbook> {
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet("사진첩", {
@@ -169,7 +171,7 @@ export async function buildWorkbookMulti(
       // 직전 차량 마지막 행 다음에서 새 페이지 시작
       ws.getRow(base - 1).addPageBreak();
     }
-    const lastRow = writeVehicleBlock(wb, ws, input, base);
+    const lastRow = writeVehicleBlock(wb, ws, input, base, title);
     base = lastRow + 1;
   });
 

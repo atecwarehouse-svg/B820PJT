@@ -3,7 +3,7 @@ import { revalidateTag } from "next/cache";
 import { createServiceClient } from "@/lib/supabase/server";
 import { chunk } from "@/lib/supabase/paginate";
 import { PILOT_CUTOFF } from "@/lib/import/parse-schedule";
-import { adminPassword, isAdmin } from "@/lib/admin-auth";
+import { checkAdminPassword, isAdmin } from "@/lib/admin-auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -20,7 +20,7 @@ export async function POST(req: NextRequest) {
     pw?: unknown;
   } | null;
   const pw = String(body?.pw ?? "");
-  if (pw !== adminPassword() && !isAdmin()) {
+  if (!(await checkAdminPassword(pw)) && !(await isAdmin())) {
     return NextResponse.json({ error: "관리자 비밀번호가 올바르지 않습니다." }, { status: 401 });
   }
   const plates = Array.isArray(body?.plates)

@@ -87,7 +87,7 @@ function esc(s: unknown): string {
     .replace(/"/g, "&quot;");
 }
 
-function page1(s: PledgeSessionData): string {
+function page1(s: PledgeSessionData, title: string): string {
   const info = `
     <table class="info"><tbody>
       <tr><th>작 업 내 용</th><td colspan="3">${esc(s.work_content)}</td></tr>
@@ -108,7 +108,7 @@ function page1(s: PledgeSessionData): string {
     </ol>`;
 
   return `<div class="page">
-    <h1 class="doc-title">인천버스 단말기 설치 안전관리 서약서</h1>
+    <h1 class="doc-title">${esc(title)}</h1>
     ${info}
     ${edu}
   </div>`;
@@ -152,11 +152,14 @@ function page2(s: PledgeSessionData, rows: PledgeSignatureData[]): string {
   </div>`;
 }
 
+export const PLEDGE_TITLE = "인천버스 단말기 설치 안전관리 서약서";
+
 export function buildPledgeHtml(
   session: PledgeSessionData,
   signatures: PledgeSignatureData[],
+  title = PLEDGE_TITLE,
 ): string {
   return `<!doctype html><html lang="ko"><head><meta charset="utf-8" />
   <style>${CSS}</style></head>
-  <body>${page1(session)}${page2(session, signatures)}</body></html>`;
+  <body>${page1(session, title)}${page2(session, signatures)}</body></html>`;
 }

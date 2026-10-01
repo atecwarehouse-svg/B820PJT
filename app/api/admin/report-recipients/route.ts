@@ -14,7 +14,7 @@ function parseList(raw: string | null | undefined): string[] {
 
 // GET → 저장된 완료리포트 수신자 목록. DB에 저장된 적 없으면 env(REPORT_MAIL_TO)를 보여줌.
 export async function GET() {
-  if (!isAdmin()) {
+  if (!(await isAdmin())) {
     return NextResponse.json({ error: "관리자 인증이 필요합니다." }, { status: 401 });
   }
   const saved = await getSetting(REPORT_MAIL_KEY);
@@ -24,7 +24,7 @@ export async function GET() {
 
 // PUT { list: string[] } → 수신자 목록 저장 (전체 교체)
 export async function PUT(req: NextRequest) {
-  if (!isAdmin()) {
+  if (!(await isAdmin())) {
     return NextResponse.json({ error: "관리자 인증이 필요합니다." }, { status: 401 });
   }
   const body = (await req.json().catch(() => null)) as { list?: unknown } | null;

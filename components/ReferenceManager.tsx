@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
-import Link from "next/link";
+import Link from "@/components/PLink";
 import { BEFORE_SLOTS, AFTER_SLOTS, type SlotDef } from "@/lib/slots";
 import { compressImage } from "@/lib/image-compress";
 

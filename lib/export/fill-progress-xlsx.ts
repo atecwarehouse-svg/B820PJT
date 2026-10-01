@@ -26,7 +26,7 @@ const FALLBACK_PATHS = {
   progress: "xl/worksheets/sheet2.xml", // 인천버스 B800단말기 설치 진행현황
 };
 
-async function resolveSheetPaths(zip: JSZip): Promise<typeof FALLBACK_PATHS> {
+export async function resolveSheetPaths(zip: JSZip): Promise<typeof FALLBACK_PATHS> {
   const out = { ...FALLBACK_PATHS };
   const wbFile = zip.file(WORKBOOK);
   const relsFile = zip.file("xl/_rels/workbook.xml.rels");
@@ -83,7 +83,7 @@ function replaceCellText(xml: string, ref: string, text: string): string {
 }
 
 // 숫자 값 셀 세팅 (스타일 유지) — 빈 셀(<c/>)이어도 값을 넣는다. 수식 셀은 재계산에 맡기고 건너뜀.
-function setCellNumber(xml: string, ref: string, val: number): string {
+export function setCellNumber(xml: string, ref: string, val: number): string {
   const re = new RegExp(`<c r="${ref}"([^>]*?)(?:/>|>([\\s\\S]*?)</c>)`);
   return xml.replace(re, (m, attrs: string, inner?: string) => {
     if (inner && /<f[ >]/.test(inner)) return m;
@@ -154,7 +154,7 @@ function makeRestyler(stylesXml: string) {
 }
 
 // sharedStrings.xml → 문자열 배열 (각 <si>의 <t>들을 이어붙임)
-function parseSharedStrings(xml: string): string[] {
+export function parseSharedStrings(xml: string): string[] {
   const out: string[] = [];
   for (const si of xml.matchAll(/<si>([\s\S]*?)<\/si>/g)) {
     let text = "";
@@ -165,7 +165,7 @@ function parseSharedStrings(xml: string): string[] {
 }
 
 // <c> 셀의 표시값 복원 (공유문자열/인라인/숫자)
-function cellValue(attrs: string, inner: string, shared: string[]): string {
+export function cellValue(attrs: string, inner: string, shared: string[]): string {
   if (/t="s"/.test(attrs)) {
     const v = inner.match(/<v>(\d+)<\/v>/);
     return v ? shared[Number(v[1])] ?? "" : "";

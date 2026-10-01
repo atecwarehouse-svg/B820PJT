@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/PLink";
 
 export const metadata = {
   title: "앱 소개 — B820 설치 사진첩",

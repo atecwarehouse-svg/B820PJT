@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { brandName, currentProject } from "@/lib/project";
 import { sendProgressCard, sendStartReportCard, inspectorNames } from "@/lib/teams";
 import {
   getStartReport,
@@ -86,6 +87,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "잘못된 요청입니다." }, { status: 400 });
   }
   const n = (v: unknown) => (typeof v === "number" && isFinite(v) ? v : 0);
+  const projectName = brandName(await currentProject()); // 카드 제목 (B820은 "B820")
   try {
     if (b.kind === "start") {
       const groups = (Array.isArray(b.groups) ? b.groups : []).slice(0, 50).map((g) => {
@@ -120,6 +122,7 @@ export async function POST(req: NextRequest) {
       }
       try {
         await sendStartReportCard({
+          projectName,
           label: (b.label ?? "").toString().slice(0, 40),
           todayPlanned: n(b.todayPlanned),
           complete: n(b.complete),
@@ -141,6 +144,7 @@ export async function POST(req: NextRequest) {
       }
     } else {
       await sendProgressCard({
+        projectName,
         label: (b.label ?? "").toString().slice(0, 40),
         todayPlanned: n(b.todayPlanned),
         inProgress: n(b.inProgress),

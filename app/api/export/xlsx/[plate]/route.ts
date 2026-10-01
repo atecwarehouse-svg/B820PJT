@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { brandName, currentProject } from "@/lib/project";
+import { titleText } from "@/lib/export/layout-spec";
 import { loadBuildInput } from "@/lib/export/load-xlsx-input";
 import { buildWorkbook } from "@/lib/export/xlsx-builder";
 
@@ -15,9 +17,10 @@ export async function GET(
     return NextResponse.json({ error: "차량을 찾을 수 없습니다." }, { status: 404 });
   }
 
-  const wb = await buildWorkbook(input);
+  const brand = brandName(await currentProject());
+  const wb = await buildWorkbook(input, titleText(brand));
   const arrayBuffer = await wb.xlsx.writeBuffer();
-  const filename = encodeURIComponent(`B820_설치사진첩_${plate}.xlsx`);
+  const filename = encodeURIComponent(`${brand}_설치사진첩_${plate}.xlsx`);
 
   return new NextResponse(arrayBuffer as ArrayBuffer, {
     status: 200,

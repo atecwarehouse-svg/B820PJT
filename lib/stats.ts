@@ -120,8 +120,8 @@ async function loadByScan(supabase: SB, target: number): Promise<DashboardStats>
   return assemble(target, [...byOp.values()]);
 }
 
-export async function loadStats(): Promise<DashboardStats> {
-  const supabase = createServiceClient();
+export async function loadStats(slug: string): Promise<DashboardStats> {
+  const supabase = createServiceClient(slug);
   const target = DEFAULT_PHOTO_COUNT;
   // 집계 뷰 우선, 없으면 전수 스캔으로 폴백
   return (await loadFromView(supabase, target)) ?? (await loadByScan(supabase, target));
@@ -137,8 +137,8 @@ export interface InProgressVehicle {
   photoCount: number;
 }
 
-export async function loadInProgressList(): Promise<InProgressVehicle[]> {
-  const supabase = createServiceClient();
+export async function loadInProgressList(slug: string): Promise<InProgressVehicle[]> {
+  const supabase = createServiceClient(slug);
   const target = DEFAULT_PHOTO_COUNT;
 
   // 시작된 차량 = records 존재. + plate별 사진 장수. '단말기 없음'은 사진 1장으로 간주.
@@ -270,8 +270,8 @@ export interface InstallProgress {
   completedList: CompletedVehicle[]; // 날짜별 검색용 (완료 차량만)
 }
 
-export async function loadInstallProgress(): Promise<InstallProgress> {
-  const supabase = createServiceClient();
+export async function loadInstallProgress(slug: string): Promise<InstallProgress> {
+  const supabase = createServiceClient(slug);
   const [vehicles, completed] = await Promise.all([
     fetchAll<{ plate: string; operator: string | null; route: string | null }>((from, to) =>
       supabase.from("vehicles").select("plate, operator, route").order("plate").range(from, to),
@@ -332,8 +332,8 @@ export interface TodayPlanGroup {
   planned: number;
 }
 
-export async function loadTodayPlanGroups(date: string): Promise<TodayPlanGroup[]> {
-  const supabase = createServiceClient();
+export async function loadTodayPlanGroups(slug: string, date: string): Promise<TodayPlanGroup[]> {
+  const supabase = createServiceClient(slug);
   const vehicles = await fetchAll<{
     planned_date: string | null;
     operator: string | null;
@@ -362,16 +362,17 @@ export async function loadTodayPlanGroups(date: string): Promise<TodayPlanGroup[
 // 조회 실패 시 빈 목록(타일 차감만 생략, 대시보드는 정상 동작).
 // 일정 재업로드로 예정일이 바뀌었거나 삭제된 차량의 옛 배차표 행이 남아 있어도
 // 차감되지 않도록, 그날 예정(planned_date=date)인 차량과 교집합만 돌려준다.
-export async function loadTodayExcludedPlates(date: string): Promise<string[]> {
-  return (await loadTodayExcluded(date)).map((e) => e.plate);
+export async function loadTodayExcludedPlates(slug: string, date: string): Promise<string[]> {
+  return (await loadTodayExcluded(slug, date)).map((e) => e.plate);
 }
 
 // 위와 같은 목록에 제외 사유(금일완료 리포트에서 입력)를 붙여서. 사유 컬럼이 없는
 // DB(migration_exclude_reason.sql 미실행)면 사유는 빈 문자열.
 export async function loadTodayExcluded(
+  slug: string,
   date: string,
 ): Promise<{ plate: string; reason: string }[]> {
-  const supabase = createServiceClient();
+  const supabase = createServiceClient(slug);
   const query = (cols: string) =>
     supabase
       .from("dispatch_times")
@@ -411,9 +412,10 @@ export async function loadTodayExcluded(
 // 설치제외와 같은 규칙: 그날 예정(planned_date=date)인 차량과 교집합만 돌려준다
 // (일정 재업로드로 예정일이 바뀐 차량의 옛 배차표 행이 리포트에 올라오지 않도록).
 export async function loadTodayTachoOff(
+  slug: string,
   date: string,
 ): Promise<{ plate: string; reason: string }[]> {
-  const supabase = createServiceClient();
+  const supabase = createServiceClient(slug);
   const { data, error } = await supabase
     .from("dispatch_times")
     .select("plate, tacho_reason")
@@ -442,9 +444,10 @@ export async function loadTodayTachoOff(
 // 금일 '장애접수' 모뎀 — 교체할 모뎀이 없어 업체(AI텔레콤)에 인계한 차량과 증상.
 // 금일완료 리포트 특이사항 블록용. 테이블이 없거나 조회 실패면 빈 목록(기능만 생략).
 export async function loadTodayModemFaults(
+  slug: string,
   date: string,
 ): Promise<{ plate: string; reason: string }[]> {
-  const supabase = createServiceClient();
+  const supabase = createServiceClient(slug);
   const { data, error } = await supabase
     .from("modem_defects")
     .select("plate, symptom")
@@ -485,8 +488,8 @@ export interface ScheduleStats {
   pilotDone: number;
 }
 
-export async function loadScheduleStats(): Promise<ScheduleStats> {
-  const supabase = createServiceClient();
+export async function loadScheduleStats(slug: string): Promise<ScheduleStats> {
+  const supabase = createServiceClient(slug);
   const [vehicles, completed, addresses] = await Promise.all([
     fetchAll<{
       plate: string;
@@ -504,7 +507,7 @@ export async function loadScheduleStats(): Promise<ScheduleStats> {
     ),
     fetchCompletedMap(supabase),
     // 주소(템플릿 E열)는 부가 정보 — 실패해도 일정 집계는 그대로 진행
-    loadOperatorAddresses().catch(() => ({}) as Record<string, string>),
+    loadOperatorAddresses(slug).catch(() => ({}) as Record<string, string>),
   ]);
 
   type OpAcc = ScheduleDayOp & { routeCnt: Map<string, number>; modelCnt: Map<string, number> };
@@ -596,8 +599,8 @@ export interface OperatorSchedule {
 
 // 운수사 협의사항 폼용 — 운수사별 설치 예정일 목록과 날짜별 대수·노선.
 // 예정일 없는 차량의 운수사도 목록에 포함(dates가 빈 배열일 수 있음).
-export async function loadOperatorSchedules(): Promise<OperatorSchedule[]> {
-  const supabase = createServiceClient();
+export async function loadOperatorSchedules(slug: string): Promise<OperatorSchedule[]> {
+  const supabase = createServiceClient(slug);
   const vehicles = await fetchAll<{
     operator: string | null;
     route: string | null;

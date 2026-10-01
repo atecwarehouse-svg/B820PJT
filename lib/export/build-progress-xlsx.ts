@@ -13,20 +13,22 @@ import {
 } from "@/lib/export/fill-progress-xlsx";
 import { workDateString, workDateExcelSerial, excelSerialFromDate } from "@/lib/work-day";
 
-const TEMPLATE_BUCKET = process.env.TEMPLATE_BUCKET ?? "templates";
-const TEMPLATE_OBJECT = process.env.TEMPLATE_OBJECT ?? "progress-template.xlsx";
+import { TEMPLATE_BUCKET, templateObject } from "@/lib/template-path";
+import { currentSlug, getProject, isDefault } from "@/lib/project";
+
 
 // asOfDate: 기준일(업무일 "YYYY-MM-DD"). 지정 없으면 현재 업무일.
 //  - 완료(차량리스트 G/H)는 기준일까지 완료된 것만 채움 → 그 날짜 시점 스냅샷.
 //  - 계획수량은 차량 설치예정일(planned_date) 기준: 금일(A6)=당일, 누적(F6)=기준일까지.
-export async function buildProgressXlsx(opts?: { asOfDate?: string }): Promise<{
+export async function buildProgressXlsx(opts?: { asOfDate?: string; slug?: string }): Promise<{
   buffer: Buffer;
   filename: string;
   filled: number;
   added: number;
   removed: number;
 }> {
-  const supabase = createServiceClient();
+  const slug = opts?.slug ?? currentSlug();
+  const supabase = createServiceClient(slug);
 
   const asOfDate =
     opts?.asOfDate && /^\d{4}-\d{2}-\d{2}$/.test(opts.asOfDate)
@@ -118,9 +120,9 @@ export async function buildProgressXlsx(opts?: { asOfDate?: string }): Promise<{
   // 비공개 버킷에서 템플릿 내려받기
   const { data: file, error: dlError } = await supabase.storage
     .from(TEMPLATE_BUCKET)
-    .download(TEMPLATE_OBJECT);
+    .download(templateObject(slug));
   if (dlError || !file) {
-    throw new Error("양식 템플릿을 불러올 수 없습니다. (Storage 업로드 필요)");
+    throw new Error("진행현황 양식이 없습니다 — 대시보드 '일정 업로드'로 전개현황 엑셀을 먼저 등록하세요.");
   }
   const template = Buffer.from(await file.arrayBuffer());
 
@@ -137,7 +139,8 @@ export async function buildProgressXlsx(opts?: { asOfDate?: string }): Promise<{
 
   // 파일명: 기준일 YYMMDD
   const [yy, mm, dd] = asOfDate.split("-");
-  const filename = `인천버스_설치_전개현황_${yy.slice(2)}${mm}${dd}.xlsx`;
+  const prefix = isDefault(slug) ? "인천버스" : ((await getProject(slug))?.name ?? slug);
+  const filename = `${prefix}_설치_전개현황_${yy.slice(2)}${mm}${dd}.xlsx`;
 
   return { buffer, filename, filled, added, removed };
 }

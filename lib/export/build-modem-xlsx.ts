@@ -6,6 +6,7 @@
 
 import ExcelJS from "exceljs";
 import { createServiceClient } from "@/lib/supabase/server";
+import { currentSlug, isDefault } from "@/lib/project";
 import { fetchAll } from "@/lib/supabase/paginate";
 import { MODEM_FAULT_KIND, MODEM_SPARE_KIND, shortPlate } from "@/lib/modem";
 import { kstStamp } from "./filename";
@@ -50,8 +51,9 @@ const HEADERS = [
 ];
 const WIDTHS = [11.5, 13, 13.25, 20.375, 20.375, 35.375, 13.875, 13.25, 13.75, 10];
 
-export async function buildModemXlsx(): Promise<{ buffer: Buffer; filename: string }> {
-  const supabase = createServiceClient();
+export async function buildModemXlsx(slug?: string): Promise<{ buffer: Buffer; filename: string }> {
+  const s = slug ?? currentSlug();
+  const supabase = createServiceClient(s);
   const saved = await fetchAll<SavedModem>((from, to) =>
     supabase
       .from("modem_defects")
@@ -67,12 +69,12 @@ export async function buildModemXlsx(): Promise<{ buffer: Buffer; filename: stri
     );
   });
 
-  return renderModemXlsx(mergeModemRows(saved));
+  return renderModemXlsx(mergeModemRows(saved, isDefault(s))); // 과거 수기 이력은 B820에만
 }
 
 // 과거 내역 + DB 기록 → 날짜순 한 벌. 같은 (날짜·차량)은 앱 기록이 최신이므로 덮어쓴다.
-export function mergeModemRows(saved: SavedModem[]): Row[] {
-  const rows: Row[] = (history as Row[]).map((h) => ({ ...h }));
+export function mergeModemRows(saved: SavedModem[], includeHistory = true): Row[] {
+  const rows: Row[] = includeHistory ? (history as Row[]).map((h) => ({ ...h })) : []; // 과거 수기 이력(B820 전용)은 includeHistory=false면 제외
   const seen = new Set(rows.map((r) => `${r.date}|${r.plate}`));
   for (const s of saved) {
     // 장애접수는 모뎀을 쓴 게 아니라 업체에 인계한 건 — '사용 현황'에는 넣지 않는다

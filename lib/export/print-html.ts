@@ -4,6 +4,7 @@
 // 화면 인쇄 페이지(app/print)와 서버 PDF 라우트(api/export/pdf)가 동일 마크업을 공유.
 
 import { PRETENDARD_WOFF2_BASE64 } from "./pretendard-font";
+import { TITLE_TEXT } from "./layout-spec";
 
 export interface PrintSlot {
   label: string;
@@ -68,9 +69,9 @@ function esc(s: string): string {
 }
 
 // 차량 한 대의 내부 마크업(페이지 래퍼 제외)
-function bodyInner(data: PrintData): string {
+function bodyInner(data: PrintData, title: string): string {
   const info = `
-    <h1 class="doc-title">B820 설치 사진</h1>
+    <h1 class="doc-title">${esc(title)}</h1>
     <table class="info"><tbody>
       <tr><th>설치일자</th><td>${esc(data.installDate)}</td><th>차량NO</th><td>${esc(data.plate)}</td></tr>
       <tr><th>운수사</th><td>${esc(data.operator)}</td><th>노선</th><td>${esc(data.route)}</td></tr>
@@ -102,21 +103,21 @@ function bodyInner(data: PrintData): string {
 }
 
 // 차량 한 대 = 페이지 1개 래퍼
-export function buildPrintBodyHtml(data: PrintData): string {
-  return `<div class="page">${bodyInner(data)}</div>`;
+export function buildPrintBodyHtml(data: PrintData, title = TITLE_TEXT): string {
+  return `<div class="page">${bodyInner(data, title)}</div>`;
 }
 
 // 다중 차량 — 각 차량을 한 페이지씩
-export function buildMultiBodyHtml(items: PrintData[]): string {
-  return items.map((d) => `<div class="page">${bodyInner(d)}</div>`).join("");
+export function buildMultiBodyHtml(items: PrintData[], title = TITLE_TEXT): string {
+  return items.map((d) => `<div class="page">${bodyInner(d, title)}</div>`).join("");
 }
 
-export function buildMultiDocument(items: PrintData[]): string {
+export function buildMultiDocument(items: PrintData[], title = TITLE_TEXT): string {
   return `<!doctype html><html lang="ko"><head><meta charset="utf-8" />
   <style>${PRINT_CSS}</style></head>
-  <body>${buildMultiBodyHtml(items)}</body></html>`;
+  <body>${buildMultiBodyHtml(items, title)}</body></html>`;
 }
 
-export function buildPrintDocument(data: PrintData): string {
-  return buildMultiDocument([data]);
+export function buildPrintDocument(data: PrintData, title = TITLE_TEXT): string {
+  return buildMultiDocument([data], title);
 }

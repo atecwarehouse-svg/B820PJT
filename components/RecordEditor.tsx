@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import Link from "next/link";
+import Link from "@/components/PLink";
 import { useRouter } from "next/navigation";
 import type { RecordBundle } from "@/lib/types";
 import {
@@ -18,6 +18,7 @@ import { publicPhotoUrl } from "@/lib/photo-url";
 import PhotoSlot from "@/components/PhotoSlot";
 
 interface Props {
+  brand?: string; // 제목 "<brand> 설치 사진" — 프로젝트명(기본 B820)
   plate: string;
   initial: RecordBundle;
   teamOptions?: string[]; // 설치팀 선택지 (관리자 페이지에서 관리, 비면 직접 입력)
@@ -36,7 +37,7 @@ const STEPS = ["차량 이상유무", "설치 전", "설치 후"] as const;
 // 타코케이블 Y자 사진 촬영 시 특이사항에 자동으로 넣는 문구
 const TACHO_Y_NOTE = "타코케이블 Y자 있음";
 
-export default function RecordEditor({ plate, initial, teamOptions = [] }: Props) {
+export default function RecordEditor({ plate, initial, teamOptions = [], brand = "B820" }: Props) {
   const vehicle = initial.vehicle!;
   const installDate = initial.record?.install_date ?? todayStr();
 
@@ -692,7 +693,7 @@ export default function RecordEditor({ plate, initial, teamOptions = [] }: Props
               </button>
             </div>
             <h1 className="mb-3 text-center text-lg font-bold text-blue-700">
-              B820 설치 사진
+              {brand} 설치 사진
             </h1>
             <div className="grid grid-cols-2 gap-x-3 gap-y-2 text-sm">
               <Field label="설치일자" value={installDate} />

@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 // 해당 운수사 차량 중 '사진이 1장이라도 있는' 차량번호 목록을 반환 (운수사별 내보내기용).
 // 설치일자 과거순 정렬 + 설치일자 기간(from/to, 파일명용)을 함께 반환.
 export async function GET(req: NextRequest) {
-  if (!isAdmin()) {
+  if (!(await isAdmin())) {
     return NextResponse.json({ error: "관리자 인증이 필요합니다." }, { status: 401 });
   }
   const operator = req.nextUrl.searchParams.get("operator")?.trim();

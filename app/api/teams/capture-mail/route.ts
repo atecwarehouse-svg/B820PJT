@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { brandName, currentProject, isDefault } from "@/lib/project";
 import nodemailer from "nodemailer";
 import { kstDateString } from "@/lib/work-day";
 import { buildCaptureXlsx, type CaptureRow } from "@/lib/export/build-capture-xlsx";
@@ -10,6 +11,9 @@ export const maxDuration = 60;
 // 설치팀별 확인 캡쳐 이미지·정리 엑셀을 입력한 메일주소로 발송 (report/send와 같은 Gmail 설정).
 // 공개 페이지에서 호출되므로 수신자 수·이미지 수·용량을 제한한다.
 export async function POST(req: NextRequest) {
+  const project = await currentProject();
+  const brand = brandName(project);
+  const mailTag = isDefault(project.slug) ? "인천버스 B820" : project.name;
   const b = (await req.json()) as {
     to?: string;
     label?: string; // 검색 조건 요약 — 제목·본문용
@@ -80,9 +84,9 @@ export async function POST(req: NextRequest) {
       auth: { user, pass },
     });
     await transporter.sendMail({
-      from: `B820 설치현황 <${user}>`,
+      from: `${brand} 설치현황 <${user}>`,
       to: recipients.join(", "),
-      subject: `[인천버스 B820] 설치팀별 설치 현황${label ? ` (${label})` : ""}`,
+      subject: `[${mailTag}] 설치팀별 설치 현황${label ? ` (${label})` : ""}`,
       text: `설치팀별 설치 현황 캡쳐 ${imageCount}장${
         attachments.length > imageCount ? "과 정리 엑셀" : ""
       }을 첨부합니다.${label ? `\n검색 조건: ${label}` : ""}`,

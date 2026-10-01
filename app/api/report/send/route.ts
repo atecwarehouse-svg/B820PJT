@@ -2,11 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import nodemailer from "nodemailer";
 import { loadInstallProgress, loadScheduleStats } from "@/lib/stats";
 import { buildReport, formatReportText, formatReportHtml } from "@/lib/report";
+import { brandName, currentProject, currentSlug, isDefault } from "@/lib/project";
 import type { ServiceCheck } from "@/lib/report";
 import { buildProgressXlsx } from "@/lib/export/build-progress-xlsx";
 import { getSetting, setSetting, REPORT_MAIL_KEY } from "@/lib/settings";
 import { sendCompletionReportCard } from "@/lib/teams";
-import { adminPassword, isAdmin } from "@/lib/admin-auth";
+import { checkAdminPassword, isAdmin } from "@/lib/admin-auth";
 import { createServiceClient } from "@/lib/supabase/server";
 import { summarizeVocs, type VocOperatorSummary, type VocRow } from "@/lib/voc";
 
@@ -73,7 +74,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const body = (await req.json()) as SendBody;
 
-  if ((body.pw ?? "") !== adminPassword() && !isAdmin()) {
+  if (!(await checkAdminPassword(body.pw)) && !(await isAdmin())) {
     return NextResponse.json({ error: "관리자 비밀번호가 올바르지 않습니다." }, { status: 401 });
   }
 
@@ -94,7 +95,7 @@ export async function POST(req: NextRequest) {
   // 리포트 데이터 — 진행현황/일정 통계 재사용
   let report;
   try {
-    const [ip, sch] = await Promise.all([loadInstallProgress(), loadScheduleStats()]);
+    const [ip, sch] = await Promise.all([loadInstallProgress(currentSlug()), loadScheduleStats(currentSlug())]);
     report = buildReport({
       date,
       completedList: ip.completedList,
@@ -116,14 +117,18 @@ export async function POST(req: NextRequest) {
   const stage = body.stage === 1 ? 1 : 2;
   // VOC는 2차에서만 붙인다.
   const vocs = stage === 2 ? await loadVocSummaries(date) : [];
-  const text = formatReportText(report, notes, check, vocs);
-  const html = formatReportHtml(report, notes, check, vocs);
-  const subject = `[인천버스 B820] 설치 완료 보고 (${report.label}, ${report.dow}) — ${report.dailyDone}대`;
+  const project = await currentProject();
+  const brand = brandName(project);
+  const mailTag = isDefault(project.slug) ? "인천버스 B820" : project.name;
+  const projectLabel = isDefault(project.slug) ? "인천버스 B820 단말기 설치 프로젝트" : `${project.name} 프로젝트`;
+  const text = formatReportText(report, notes, check, vocs, projectLabel);
+  const html = formatReportHtml(report, notes, check, vocs, projectLabel);
+  const subject = `[${mailTag}] 설치 완료 보고 (${report.label}, ${report.dow}) — ${report.dailyDone}대`;
 
   // 1차 — 메일 없이 팀즈 완료보고 카드만 전송.
   if (stage === 1) {
     try {
-      await sendCompletionReportCard(report, notes, check);
+      await sendCompletionReportCard(report, notes, check, undefined, brand);
     } catch (e) {
       return NextResponse.json(
         { error: "팀즈 전송 실패: " + (e instanceof Error ? e.message : "알 수 없는 오류") },
@@ -181,7 +186,7 @@ export async function POST(req: NextRequest) {
       auth: { user, pass },
     });
     await transporter.sendMail({
-      from: `B820 설치현황 <${user}>`,
+      from: `${brand} 설치현황 <${user}>`,
       to: recipients.join(", "),
       subject,
       text,
@@ -198,7 +203,7 @@ export async function POST(req: NextRequest) {
   // 팀즈 '설치 진행중' 공유방에도 완료보고 카드 전송 (실패해도 메일 발송 결과는 성공 유지)
   let teams = false;
   try {
-    await sendCompletionReportCard(report, notes, check, vocs);
+    await sendCompletionReportCard(report, notes, check, vocs, brand);
     teams = true;
   } catch (e) {
     console.warn("[report/send] 팀즈 완료보고 카드 전송 실패:", e instanceof Error ? e.message : e);

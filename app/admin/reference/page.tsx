@@ -8,7 +8,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export default async function ReferencePage() {
-  if (!isAdmin()) return <AdminLogin />;
+  if (!(await isAdmin())) return <AdminLogin />;
 
   const supabase = createServiceClient();
   const { data } = await supabase

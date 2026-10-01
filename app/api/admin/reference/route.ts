@@ -13,7 +13,7 @@ const REF_PLATE = "공통";
 
 // POST /api/admin/reference  (multipart: slot_key, section, label, file)  → 기준사진 등록/교체
 export async function POST(req: NextRequest) {
-  if (!isAdmin()) {
+  if (!(await isAdmin())) {
     return NextResponse.json({ error: "관리자 인증이 필요합니다." }, { status: 401 });
   }
   const form = await req.formData();
@@ -74,7 +74,7 @@ export async function POST(req: NextRequest) {
 
 // DELETE /api/admin/reference?slot_key=...  → 기준사진 삭제(Drive + DB)
 export async function DELETE(req: NextRequest) {
-  if (!isAdmin()) {
+  if (!(await isAdmin())) {
     return NextResponse.json({ error: "관리자 인증이 필요합니다." }, { status: 401 });
   }
   const slotKey = req.nextUrl.searchParams.get("slot_key")?.trim();

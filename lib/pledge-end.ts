@@ -27,7 +27,7 @@ export function endHm(installDate: string, now: Date = new Date()): string {
 
 // 금일 설치 완료 = 금일 예정 차량이 전부 '설치완료' 또는 '배차표 설치제외'.
 // (완료 판정은 대시보드와 같은 기준 — 표준 14칸이 사진 또는 '없음' 체크로 충족 + 저장됨)
-export async function todayInstallDone(supabase: SB, date: string): Promise<boolean> {
+export async function todayInstallDone(supabase: SB, slug: string, date: string): Promise<boolean> {
   const planned = await fetchAll<{ plate: string }>((from, to) =>
     supabase
       .from("vehicles")
@@ -38,7 +38,7 @@ export async function todayInstallDone(supabase: SB, date: string): Promise<bool
   );
   const plates = planned.map((v) => v.plate).filter(Boolean);
   if (!plates.length) return false; // 금일 예정이 없으면 판정하지 않는다
-  const excluded = new Set(await loadTodayExcludedPlates(date));
+  const excluded = new Set(await loadTodayExcludedPlates(slug, date));
   const targets = plates.filter((p) => !excluded.has(p));
 
   for (const part of chunk(targets)) {
@@ -74,7 +74,7 @@ export async function todayInstallDone(supabase: SB, date: string): Promise<bool
 
 // 금일 설치가 다 끝나면 그 업무일의 열린 서약서 세션을 자동 종료한다
 // (= 그 시점부터 작업자의 '설치 후' 서명이 열린다). 차량 저장 후 백그라운드로 호출.
-export async function autoEndPledgeSessions(supabase: SB): Promise<void> {
+export async function autoEndPledgeSessions(supabase: SB, slug: string): Promise<void> {
   const date = workDateString(new Date());
   const { data: sessions, error } = await supabase
     .from("pledge_sessions")
@@ -82,7 +82,7 @@ export async function autoEndPledgeSessions(supabase: SB): Promise<void> {
     .eq("install_date", date)
     .is("ended_at", null);
   if (error || !sessions?.length) return;
-  if (!(await todayInstallDone(supabase, date))) return;
+  if (!(await todayInstallDone(supabase, slug, date))) return;
 
   const now = new Date();
   for (const s of sessions) {

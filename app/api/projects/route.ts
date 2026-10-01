@@ -1,29 +1,48 @@
 import { randomUUID } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
-import { adminPassword, isAdmin } from "@/lib/admin-auth";
-import { getProjects, setSetting, PROJECTS_KEY, B820_COLOR_KEY, type Project } from "@/lib/settings";
+import { checkAdminPassword, cookieToken, isAdmin } from "@/lib/admin-auth";
+import { createServiceClient } from "@/lib/supabase/server";
+import {
+  DEFAULT_SLUG,
+  SLUG_RE,
+  invalidateProjectCache,
+  isDefault,
+  projectHome,
+} from "@/lib/project";
 import { colorKey, iconKey } from "@/components/ProjectIcon";
+import { createProjectFolder, deletePhoto, trashFile } from "@/lib/gdrive";
+import { TEMPLATE_BUCKET } from "@/lib/template-path";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
-// 첫 화면 프로젝트 카드 관리 — 관리자 로그인 쿠키 또는 body.pw(관리자 비밀번호) 필수.
-//   POST   { icon, color, name, description, url, pw }     → 추가
-//   PUT    { id, icon, color, name, description, url, pw } → 수정
-//   DELETE { id, pw }                                       → 삭제
-//   PATCH  { color, pw }                                    → B820 고정 카드 색만 변경
-// ponytail: 목록을 통째로 읽고 덮어쓴다 — 동시에 두 명이 저장하면 하나가 유실될 수 있음.
-// 관리자 한 명이 가끔 쓰는 기능이라 그대로 둠. 잦아지면 projects 테이블로.
+// 프로젝트 레지스트리(public.projects) 관리 — 런처(마스터=B820) 관리자 쿠키 또는 body.pw 필수.
+//   POST   { kind:"link",  name, description, icon, color, url }                       → 링크 카드 추가
+//   POST   { kind:"album", slug, name, description, icon, color, admin_password }       → 앨범 프로젝트 생성
+//            (드라이브 폴더 → DB 스키마 복제(create_project_schema) → 레지스트리 행. 실패 시 되감기)
+//   PUT    { slug, name?, description?, icon?, color?, url?, admin_password? }           → 수정 (b820은 색만)
+//   DELETE { slug }                     → 링크 카드 삭제
+//   DELETE { slug, confirm: <slug> }    → 앨범 프로젝트 삭제 (DB 스키마·양식 삭제, 드라이브 폴더 휴지통. B820 불가)
 
 type Body = Record<string, unknown>;
 
-function authorized(pw: unknown): boolean {
-  return isAdmin() || (typeof pw === "string" && pw === adminPassword());
+const RESERVED = new Set([
+  "public", "b820", "storage", "auth", "extensions", "graphql", "graphql_public", "realtime",
+  "vault", "net", "pgsodium", "pgsodium_masks", "supabase_functions", "supabase_migrations",
+  "information_schema", "cron", "pgbouncer", "repack", "tiger", "topology", "api", "p", "projects",
+]);
+
+const bad = (error: string, status = 400) => NextResponse.json({ error }, { status });
+const unauthorized = () => bad("관리자 비밀번호가 올바르지 않습니다.", 401);
+
+async function authorized(body: Body): Promise<boolean> {
+  return (await isAdmin(DEFAULT_SLUG)) || (await checkAdminPassword(body.pw, DEFAULT_SLUG));
 }
 
-const unauthorized = () =>
-  NextResponse.json({ error: "관리자 비밀번호가 올바르지 않습니다." }, { status: 401 });
-const bad = (error: string) => NextResponse.json({ error }, { status: 400 });
+async function readBody(req: NextRequest): Promise<Body | null> {
+  return (await req.json().catch(() => null)) as Body | null;
+}
 
 function validUrl(url: string): boolean {
   if (url.startsWith("/")) return true; // 이 앱 안의 경로
@@ -34,84 +53,221 @@ function validUrl(url: string): boolean {
   }
 }
 
-// 입력값 정리·검증 — 추가/수정 공용. 실패 시 오류 문구.
-function parseFields(body: Body): Omit<Project, "id" | "created_at"> | string {
-  const name = String(body.name ?? "").trim();
-  const description = String(body.description ?? "").trim();
-  const url = String(body.url ?? "").trim();
-  if (!name) return "프로젝트명을 입력하세요.";
-  if (name.length > 40 || description.length > 100) return "프로젝트명 40자·설명 100자 이하로 입력하세요.";
-  if (!validUrl(url)) return "앱 주소는 https://… 형식으로 입력하세요.";
-  return { icon: iconKey(body.icon), color: colorKey(body.color), name, description, url };
-}
-
-async function readBody(req: NextRequest): Promise<Body | null> {
-  return (await req.json().catch(() => null)) as Body | null;
-}
-
-async function save(list: Project[]) {
-  try {
-    await setSetting(PROJECTS_KEY, JSON.stringify(list));
-  } catch (e) {
-    return NextResponse.json(
-      { error: "저장 실패: " + (e instanceof Error ? e.message : "알 수 없는 오류") },
-      { status: 500 },
-    );
+// DB 오류 메시지에 사용자가 할 일을 덧붙인다
+function hint(message: string): string {
+  if (/create_project_schema|drop_project_schema|relation .*projects/i.test(message)) {
+    return `${message} — supabase/migration_projects.sql 을 Supabase SQL Editor에서 먼저 실행하세요.`;
   }
-  return NextResponse.json({ ok: true });
+  return message;
+}
+
+// Supabase Management API로 PostgREST 노출 스키마에 추가 — SQL 함수가 권한 부족으로 못 했을 때의 폴백.
+// Vercel env SUPABASE_ACCESS_TOKEN(개인 액세스 토큰)·SUPABASE_PROJECT_REF 가 있어야 동작.
+async function exposeSchemaViaApi(slug: string): Promise<boolean> {
+  const token = process.env.SUPABASE_ACCESS_TOKEN;
+  const ref = process.env.SUPABASE_PROJECT_REF;
+  if (!token || !ref) return false;
+  const url = `https://api.supabase.com/v1/projects/${ref}/postgrest`;
+  const headers = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
+  try {
+    const cur = (await fetch(url, { headers }).then((r) => (r.ok ? r.json() : null))) as
+      | { db_schema?: string }
+      | null;
+    const list = String(cur?.db_schema ?? "public, graphql_public")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (!list.includes(slug)) list.push(slug);
+    const r = await fetch(url, {
+      method: "PATCH",
+      headers,
+      body: JSON.stringify({ db_schema: list.join(", ") }),
+    });
+    return r.ok;
+  } catch {
+    return false;
+  }
 }
 
 export async function POST(req: NextRequest) {
   const body = await readBody(req);
   if (!body) return bad("요청 형식이 잘못되었습니다.");
-  if (!authorized(body.pw)) return unauthorized();
-  const fields = parseFields(body);
-  if (typeof fields === "string") return bad(fields);
+  if (!(await authorized(body))) return unauthorized();
 
-  const list = await getProjects();
-  if (list.length >= 30) return bad("프로젝트는 30개까지 등록할 수 있습니다.");
-  list.push({ id: randomUUID(), ...fields, created_at: new Date().toISOString() });
-  return save(list);
+  const name = String(body.name ?? "").trim();
+  const description = String(body.description ?? "").trim();
+  if (!name) return bad("프로젝트명을 입력하세요.");
+  if (name.length > 40 || description.length > 100) {
+    return bad("프로젝트명 40자·설명 100자 이하로 입력하세요.");
+  }
+  const icon = iconKey(body.icon);
+  const color = colorKey(body.color);
+  const sb = createServiceClient(DEFAULT_SLUG);
+
+  const { count, error: countErr } = await sb
+    .from("projects")
+    .select("slug", { count: "exact", head: true });
+  if (countErr) return bad(hint(countErr.message), 500);
+  if ((count ?? 0) >= 30) return bad("프로젝트는 30개까지 등록할 수 있습니다.");
+
+  if (body.kind === "album") {
+    const slug = String(body.slug ?? "").trim().toLowerCase();
+    if (!SLUG_RE.test(slug)) {
+      return bad("프로젝트 ID는 영문 소문자로 시작하는 소문자·숫자·_ 2~20자여야 합니다. (예: b900)");
+    }
+    if (RESERVED.has(slug) || slug.startsWith("pg_")) return bad("쓸 수 없는 프로젝트 ID입니다.");
+    const pw = String(body.admin_password ?? "");
+    if (pw.length < 4) return bad("프로젝트 관리자 비밀번호는 4자 이상으로 정하세요.");
+    const { data: dup } = await sb.from("projects").select("slug").eq("slug", slug).maybeSingle();
+    if (dup) return bad("이미 있는 프로젝트 ID입니다.");
+
+    // 1) 드라이브 폴더
+    let folderId: string;
+    try {
+      folderId = await createProjectFolder(name);
+    } catch (e) {
+      return bad("구글드라이브 폴더 생성 실패: " + (e instanceof Error ? e.message : String(e)), 500);
+    }
+
+    // 2) DB 스키마 복제 (public → <slug>)
+    const { data: rpc, error: rpcErr } = await sb.rpc("create_project_schema", { slug });
+    if (rpcErr) {
+      await deletePhoto(folderId).catch(() => {});
+      return bad("프로젝트 DB 생성 실패: " + hint(rpcErr.message), 500);
+    }
+    let exposed = !!(rpc as { exposed?: boolean } | null)?.exposed;
+    let warning: string | undefined;
+    if (!exposed) {
+      exposed = await exposeSchemaViaApi(slug);
+      if (!exposed) {
+        warning =
+          "DB는 만들어졌지만 API 노출 설정이 자동으로 되지 않았습니다. Supabase 대시보드 → Settings → API → Exposed schemas 에 '" +
+          slug +
+          "' 을(를) 추가하거나, Vercel 환경변수 SUPABASE_ACCESS_TOKEN·SUPABASE_PROJECT_REF 를 넣어 주세요. 그 전까지 이 프로젝트는 열리지 않습니다.";
+      }
+    }
+
+    // 3) 레지스트리 행
+    const { error: insErr } = await sb.from("projects").insert({
+      slug,
+      kind: "album",
+      name,
+      description,
+      icon,
+      color,
+      drive_folder_id: folderId,
+      admin_password_hash: cookieToken(slug, pw),
+    });
+    if (insErr) {
+      try {
+        await sb.rpc("drop_project_schema", { slug });
+      } catch {
+        // 되감기 실패는 무시 — 메시지로 안내
+      }
+      await deletePhoto(folderId).catch(() => {});
+      return bad("프로젝트 등록 실패: " + hint(insErr.message), 500);
+    }
+    invalidateProjectCache();
+    return NextResponse.json({ ok: true, slug, home: projectHome(slug), exposed, warning });
+  }
+
+  // 링크 카드
+  const url = String(body.url ?? "").trim();
+  if (!validUrl(url)) return bad("앱 주소는 https://… 형식으로 입력하세요.");
+  const { error } = await sb.from("projects").insert({
+    slug: randomUUID(),
+    kind: "link",
+    name,
+    description,
+    icon,
+    color,
+    url,
+  });
+  if (error) return bad("저장 실패: " + hint(error.message), 500);
+  invalidateProjectCache();
+  return NextResponse.json({ ok: true });
 }
 
 export async function PUT(req: NextRequest) {
   const body = await readBody(req);
   if (!body) return bad("요청 형식이 잘못되었습니다.");
-  if (!authorized(body.pw)) return unauthorized();
-  const fields = parseFields(body);
-  if (typeof fields === "string") return bad(fields);
+  if (!(await authorized(body))) return unauthorized();
 
-  const id = String(body.id ?? "");
-  const list = await getProjects();
-  const i = list.findIndex((p) => p.id === id);
-  if (i < 0) return bad("해당 프로젝트가 없습니다.");
-  list[i] = { ...list[i], ...fields };
-  return save(list);
-}
+  const slug = String(body.slug ?? "");
+  const sb = createServiceClient(DEFAULT_SLUG);
+  const { data: row, error: rowErr } = await sb
+    .from("projects")
+    .select("slug, kind")
+    .eq("slug", slug)
+    .maybeSingle();
+  if (rowErr) return bad(hint(rowErr.message), 500);
+  if (!row) return bad("해당 프로젝트가 없습니다.");
 
-export async function PATCH(req: NextRequest) {
-  const body = await readBody(req);
-  if (!body) return bad("요청 형식이 잘못되었습니다.");
-  if (!authorized(body.pw)) return unauthorized();
-  try {
-    await setSetting(B820_COLOR_KEY, colorKey(body.color));
-  } catch (e) {
-    return NextResponse.json(
-      { error: "저장 실패: " + (e instanceof Error ? e.message : "알 수 없는 오류") },
-      { status: 500 },
-    );
+  const patch: Record<string, unknown> = {};
+  if (body.color !== undefined) patch.color = colorKey(body.color);
+  if (!isDefault(slug)) {
+    if (body.name !== undefined) {
+      const name = String(body.name ?? "").trim();
+      if (!name || name.length > 40) return bad("프로젝트명은 1~40자로 입력하세요.");
+      patch.name = name;
+    }
+    if (body.description !== undefined) {
+      const d = String(body.description ?? "").trim();
+      if (d.length > 100) return bad("설명은 100자 이하로 입력하세요.");
+      patch.description = d;
+    }
+    if (body.icon !== undefined) patch.icon = iconKey(body.icon);
+    if (row.kind === "link" && body.url !== undefined) {
+      const url = String(body.url ?? "").trim();
+      if (!validUrl(url)) return bad("앱 주소는 https://… 형식으로 입력하세요.");
+      patch.url = url;
+    }
+    if (row.kind === "album" && typeof body.admin_password === "string" && body.admin_password) {
+      if (body.admin_password.length < 4) return bad("프로젝트 관리자 비밀번호는 4자 이상으로 정하세요.");
+      patch.admin_password_hash = cookieToken(slug, body.admin_password);
+    }
   }
+  if (!Object.keys(patch).length) return bad("바꿀 내용이 없습니다.");
+
+  const { error } = await sb.from("projects").update(patch).eq("slug", slug);
+  if (error) return bad("저장 실패: " + hint(error.message), 500);
+  invalidateProjectCache(slug);
   return NextResponse.json({ ok: true });
 }
 
 export async function DELETE(req: NextRequest) {
   const body = await readBody(req);
   if (!body) return bad("요청 형식이 잘못되었습니다.");
-  if (!authorized(body.pw)) return unauthorized();
+  if (!(await authorized(body))) return unauthorized();
 
-  const id = String(body.id ?? "");
-  const list = await getProjects();
-  const next = list.filter((p) => p.id !== id);
-  if (next.length === list.length) return bad("해당 프로젝트가 없습니다.");
-  return save(next);
+  const slug = String(body.slug ?? "");
+  const sb = createServiceClient(DEFAULT_SLUG);
+  const { data: row } = await sb
+    .from("projects")
+    .select("slug, kind, drive_folder_id")
+    .eq("slug", slug)
+    .maybeSingle();
+  if (!row) return bad("해당 프로젝트가 없습니다.");
+
+  if (row.kind === "album") {
+    // 앨범 프로젝트 삭제 = DB 스키마(차량·기록·사진 메타·서약서…) 통째 삭제 + 양식 삭제 + 드라이브 폴더 휴지통.
+    // 되돌릴 수 없으므로 프로젝트 ID를 그대로 입력해 확인받는다. B820은 불가.
+    if (isDefault(slug)) return bad("B820은 삭제할 수 없습니다.");
+    if (String(body.confirm ?? "").trim() !== slug) {
+      return bad("확인을 위해 프로젝트 ID를 똑같이 입력하세요.");
+    }
+    const st = sb.storage.from(TEMPLATE_BUCKET);
+    const { data: objs } = await st.list(slug);
+    if (objs?.length) await st.remove(objs.map((o) => `${slug}/${o.name}`));
+    if (row.drive_folder_id) await trashFile(row.drive_folder_id).catch(() => {});
+    const { error } = await sb.rpc("drop_project_schema", { slug }); // 스키마 + 레지스트리 행
+    if (error) return bad("삭제 실패: " + hint(error.message), 500);
+    invalidateProjectCache(slug);
+    return NextResponse.json({ ok: true });
+  }
+
+  const { error } = await sb.from("projects").delete().eq("slug", slug);
+  if (error) return bad("삭제 실패: " + hint(error.message), 500);
+  invalidateProjectCache(slug);
+  return NextResponse.json({ ok: true });
 }

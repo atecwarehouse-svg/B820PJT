@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import Link from "next/link";
+import Link from "@/components/PLink";
 import { EXPORT_CHUNK } from "@/lib/export/limits";
 
 export interface ListItem {
@@ -28,9 +28,11 @@ interface ExportResult {
 export default function ListClient({
   items,
   operators,
+  exportTitle = "B820_설치사진첩",
 }: {
   items: ListItem[];
   operators: string[];
+  exportTitle?: string; // 다운로드 파일명 앞부분 (프로젝트별)
 }) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState<null | "pdf" | "xlsx">(null);
@@ -134,7 +136,7 @@ export default function ListClient({
     }
     setBusy(kind);
     try {
-      const results = await runExport(kind, selectedPlates, "B820_설치사진첩");
+      const results = await runExport(kind, selectedPlates, exportTitle);
       finishExport(results);
     } catch (e) {
       alert(e instanceof Error ? e.message : "생성 실패");

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { currentSlug } from "@/lib/project";
 import {
   loadTodayExcluded,
   loadTodayModemFaults,
@@ -21,9 +22,9 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ plates: [], excluded: [], tachoOff: [], modemFaults: [] });
   }
   const [excluded, tachoOff, modemFaults] = await Promise.all([
-    loadTodayExcluded(date).catch(() => []),
-    loadTodayTachoOff(date).catch(() => []),
-    loadTodayModemFaults(date).catch(() => []),
+    loadTodayExcluded(currentSlug(), date).catch(() => []),
+    loadTodayTachoOff(currentSlug(), date).catch(() => []),
+    loadTodayModemFaults(currentSlug(), date).catch(() => []),
   ]);
   return NextResponse.json({
     plates: excluded.map((e) => e.plate),

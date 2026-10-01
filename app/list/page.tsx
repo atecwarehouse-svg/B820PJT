@@ -1,4 +1,5 @@
-import Link from "next/link";
+import Link from "@/components/PLink";
+import { brandName, currentProject } from "@/lib/project";
 import { createServiceClient } from "@/lib/supabase/server";
 import { fetchAll } from "@/lib/supabase/paginate";
 import { workDateString } from "@/lib/work-day";
@@ -15,7 +16,7 @@ export const dynamic = "force-dynamic";
 const STD_SLOT_KEYS = [...BEFORE_SLOTS, ...AFTER_SLOTS].map((s) => s.slotKey);
 
 export default async function ListPage() {
-  if (!isAdmin()) return <AdminLogin />;
+  if (!(await isAdmin())) return <AdminLogin />;
 
   const supabase = createServiceClient();
 
@@ -89,7 +90,7 @@ export default async function ListPage() {
         <span className="text-xs text-gray-400">{items.length}대</span>
       </div>
 
-      <ListClient items={items} operators={operators} />
+      <ListClient items={items} operators={operators} exportTitle={`${brandName(await currentProject())}_설치사진첩`} />
     </main>
   );
 }

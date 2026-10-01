@@ -1,4 +1,6 @@
-import Link from "next/link";
+import Link from "@/components/PLink";
+import type { Metadata } from "next";
+import { currentProject } from "@/lib/project";
 import PlateSearch from "@/components/PlateSearch";
 import AdminCallButton from "@/components/AdminCallButton";
 import DispatchButton from "@/components/DispatchButton";
@@ -7,17 +9,19 @@ import TeamCallButton from "@/components/TeamCallButton";
 import WeatherWidget from "@/components/WeatherWidget";
 
 // 빌드(배포) 시각 KST "26.08.09 22:10" + 커밋 7자리 — 정적 페이지라 빌드 때 값이 박힌다
-const BUILD_TIME = new Date().toLocaleString("sv-SE", {
-  timeZone: "Asia/Seoul", // sv-SE = "2026-08-09 22:10"
-  dateStyle: "short",
-  timeStyle: "short",
-});
+const BUILD_TIME = process.env.NEXT_PUBLIC_BUILD_TIME ?? ""; // next.config.mjs 가 빌드 때 박아 둔 KST 시각 (동적 페이지라 모듈 상수로는 못 잡는다)
 const COMMIT = process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? "";
 
-// 탭 제목 — 루트 기본값은 "프로젝트 산출물 관리"라 B820 홈은 자기 이름을 쓴다
-export const metadata = { title: "B820 설치 사진첩" };
+// 프로젝트 홈 — B820은 /b820, 다른 앨범 프로젝트는 /p/<slug> (미들웨어가 이 파일로 rewrite).
+// 제목·탭 이름은 현재 프로젝트명.
+export const dynamic = "force-dynamic";
 
-export default function HomePage() {
+export async function generateMetadata(): Promise<Metadata> {
+  return { title: (await currentProject()).name };
+}
+
+export default async function HomePage() {
+  const project = await currentProject();
   return (
     <main className="relative mx-auto flex min-h-screen max-w-md flex-col px-4 pt-24">
       <WeatherWidget />
@@ -28,7 +32,7 @@ export default function HomePage() {
         ← 프로젝트 선택
       </Link>
       <header className="mb-8 text-center">
-        <h1 className="text-2xl font-bold text-blue-700">B820 설치 사진첩</h1>
+        <h1 className="text-2xl font-bold text-blue-700">{project.name}</h1>
         <p className="mt-2 text-sm text-gray-500">
           차량번호를 입력해 사진첩을 작성하세요
         </p>

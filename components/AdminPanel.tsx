@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import Link from "next/link";
+import Link from "@/components/PLink";
 import { useRouter } from "next/navigation";
 import ReportRecipientsManager from "@/components/ReportRecipientsManager";
 import TeamNamesManager from "@/components/TeamNamesManager";

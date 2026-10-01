@@ -170,9 +170,10 @@ export function formatReportText(
   notes: string,
   check?: ServiceCheck,
   vocs?: VocOperatorSummary[], // 2차 발송에서만 전달 — 운수사 VOC 섹션
+  projectLabel = "인천버스 B820 단말기 설치 프로젝트",
 ): string {
   const lines: string[] = [];
-  lines.push("[인천버스 B820 단말기 설치 프로젝트]");
+  lines.push(`[${projectLabel}]`);
   lines.push(`설치 완료 (${r.label}, ${r.dow})`);
   lines.push(`금일 설치 수량 (실적/계획): ${r.dailyDone}대 / ${r.dailyPlanned}대 ${r.dailyPct.toFixed(1)}%`);
   lines.push("");
@@ -225,6 +226,7 @@ export function formatReportHtml(
   notes: string,
   check?: ServiceCheck,
   vocs?: VocOperatorSummary[],
+  projectLabel = "인천버스 B820 단말기 설치 프로젝트",
 ): string {
   const esc = (s: string) =>
     s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -280,7 +282,7 @@ export function formatReportHtml(
 
   return `<div style="max-width:480px;margin:0 auto;border:1px solid #e5e7eb;border-radius:14px;overflow:hidden;font-family:'Apple SD Gothic Neo',Malgun Gothic,sans-serif">
   <div style="background:#1d4ed8;color:#fff;padding:14px 18px">
-    <div style="font-size:13px;opacity:.85">[인천버스 B820 단말기 설치 프로젝트]</div>
+    <div style="font-size:13px;opacity:.85">[${projectLabel}]</div>
     <div style="font-size:18px;font-weight:700;margin-top:2px">설치 완료 (${r.label}, ${r.dow})</div>
   </div>
   <div style="padding:16px 18px">

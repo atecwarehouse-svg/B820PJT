@@ -37,7 +37,7 @@ interface UploadResult {
   removedCount?: number; // 차량리스트에서 빠져 삭제(예정)된 차량 수
   removed?: RemovedGroup[];
   protectedPlates?: string[]; // 기록·사진이 있어 삭제하지 않은 차량
-  template?: { ok: boolean; reason?: string; warn?: string }; // 미리보기: 양식 교체 가능 여부
+  template?: { ok: boolean; reason?: string; warn?: string; initialNote?: string }; // 미리보기: 양식 교체 가능 여부
   templateReplaced?: boolean; // 적용: 다운로드 양식(템플릿) 교체 여부
   templateNote?: string; // 적용: 미교체 사유 또는 경고
 }
@@ -51,7 +51,9 @@ function fmtDate(d: string | null): string {
 
 // '설치일정 변경 업로드' 버튼 → 팝업(모달).
 // 1) 파일 선택 → 변경 내역 미리보기(DB 미변경) → 2) '변경 반영' 확인 시 실제 반영.
-export default function ScheduleUploadModal() {
+// initial: 새 프로젝트(B820 아님)의 첫 차량리스트 등록 모드 — 같은 양식을 올리되 시범설치 판정 없이
+//          전부 등록하고, 전개일정 대상수량을 차량리스트에 맞춰 정리한 파일을 양식으로 저장한다.
+export default function ScheduleUploadModal({ initial = false }: { initial?: boolean }) {
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState<"select" | "preview" | "done">("select");
   const [busy, setBusy] = useState(false);
@@ -85,6 +87,7 @@ export default function ScheduleUploadModal() {
       const form = new FormData();
       form.append("file", f);
       form.append("pw", pw);
+      form.append("initial", String(initial));
       const res = await fetch("/api/import/schedule", { method: "POST", body: form });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "업로드 실패");
@@ -108,6 +111,7 @@ export default function ScheduleUploadModal() {
       form.append("file", file);
       form.append("apply", "true");
       form.append("pw", pw);
+      form.append("initial", String(initial));
       const res = await fetch("/api/import/schedule", { method: "POST", body: form });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "반영 실패");
@@ -197,6 +201,11 @@ export default function ScheduleUploadModal() {
             ⚠️ {result.template.warn}
           </p>
         )}
+        {result.template.initialNote && (
+          <p className="mt-2 rounded-lg bg-blue-50 px-3 py-2 text-[11px] leading-relaxed text-blue-700">
+            🧹 {result.template.initialNote}
+          </p>
+        )}
       </>
     );
   }
@@ -272,9 +281,13 @@ export default function ScheduleUploadModal() {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="rounded-lg border border-blue-300 bg-white px-3 py-1.5 text-xs font-semibold text-blue-600 shadow-sm transition-colors hover:bg-blue-50"
+        className={
+          initial
+            ? "rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-blue-700"
+            : "rounded-lg border border-blue-300 bg-white px-3 py-1.5 text-xs font-semibold text-blue-600 shadow-sm transition-colors hover:bg-blue-50"
+        }
       >
-        설치일정 변경 업로드
+        {initial ? "최초 업로드 (차량리스트 등록)" : "설치일정 변경 업로드"}
       </button>
 
       {open && (
@@ -289,10 +302,16 @@ export default function ScheduleUploadModal() {
             <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
               <h2 className="text-sm font-bold text-blue-700">
                 {step === "preview"
-                  ? "변경 내용 확인"
+                  ? initial
+                    ? "등록 내용 확인"
+                    : "변경 내용 확인"
                   : step === "done"
-                    ? "반영 완료"
-                    : "설치일정 변경 업로드"}
+                    ? initial
+                      ? "등록 완료"
+                      : "반영 완료"
+                    : initial
+                      ? "차량리스트 최초 업로드"
+                      : "설치일정 변경 업로드"}
               </h2>
               <button
                 onClick={close}
@@ -307,6 +326,21 @@ export default function ScheduleUploadModal() {
               {step === "select" && (
                 // 1단계: 파일 선택
                 <>
+                  {initial ? (
+                    <div className="rounded-lg bg-blue-50 px-3 py-2.5 text-xs leading-relaxed text-gray-600">
+                      <p className="font-semibold text-blue-700">이 프로젝트의 첫 차량리스트</p>
+                      <p className="mt-1">
+                        진행현황 양식(「차량리스트」·「전개일정」·「진행현황」 시트) 엑셀을 올려주세요.{" "}
+                        <b>차량리스트 시트의 차량이 전부 등록</b>되고, 이 파일이 이 프로젝트의 진행현황
+                        다운로드 양식이 됩니다.
+                      </p>
+                      <p className="mt-1 text-gray-500">
+                        B820 파일을 복사해 쓰셔도 됩니다. <b>전개일정 시트의 대상수량은 차량리스트에 맞춰
+                        자동으로 정리</b>되므로 숫자를 손볼 필요가 없습니다. (B820의 시범설치 기준도 적용하지
+                        않습니다)
+                      </p>
+                    </div>
+                  ) : (
                   <div className="rounded-lg bg-blue-50 px-3 py-2.5 text-xs leading-relaxed text-gray-600">
                     <p className="font-semibold text-blue-700">수정 방법</p>
                     <p className="mt-1">
@@ -327,6 +361,7 @@ export default function ScheduleUploadModal() {
                       교체됩니다. (노선명 변경·일정 재편성도 다운로드에 바로 반영)
                     </p>
                   </div>
+                  )}
 
                   <label className="mt-3 block">
                     <span className="text-[11px] font-medium text-gray-500">관리자 비밀번호</span>
@@ -372,7 +407,15 @@ export default function ScheduleUploadModal() {
                 // 2단계: 변경 내용 확인 → 반영 여부 결정
                 <>
                   <p className="text-xs text-gray-500">
-                    아래 내용으로 일정을 변경합니다. 확인 후 <b>변경 반영</b>을 눌러주세요.
+                    {initial ? (
+                      <>
+                        아래 차량을 이 프로젝트의 차량리스트로 등록합니다. 확인 후 <b>등록</b>을 눌러주세요.
+                      </>
+                    ) : (
+                      <>
+                        아래 내용으로 일정을 변경합니다. 확인 후 <b>변경 반영</b>을 눌러주세요.
+                      </>
+                    )}
                   </p>
                   <p className="mt-1 text-xs text-gray-500">
                     총 {result.total.toLocaleString()}대 · 일정 변경{" "}
@@ -409,7 +452,7 @@ export default function ScheduleUploadModal() {
                       disabled={busy}
                       className="flex-1 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
                     >
-                      {busy ? "반영 중…" : "변경 반영"}
+                      {busy ? "반영 중…" : initial ? "등록" : "변경 반영"}
                     </button>
                   </div>
                 </>

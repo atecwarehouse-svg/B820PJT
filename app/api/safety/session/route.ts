@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
+import { currentProject, isDefault } from "@/lib/project";
 import { createServiceClient } from "@/lib/supabase/server";
-import { adminPassword, isAdmin } from "@/lib/admin-auth";
+import { checkAdminPassword, isAdmin } from "@/lib/admin-auth";
 import { deletePhoto } from "@/lib/gdrive";
 
 export const runtime = "nodejs";
@@ -20,7 +21,7 @@ interface CreateBody {
 // POST /api/safety/session  → 안전관리 서약서 세션 생성 (공유 링크용)
 // 안전관리자가 이름·운수사·장소·설치일자를 입력하면 세션 1개를 만들고 id를 반환한다.
 export async function POST(req: NextRequest) {
-  if (!isAdmin()) {
+  if (!(await isAdmin())) {
     return NextResponse.json(
       { error: "관리자 인증이 필요합니다." },
       { status: 401 },
@@ -55,6 +56,9 @@ export async function POST(req: NextRequest) {
   };
   const installDate = (body.install_date ?? "").trim();
   if (installDate) payload.install_date = installDate;
+  // 작업내용(서약서 PDF 상단) — DB 기본값은 B820 문구라 다른 프로젝트는 프로젝트명으로
+  const project = await currentProject();
+  if (!isDefault(project.slug)) payload.work_content = `${project.name} 설치`;
 
   const { data, error } = await supabase
     .from("pledge_sessions")
@@ -73,7 +77,7 @@ export async function DELETE(req: NextRequest) {
     sessionId?: string;
     password?: string;
   };
-  if (password !== adminPassword() && !isAdmin()) {
+  if (!(await checkAdminPassword(password)) && !(await isAdmin())) {
     return NextResponse.json(
       { error: "관리자 비밀번호가 올바르지 않습니다." },
       { status: 401 },

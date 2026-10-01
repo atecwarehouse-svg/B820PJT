@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/PLink";
 import { createServiceClient } from "@/lib/supabase/server";
 import { fetchAll } from "@/lib/supabase/paginate";
 import { getInstallTeamsFull, makeTeamNormalizer, teamLabel } from "@/lib/settings";

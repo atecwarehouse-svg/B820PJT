@@ -135,6 +135,7 @@ export interface ProgressCardData {
   todayDone: number; // 금일 완료 (저장 + 설치 전·후 사진 전부 충족, 현재 업무일)
   complete: number; // 누적 완료
   remain: number;
+  projectName?: string; // 카드 제목의 프로젝트명 (기본 "B820")
 }
 
 export async function sendProgressCard(d: ProgressCardData): Promise<void> {
@@ -156,7 +157,7 @@ export async function sendProgressCard(d: ProgressCardData): Promise<void> {
               type: "TextBlock",
               size: "Large",
               weight: "Bolder",
-              text: "🚌 B820 단말기 설치 진행 현황",
+              text: `🚌 ${d.projectName ?? "B820"} 단말기 설치 진행 현황`,
               wrap: true,
             },
             {
@@ -208,6 +209,7 @@ export async function sendStartReportCard(d: {
   todayPlanned: number;
   complete: number;
   remain: number;
+  projectName?: string;
   groups: {
     operator: string;
     route: string;
@@ -235,7 +237,7 @@ export async function sendStartReportCard(d: {
               type: "TextBlock",
               size: "Large",
               weight: "Bolder",
-              text: "B820 단말기 설치 시작 보고",
+              text: `${d.projectName ?? "B820"} 단말기 설치 시작 보고`,
               wrap: true,
             },
             {
@@ -333,6 +335,7 @@ export async function sendCompletionReportCard(
   notes: string,
   check?: ServiceCheck,
   vocs?: VocOperatorSummary[], // 2차 발송에서만 전달 — 운수사 VOC 섹션
+  projectName?: string,
 ): Promise<void> {
   const url = process.env.TEAMS_WEBHOOK_URL;
   if (!url)
@@ -392,7 +395,7 @@ export async function sendCompletionReportCard(
               type: "TextBlock",
               size: "Large",
               weight: "Bolder",
-              text: "✅ B820 단말기 설치 완료 보고",
+              text: `✅ ${projectName ?? "B820"} 단말기 설치 완료 보고`,
               wrap: true,
             },
             {
@@ -1182,6 +1185,7 @@ export async function sendPlanReportCard(
     label: string; // 날짜 라벨 (예: "7/10 (금)")
     total: number; // 금일 설치계획 합계
     groups: PlanReportGroup[];
+    projectName?: string;
   },
   rooms: PlanReportRoom[] = ["start", "consult"],
 ): Promise<{ sent: PlanReportRoom[]; errors: string[] }> {
@@ -1247,7 +1251,7 @@ export async function sendPlanReportCard(
 
   // 시작보고방: 휴차 없이 간단히
   const startCard = mkCard([
-    ...header("B820 단말기 설치계획 보고"),
+    ...header(`${d.projectName ?? "B820"} 단말기 설치계획 보고`),
     ...d.groups.flatMap((g) => [
       groupHead(g),
       { type: "FactSet", spacing: "Small", facts: baseFacts(g) },

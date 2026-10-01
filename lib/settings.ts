@@ -2,47 +2,10 @@
 // 관리자 페이지에서 수정하는 값(완료리포트 수신자 등)을 저장한다.
 
 import { createServiceClient } from "@/lib/supabase/server";
-import { colorKey, iconKey, type ColorKey, type IconKey } from "@/components/ProjectIcon";
 
 export const REPORT_MAIL_KEY = "report_mail_to";
 export const INSTALL_TEAMS_KEY = "install_teams"; // 설치팀 목록 (JSON [{team,name,phone}], 구버전 문자열 배열 호환)
 export const INSPECT_CHECKLIST_KEY = "inspect_checklist"; // 배차표 검수항목 (JSON {vehicle,device})
-export const PROJECTS_KEY = "projects"; // 첫 화면 프로젝트 목록 (JSON Project[]) — B820은 코드에 고정, 여기엔 추가 프로젝트만
-export const B820_COLOR_KEY = "b820_card_color"; // 첫 화면 B820 고정 카드의 색 키 (CARD_COLORS, 기본 blue)
-
-// 첫 화면(프로젝트 선택)에 추가로 띄우는 프로젝트. 각 프로젝트는 별도 배포된 앱이라
-// 카드는 url로 이동만 한다(이 앱 안에 데이터를 두지 않음).
-export interface Project {
-  id: string;
-  icon: IconKey; // 아이콘 키 (components/ProjectIcon.tsx의 PROJECT_ICONS, 기본 folder)
-  color: ColorKey; // 카드 배경색 키 (CARD_COLORS, 기본 blue)
-  name: string;
-  description: string;
-  url: string; // https://… 또는 이 앱 안의 경로(/…)
-  created_at: string;
-}
-
-export async function getProjects(): Promise<Project[]> {
-  const raw = await getSetting(PROJECTS_KEY);
-  if (!raw) return [];
-  try {
-    const arr = JSON.parse(raw);
-    if (!Array.isArray(arr)) return [];
-    return arr
-      .map((v) => ({
-        id: String(v?.id ?? ""),
-        icon: iconKey(v?.icon),
-        color: colorKey(v?.color),
-        name: String(v?.name ?? "").trim(),
-        description: String(v?.description ?? "").trim(),
-        url: String(v?.url ?? "").trim(),
-        created_at: String(v?.created_at ?? ""),
-      }))
-      .filter((v) => v.id && v.name && v.url);
-  } catch {
-    return [];
-  }
-}
 
 // 업무일별 설치시작 보고 현황 — JSON {운수사: [담당 검수자…]}.
 // 두 가지를 겸한다: (1) 보고 완료 운수사 잠금(키 존재 여부), (2) 그날 담당 검수자 배정
@@ -77,15 +40,15 @@ export function parseStartReport(raw: string | null): Record<string, string[]> {
 }
 
 /** 화면 표시용 읽기 — 조회 실패는 '기록 없음'으로 처리(잠금이 잠깐 안 보일 뿐). */
-export async function getStartReport(date: string): Promise<Record<string, string[]>> {
-  return parseStartReport(await getSetting(startReportKey(date)));
+export async function getStartReport(date: string, slug?: string): Promise<Record<string, string[]>> {
+  return parseStartReport(await getSetting(startReportKey(date), slug));
 }
 
 /** 수정 전 읽기 — 조회 실패 시 던진다.
  *  getSetting은 오류를 삼키고 null을 주기 때문에, 그대로 쓰면 일시적 DB 오류를
  *  '아직 아무도 보고 안 함'으로 오해해 그날 기록 전체를 덮어써 버린다. */
-export async function getStartReportForUpdate(date: string): Promise<Record<string, string[]>> {
-  const supabase = createServiceClient();
+export async function getStartReportForUpdate(date: string, slug?: string): Promise<Record<string, string[]>> {
+  const supabase = createServiceClient(slug);
   const { data, error } = await supabase
     .from("app_settings")
     .select("value")
@@ -153,9 +116,9 @@ export async function getInstallTeams(): Promise<string[]> {
 }
 
 // 값 읽기. 행 없음/테이블 미생성 등 오류 시 null → 호출측에서 env 폴백.
-export async function getSetting(key: string): Promise<string | null> {
+export async function getSetting(key: string, slug?: string): Promise<string | null> {
   try {
-    const supabase = createServiceClient();
+    const supabase = createServiceClient(slug);
     const { data, error } = await supabase
       .from("app_settings")
       .select("value")
@@ -168,8 +131,8 @@ export async function getSetting(key: string): Promise<string | null> {
   }
 }
 
-export async function setSetting(key: string, value: string): Promise<void> {
-  const supabase = createServiceClient();
+export async function setSetting(key: string, value: string, slug?: string): Promise<void> {
+  const supabase = createServiceClient(slug);
   const { error } = await supabase
     .from("app_settings")
     .upsert({ key, value, updated_at: new Date().toISOString() }, { onConflict: "key" });
@@ -180,9 +143,4 @@ export async function setSetting(key: string, value: string): Promise<void> {
       : "";
     throw new Error(error.message + hint);
   }
-}
-
-// 첫 화면 B820 카드 색 — 미설정이면 blue.
-export async function getB820Color(): Promise<ColorKey> {
-  return colorKey(await getSetting(B820_COLOR_KEY));
 }

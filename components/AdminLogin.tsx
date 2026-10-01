@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
+import Link from "@/components/PLink";
 
 // 관리자 비밀번호 입력 게이트. 성공 시 쿠키 발급 후 페이지 새로고침.
 // backHref: 로그인 화면의 "처음으로" 링크 — 관리자 페이지는 B820 홈, 프로젝트 관리는 첫 화면

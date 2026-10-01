@@ -13,7 +13,7 @@ export const dynamic = "force-dynamic";
 
 // GET → 설치팀 목록(팀명·이름·전화) — 관리자 페이지 팀 관리 섹션용
 export async function GET() {
-  if (!isAdmin()) {
+  if (!(await isAdmin())) {
     return NextResponse.json({ error: "관리자 인증이 필요합니다." }, { status: 401 });
   }
   const list = await getInstallTeamsFull();
@@ -22,7 +22,7 @@ export async function GET() {
 
 // PUT { list: {team,name,phone}[] } → 설치팀 목록 저장 (전체 교체)
 export async function PUT(req: NextRequest) {
-  if (!isAdmin()) {
+  if (!(await isAdmin())) {
     return NextResponse.json({ error: "관리자 인증이 필요합니다." }, { status: 401 });
   }
   const body = (await req.json().catch(() => null)) as { list?: unknown } | null;

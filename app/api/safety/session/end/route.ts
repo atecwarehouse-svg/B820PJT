@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
-import { adminPassword, isAdmin } from "@/lib/admin-auth";
+import { checkAdminPassword, isAdmin } from "@/lib/admin-auth";
 import { endHm } from "@/lib/pledge-end";
 
 export const runtime = "nodejs";
@@ -14,7 +14,7 @@ export async function POST(req: NextRequest) {
     sessionId?: string;
     password?: string;
   };
-  if (password !== adminPassword() && !isAdmin()) {
+  if (!(await checkAdminPassword(password)) && !(await isAdmin())) {
     return NextResponse.json(
       { error: "관리자 비밀번호가 올바르지 않습니다." },
       { status: 401 },

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
+import Link from "@/components/PLink";
 import type { InProgressVehicle, CompletedVehicle } from "@/lib/stats";
 import CompletedListModal from "@/components/CompletedListModal";
 

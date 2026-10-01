@@ -31,6 +31,7 @@ const OFF_BEFORE_HEADER = 4; // "설치 전"
 const OFF_BEFORE_GRID = 5; // 설치 전 첫 라벨행
 
 export const TITLE_TEXT = "B820 설치 사진";
+export const titleText = (brand: string) => `${brand} 설치 사진`; // 프로젝트별 제목
 
 export interface CellRange {
   // 1-based 셀 주소 (병합용)

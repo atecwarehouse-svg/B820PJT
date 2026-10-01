@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/PLink";
 import { unstable_cache } from "next/cache";
 import {
   loadStats,
@@ -32,22 +32,23 @@ import CompletedListModal from "@/components/CompletedListModal";
 import RefreshButton from "@/components/RefreshButton";
 import DashboardDetailTabs from "@/components/DashboardDetailTabs";
 import { isProgressUnlocked } from "@/lib/admin-auth";
+import { brandName, currentProject, currentSlug, isDefault } from "@/lib/project";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 // 집계 결과를 60초 캐시 — 실시간일 필요 없어 매 접속마다 재계산하지 않음.
 // tags:["dashboard"] → 관리자 삭제 등에서 revalidateTag로 즉시 갱신 가능.
-const getStats = unstable_cache(() => loadStats(), ["dashboard-stats"], {
+const getStats = unstable_cache((slug: string) => loadStats(slug), ["dashboard-stats"], {
   revalidate: 60,
   tags: ["dashboard"],
 });
 
 // 설치 진행현황(저장 기준). 실패해도 페이지 전체가 죽지 않게 null 폴백.
 const getInstall = unstable_cache(
-  async (): Promise<InstallProgress | null> => {
+  async (slug: string): Promise<InstallProgress | null> => {
     try {
-      return await loadInstallProgress();
+      return await loadInstallProgress(slug);
     } catch {
       return null;
     }
@@ -58,9 +59,9 @@ const getInstall = unstable_cache(
 
 // 설치 일정 — vehicles.planned_date/is_pilot 컬럼 필요(마이그레이션·임포트 전이면 null).
 const getSchedule = unstable_cache(
-  async (): Promise<ScheduleStats | null> => {
+  async (slug: string): Promise<ScheduleStats | null> => {
     try {
-      return await loadScheduleStats();
+      return await loadScheduleStats(slug);
     } catch {
       return null;
     }
@@ -71,9 +72,9 @@ const getSchedule = unstable_cache(
 
 // 진행중(사진 미완료) 차량 목록 — KPI 진행중 팝업용.
 const getInProgress = unstable_cache(
-  async (): Promise<InProgressVehicle[]> => {
+  async (slug: string): Promise<InProgressVehicle[]> => {
     try {
-      return await loadInProgressList();
+      return await loadInProgressList(slug);
     } catch {
       return [];
     }
@@ -84,9 +85,9 @@ const getInProgress = unstable_cache(
 
 // 금일 설치계획 운수사·노선별 집계 — 설치시작 보고 카드용. 날짜가 캐시 키에 포함됨.
 const getTodayPlan = unstable_cache(
-  async (date: string): Promise<TodayPlanGroup[]> => {
+  async (slug: string, date: string): Promise<TodayPlanGroup[]> => {
     try {
-      return await loadTodayPlanGroups(date);
+      return await loadTodayPlanGroups(slug, date);
     } catch {
       return [];
     }
@@ -98,9 +99,9 @@ const getTodayPlan = unstable_cache(
 // 배차표 '설치제외' 금일 차량 목록 — 금일 설치현황 타일에서 설치대상 차감용.
 // (그날 예정 차량과 교집합만 — 일정 변경·삭제된 차량의 옛 제외 기록은 무시)
 const getTodayExcluded = unstable_cache(
-  async (date: string): Promise<string[]> => {
+  async (slug: string, date: string): Promise<string[]> => {
     try {
-      return await loadTodayExcludedPlates(date);
+      return await loadTodayExcludedPlates(slug, date);
     } catch {
       return [];
     }
@@ -111,9 +112,9 @@ const getTodayExcluded = unstable_cache(
 
 // 운수사별 설치 예정일·대수 — 운수사 협의사항 폼(운수사 검색 → 날짜 선택)용.
 const getOperatorSchedules = unstable_cache(
-  async (): Promise<OperatorSchedule[]> => {
+  async (slug: string): Promise<OperatorSchedule[]> => {
     try {
-      return await loadOperatorSchedules();
+      return await loadOperatorSchedules(slug);
     } catch {
       return [];
     }
@@ -124,21 +125,23 @@ const getOperatorSchedules = unstable_cache(
 
 export default async function DashboardPage() {
   // 상세 섹션(설치 일정·운수사별·영업소별·날짜별)은 잠금 해제 전에는 서버가 아예 안 내려준다.
+  const slug = currentSlug();
+  const brand = brandName(await currentProject()); // 카드 미리보기 제목용 프로젝트명
   const detailUnlocked = isProgressUnlocked();
   const todayWork = workDateString(new Date()); // 현재 업무일
   const [s, ip, sch, inProgressList, operatorSchedules] = await Promise.all([
-    getStats(),
-    getInstall(),
-    getSchedule(),
-    getInProgress(),
-    getOperatorSchedules(),
+    getStats(slug),
+    getInstall(slug),
+    getSchedule(slug),
+    getInProgress(slug),
+    getOperatorSchedules(slug),
   ]);
   // '금일'은 진행현황 캐시(ip.today)와 같은 날짜로 통일 — 업무일 경계(정오) 직후
   // 60초 캐시가 남아 있는 동안 대상·완료·제외가 서로 다른 날짜로 집계되는 것을 방지.
   const todayKey = ip?.today ?? todayWork;
   const [todayPlanGroups, excludedPlates] = await Promise.all([
-    getTodayPlan(todayKey),
-    getTodayExcluded(todayKey),
+    getTodayPlan(slug, todayKey),
+    getTodayExcluded(slug, todayKey),
   ]);
   // 렌더 시각(KST) — 새로고침할 때마다 갱신되어 데이터 최신 여부를 바로 알 수 있다.
   const updatedAt = new Intl.DateTimeFormat("ko-KR", {
@@ -152,6 +155,8 @@ export default async function DashboardPage() {
   // 진행중 = 시작(기록 있음)했으나 13장 미만 차량(사진 0장 중단 포함 · 팝업 목록과 일치)
   const inProgressCount = inProgressList.length;
   const remainCount = Math.max(0, s.totalVehicles - s.complete - inProgressCount);
+  // 새 프로젝트(B820 아님)에서 아직 설치 기록이 하나도 없으면 "최초 업로드" 모드
+  const initialUpload = !isDefault(slug) && s.complete === 0 && inProgressList.length === 0;
 
   // 진행현황 다운로드 기준일 기본값 = 현재 업무일. 팝업에서 날짜를 바꾸면
   // 그 날짜까지의 스냅샷(계획·기준일·완료)으로 받는다. 계획수량은 예정일(planned_date)에서 파생.
@@ -213,6 +218,7 @@ export default async function DashboardPage() {
             startComplete={startComplete}
             startRemain={startRemain}
             inspectorList={inspectorNames()}
+            brand={brand}
           />
           {ip && (
             <DailyReportModal
@@ -310,7 +316,7 @@ export default async function DashboardPage() {
         <h2 className="text-sm font-bold text-gray-700">상세 현황</h2>
         <div className="flex flex-wrap items-center gap-2">
           <ConsultationModal operators={operatorSchedules} />
-          <ScheduleUploadModal />
+          <ScheduleUploadModal initial={initialUpload} />
         </div>
       </div>
 

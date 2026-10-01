@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { brandName, currentProject } from "@/lib/project";
 import { createServiceClient } from "@/lib/supabase/server";
 import {
   sendPlanReportCard,
@@ -111,7 +112,7 @@ export async function POST(req: NextRequest) {
     : [];
   const rooms: PlanReportRoom[] = roomsIn.length > 0 ? roomsIn : ["start", "consult"];
 
-  const result = await sendPlanReportCard({ label, total, groups }, rooms);
+  const result = await sendPlanReportCard({ label, total, groups, projectName: brandName(await currentProject()) }, rooms);
   if (result.errors.length > 0) {
     // 성공한 방 목록을 함께 돌려줘 클라이언트가 실패한 방에만 재시도하게 한다
     return NextResponse.json(
