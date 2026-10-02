@@ -82,7 +82,7 @@ async function parseWorkbook(wb: ExcelJS.Workbook): Promise<ParseResult> {
   for (let r = 2; r <= vws.rowCount; r++) {
     const row = vws.getRow(r);
     const plate = txt(row.getCell("F").value);
-    if (!plate) continue;
+    if (!plate || plate.startsWith("예)")) continue; // 빈 양식의 2행 작성 예시("예) 인천70바4005")는 건너뜀
     const operator = txt(row.getCell("B").value);
     const route = txt(row.getCell("C").value);
     if (!operator || !route) {

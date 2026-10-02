@@ -4,7 +4,8 @@ const COLS: { col: string; name: string; need: "필수" | "권장" | "선택"; n
   { col: "A", name: "번호", need: "선택", note: "차량 순번(숫자). 리포트 정렬에 씀" },
   { col: "B", name: "운수사", need: "필수", note: "비면 그 행은 건너뜀" },
   { col: "C", name: "노선", need: "필수", note: "비면 그 행은 건너뜀" },
-  { col: "E", name: "야간 박차지 주소", need: "권장", note: "운수사별 첫 행만. 홈 날씨·일정 팝업에 씀" },
+  { col: "D", name: "차고지", need: "선택", note: "차고지 이름 (참고용)" },
+  { col: "E", name: "설치 장소", need: "권장", note: "주소. 운수사별 첫 행만 읽어 홈 날씨·일정 팝업에 씀" },
   { col: "F", name: "차량번호", need: "필수", note: "예: 인천70바4005. 같은 번호가 여러 행이면 마지막 행" },
   { col: "I", name: "설치 예정일", need: "권장", note: "날짜 셀 또는 2026.07.30 형식. 비면 '미정'" },
   { col: "J", name: "연식", need: "선택", note: "예: 2023" },
@@ -26,7 +27,7 @@ export default function RawDataGuide({ open = false }: { open?: boolean }) {
           download
           className="flex items-center justify-center gap-1.5 rounded-xl bg-emerald-600 px-3 py-2.5 text-sm font-semibold text-white shadow-sm active:bg-emerald-700"
         >
-          ⬇️ 빈 양식 다운로드 (차량리스트_빈양식.xlsx)
+          ⬇️ 빈 양식 다운로드 (2행에 작성 예시 포함)
         </a>
         <p className="leading-relaxed">
           B820 진행현황 양식 엑셀과 같은 구성입니다. <b>「차량리스트」 시트</b>의 1행은 제목줄, 2행부터 차량
@@ -58,7 +59,7 @@ export default function RawDataGuide({ open = false }: { open?: boolean }) {
           </table>
         </div>
         <ul className="space-y-0.5 text-[11px] leading-relaxed text-gray-500">
-          <li>· 적지 않은 열(D·G·H·K 등)은 읽지 않으니 비워 두거나 자유롭게 써도 됩니다.</li>
+          <li>· 빈 양식 2행의 회색 예시는 지우지 않아도 됩니다(차량번호가 「예)」로 시작하면 건너뜁니다). 적지 않은 열(G·H·K 등)은 읽지 않으니 자유롭게 써도 됩니다.</li>
           <li>· 「전개일정」·「진행현황」 시트까지 있는 양식이면 이 파일이 진행현황 다운로드 양식으로도 저장됩니다(대상수량은 차량리스트에 맞춰 자동 정리). 없으면 차량 리스트만 등록됩니다.</li>
           <li>· 시트 이름은 꼭 「차량리스트」여야 합니다. 설치 예정일은 나중에 「설치일정 변경 업로드」로 바꿀 수 있습니다.</li>
         </ul>
