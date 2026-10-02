@@ -60,7 +60,7 @@ function fmtDate(d: string | null): string {
 // 1) 파일 선택 → 변경 내역 미리보기(DB 미변경) → 2) '변경 반영' 확인 시 실제 반영.
 // initial: 새 프로젝트(B820 아님)의 첫 차량리스트 등록 모드 — 같은 양식을 올리되 시범설치 판정 없이
 //          전부 등록하고, 전개일정 대상수량을 차량리스트에 맞춰 정리한 파일을 양식으로 저장한다.
-export default function ScheduleUploadModal({ initial = false }: { initial?: boolean }) {
+export default function ScheduleUploadModal({ initial = false, projectName = "" }: { initial?: boolean; projectName?: string }) {
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState<"select" | "preview" | "done">("select");
   const [busy, setBusy] = useState(false);
@@ -356,7 +356,7 @@ export default function ScheduleUploadModal({ initial = false }: { initial?: boo
                         않습니다)
                       </p>
                       <div className="mt-2">
-                        <RawDataGuide />
+                        <RawDataGuide projectName={projectName} />
                       </div>
                     </div>
                   ) : (

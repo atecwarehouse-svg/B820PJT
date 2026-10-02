@@ -323,7 +323,7 @@ export default async function DashboardPage() {
         <h2 className="text-sm font-bold text-gray-800">🔎 상세 현황</h2>
         <div className="flex flex-wrap items-center gap-2">
           <ConsultationModal operators={operatorSchedules} />
-          <ScheduleUploadModal initial={initialUpload} />
+          <ScheduleUploadModal initial={initialUpload} projectName={projectInfo.name} />
         </div>
       </div>
 

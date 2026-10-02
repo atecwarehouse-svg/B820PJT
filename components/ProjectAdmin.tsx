@@ -628,7 +628,7 @@ export default function ProjectAdmin({
                       : "진행현황 양식 엑셀을 올리면 차량 리스트·설치 일정이 바로 등록됩니다."}
                   </p>
                   <div className="mt-2">
-                    <RawDataGuide />
+                    <RawDataGuide projectName={name} />
                   </div>
                   <label className="mt-2 flex items-center gap-2">
                     <input
