@@ -21,6 +21,13 @@ export default function RawDataGuide({ open = false }: { open?: boolean }) {
         📑 엑셀 어느 열에 뭘 넣나요? <span className="font-normal text-gray-400 group-open:hidden">(펼치기)</span>
       </summary>
       <div className="space-y-2 px-3 pb-3">
+        <a
+          href="/api/import/schedule/template"
+          download
+          className="flex items-center justify-center gap-1.5 rounded-xl bg-emerald-600 px-3 py-2.5 text-sm font-semibold text-white shadow-sm active:bg-emerald-700"
+        >
+          ⬇️ 빈 양식 다운로드 (차량리스트_빈양식.xlsx)
+        </a>
         <p className="leading-relaxed">
           B820 진행현황 양식 엑셀과 같은 구성입니다. <b>「차량리스트」 시트</b>의 1행은 제목줄, 2행부터 차량
           한 대가 한 줄입니다. 가장 쉬운 방법은 <b>B820 진행현황 엑셀을 내려받아 차량리스트 시트만 바꿔</b> 올리는
