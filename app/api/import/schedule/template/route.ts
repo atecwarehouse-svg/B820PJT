@@ -5,6 +5,8 @@ import { createServiceClient } from "@/lib/supabase/server";
 import { DEFAULT_SLUG } from "@/lib/project";
 import { TEMPLATE_BUCKET, templateObject } from "@/lib/template-path";
 import { parsePeriod } from "@/lib/settings";
+import { addGuideSheet, type GuideRow } from "@/lib/import/guide-sheet";
+import { RAW_DATA_COLS } from "@/components/RawDataGuide";
 import { resolveSheetPaths, setCellNumber } from "@/lib/export/fill-progress-xlsx";
 
 export const runtime = "nodejs";
@@ -20,6 +22,7 @@ export const dynamic = "force-dynamic";
 //                12~348행 A(NO)·B(영업소)·C(노선)·D(대상대수)는 같은 행의 전개일정(A/B/E) 참조 수식
 //                → 전개일정에 운수사·노선을 적는 만큼 진행현황 행이 따라 채워진다(빈 행은 공란)
 //   workbook   : fullCalcOnLoad — 열 때 수식 재계산(캐시값은 지움), 진행현황 탭 이름=(프로젝트명) 진행현황
+//   작성 안내  : 맨 앞 탭(열 때 보이는 시트)에 작성 순서·열 안내 — 업로드 때 lib/import/guide-sheet removeGuideSheet로 빠진다
 // 그래서 이 파일을 채워 올리면 진행현황 다운로드 양식으로도 저장된다. Storage를 못 읽으면 차량리스트만 있는 간단 양식.
 
 const XLSX_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
@@ -187,7 +190,41 @@ async function blankFromTemplate(src: Buffer, projectName: string, period: { sta
   wx = wx.replace(/<sheet name="[^"]*진행현황[^"]*"/, `<sheet name="${esc(tab)}"`);
   zip.file("xl/workbook.xml", wx);
 
+  // ── 맨 앞 「작성 안내」 시트 (업로드 때 prepare-template이 뺀다) ──
+  await addGuideSheet(zip, guideRows(projectName, tab, period), [10, 16, 9, 60]);
+
   return zip.generateAsync({ type: "nodebuffer", compression: "DEFLATE" });
+}
+
+/** 「작성 안내」 시트 내용 — 긴 문장은 A열에 쓰고 오른쪽 빈 칸으로 넘쳐 보이게(병합하면 줄 높이가 안 맞음) */
+function guideRows(projectName: string, tab: string, period: { start: string; end: string } | null): GuideRow[] {
+  const today = new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 10);
+  const line = (text: string, s: GuideRow["s"] = "body"): GuideRow => ({ s, cells: [text] });
+  const gap: GuideRow = { cells: [] };
+  return [
+    line(`${projectName} 진행현황 양식 — 작성 안내`, "title"),
+    line(`내려받은 날: ${today}${period ? ` · 프로젝트 기간: ${period.start} ~ ${period.end}` : ""} · 이 시트는 업로드할 때 자동으로 빠지니 지우지 않아도 됩니다.`, "note"),
+    gap,
+    line("■ 작성 순서", "head"),
+    line("1. 「차량리스트」 시트 2행부터 차량 한 대를 한 줄씩 적습니다. 어느 열에 무엇을 넣는지는 아래 표를 보세요."),
+    line("2. 2행의 회색 예시는 지우지 않아도 됩니다. 차량번호가 「예)」로 시작하는 줄은 업로드 때 건너뜁니다."),
+    line(`3. 「전개일정」·「${tab}」 시트는 손대지 않아도 됩니다. 업로드하면 차량리스트를 기준으로 자동으로 채워집니다.`),
+    line("     · 전개일정: 운수사·노선·차고지·대상수량, 3행 날짜(프로젝트 기간 + 설치 예정일), 날짜별 계획 수량"),
+    line("     · 진행현황: 영업소·노선·대상대수가 전개일정을 따라 채워지고, 완료 수량은 앱에서 설치가 끝나면 집계됩니다."),
+    line("4. 저장한 뒤 「프로젝트 만들기」 화면에 첨부하거나, 대시보드의 「최초 업로드」로 올립니다."),
+    line("     · 그 뒤로 일정이 바뀌면 같은 파일을 고쳐 「설치일정 변경 업로드」로 올리면 됩니다. 날짜별 계획도 다시 계산됩니다."),
+    line("5. 시트 이름(차량리스트·전개일정)과 열 위치는 바꾸지 마세요."),
+    gap,
+    line("■ 차량리스트 열 안내", "head"),
+    { s: "th", cells: ["열", "내용", "구분", "설명"] },
+    ...RAW_DATA_COLS.map((c) => ({ cells: [c.col, c.name, c.need, c.note] })),
+    { cells: ["G · H", "완료여부·완료일", "비워 둠", "앱이 설치 완료 때 채우는 칸입니다. 적지 마세요."] },
+    gap,
+    line("■ 참고", "head"),
+    line(`· 「${tab}」 시트 A10 기준일은 이 파일을 내려받은 날짜입니다. 앱에서 진행현황을 다운로드하면 고른 날짜로 바뀝니다.`),
+    line("· 표에 없는 열(K 등)은 읽지 않으니 메모용으로 써도 됩니다."),
+    line("· 같은 차량번호가 여러 줄이면 마지막 줄만 반영됩니다. 차량리스트에서 지운 차량은 업로드 때 앱에서도 지워집니다(설치 기록이 있는 차량은 보호)."),
+  ];
 }
 
 /** 합계 행 번호 — E열 또는 D열에 SUM(?from:?…) 수식이 있는 첫 행. 못 찾으면 마지막 행+1 */

@@ -15,6 +15,7 @@
 import ExcelJS from "exceljs";
 import JSZip from "jszip";
 import { txt } from "./parse-schedule";
+import { removeGuideSheet } from "./guide-sheet";
 
 export interface TemplateCheck {
   ok: boolean; // 템플릿으로 교체 가능한가
@@ -86,9 +87,14 @@ export async function prepareTemplateBuffer(
 
   if (opts?.checkOnly) return { ok: true, warn };
 
-  // calcChain 제거 (Content_Types·rels 참조도 함께 — Excel이 열 때 자동 재생성)
   const zip = await JSZip.loadAsync(buf);
-  if (!zip.file("xl/calcChain.xml")) return { ok: true, warn, buffer: buf };
+  // 빈 양식의 「작성 안내」 시트는 뺀다 — 이 파일이 진행현황 다운로드·리포트 첨부의 원본이 되므로
+  const guideRemoved = await removeGuideSheet(zip);
+  if (!zip.file("xl/calcChain.xml")) {
+    if (!guideRemoved) return { ok: true, warn, buffer: buf };
+    return { ok: true, warn, buffer: await zip.generateAsync({ type: "nodebuffer", compression: "DEFLATE" }) };
+  }
+  // calcChain 제거 (Content_Types·rels 참조도 함께 — Excel이 열 때 자동 재생성)
   zip.remove("xl/calcChain.xml");
   const ct = zip.file("[Content_Types].xml");
   if (ct) {

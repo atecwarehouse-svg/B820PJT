@@ -1,6 +1,6 @@
 // 로우데이터(전개현황 엑셀) 열 안내 — 프로젝트 생성 폼·최초 업로드 팝업·사용방법에서 같이 쓴다.
 // 열 위치는 lib/import/parse-schedule.ts(차량리스트 시트)·lib/operator-address.ts(E열)와 맞춰 둔다.
-const COLS: { col: string; name: string; need: "필수" | "권장" | "선택"; note: string }[] = [
+export const RAW_DATA_COLS: { col: string; name: string; need: "필수" | "권장" | "선택"; note: string }[] = [
   { col: "A", name: "번호", need: "선택", note: "차량 순번(숫자). 리포트 정렬에 씀" },
   { col: "B", name: "운수사", need: "필수", note: "비면 그 행은 건너뜀" },
   { col: "C", name: "노선", need: "필수", note: "비면 그 행은 건너뜀" },
@@ -59,7 +59,7 @@ export default function RawDataGuide({
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {COLS.map((c) => (
+              {RAW_DATA_COLS.map((c) => (
                 <tr key={c.col}>
                   <td className="px-2 py-1.5 font-mono font-bold text-gray-800">{c.col}</td>
                   <td className="whitespace-nowrap px-2 py-1.5 font-medium text-gray-700">{c.name}</td>
@@ -73,7 +73,8 @@ export default function RawDataGuide({
           </table>
         </div>
         <ul className="space-y-0.5 text-[11px] leading-relaxed text-gray-500">
-          <li>· 빈 양식 2행의 회색 예시는 지우지 않아도 됩니다(차량번호가 「예)」로 시작하면 건너뜁니다). 적지 않은 열(G·H·K 등)은 읽지 않으니 자유롭게 써도 됩니다.</li>
+          <li>· 빈 양식을 열면 맨 앞 「작성 안내」 시트에 작성 순서와 이 표가 그대로 들어 있습니다(업로드할 때 자동으로 빠집니다).</li>
+          <li>· 빈 양식 2행의 회색 예시는 지우지 않아도 됩니다(차량번호가 「예)」로 시작하면 건너뜁니다). G·H열(완료여부·완료일)은 앱이 채우는 칸이라 비워 두고, 표에 없는 열(K 등)은 읽지 않으니 자유롭게 써도 됩니다.</li>
           <li>· 빈 양식에는 「전개일정」·「진행현황」 시트도 들어 있습니다(수식 유지, 값만 비움). 전개일정의 운수사·노선·차고지·대상수량은 업로드 때 차량리스트(B·C·D열) 기준으로 자동으로 채워지고, 진행현황 시트는 전개일정을 수식으로 따라갑니다(진행현황 기준일은 내려받은 날짜). 전개일정 3행 날짜는 프로젝트 기간을 지정했으면 그 기간으로 들어가고(최대 61일), 업로드하면 차량리스트 I열 설치 예정일이 날짜에 더해지며 날짜별 계획 수량(H열~)도 예정일 기준으로 자동으로 채워집니다. 그래서 전개일정 시트는 손대지 않아도 됩니다. 이 파일이 진행현황 다운로드 양식으로도 저장됩니다.</li>
           <li>· 전개일정·진행현황 시트 1행 제목은 「(프로젝트명) 진행현황」처럼 프로젝트명으로 들어갑니다(프로젝트명을 먼저 적고 내려받으면 그 이름이 박힙니다).</li>
           <li>· 시트 이름은 꼭 「차량리스트」여야 합니다. 설치 예정일은 나중에 「설치일정 변경 업로드」로 바꿀 수 있습니다.</li>
