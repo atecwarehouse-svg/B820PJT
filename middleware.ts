@@ -16,8 +16,8 @@ export const config = {
 
 const DEFAULT = "b820";
 const PREFIX = /^\/p\/([a-z][a-z0-9_]{1,19})(\/.*)?$/;
-const PROJECT_PAGES = /^\/(b820|dashboard|list|safety|teams|admin|about|record|print)(\/|$)/;
-const LAUNCHER = /^\/(projects(\/.*)?)?$/; // "/", "/projects…" — 런처(프로젝트 무관)
+const PROJECT_PAGES = /^\/(b820|dashboard|list|safety|teams|admin|record|print)(\/|$)/;
+const LAUNCHER = /^\/(projects(\/.*)?|help)?$/; // "/", "/projects…", "/help" — 런처(프로젝트 무관)
 const COOKIE = "pj"; // 마지막으로 연 프로젝트 — Referer 없는 API 호출의 폴백
 const RESERVED = new Set(["public", "graphql_public", "storage", "auth", "extensions"]);
 

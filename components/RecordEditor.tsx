@@ -35,7 +35,7 @@ function todayStr(): string {
 }
 
 // 페이지(단계) 순서: 차량번호 입력(홈) → 이상유무 → 설치 전 → 설치 후
-const STEPS = ["차량 이상유무", "설치 전", "설치 후"] as const;
+const STEPS = ["설치전 특이사항", "설치 전", "설치 후"] as const;
 
 // 타코케이블 Y자 사진 촬영 시 특이사항에 자동으로 넣는 문구
 const TACHO_Y_NOTE = "타코케이블 Y자 있음";
@@ -369,7 +369,7 @@ export default function RecordEditor({ plate, initial, teamOptions = [], brand =
       return;
     }
     if (!checkNote.trim()) {
-      showToast("비고(차량 이상유무)를 입력해주세요. 없으면 '없음'", "error");
+      showToast("비고(설치전 특이사항)를 입력해주세요. 없으면 '없음'", "error");
       return;
     }
     const missing = missingRequiredCheck();
@@ -392,7 +392,7 @@ export default function RecordEditor({ plate, initial, teamOptions = [], brand =
       return;
     }
     if (!checkNote.trim()) {
-      showToast("비고(차량 이상유무)를 입력해주세요. 없으면 '없음'", "error");
+      showToast("비고(설치전 특이사항)를 입력해주세요. 없으면 '없음'", "error");
       return;
     }
     const missing = missingRequiredCheck();
@@ -423,7 +423,7 @@ export default function RecordEditor({ plate, initial, teamOptions = [], brand =
         !team.trim()
           ? "팀명을 입력해야 저장할 수 있습니다"
           : !checkNote.trim()
-            ? "비고(차량 이상유무)를 입력해주세요. 없으면 '없음'"
+            ? "비고(설치전 특이사항)를 입력해주세요. 없으면 '없음'"
             : `${missingReq} 사진은 필수입니다. 촬영해주세요`,
         "error",
       );
@@ -799,7 +799,7 @@ export default function RecordEditor({ plate, initial, teamOptions = [], brand =
           </section>
 
           {/* 차량 이상유무 확인 (작업 시작 전 8종 + 추가 항목 — 사진은 드라이브 보관용, PDF/엑셀 미포함) */}
-          <SectionHeader title="차량 이상유무 확인" />
+          <SectionHeader title="설치전 특이사항" />
           <p className="mb-2 -mt-1 text-[11px] text-gray-500">
             작업 시작 전 촬영 · <span className="font-semibold text-red-500">전광판·차량계기판·CCTV(*)는 사진 필수</span>
             {" "}· 그 외 장비가 없는 항목은 &lsquo;없음&rsquo;에 체크해주세요.
@@ -836,7 +836,7 @@ export default function RecordEditor({ plate, initial, teamOptions = [], brand =
           </div>
           <label className="mt-2 flex flex-col">
             <span className="text-xs text-gray-500">
-              비고 (차량 이상유무) <span className="text-red-500">*</span>
+              비고 (설치전 특이사항) <span className="text-red-500">*</span>
             </span>
             <textarea
               value={checkNote}

@@ -477,7 +477,7 @@ export default function ProjectAdmin({
                     <span className="block text-[11px] text-gray-400">
                       {isDefaultSlots(photoSlots)
                         ? "B820 기본 양식 — 촬영 칸을 이 프로젝트에 맞게 바꾸려면 누르세요"
-                        : `전용 양식 · 이상유무 ${photoSlots.check.length}칸 · 설치 전 ${photoSlots.before.length}칸 · 설치 후 ${photoSlots.after.length}칸`}
+                        : `전용 양식 · 설치전 특이사항 ${photoSlots.check.length}칸 · 설치 전 ${photoSlots.before.length}칸 · 설치 후 ${photoSlots.after.length}칸`}
                     </span>
                   </span>
                   <span className="text-blue-600">설정 ›</span>
@@ -648,7 +648,7 @@ export default function ProjectAdmin({
             </div>
             <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-3">
               <p className="rounded-lg bg-blue-50 px-3 py-2 text-xs leading-relaxed text-gray-600">
-                새 프로젝트의 촬영 칸(차량 이상유무 · 설치 전 · 설치 후)을 정합니다. 만든 뒤에도 관리자 「사진 양식」 탭에서 바꿀 수 있습니다.
+                새 프로젝트의 촬영 칸(설치전 특이사항 · 설치 전 · 설치 후)을 정합니다. 만든 뒤에도 관리자 「사진 양식」 탭에서 바꿀 수 있습니다.
               </p>
               <SlotEditor value={photoSlots} onChange={(n) => { setPhotoSlots(n); setSlotsError(""); }} />
               {slotsError && <p className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600">{slotsError}</p>}

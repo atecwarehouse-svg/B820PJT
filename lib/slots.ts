@@ -177,7 +177,7 @@ export function validateSlotConfig(v: unknown): SlotConfig | string {
   if (typeof before === "string") return before;
   const after = read(o.after, "after", "설치 후");
   if (typeof after === "string") return after;
-  const check = read(o.check, "check", "차량 이상유무");
+  const check = read(o.check, "check", "설치전 특이사항");
   if (typeof check === "string") return check;
   if (before.length === 0) return "설치 전 칸은 최소 1개 필요합니다.";
   if (after.filter((s) => !s.extra).length === 0) return "설치 후(완료 판정) 칸은 최소 1개 필요합니다.";

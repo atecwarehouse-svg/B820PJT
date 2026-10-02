@@ -30,14 +30,23 @@ export default async function ProjectSelectPage() {
       />
 
       <div className="relative mx-auto max-w-md px-4 pb-16 pt-14">
-        {/* 우측 상단 톱니바퀴 → 프로젝트 관리(추가·수정·삭제, 관리자 비밀번호). 첫 화면에 별도 추가 버튼은 두지 않는다 */}
-        <Link
-          href="/projects"
-          aria-label="프로젝트 관리"
-          className="absolute right-4 top-4 flex h-10 w-10 items-center justify-center rounded-full bg-white/80 text-gray-500 shadow-sm ring-1 ring-black/5 backdrop-blur transition-transform duration-300 active:rotate-90 active:text-blue-600 motion-safe:animate-fade-in"
-        >
-          <Svg d={UI.gear} className="h-5 w-5" />
-        </Link>
+        {/* 우측 상단: 물음표 → 사용방법(/help), 톱니바퀴 → 프로젝트 관리(추가·수정·삭제, 관리자 비밀번호). 첫 화면에 별도 추가 버튼은 두지 않는다 */}
+        <div className="absolute right-4 top-4 flex gap-2 motion-safe:animate-fade-in">
+          <Link
+            href="/help"
+            aria-label="사용 방법"
+            className="flex h-10 w-10 items-center justify-center rounded-full bg-white/80 text-gray-500 shadow-sm ring-1 ring-black/5 backdrop-blur transition-colors active:text-blue-600"
+          >
+            <Svg d={UI.help} className="h-5 w-5" />
+          </Link>
+          <Link
+            href="/projects"
+            aria-label="프로젝트 관리"
+            className="flex h-10 w-10 items-center justify-center rounded-full bg-white/80 text-gray-500 shadow-sm ring-1 ring-black/5 backdrop-blur transition-transform duration-300 active:rotate-90 active:text-blue-600"
+          >
+            <Svg d={UI.gear} className="h-5 w-5" />
+          </Link>
+        </div>
 
         <header className="mb-8 flex flex-col items-center text-center motion-safe:animate-rise">
           <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500 to-blue-700 text-white shadow-lg shadow-blue-200">

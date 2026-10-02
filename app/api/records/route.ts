@@ -48,7 +48,7 @@ export async function POST(req: NextRequest) {
   if (body.saved) {
     if (!(body.check_note ?? "").trim()) {
       return NextResponse.json(
-        { error: "비고(차량 이상유무)를 입력해야 저장할 수 있습니다. (없으면 '없음')" },
+        { error: "비고(설치전 특이사항)를 입력해야 저장할 수 있습니다. (없으면 '없음')" },
         { status: 400 },
       );
     }

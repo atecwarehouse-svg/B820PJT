@@ -73,12 +73,6 @@ export default async function HomePage() {
       >
         🔒 관리자
       </Link>
-      <Link
-        href="/about"
-        className="mt-2 rounded-xl border border-gray-300 bg-white px-4 py-3 text-center text-sm font-medium text-gray-700 shadow-sm active:bg-gray-100"
-      >
-        ℹ️ 앱 소개
-      </Link>
       {/* 배포 버전 — 빌드 시점에 고정. 새로고침해서 이 값이 바뀌면 최신판을 받은 것 */}
       <p className="mb-6 mt-4 text-center text-[10px] text-gray-400">
         v{BUILD_TIME}

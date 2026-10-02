@@ -13,7 +13,7 @@ type Section = "before" | "after" | "check";
 type Item = { key: string; label: string; extra?: boolean; required?: boolean };
 
 const SECTIONS: { key: Section; title: string; hint: string; color: string }[] = [
-  { key: "check", title: "차량 이상유무", hint: "작업 시작 전 촬영 · 설치시작 알림 조건", color: "bg-emerald-600" },
+  { key: "check", title: "설치전 특이사항", hint: "작업 시작 전 촬영 · 설치시작 알림 조건", color: "bg-emerald-600" },
   { key: "before", title: "설치 전", hint: "완료 판정·PDF/엑셀에 포함", color: "bg-blue-600" },
   { key: "after", title: "설치 후", hint: "완료 판정·PDF/엑셀에 포함 ('추가 촬영'은 제외)", color: "bg-indigo-600" },
 ];
@@ -237,7 +237,7 @@ export default function SlotConfigManager() {
       </div>
       {defaults && !isDefault && (
         <p className="text-[11px] text-gray-400">
-          기본 양식: 이상유무 {defaults.check.length}칸 · 설치 전 {defaults.before.length}칸 · 설치 후 {defaults.after.length}칸
+          기본 양식: 설치전 특이사항 {defaults.check.length}칸 · 설치 전 {defaults.before.length}칸 · 설치 후 {defaults.after.length}칸
         </p>
       )}
     </div>
