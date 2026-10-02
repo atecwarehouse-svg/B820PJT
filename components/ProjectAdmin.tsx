@@ -7,6 +7,7 @@ import type { Project } from "@/lib/project";
 import { DEFAULT_SLOT_CONFIG, toSlotConfigJson, validateSlotConfig, type SlotConfigJson } from "@/lib/slots";
 import { SlotEditor } from "@/components/SlotConfigManager";
 import { PledgeTemplateEditor } from "@/components/PledgeTemplateManager";
+import RawDataGuide from "@/components/RawDataGuide";
 import { DEFAULT_PLEDGE_TEMPLATE, PLEDGE_BASE_NAME, isDefaultPledgeTemplate, validatePledgeTemplate, type PledgeTemplate } from "@/lib/pledge-template";
 import {
   CARD_COLORS,
@@ -626,6 +627,9 @@ export default function ProjectAdmin({
                       ? `${rawFile.name} — 만들면서 차량 리스트를 바로 등록합니다. 이후에는 대시보드 '설치일정 변경 업로드'로 바꿉니다.`
                       : "진행현황 양식 엑셀을 올리면 차량 리스트·설치 일정이 바로 등록됩니다."}
                   </p>
+                  <div className="mt-2">
+                    <RawDataGuide />
+                  </div>
                   <label className="mt-2 flex items-center gap-2">
                     <input
                       type="checkbox"

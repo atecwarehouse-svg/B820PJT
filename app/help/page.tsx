@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Svg, UI } from "@/components/ProjectIcon";
+import RawDataGuide from "@/components/RawDataGuide";
 
 export const metadata = {
   title: "사용 방법 — 프로젝트 산출물 관리",
@@ -144,6 +145,7 @@ export default function HelpPage() {
               언제든 고칠 수 있습니다.
             </Step>
           </ol>
+          <RawDataGuide />
           <Grid>
             <Mini tone="violet" title="수정 (연필)">
               이름·설명·아이콘·색·관리자 비밀번호·드라이브 공유를 바꿉니다. 이름을 바꾸면 드라이브 폴더명도 같이

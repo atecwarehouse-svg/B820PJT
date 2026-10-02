@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { OPEN_UPLOAD_EVENT } from "@/components/InitialUploadPrompt";
+import RawDataGuide from "@/components/RawDataGuide";
 import { useRouter } from "next/navigation";
 import { prefixOf } from "@/components/PLink";
 
@@ -354,6 +355,9 @@ export default function ScheduleUploadModal({ initial = false }: { initial?: boo
                         자동으로 정리</b>되므로 숫자를 손볼 필요가 없습니다. (B820의 시범설치 기준도 적용하지
                         않습니다)
                       </p>
+                      <div className="mt-2">
+                        <RawDataGuide />
+                      </div>
                     </div>
                   ) : (
                   <div className="rounded-lg bg-blue-50 px-3 py-2.5 text-xs leading-relaxed text-gray-600">
