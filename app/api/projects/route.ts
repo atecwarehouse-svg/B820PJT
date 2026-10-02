@@ -12,8 +12,9 @@ import {
 import { colorKey, iconKey } from "@/components/ProjectIcon";
 import { createProjectFolder, deleteFolder, folderLink, renameFile, setLinkSharing, trashFile } from "@/lib/gdrive";
 import { TEMPLATE_BUCKET } from "@/lib/template-path";
-import { PHOTO_SLOTS_KEY, REPORT_MAIL_KEY } from "@/lib/settings";
+import { PHOTO_SLOTS_KEY, PLEDGE_TEMPLATE_KEY, REPORT_MAIL_KEY } from "@/lib/settings";
 import { toSlotConfigJson, validateSlotConfig } from "@/lib/slots";
+import { validatePledgeTemplate } from "@/lib/pledge-template";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -22,7 +23,8 @@ export const maxDuration = 60;
 // 프로젝트 레지스트리(public.projects) 관리 — 런처(마스터=B820) 관리자 쿠키 또는 body.pw 필수.
 //   POST   { kind:"link",  name, description, icon, color, url }                       → 링크 카드 추가
 //   POST   { kind:"album", slug, name, description, icon, color, admin_password, shareLink?, photoSlots?, reportMail? } → 앨범 프로젝트 생성
-//            (shareLink: 드라이브 폴더를 링크 공유로, photoSlots: 사진 양식 SlotConfigJson — 없으면 B820 기본, reportMail: 완료리포트 수신자 string[])
+//            (shareLink: 드라이브 폴더를 링크 공유로, photoSlots: 사진 양식 SlotConfigJson — 없으면 B820 기본, reportMail: 완료리포트 수신자 string[],
+//             pledgeTemplate: 안전관리 서약서 양식 — 없으면 기준양식. 차량 리스트(로우데이터)는 생성 후 화면이 /p/<slug>/api/import/schedule 로 따로 올린다)
 //            (드라이브 폴더 → DB 스키마 복제(create_project_schema) → 레지스트리 행. 실패 시 되감기)
 //   PUT    { slug, name?, description?, icon?, color?, url?, admin_password?, shareLink? } → 수정 (b820은 색만, 앨범 이름 변경 시 드라이브 폴더명도 변경, shareLink: 드라이브 링크 공유 켜기/끄기)
 //   DELETE { slug }                     → 링크 카드 삭제
@@ -130,6 +132,11 @@ export async function POST(req: NextRequest) {
       if (typeof c === "string") return bad("사진 양식: " + c);
       settings.push({ key: PHOTO_SLOTS_KEY, value: JSON.stringify(toSlotConfigJson(c)) });
     }
+    if (body.pledgeTemplate != null) {
+      const t = validatePledgeTemplate(body.pledgeTemplate);
+      if (typeof t === "string") return bad("서약서 양식: " + t);
+      settings.push({ key: PLEDGE_TEMPLATE_KEY, value: JSON.stringify(t) });
+    }
     // 완료리포트 메일 수신자 — 관리자 '메일 수신자' 탭(PUT /api/admin/report-recipients)과 같은 규칙
     let reportMail = 0;
     if (Array.isArray(body.reportMail) && body.reportMail.length) {
@@ -215,12 +222,13 @@ export async function POST(req: NextRequest) {
         if (!error) saved = true;
       }
       if (!saved) {
-        warning = (warning ? warning + " " : "") + "사진 양식·메일 수신자 저장은 실패했습니다. 관리자 페이지에서 다시 지정하세요.";
+        warning = (warning ? warning + " " : "") + "사진 양식·서약서 양식·메일 수신자 저장은 실패했습니다. 관리자 페이지에서 다시 지정하세요.";
       }
     }
     const photoSlots = saved && settings.some((s) => s.key === PHOTO_SLOTS_KEY);
+    const pledge = saved && settings.some((s) => s.key === PLEDGE_TEMPLATE_KEY);
     if (!saved) reportMail = 0;
-    return NextResponse.json({ ok: true, slug, home: projectHome(slug), exposed, warning, photoSlots, reportMail, driveFolder: folderLink(folderId), driveShared });
+    return NextResponse.json({ ok: true, slug, home: projectHome(slug), exposed, warning, photoSlots, pledge, reportMail, driveFolder: folderLink(folderId), driveShared });
   }
 
   // 링크 카드

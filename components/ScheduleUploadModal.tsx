@@ -1,6 +1,7 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { OPEN_UPLOAD_EVENT } from "@/components/InitialUploadPrompt";
 import { useRouter } from "next/navigation";
 import { prefixOf } from "@/components/PLink";
 
@@ -68,6 +69,13 @@ export default function ScheduleUploadModal({ initial = false }: { initial?: boo
   const [pw, setPw] = useState(""); // 관리자 비밀번호
   const fileRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
+
+  // 최초 업로드 안내 팝업(InitialUploadPrompt)의 '지금 업로드' → 이 팝업 열기
+  useEffect(() => {
+    const h = () => setOpen(true);
+    window.addEventListener(OPEN_UPLOAD_EVENT, h);
+    return () => window.removeEventListener(OPEN_UPLOAD_EVENT, h);
+  }, []);
 
   function reset() {
     setStep("select");

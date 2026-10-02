@@ -6,6 +6,8 @@ import { useRouter } from "next/navigation";
 import type { Project } from "@/lib/project";
 import { DEFAULT_SLOT_CONFIG, toSlotConfigJson, validateSlotConfig, type SlotConfigJson } from "@/lib/slots";
 import { SlotEditor } from "@/components/SlotConfigManager";
+import { PledgeTemplateEditor } from "@/components/PledgeTemplateManager";
+import { DEFAULT_PLEDGE_TEMPLATE, PLEDGE_BASE_NAME, isDefaultPledgeTemplate, validatePledgeTemplate, type PledgeTemplate } from "@/lib/pledge-template";
 import {
   CARD_COLORS,
   COLOR_KEYS,
@@ -44,6 +46,31 @@ function suggestSlug(name: string): string {
 const DEFAULT_SLOTS = toSlotConfigJson(DEFAULT_SLOT_CONFIG);
 const isDefaultSlots = (c: SlotConfigJson) => JSON.stringify(c) === JSON.stringify(DEFAULT_SLOTS);
 
+// 생성 직후 차량 리스트(로우데이터) 등록 — 새 프로젝트 주소(/p/<slug>/api/…)로 올리면 미들웨어가 그 프로젝트 DB로 보낸다.
+// 스키마가 막 노출된 직후라 첫 시도가 실패할 수 있어 짧게 재시도. 파일 자체 문제(읽기 실패)는 재시도하지 않는다.
+async function uploadRawData(slug: string, pw: string, file: File): Promise<{ total?: number; error?: string }> {
+  let last = "";
+  for (let attempt = 0; attempt < 3; attempt++) {
+    if (attempt) await new Promise((r) => setTimeout(r, 1500));
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      form.append("apply", "true");
+      form.append("pw", pw);
+      form.append("initial", "true");
+      form.append("slug", slug);
+      const res = await fetch(`/p/${slug}/api/import/schedule`, { method: "POST", body: form });
+      const j = (await res.json().catch(() => ({}))) as { total?: number; error?: string };
+      if (res.ok) return { total: Number(j.total ?? 0) };
+      last = j.error ?? `HTTP ${res.status}`;
+      if (res.status === 400 && /읽을 수 없|파일이 없|일치하지/.test(last)) break;
+    } catch (e) {
+      last = e instanceof Error ? e.message : "네트워크 오류";
+    }
+  }
+  return { error: last };
+}
+
 export default function ProjectAdmin({
   projects,
   driveShared = {},
@@ -70,6 +97,13 @@ export default function ProjectAdmin({
   const [reportMail, setReportMail] = useState(""); // 완료리포트 메일 수신자 (쉼표·줄바꿈 구분)
   const [slotsOpen, setSlotsOpen] = useState(false); // 사진 양식 팝업
   const [slotsError, setSlotsError] = useState("");
+  const [pledge, setPledge] = useState<PledgeTemplate>(DEFAULT_PLEDGE_TEMPLATE); // 새 프로젝트 서약서 양식
+  const [pledgeOpen, setPledgeOpen] = useState(false);
+  const [pledgeError, setPledgeError] = useState("");
+  const [rawFile, setRawFile] = useState<File | null>(null); // 차량 리스트(전개현황 엑셀) — 생성 직후 등록
+  const [later, setLater] = useState(false); // 차량 리스트는 나중에 대시보드에서 등록
+  const [phase, setPhase] = useState<"" | "create" | "upload">("");
+  const rawRef = useRef<HTMLInputElement>(null);
   const [shareLink, setShareLink] = useState(true); // 드라이브 폴더를 '링크가 있는 사용자'에게 보기 공유
   const [confirmSlug, setConfirmSlug] = useState(""); // 삭제 확인 대기 중인 프로젝트
   const [confirmText, setConfirmText] = useState(""); // 앨범 삭제 확인용 ID 입력
@@ -79,7 +113,10 @@ export default function ProjectAdmin({
     exposed: boolean;
     warning?: string;
     customSlots?: boolean; // 전용 사진 양식을 적용했는지
+    customPledge?: boolean; // 전용 서약서 양식을 적용했는지
     reportMail?: number; // 저장된 리포트 수신자 수
+    uploaded?: number; // 생성 직후 등록된 차량 수
+    uploadError?: string; // 로우데이터 등록 실패 사유
     driveFolder?: string; // 구글드라이브 사진 폴더 링크
     driveShared?: boolean;
   } | null>(null);
@@ -98,6 +135,11 @@ export default function ProjectAdmin({
     setShowPw(false);
     setPhotoSlots(DEFAULT_SLOTS);
     setSlotsOpen(false);
+    setPledge(DEFAULT_PLEDGE_TEMPLATE);
+    setPledgeOpen(false);
+    setRawFile(null);
+    setLater(false);
+    if (rawRef.current) rawRef.current.value = "";
     setReportMail("");
     setError("");
   }
@@ -156,28 +198,48 @@ export default function ProjectAdmin({
     }
     const common = { name, description, icon, color };
     if (kind === "album") {
+      const newSlug = slug.trim().toLowerCase();
+      setPhase("create");
       const j = await call("POST", {
         kind,
         ...common,
-        slug: slug.trim().toLowerCase(),
+        slug: newSlug,
         admin_password: adminPw,
         shareLink,
         ...(isDefaultSlots(photoSlots) ? {} : { photoSlots }),
+        ...(isDefaultPledgeTemplate(pledge) ? {} : { pledgeTemplate: pledge }),
         reportMail: mailList,
       });
       if (j) {
+        // 로우데이터를 붙였으면 바로 차량 리스트 등록 (API 노출 실패 시엔 건너뛰고 안내만)
+        let uploaded: number | undefined;
+        let uploadError: string | undefined;
+        if (rawFile && j.exposed) {
+          setPhase("upload");
+          setBusy(true);
+          const r = await uploadRawData(newSlug, adminPw, rawFile);
+          setBusy(false);
+          uploaded = r.total;
+          uploadError = r.error;
+        } else if (rawFile) {
+          uploadError = "DB API 노출이 안 돼 차량 리스트는 등록하지 못했습니다. 노출 설정 후 대시보드 '최초 업로드'로 올려주세요.";
+        }
         setCreated({
           name,
-          home: String(j.home ?? projectHome(slug)),
+          home: String(j.home ?? projectHome(newSlug)),
           exposed: !!j.exposed,
           warning: j.warning ? String(j.warning) : undefined,
           customSlots: j.photoSlots === true,
+          customPledge: j.pledge === true,
           reportMail: typeof j.reportMail === "number" ? j.reportMail : 0,
+          uploaded,
+          uploadError,
           driveFolder: j.driveFolder ? String(j.driveFolder) : undefined,
           driveShared: j.driveShared === true,
         });
         resetForm();
       }
+      setPhase("");
     } else if (await call("POST", { kind, ...common, url })) {
       resetForm();
     }
@@ -240,7 +302,7 @@ export default function ProjectAdmin({
     (editing
       ? isB820 || !!name
       : kind === "album"
-        ? !!name && SLUG_RE.test(slug.trim().toLowerCase()) && adminPw.length >= 4 && badMail.length === 0
+        ? !!name && SLUG_RE.test(slug.trim().toLowerCase()) && adminPw.length >= 4 && badMail.length === 0 && (!!rawFile || later)
         : !!name && !!url);
 
   return (
@@ -281,7 +343,20 @@ export default function ProjectAdmin({
               에서 프로젝트 홈을 엽니다. (첫 화면 카드로도 들어갈 수 있습니다)
             </li>
             <li>
-              대시보드 → <b>최초 업로드</b>로 전개현황 엑셀을 올려 차량리스트를 등록합니다.
+              {created.uploaded !== undefined ? (
+                <>
+                  차량 리스트 <b>{created.uploaded.toLocaleString()}대</b>를 등록했습니다. 이후 일정이 바뀌면 대시보드{" "}
+                  <b>설치일정 변경 업로드</b>로 올립니다.
+                </>
+              ) : created.uploadError ? (
+                <span className="text-amber-800">
+                  차량 리스트 등록 실패: {created.uploadError} — 대시보드 <b>최초 업로드</b>로 다시 올려주세요.
+                </span>
+              ) : (
+                <>
+                  대시보드 → <b>최초 업로드</b>로 전개현황 엑셀을 올려 차량리스트를 등록합니다. (대시보드에 들어가면 안내 팝업이 뜹니다)
+                </>
+              )}
             </li>
             <li>
               관리자(방금 정한 비밀번호) → 설치팀을 등록합니다.
@@ -289,6 +364,7 @@ export default function ProjectAdmin({
                 ? ` 완료리포트 메일 수신자 ${created.reportMail}명을 저장했습니다(관리자 '메일 수신자' 탭에서 수정).`
                 : " 완료리포트 메일 수신자는 관리자 '메일 수신자' 탭에서 등록해야 발송됩니다."}
               {created.customSlots ? " 사진 양식은 지정한 대로 적용했고, 관리자 '사진 양식' 탭에서 고칠 수 있습니다." : ""}
+              {created.customPledge ? " 서약서 양식도 적용했고, 관리자 '서약서 양식' 탭에서 고칠 수 있습니다." : ""}
             </li>
           </ol>
           <div className="mt-3 flex gap-2">
@@ -296,7 +372,7 @@ export default function ProjectAdmin({
               href={`${created.home}/dashboard`}
               className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white"
             >
-              대시보드에서 최초 업로드 →
+              {created.uploaded !== undefined ? "대시보드 열기 →" : "대시보드에서 최초 업로드 →"}
             </a>
             <button
               type="button"
@@ -517,6 +593,59 @@ export default function ProjectAdmin({
                   <span className="shrink-0 whitespace-nowrap pl-2 text-blue-600">설정 ›</span>
                 </button>
               )}
+              {!editing && (
+                <button
+                  type="button"
+                  onClick={() => { setPledgeError(""); setPledgeOpen(true); }}
+                  className="flex w-full items-center justify-between rounded-xl border border-dashed border-blue-200 bg-blue-50/60 px-3 py-2.5 text-left text-xs text-gray-600 active:bg-blue-100"
+                >
+                  <span>
+                    <b>안전관리 서약서 양식 지정</b>
+                    <span className="block text-[11px] text-gray-400">
+                      {isDefaultPledgeTemplate(pledge)
+                        ? `기준양식: ${PLEDGE_BASE_NAME} — 제목·회사명·교육내용을 바꾸려면 누르세요`
+                        : `전용 양식 · 교육내용 ${pledge.eduItems.length}항목 · ${pledge.company}`}
+                    </span>
+                  </span>
+                  <span className="shrink-0 whitespace-nowrap pl-2 text-blue-600">설정 ›</span>
+                </button>
+              )}
+              {!editing && (
+                <div className="rounded-xl border border-dashed border-emerald-200 bg-emerald-50/60 px-3 py-2.5 text-xs text-gray-600">
+                  <p className="mb-1.5 font-bold text-gray-700">📂 차량 리스트 (로우데이터 · 전개현황 엑셀)</p>
+                  <input
+                    ref={rawRef}
+                    type="file"
+                    accept=".xlsx,.xlsm,.xls"
+                    disabled={later}
+                    onChange={(e) => setRawFile(e.target.files?.[0] ?? null)}
+                    className="block w-full text-xs text-gray-600 file:mr-2 file:rounded-lg file:border-0 file:bg-emerald-600 file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-white disabled:opacity-40"
+                  />
+                  <p className="mt-1 text-[11px] text-gray-400">
+                    {rawFile
+                      ? `${rawFile.name} — 만들면서 차량 리스트를 바로 등록합니다. 이후에는 대시보드 '설치일정 변경 업로드'로 바꿉니다.`
+                      : "진행현황 양식 엑셀을 올리면 차량 리스트·설치 일정이 바로 등록됩니다."}
+                  </p>
+                  <label className="mt-2 flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={later}
+                      onChange={(e) => {
+                        setLater(e.target.checked);
+                        if (e.target.checked) {
+                          setRawFile(null);
+                          if (rawRef.current) rawRef.current.value = "";
+                        }
+                      }}
+                      className="h-4 w-4"
+                    />
+                    <span>
+                      <b>나중에 등록</b>
+                      <span className="block text-[11px] text-gray-400">대시보드에 처음 들어가면 업로드 안내 팝업이 뜹니다.</span>
+                    </span>
+                  </label>
+                </div>
+              )}
             </>
           )}
           {kind === "link" && !isB820 && (
@@ -549,7 +678,9 @@ export default function ProjectAdmin({
               <Svg d={editing ? UI.pencil : UI.plus} className="h-4 w-4" />
               {busy
                 ? kind === "album" && !editing
-                  ? "프로젝트 만드는 중… (10초 정도)"
+                  ? phase === "upload"
+                    ? "차량 리스트 등록 중… (엑셀 반영)"
+                    : "프로젝트 만드는 중… (10초 정도)"
                   : "처리 중…"
                 : editing
                   ? "수정 저장"
@@ -703,6 +834,54 @@ export default function ProjectAdmin({
                   if (typeof v === "string") return setSlotsError(v);
                   setPhotoSlots(toSlotConfigJson(v)); // 공백 정리된 값으로
                   setSlotsOpen(false);
+                }}
+                className="flex-1 rounded-xl bg-blue-600 py-2.5 text-sm font-semibold text-white active:bg-blue-700"
+              >
+                적용
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 서약서 양식 팝업 — 생성 시 app_settings.safety_pledge 로 저장된다 */}
+      {pledgeOpen && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center" onClick={() => setPledgeOpen(false)}>
+          <div className="flex max-h-[90vh] w-full max-w-md flex-col rounded-t-2xl bg-white sm:rounded-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
+              <h3 className="text-base font-bold text-gray-900">안전관리 서약서 양식</h3>
+              <button type="button" onClick={() => setPledgeOpen(false)} className="text-sm text-gray-400">
+                닫기
+              </button>
+            </div>
+            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-3">
+              <p className="rounded-lg bg-blue-50 px-3 py-2 text-xs leading-relaxed text-gray-600">
+                기준양식: <b>{PLEDGE_BASE_NAME}</b>. 서약서 PDF의 제목·회사명·교육내용·서약 문구를 이 프로젝트에 맞게 고칩니다. 만든 뒤에도
+                관리자 「서약서 양식」 탭에서 바꿀 수 있습니다.
+              </p>
+              <PledgeTemplateEditor
+                value={pledge}
+                onChange={(n) => { setPledge(n); setPledgeError(""); }}
+                titlePlaceholder={`비우면 자동 — ${name || "<프로젝트명>"} 안전관리 서약서`}
+              />
+              {pledgeError && <p className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600">{pledgeError}</p>}
+            </div>
+            <div className="flex gap-2 border-t border-gray-100 px-4 py-3">
+              <button
+                type="button"
+                onClick={() => { setPledge(DEFAULT_PLEDGE_TEMPLATE); setPledgeError(""); }}
+                disabled={isDefaultPledgeTemplate(pledge)}
+                className="rounded-xl border border-gray-300 px-4 py-2.5 text-sm text-gray-600 active:bg-gray-100 disabled:opacity-40"
+              >
+                기준양식으로
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const v = validatePledgeTemplate(pledge);
+                  if (typeof v === "string") return setPledgeError(v);
+                  setPledge(v);
+                  setPledgeOpen(false);
                 }}
                 className="flex-1 rounded-xl bg-blue-600 py-2.5 text-sm font-semibold text-white active:bg-blue-700"
               >

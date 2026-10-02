@@ -1,10 +1,11 @@
+import { getPledgeTemplate } from "@/lib/settings";
+import { pledgeTitleFor } from "@/lib/pledge-template";
 import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
 import { fetchAll } from "@/lib/supabase/paginate";
 import { renderPdf, renderPdfMany } from "@/lib/export/pdf-render";
 import {
   buildPledgeHtml,
-  PLEDGE_TITLE,
   type PledgeSessionData,
   type PledgeSignatureData,
 } from "@/lib/export/pledge-html";
@@ -60,11 +61,8 @@ export async function GET(req: Request) {
   let buffer: Buffer;
   try {
     const project = await currentProject();
-    const html = buildPledgeHtml(
-      session,
-      rows ?? [],
-      isDefault(project.slug) ? PLEDGE_TITLE : `${project.name} 안전관리 서약서`,
-    );
+    const tpl = await getPledgeTemplate();
+    const html = buildPledgeHtml(session, rows ?? [], tpl, pledgeTitleFor(tpl, project.name, isDefault(project.slug)));
     buffer = await renderPdf(html);
   } catch (e) {
     return NextResponse.json(
@@ -107,7 +105,8 @@ export async function GET(req: Request) {
 // 드라이브 보관은 세션별 PDF가 담당하므로 여기서는 업로드하지 않는다.
 async function exportAll() {
   const project = await currentProject();
-  const pledgeTitle = isDefault(project.slug) ? PLEDGE_TITLE : `${project.name} 안전관리 서약서`;
+  const tpl = await getPledgeTemplate();
+  const pledgeTitle = pledgeTitleFor(tpl, project.name, isDefault(project.slug));
   const supabase = createServiceClient();
 
   const { data: sessions, error: sErr } = await supabase
@@ -153,6 +152,7 @@ async function exportAll() {
         buildPledgeHtml(
           s as unknown as PledgeSessionData,
           bySession.get(s.id as string) ?? [],
+          tpl,
           pledgeTitle,
         ),
       ),

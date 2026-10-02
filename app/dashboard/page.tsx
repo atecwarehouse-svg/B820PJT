@@ -19,6 +19,7 @@ import type {
 import { workDateString } from "@/lib/work-day";
 import ProgressDownloadButton from "@/components/ProgressDownloadButton";
 import ScheduleUploadModal from "@/components/ScheduleUploadModal";
+import InitialUploadPrompt from "@/components/InitialUploadPrompt";
 import ConsultationModal from "@/components/ConsultationModal";
 import ReportHub from "@/components/ReportHub";
 import { inspectorNames } from "@/lib/teams";
@@ -186,6 +187,8 @@ export default async function DashboardPage() {
 
   return (
     <main className="mx-auto max-w-3xl px-3 pb-16 pt-4">
+      {/* 새 프로젝트에서 '나중에 등록'을 고른 경우 — 차량 리스트가 없으면 업로드 안내를 한 번 띄운다 */}
+      <InitialUploadPrompt show={initialUpload} />
       <div className="page-head">
         <Link href="/b820" className="pill">
           ← 차량 입력

@@ -24,24 +24,7 @@ export interface PledgeSignatureData {
   sig_after: string | null; // PNG data URL
 }
 
-// 회사명(설치사) 고정값 — 워드 양식과 동일.
-const INSTALLER_COMPANY = "에이텍모빌리티";
-
-// 교육내용 (워드 양식 [교육내용] 1~8 원문 그대로)
-const EDU_ITEMS = [
-  "작업 시작 전에 현장에 잠재한 위험 요소를 사전 평가하고, 필요한 안전 조치를 취해야 합니다.",
-  "사용되는 기계 및 장비가 정상 작동하는지, 고장이나 결함이 없는지 사전 점검이 필수적입니다.",
-  "모든 근로자는 작업에 적합한 개인 보호장비(헬멧, 안전화, 안전벨트 등)를 반드시 착용해야 하며, 장비가 제대로 장착되었는지 확인해야 합니다.",
-  "정해진 작업 절차와 순서를 반드시 따라야 하며, 위험 요소를 줄이기 위한 예방 조치를 준수해야 합니다.",
-  "고소 작업 시 안전벨트 착용, 작업대와의 적절한 고정, 비상 대피 경로 확보 등 필수 조치를 반드시 시행해야 합니다.",
-  "기계 작동 중에 근로자가 접근하거나 수리 작업을 하지 않도록 주의해야 하며, 필요한 경우 기계를 완전히 정지시키고 작업을 진행해야 합니다.",
-  "작업이 끝난 후에도 현장 점검을 실시하여 위험 요소가 남아 있지 않은지 확인하고, 필요한 경우 작업 일지에 기록을 남겨야 합니다.",
-  "작업 중 통행로가 막히지 않도록 바닥을 정리하고, 사고를 유발할 수 있는 장애물이나 미끄러운 바닥을 주기적으로 점검하여 위험을 최소화해야 합니다.",
-];
-
-const PLEDGE_TEXT =
-  "상기 주의사항을 충분히 이해하고 인식하였으며, 이를 성실히 준수할 것을 서약합니다. " +
-  "이에 따라 모든 안전 수칙을 준수하고, 중대재해 예방을 위한 의무를 다할 것을 서명으로 확인합니다.";
+import type { PledgeTemplate } from "@/lib/pledge-template";
 
 const CSS = `
   @font-face {
@@ -87,14 +70,14 @@ function esc(s: unknown): string {
     .replace(/"/g, "&quot;");
 }
 
-function page1(s: PledgeSessionData, title: string): string {
+function page1(s: PledgeSessionData, title: string, tpl: PledgeTemplate): string {
   const info = `
     <table class="info"><tbody>
       <tr><th>작 업 내 용</th><td colspan="3">${esc(s.work_content)}</td></tr>
       <tr><th>수      량</th><td>${esc(s.quantity)}</td><th>일      자</th><td>${esc(s.install_date)}</td></tr>
       <tr><th>운  수  사</th><td>${esc(s.operator)}</td><th>장      소</th><td>${esc(s.location)}</td></tr>
       <tr><th>안전관리 담당자</th><td colspan="3">${esc(s.manager_name)}</td></tr>
-      <tr><th>회 사 명</th><td>${esc(INSTALLER_COMPANY)}</td><th>이 름 / 서 명</th><td>${esc(s.manager_name)} ${
+      <tr><th>회 사 명</th><td>${esc(tpl.company)}</td><th>이 름 / 서 명</th><td>${esc(s.manager_name)} ${
         s.manager_sig
           ? `<img class="mgr-sig" src="${esc(s.manager_sig)}" alt="서명" />`
           : ""
@@ -104,7 +87,7 @@ function page1(s: PledgeSessionData, title: string): string {
   const edu = `
     <div class="edu-head">[교육내용]</div>
     <ol class="edu">
-      ${EDU_ITEMS.map((t) => `<li>${esc(t)}</li>`).join("")}
+      ${tpl.eduItems.map((t) => `<li>${esc(t)}</li>`).join("")}
     </ol>`;
 
   return `<div class="page">
@@ -114,7 +97,7 @@ function page1(s: PledgeSessionData, title: string): string {
   </div>`;
 }
 
-function page2(s: PledgeSessionData, rows: PledgeSignatureData[]): string {
+function page2(s: PledgeSessionData, rows: PledgeSignatureData[], tpl: PledgeTemplate): string {
   const sigCell = (url: string | null) =>
     url ? `<img class="sig-img" src="${esc(url)}" alt="서명" />` : "";
 
@@ -148,18 +131,18 @@ function page2(s: PledgeSessionData, rows: PledgeSignatureData[]): string {
       </thead>
       <tbody>${body}</tbody>
     </table>
-    <div class="pledge-foot">${esc(PLEDGE_TEXT)}</div>
+    <div class="pledge-foot">${esc(tpl.pledgeText)}</div>
   </div>`;
 }
 
-export const PLEDGE_TITLE = "인천버스 단말기 설치 안전관리 서약서";
-
+// tpl: 프로젝트별 서약서 양식(회사명·교육내용·서약 문구), title: pledgeTitleFor()로 정한 제목
 export function buildPledgeHtml(
   session: PledgeSessionData,
   signatures: PledgeSignatureData[],
-  title = PLEDGE_TITLE,
+  tpl: PledgeTemplate,
+  title: string,
 ): string {
   return `<!doctype html><html lang="ko"><head><meta charset="utf-8" />
   <style>${CSS}</style></head>
-  <body>${page1(session, title)}${page2(session, signatures)}</body></html>`;
+  <body>${page1(session, title, tpl)}${page2(session, signatures, tpl)}</body></html>`;
 }

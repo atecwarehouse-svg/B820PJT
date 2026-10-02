@@ -1,3 +1,4 @@
+import { parsePledgeTemplate, type PledgeTemplate } from "@/lib/pledge-template";
 // 앱 설정(키/값) 읽기·쓰기 — app_settings 테이블 (migration_settings.sql).
 // 관리자 페이지에서 수정하는 값(완료리포트 수신자 등)을 저장한다.
 
@@ -148,6 +149,12 @@ export async function setSetting(key: string, value: string, slug?: string): Pro
 
 // ── 사진 양식(칸 구성) — 프로젝트별. 없으면 B820 기본값(lib/slots.ts) ──
 export const PHOTO_SLOTS_KEY = "photo_slots";
+
+// ── 안전관리 서약서 양식 — 프로젝트별. 없으면 기준양식(버스단말기설치 양식, lib/pledge-template.ts) ──
+export const PLEDGE_TEMPLATE_KEY = "safety_pledge";
+export async function getPledgeTemplate(slug?: string): Promise<PledgeTemplate> {
+  return parsePledgeTemplate(await getSetting(PLEDGE_TEMPLATE_KEY, slug));
+}
 export async function getSlotConfig(slug?: string): Promise<SlotConfig> {
   return parseSlotConfig(await getSetting(PHOTO_SLOTS_KEY, slug));
 }
