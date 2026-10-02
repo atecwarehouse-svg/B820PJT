@@ -606,15 +606,25 @@ export default function RecordEditor({ plate, initial, teamOptions = [], brand =
           <div className="w-full max-w-xs rounded-2xl bg-white p-5 text-center shadow-xl">
             <div className="text-4xl">✅</div>
             <p className="mt-2 text-lg font-bold text-gray-800">저장되었습니다</p>
-            <p className="mt-1 text-xs text-gray-500">
-              {plate} · 목록에서 확인·다운로드할 수 있습니다.
-            </p>
-            <button
-              onClick={() => router.push(clientProjectPath("/list"))}
-              className="mt-4 w-full rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white active:bg-blue-700"
-            >
-              확인
-            </button>
+            <p className="mt-1 text-xs text-gray-500">{plate}</p>
+            {/* 목록(/list)은 비밀번호가 걸려 있어 현장에서 번거롭다 — 홈으로 가거나 이 화면에서 사진을 다시 본다 */}
+            <div className="mt-4 flex gap-2">
+              <button
+                onClick={() => {
+                  setSavedPopup(false);
+                  window.scrollTo({ top: 0, behavior: "smooth" });
+                }}
+                className="flex-1 rounded-lg border border-gray-300 px-3 py-2.5 text-sm font-medium text-gray-600 active:bg-gray-100"
+              >
+                사진 다시 확인하기
+              </button>
+              <button
+                onClick={() => router.push(clientProjectPath("/b820"))}
+                className="flex-1 rounded-lg bg-blue-600 px-3 py-2.5 text-sm font-semibold text-white active:bg-blue-700"
+              >
+                처음으로
+              </button>
+            </div>
           </div>
         </div>
       )}
