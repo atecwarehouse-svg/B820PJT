@@ -151,7 +151,7 @@ async function blankFromTemplate(src: Buffer, projectName: string): Promise<Buff
     ? wx.replace(/<calcPr\b([^>]*?)\/?>/, (m, attrs: string) => (/fullCalcOnLoad=/.test(attrs) ? m : `<calcPr${attrs} fullCalcOnLoad="1"${m.endsWith("/>") ? "/>" : ">"}`))
     : wx.replace("</workbook>", '<calcPr fullCalcOnLoad="1"/></workbook>');
   // 진행현황 시트 탭 이름도 "(프로젝트명) 진행현황" — 다른 시트 수식이 이 이름을 참조하지 않아 안전 (31자·금지문자 제한)
-  const tab = `${projectName} 진행현황`.replace(/[[\]:*?/\]/g, " ").slice(0, 31);
+  const tab = `${projectName} 진행현황`.replace(/[[\]:*?\/\\]/g, " ").slice(0, 31);
   wx = wx.replace(/<sheet name="[^"]*진행현황[^"]*"/, `<sheet name="${esc(tab)}"`);
   zip.file("xl/workbook.xml", wx);
 
