@@ -25,8 +25,9 @@ import {
   setCellNumber,
   replaceCellText,
   clearCellText,
+  whitenProgressRows,
 } from "@/lib/export/fill-progress-xlsx";
-import { MAX_PLAN_DAYS, colName, colNum, expandPlanColumns, fixProgressPlanRange, planColumns } from "@/lib/import/schedule-columns";
+import { MAX_PLAN_DAYS, colName, colNum, colorDateRow, expandPlanColumns, fixProgressPlanRange, planColumns } from "@/lib/import/schedule-columns";
 
 export interface NormalizeResult {
   buffer: Buffer;
@@ -184,13 +185,21 @@ export async function normalizeScheduleQuantities(
   }
 
   xml = xml.replace(rowRe, (whole, rnStr: string) => edits.get(Number(rnStr))?.(whole) ?? whole);
+  const stylesFile = zip.file("xl/styles.xml");
+  let styles = (await stylesFile?.async("string")) ?? "";
+  // 3행 날짜 글자색: 평일 검정 · 토 파랑 · 일·공휴일 빨강
+  if (styles && dates.length) ({ sx: xml, styles } = colorDateRow(xml, styles, planCols));
   zip.file(paths.schedule, xml);
-  // 진행현황 금일·누적 계획(A6·F6) SUMIF 범위를 전개일정 마지막 열까지 (B820 양식은 DW까지라 61번째 날이 빠져 있었다)
-  const pFile = planCols.length ? zip.file(paths.progress) : null;
+  const pFile = zip.file(paths.progress);
   if (pFile) {
-    const lastCol = colName(colNum(planCols[planCols.length - 1]) + 1);
-    zip.file(paths.progress, fixProgressPlanRange(await pFile.async("string"), lastCol));
+    let px = await pFile.async("string");
+    // 진행현황 금일·누적 계획(A6·F6) SUMIF 범위를 전개일정 마지막 열까지 (B820 양식은 DW까지라 61번째 날이 빠져 있었다)
+    if (planCols.length) px = fixProgressPlanRange(px, colName(colNum(planCols[planCols.length - 1]) + 1));
+    // 12행~ 바탕 흰색으로 — 저장 양식은 늘 흰 바탕, 완료=녹색·설치제외=베이지는 다운로드 때 칠한다
+    if (styles) ({ pXml: px, stylesXml: styles } = whitenProgressRows(px, styles));
+    zip.file(paths.progress, px);
   }
+  if (styles) zip.file("xl/styles.xml", styles);
 
   const buffer = await zip.generateAsync({ type: "nodebuffer", compression: "DEFLATE" });
   return { buffer, rows: rowCount, unmatched, planDays: dates.length, droppedDays };

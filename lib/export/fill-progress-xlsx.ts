@@ -104,7 +104,7 @@ export function clearCellText(xml: string, ref: string): string {
 // styles.xml 도우미 — "채움색만 바꾼 셀 스타일(xf)"을 만들어 준다.
 // 글꼴·테두리·서식은 그대로 두고 fillId만 갈아끼운 xf를 복제해 새 인덱스를 돌려주므로,
 // 어느 열에 적용해도 원래 서식이 유지된다. 색은 템플릿에 이미 있는 채움을 재사용한다.
-function makeRestyler(stylesXml: string) {
+export function makeRestyler(stylesXml: string) {
   const xfsM = stylesXml.match(/<cellXfs count="\d+">([\s\S]*?)<\/cellXfs>/);
   const fillsM = stylesXml.match(/<fills count="\d+">([\s\S]*?)<\/fills>/);
   if (!xfsM || !fillsM) return null;
@@ -150,7 +150,25 @@ function makeRestyler(stylesXml: string) {
         /<cellXfs count="\d+">[\s\S]*?<\/cellXfs>/,
         `<cellXfs count="${xfs.length}">${xfs.join("")}</cellXfs>`,
       );
-  return { green: fillFor(9), beige: fillFor(7), restyle, serialize };
+  // 흰색 = B820 미완료 행이 쓰는 흰 채움(theme 0), 없으면 채움 없음
+  const white = Math.max(0, fills.findIndex((f) => /patternType="solid"[\s\S]*<fgColor theme="0"\/>/.test(f)));
+  return { green: fillFor(9), beige: fillFor(7), white, restyle, serialize };
+}
+
+/** 진행현황 데이터 행(12행~, 전개일정!F 참조가 있는 행) A~N 채움을 흰색으로 — 새 프로젝트 양식 초기화.
+ *  색은 다운로드 때 paintProgressRows가 완료=녹색·설치제외=베이지로 다시 칠한다. */
+export function whitenProgressRows(pXml: string, stylesXml: string): { pXml: string; stylesXml: string } {
+  const r = makeRestyler(stylesXml);
+  if (!r) return { pXml, stylesXml };
+  const out = pXml.replace(/<row r="(\d+)"([^>]*?)(?:\/>|>([\s\S]*?)<\/row>)/g, (whole, rn: string, attrs: string, inner?: string) => {
+    if (inner === undefined || Number(rn) < 12 || !/전개일정'?!\$?F\$?\d+/.test(inner)) return whole;
+    const cells = inner.replace(/<c r="[A-N]\d+"[^>]*?\bs="(\d+)"/g, (c, s: string) => {
+      const ns = r.restyle(Number(s), r.white);
+      return ns === Number(s) ? c : c.replace(/\bs="\d+"/, `s="${ns}"`);
+    });
+    return `<row r="${rn}"${attrs}>${cells}</row>`;
+  });
+  return { pXml: out, stylesXml: r.serialize() };
 }
 
 // sharedStrings.xml → 문자열 배열 (각 <si>의 <t>들을 이어붙임)
@@ -287,6 +305,7 @@ function paintProgressRows(opts: {
   dbInfo?: Map<string, VehicleDbInfo>;
   exclusions: ExclusionInfo[];
   schedAdjust: Map<number, number>;
+  schedRows?: Map<number, { op: string; rt: string; target: number }>; // 전개일정 행 → 운수사·노선·대상수량(보정 후)
   restyler: NonNullable<ReturnType<typeof makeRestyler>>;
 }): { pXml: string; changed: boolean } {
   const { shared, completed, dbInfo, exclusions, schedAdjust, restyler } = opts;
@@ -326,14 +345,21 @@ function paintProgressRows(opts: {
     const c = cells.get("C");
     const d = cells.get("D");
     if (!b || !c || !d) continue;
-    const op = cellValue(b.attrs, b.inner, shared).trim();
-    const rt = cellValue(c.attrs, c.inner, shared).trim();
-    if (!op || !rt) continue;
-    // 대상대수: 값 셀이면 그 값, 전개일정 E를 참조하는 수식이면 캐시값 + 이번 보정(Δ)
-    let target = Number((d.inner.match(/<v>([\d.]+)<\/v>/) || [])[1]);
+    let op = cellValue(b.attrs, b.inner, shared).trim();
+    let rt = cellValue(c.attrs, c.inner, shared).trim();
     const sched = d.inner.match(/'?전개일정'?!\$?E\$?(\d+)/);
-    if (sched) target += schedAdjust.get(Number(sched[1])) ?? 0;
-    if (!Number.isFinite(target)) continue;
+    let target: number;
+    // 새 프로젝트 양식: 영업소·노선·대상대수가 전개일정 참조 수식이라 캐시값이 없다 → 전개일정 그 행 값으로
+    const fromSched = (!op || !rt) && sched ? opts.schedRows?.get(Number(sched[1])) : undefined;
+    if (fromSched) {
+      ({ op, rt, target } = fromSched);
+    } else {
+      if (!op || !rt) continue;
+      // 대상대수: 값 셀이면 그 값, 전개일정 E를 참조하는 수식이면 캐시값 + 이번 보정(Δ)
+      target = Number((d.inner.match(/<v>([\d.]+)<\/v>/) || [])[1]);
+      if (sched) target += schedAdjust.get(Number(sched[1])) ?? 0;
+    }
+    if (!op || !rt || !Number.isFinite(target)) continue;
     const i = cells.get("I");
     rows.push({
       row,
@@ -819,6 +845,20 @@ export async function fillProgressXlsx(
       if (stylesFile) {
         const restyler = makeRestyler(await stylesFile.async("string"));
         if (restyler) {
+          // 전개일정 최종값(대상수량 보정·노선 라벨 교정 후) — 수식 행 판정용
+          const schedRows = new Map<number, { op: string; rt: string; target: number }>();
+          const sx = (await zip.file(sheetPaths.schedule)?.async("string")) ?? "";
+          for (const rm of sx.matchAll(/<row r="(\d+)"[^>]*?(?:\/>|>([\s\S]*?)<\/row>)/g)) {
+            const rn = Number(rm[1]);
+            if (rn < 5 || !rm[2]) continue;
+            const get = (col: string) => {
+              const m = rm[2].match(new RegExp(`<c r="${col}${rn}"([^>]*?)(?:/>|>([\\s\\S]*?)</c>)`));
+              return m ? cellValue(m[1], m[2] ?? "", shared).trim() : "";
+            };
+            const op = get("A");
+            const target = Number(get("E"));
+            if (op && op !== "합계" && Number.isFinite(target)) schedRows.set(rn, { op, rt: get("B"), target });
+          }
           const painted = paintProgressRows({
             pXml,
             shared,
@@ -826,6 +866,7 @@ export async function fillProgressXlsx(
             dbInfo,
             exclusions: exclusions ?? [],
             schedAdjust,
+            schedRows,
             restyler,
           });
           pXml = painted.pXml;

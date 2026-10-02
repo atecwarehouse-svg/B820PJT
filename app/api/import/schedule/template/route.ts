@@ -7,8 +7,8 @@ import { TEMPLATE_BUCKET, templateObject } from "@/lib/template-path";
 import { parsePeriod } from "@/lib/settings";
 import { addGuideSheet, type GuideRow } from "@/lib/import/guide-sheet";
 import { RAW_DATA_COLS } from "@/components/RawDataGuide";
-import { parseSharedStrings, resolveSheetPaths, setCellNumber } from "@/lib/export/fill-progress-xlsx";
-import { MAX_PLAN_DAYS, colName, colNum, expandPlanColumns, fixProgressPlanRange } from "@/lib/import/schedule-columns";
+import { parseSharedStrings, resolveSheetPaths, setCellNumber, whitenProgressRows } from "@/lib/export/fill-progress-xlsx";
+import { MAX_PLAN_DAYS, colName, colNum, colorDateRow, expandPlanColumns, fixProgressPlanRange } from "@/lib/import/schedule-columns";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -24,6 +24,8 @@ export const dynamic = "force-dynamic";
 //                → 전개일정에 운수사·노선을 적는 만큼 진행현황 행이 따라 채워진다(빈 행은 공란)
 //   workbook   : fullCalcOnLoad — 열 때 수식 재계산(캐시값은 지움), 진행현황 탭 이름=(프로젝트명) 진행현황
 //   작성 안내  : 맨 앞 탭(열 때 보이는 시트)에 작성 순서·열 안내 — 업로드 때 lib/import/guide-sheet removeGuideSheet로 빠진다
+//   색         : 진행현황 12행~ 바탕 흰색(다운로드 때 완료=녹색·설치제외=베이지), 전개일정 3행 날짜 글자 평일 검정·토 파랑·일/공휴일 빨강,
+//                차량리스트 숨긴 열(D·E 등) 보이기
 // 그래서 이 파일을 채워 올리면 진행현황 다운로드 양식으로도 저장된다. Storage를 못 읽으면 차량리스트만 있는 간단 양식.
 
 const XLSX_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
@@ -137,7 +139,11 @@ async function blankFromTemplate(src: Buffer, projectName: string, period: { sta
   vx = vx.slice(0, open) + "<sheetData>" + header + `<row r="2"${rowAttrs}>${cells.join("")}</row>` + vx.slice(close);
   vx = vx.replace(/<dimension ref="A1:([A-Z]+)\d+"\/>/, '<dimension ref="A1:$12"/>');
   vx = vx.replace(/<autoFilter ref="A1:([A-Z]+)\d+"/, '<autoFilter ref="A1:$12"');
+  // B820 원본에서 숨겨 둔 열(D 차고지·E 설치 장소 등) 다시 보이기 — 새 프로젝트는 여기에 직접 적는다
+  vx = vx.replace(/<cols>[\s\S]*?<\/cols>/, (c) => c.replace(/ hidden="1"/g, ""));
   zip.file(paths.vehicle, vx);
+  const stylesFile = zip.file("xl/styles.xml");
+  let styles = (await stylesFile?.async("string")) ?? "";
 
   // ── 전개일정: 제목, 3행 날짜(프로젝트 기간이면 시작일부터 하루씩, 없으면 H3만 예시 날짜), 5행 예시, 6행~합계 전 행 비움 ──
   //    날짜 칸 = 4행 "계획" 열(H·J·L…, B820 양식 61쌍). 기간이 더 길면 계획·완료 열 쌍을 늘린다(최대 MAX_PLAN_DAYS).
@@ -155,6 +161,8 @@ async function blankFromTemplate(src: Buffer, projectName: string, period: { sta
   if (!ex.cols.length) return null;
   sx = ex.sx.replace(/<row r="3"[^>]*>[\s\S]*?<\/row>/, (row) =>
     dates.reduce((r, d, i) => setCellNumber(r, `${ex.cols[i]}3`, d), row));
+  // 3행 날짜 글자색: 평일 검정 · 토 파랑 · 일·공휴일 빨강
+  if (styles) ({ sx, styles } = colorDateRow(sx, styles, ex.cols));
   zip.file(paths.schedule, sx);
   const lastCol = colName(colNum(ex.cols[ex.cols.length - 1]) + 1); // 마지막 완료 열
 
@@ -180,7 +188,10 @@ async function blankFromTemplate(src: Buffer, projectName: string, period: { sta
       f[col] ? `<c r="${col}${row}"${sAttr(styleOf(cattrs))}><f>${f[col]}</f></c>` : c);
     return `<row r="${rn}"${attrs}>${cells}</row>`;
   });
+  // 12행~ 데이터 행 바탕 흰색으로 초기화 (B820의 녹색·베이지 제거) — 다운로드 때 완료=녹색·설치제외=베이지로 칠해진다
+  if (styles) ({ pXml: px, stylesXml: styles } = whitenProgressRows(px, styles));
   zip.file(paths.progress, px);
+  if (styles) zip.file("xl/styles.xml", styles);
 
   // ── 열 때 전부 재계산 (캐시값을 지웠으므로) ──
   let wx = await wbFile.async("string");
@@ -224,6 +235,8 @@ function guideRows(projectName: string, tab: string, period: { start: string; en
     gap,
     line("■ 참고", "head"),
     line(`· 「${tab}」 시트 A10 기준일은 이 파일을 내려받은 날짜입니다. 앱에서 진행현황을 다운로드하면 고른 날짜로 바뀝니다.`),
+    line(`· 「${tab}」 시트 행은 흰 바탕입니다. 앱에서 받은 진행현황 엑셀에서는 완료된 노선이 녹색, 설치제외가 있으면 베이지로 칠해집니다.`),
+    line("· 전개일정 3행 날짜는 평일 검정, 토요일 파랑, 일요일·공휴일 빨강 글자로 표시됩니다."),
     line("· 표에 없는 열(K 등)은 읽지 않으니 메모용으로 써도 됩니다."),
     line("· 같은 차량번호가 여러 줄이면 마지막 줄만 반영됩니다. 차량리스트에서 지운 차량은 업로드 때 앱에서도 지워집니다(설치 기록이 있는 차량은 보호)."),
   ];

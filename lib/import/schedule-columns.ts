@@ -9,6 +9,7 @@
 // 진행현황 시트 A6·F6(SUMIF 전개일정!$H$3:$..$3)은 fixProgressPlanRange로 마지막 열까지 넓힌다.
 
 import { cellValue } from "@/lib/export/fill-progress-xlsx";
+import { dateFontColor } from "@/lib/holidays";
 
 export const MAX_PLAN_DAYS = 366; // 날짜 칸 상한 (1년) — 열·수식이 너무 커지지 않게
 
@@ -164,6 +165,57 @@ export function expandPlanColumns(sx: string, shared: string[], need: number): {
   const newCols = [...cols];
   for (let k = 1; k <= extra; k++) newCols.push(colName(P + 2 * k));
   return { sx: out, cols: newCols };
+}
+
+/** 3행 날짜 칸 글자색 — 평일 검정, 토요일 파랑, 일요일·공휴일 빨강(lib/holidays).
+ *  셀 스타일(xf)의 글꼴만 색을 바꾼 복제로 갈아끼운다(굵기·크기·날짜 서식 유지). 날짜가 없는 칸은 그대로. */
+export function colorDateRow(sx: string, styles: string, cols: string[]): { sx: string; styles: string } {
+  const fontsM = styles.match(/<fonts count="\d+"([^>]*)>([\s\S]*?)<\/fonts>/);
+  const xfsM = styles.match(/<cellXfs count="\d+">([\s\S]*?)<\/cellXfs>/);
+  const fonts = fontsM?.[2].match(/<font\b[^>]*\/>|<font\b[^>]*>[\s\S]*?<\/font>/g);
+  const xfs = xfsM?.[1].match(/<xf\b[^>]*\/>|<xf\b[^>]*>[\s\S]*?<\/xf>/g);
+  if (!fontsM || !xfsM || !fonts || !xfs) return { sx, styles };
+  const fontCache = new Map<string, number>();
+  const xfCache = new Map<string, number>();
+  const fontWith = (fontId: number, rgb: string): number => {
+    const key = `${fontId}|${rgb}`;
+    const hit = fontCache.get(key);
+    if (hit != null) return hit;
+    const base = fonts[fontId] ?? "<font/>";
+    const color = `<color rgb="${rgb}"/>`;
+    let f = base.replace(/<font\b([^>]*)\/>/, "<font$1></font>");
+    f = /<color\b[^>]*\/>/.test(f)
+      ? f.replace(/<color\b[^>]*\/>/, color)
+      : /<sz\b[^>]*\/>/.test(f) ? f.replace(/(<sz\b[^>]*\/>)/, `$1${color}`) : f.replace(/<font\b([^>]*)>/, `<font$1>${color}`);
+    fonts.push(f);
+    fontCache.set(key, fonts.length - 1);
+    return fonts.length - 1;
+  };
+  const restyle = (s: number, rgb: string): number => {
+    const key = `${s}|${rgb}`;
+    const hit = xfCache.get(key);
+    if (hit != null) return hit;
+    const base = xfs[s];
+    const fid = Number(base?.match(/fontId="(\d+)"/)?.[1]);
+    if (!base || !Number.isFinite(fid)) return s;
+    let xf = base.replace(/fontId="\d+"/, `fontId="${fontWith(fid, rgb)}"`);
+    if (!/applyFont="1"/.test(xf)) xf = xf.replace(/<xf /, '<xf applyFont="1" ');
+    xfs.push(xf);
+    xfCache.set(key, xfs.length - 1);
+    return xfs.length - 1;
+  };
+  const want = new Set(cols);
+  const out = sx.replace(/<row r="3"([^>]*)>([\s\S]*?)<\/row>/, (_m, attrs: string, inner: string) =>
+    `<row r="3"${attrs}>${inner.replace(/<c r="([A-Z]+)3"([^>]*?)><v>(\d+)<\/v><\/c>/g, (c, col: string, cattrs: string, v: string) => {
+      const s = Number(cattrs.match(/\bs="(\d+)"/)?.[1]);
+      if (!want.has(col) || !Number.isFinite(s)) return c;
+      return c.replace(/\bs="\d+"/, `s="${restyle(s, dateFontColor(Number(v)))}"`);
+    })}</row>`);
+  if (!xfCache.size) return { sx, styles };
+  const st = styles
+    .replace(fontsM[0], `<fonts count="${fonts.length}"${fontsM[1]}>${fonts.join("")}</fonts>`)
+    .replace(xfsM[0], `<cellXfs count="${xfs.length}">${xfs.join("")}</cellXfs>`);
+  return { sx: out, styles: st };
 }
 
 /** 진행현황 A6·F6의 SUMIF(전개일정!$H$3:$??$3 …, 전개일정!$H$2:$??$2) 끝 열을 lastCol로 */
