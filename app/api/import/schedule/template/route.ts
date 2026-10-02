@@ -7,7 +7,8 @@ import { TEMPLATE_BUCKET, templateObject } from "@/lib/template-path";
 import { parsePeriod } from "@/lib/settings";
 import { addGuideSheet, type GuideRow } from "@/lib/import/guide-sheet";
 import { RAW_DATA_COLS } from "@/components/RawDataGuide";
-import { resolveSheetPaths, setCellNumber } from "@/lib/export/fill-progress-xlsx";
+import { parseSharedStrings, resolveSheetPaths, setCellNumber } from "@/lib/export/fill-progress-xlsx";
+import { MAX_PLAN_DAYS, colName, colNum, expandPlanColumns, fixProgressPlanRange } from "@/lib/import/schedule-columns";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -16,7 +17,7 @@ export const dynamic = "force-dynamic";
 // B820 진행현황 양식(Storage templates/progress-template.xlsx)을 바탕으로 zip 셀 수술만 한다
 // (수식·서식·병합·피벗은 그대로 — 행을 지우면 SUM 범위·공유수식이 깨지므로 행은 남기고 값만 비운다).
 //   차량리스트 : 1행 제목줄(E1=설치 장소) + 2행 작성 예시(차량번호 "예)…"는 업로드 파서가 건너뜀), 나머지 행 삭제
-//   전개일정   : A1 제목=(프로젝트명) 전개일정, 3행 날짜=start~end 하루씩(최대 61칸, 없으면 H3 예시 날짜만),
+//   전개일정   : A1 제목=(프로젝트명) 전개일정, 3행 날짜=start~end 하루씩(61일 넘으면 열 쌍을 늘림, 최대 366일, 없으면 H3 예시 날짜만),
 //                5행 예시(○○교통/5311), 6~341행 값 비움·수식 유지 (운수사·노선·차고지·대상수량은 업로드 때 차량리스트로 자동 채움)
 //   진행현황   : A1 제목=(프로젝트명) 진행현황, A10 기준일=다운로드 당일(KST),
 //                12~348행 A(NO)·B(영업소)·C(노선)·D(대상대수)는 같은 행의 전개일정(A/B/E) 참조 수식
@@ -139,29 +140,30 @@ async function blankFromTemplate(src: Buffer, projectName: string, period: { sta
   zip.file(paths.vehicle, vx);
 
   // ── 전개일정: 제목, 3행 날짜(프로젝트 기간이면 시작일부터 하루씩, 없으면 H3만 예시 날짜), 5행 예시, 6행~합계 전 행 비움 ──
-  //    날짜 칸 = 원본 3행에서 값이 들어 있던 셀(H·J·L… 격열 61개, 완료 열 I·K…는 비어 있음). 칸보다 긴 기간은 잘린다.
+  //    날짜 칸 = 4행 "계획" 열(H·J·L…, B820 양식 61쌍). 기간이 더 길면 계획·완료 열 쌍을 늘린다(최대 MAX_PLAN_DAYS).
   let sx = await sFile.async("string");
   const sTotal = findTotalRow(sx, 5); // "합계" 행(A열 공유문자열은 못 읽으니 SUM(E5:E…) 수식으로 찾는다)
   sx = setTitle(sx, "A1", `${projectName} 전개일정`);
-  const dates = period ? dateSerials(period.start, period.end) : [excelSerial(EXAMPLE_DATE)];
-  let slot = 0;
-  sx = sx.replace(/<row r="3"([^>]*?)>([\s\S]*?)<\/row>/, (_m, attrs: string, inner: string) => {
-    const cells = inner.replace(CELL_RE, (c, col: string, row: string, cattrs: string, cin?: string) => {
-      if (col.length === 1 && col < "H") return c; // A~G는 라벨·수식 그대로
-      const isDateSlot = !!cin && /<v>/.test(cin) && !/<f\b/.test(cin);
-      const v = isDateSlot ? dates[slot++] : undefined;
-      return blankCell(col, row, cattrs, cin, v === undefined ? {} : { [col]: v });
-    });
-    return `<row r="3"${attrs}>${cells}</row>`;
-  });
+  const dates = period ? dateSerials(period.start, period.end).slice(0, MAX_PLAN_DAYS) : [excelSerial(EXAMPLE_DATE)];
+  // 3행 B820 날짜 비우기 (A~G는 라벨·수식이라 그대로)
+  sx = sx.replace(/<row r="3"([^>]*?)>([\s\S]*?)<\/row>/, (_m, attrs: string, inner: string) =>
+    `<row r="3"${attrs}>${inner.replace(CELL_RE, (c, col: string, row: string, cattrs: string, cin?: string) =>
+      col.length === 1 && col < "H" ? c : blankCell(col, row, cattrs, cin, {}))}</row>`);
   sx = blankRows(sx, 5, sTotal - 1, 5, SCHEDULE_EXAMPLE);
+  const shared = parseSharedStrings((await zip.file("xl/sharedStrings.xml")?.async("string")) ?? "");
+  const ex = expandPlanColumns(sx, shared, dates.length);
+  if (!ex.cols.length) return null;
+  sx = ex.sx.replace(/<row r="3"[^>]*>[\s\S]*?<\/row>/, (row) =>
+    dates.reduce((r, d, i) => setCellNumber(r, `${ex.cols[i]}3`, d), row));
   zip.file(paths.schedule, sx);
+  const lastCol = colName(colNum(ex.cols[ex.cols.length - 1]) + 1); // 마지막 완료 열
 
   // ── 진행현황: 제목, A10 기준일=오늘, 12행~합계 전 행 값 비움 + A/B/C/D는 전개일정 참조 수식 ──
   let px = await pFile.async("string");
   const pTotal = findTotalRow(px, 12);
   px = setTitle(px, "A1", `${projectName} 진행현황`);
   px = setCellNumber(px, "A10", todaySerial());
+  px = fixProgressPlanRange(px, lastCol); // 금일·누적 계획(A6·F6) SUMIF 범위 = 전개일정 마지막 열까지
   px = blankRows(px, 12, pTotal - 1, 0, {});
   px = px.replace(/<row r="(\d+)"([^>]*?)>([\s\S]*?)<\/row>/g, (whole, rnStr: string, attrs: string, inner: string) => {
     const rn = Number(rnStr);

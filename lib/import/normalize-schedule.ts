@@ -10,8 +10,9 @@
 //   ② 차량리스트에 없는 조합이 적힌 행 → A/B/D 비우고 C/E=0 (빈 양식의 ○○교통 예시 행도 여기서 지워진다).
 //   ③ 전개일정에 없는 조합 → 빈 행(위에서부터)에 A/B/D/C/E를 써 넣는다. 진행현황 시트는 이 행들을 수식으로 참조.
 //   빈 행이 모자라면 unmatched 로 알려준다.
-//   ④ 날짜별 계획(4행 "계획" 열 = H·J·L…, 61칸): 차량리스트 I열 설치 예정일이 하나라도 있으면
-//      3행 날짜 = 기존 3행 날짜(프로젝트 기간) ∪ 예정일 — 칸이 모자라면 예정일만, 그래도 모자라면 앞에서 자른다.
+//   ④ 날짜별 계획(4행 "계획" 열 = H·J·L…, B820 양식 61칸): 차량리스트 I열 설치 예정일이 하나라도 있으면
+//      3행 날짜 = 기존 3행 날짜(프로젝트 기간) ∪ 예정일. 칸이 모자라면 계획·완료 열 쌍을 늘린다(schedule-columns).
+//      상한(MAX_PLAN_DAYS=366)을 넘으면 예정일만, 그래도 넘으면 앞에서 자른다.
 //      각 행의 계획 칸 = 그 (운수사|노선)에서 그 날짜 예정 대수. 예정일이 하나도 없으면 3행·계획 칸은 손대지 않는다.
 //      → 진행현황 금일/누적 계획(A6·F6 SUMIF)이 자동으로 맞는다.
 // ponytail: 셀이 아예 없는 행(<c> 태그 없음)에는 못 쓴다 — B820 기반 양식은 A~DY 서식 셀이 항상 있어 그대로 둔다.
@@ -25,13 +26,14 @@ import {
   replaceCellText,
   clearCellText,
 } from "@/lib/export/fill-progress-xlsx";
+import { MAX_PLAN_DAYS, colName, colNum, expandPlanColumns, fixProgressPlanRange, planColumns } from "@/lib/import/schedule-columns";
 
 export interface NormalizeResult {
   buffer: Buffer;
   rows: number; // 값을 쓴 전개일정 행 수
   unmatched: string[]; // 빈 행이 모자라 전개일정에 못 넣은 "운수사 노선" 조합
   planDays: number; // 날짜별 계획을 채운 날짜 수 (0 = 예정일 없음, 계획 칸 그대로)
-  droppedDays: number; // 날짜 칸(61)이 모자라 빠진 예정일 수
+  droppedDays: number; // 날짜 상한(MAX_PLAN_DAYS)을 넘어 빠진 예정일 수
 }
 
 type Row = { operator: string; route: string; planned_date: string | null };
@@ -86,9 +88,7 @@ export async function normalizeScheduleQuantities(
   // 0) 날짜별 계획 칸(④): 4행 "계획" 열, 3행 기존 날짜, 예정일 → 3행에 쓸 날짜 목록
   const rowXml = (rn: number) => xml.match(new RegExp(`<row r="${rn}"[^>]*?(?:/>|>([\\s\\S]*?)</row>)`))?.[1] ?? "";
   const cellsOf = (inner: string) => [...inner.matchAll(/<c r="([A-Z]+)\d+"([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/g)];
-  const planCols = cellsOf(rowXml(4))
-    .filter((c) => (c[1].length > 1 || c[1] >= "H") && cellValue(c[2], c[3] ?? "", shared).trim() === "계획")
-    .map((c) => c[1]);
+  let planCols = planColumns(xml, shared);
   const row3 = new Map(cellsOf(rowXml(3)).map((c) => [c[1], c[3] ?? ""]));
   const existing = planCols
     .map((col) => Number(row3.get(col)?.match(/^<v>(\d+(?:\.\d+)?)<\/v>$/)?.[1]))
@@ -98,9 +98,11 @@ export async function normalizeScheduleQuantities(
   let droppedDays = 0;
   if (planned.length && planCols.length) {
     dates = [...new Set([...existing, ...planned])].sort((a, b) => a - b);
-    if (dates.length > planCols.length) dates = planned; // 칸이 모자라면 기간 날짜는 버리고 예정일만
-    droppedDays = Math.max(0, dates.length - planCols.length);
-    dates = dates.slice(0, planCols.length);
+    if (dates.length > MAX_PLAN_DAYS) dates = planned; // 상한을 넘으면 기간 날짜는 버리고 예정일만
+    droppedDays = Math.max(0, dates.length - MAX_PLAN_DAYS);
+    dates = dates.slice(0, MAX_PLAN_DAYS);
+    // 칸이 모자라면 계획·완료 열 쌍을 늘린다
+    if (dates.length > planCols.length) ({ sx: xml, cols: planCols } = expandPlanColumns(xml, shared, dates.length));
   }
 
   // 1) 행 스캔: 5행 ~ 합계 전 행. 조합이 있는 행 / 비어 있는 행 분류
@@ -183,6 +185,12 @@ export async function normalizeScheduleQuantities(
 
   xml = xml.replace(rowRe, (whole, rnStr: string) => edits.get(Number(rnStr))?.(whole) ?? whole);
   zip.file(paths.schedule, xml);
+  // 진행현황 금일·누적 계획(A6·F6) SUMIF 범위를 전개일정 마지막 열까지 (B820 양식은 DW까지라 61번째 날이 빠져 있었다)
+  const pFile = planCols.length ? zip.file(paths.progress) : null;
+  if (pFile) {
+    const lastCol = colName(colNum(planCols[planCols.length - 1]) + 1);
+    zip.file(paths.progress, fixProgressPlanRange(await pFile.async("string"), lastCol));
+  }
 
   const buffer = await zip.generateAsync({ type: "nodebuffer", compression: "DEFLATE" });
   return { buffer, rows: rowCount, unmatched, planDays: dates.length, droppedDays };

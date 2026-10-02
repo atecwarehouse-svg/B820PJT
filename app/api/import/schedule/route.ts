@@ -309,7 +309,7 @@ export async function POST(req: NextRequest) {
         initialNote =
           `전개일정 운수사·노선·차고지·대상수량을 차량리스트 기준으로 채웠습니다(${n.rows}행).` +
           (n.planDays ? ` 날짜별 계획 수량도 설치 예정일 기준으로 채웠습니다(${n.planDays}일).` : "") +
-          (n.droppedDays ? ` 날짜 칸(61일)이 모자라 마지막 ${n.droppedDays}일의 계획은 빠졌습니다.` : "") +
+          (n.droppedDays ? ` 날짜가 최대 366일을 넘어 마지막 ${n.droppedDays}일의 계획은 빠졌습니다.` : "") +
           (n.unmatched.length ? ` 전개일정 빈 행이 모자라 못 넣은 노선 ${n.unmatched.length}개: ${n.unmatched.slice(0, 5).join(", ")}${n.unmatched.length > 5 ? " …" : ""}` : "");
       }
       const storage = supabase.storage.from(TEMPLATE_BUCKET);
