@@ -42,7 +42,13 @@ function suggestSlug(name: string): string {
 // 새 프로젝트에 복사할 B820 설정 (app_settings 키)
 const COPY_SETTINGS_LABEL = "B820의 설치팀 목록·배차표 검수항목·리포트 수신자를 복사";
 
-export default function ProjectAdmin({ projects }: { projects: Project[] }) {
+export default function ProjectAdmin({
+  projects,
+  driveShared = {},
+}: {
+  projects: Project[];
+  driveShared?: Record<string, boolean>; // 앨범 프로젝트 드라이브 폴더 링크 공유 여부
+}) {
   const router = useRouter();
   const formRef = useRef<HTMLElement>(null);
   const [busy, setBusy] = useState(false);
@@ -59,6 +65,7 @@ export default function ProjectAdmin({ projects }: { projects: Project[] }) {
   const [showPw, setShowPw] = useState(false);
   const [slugTouched, setSlugTouched] = useState(false); // ID를 직접 편집했으면 자동 제안 중단
   const [copySettings, setCopySettings] = useState(true);
+  const [shareLink, setShareLink] = useState(true); // 드라이브 폴더를 '링크가 있는 사용자'에게 보기 공유
   const [confirmSlug, setConfirmSlug] = useState(""); // 삭제 확인 대기 중인 프로젝트
   const [confirmText, setConfirmText] = useState(""); // 앨범 삭제 확인용 ID 입력
   const [created, setCreated] = useState<{
@@ -68,6 +75,7 @@ export default function ProjectAdmin({ projects }: { projects: Project[] }) {
     warning?: string;
     copied?: string[];
     driveFolder?: string; // 구글드라이브 사진 폴더 링크
+    driveShared?: boolean;
   } | null>(null);
 
   function resetForm() {
@@ -127,6 +135,9 @@ export default function ProjectAdmin({ projects }: { projects: Project[] }) {
         Object.assign(body, { name, description, icon });
         if (editing.kind === "link") body.url = url;
         if (editing.kind === "album" && adminPw) body.admin_password = adminPw;
+        if (editing.kind === "album" && editing.driveFolderId && shareLink !== (driveShared[editing.slug] ?? false)) {
+          body.shareLink = shareLink;
+        }
       }
       const j = await call("PUT", body);
       if (j) {
@@ -143,6 +154,7 @@ export default function ProjectAdmin({ projects }: { projects: Project[] }) {
         slug: slug.trim().toLowerCase(),
         admin_password: adminPw,
         copySettings,
+        shareLink,
       });
       if (j) {
         setCreated({
@@ -152,6 +164,7 @@ export default function ProjectAdmin({ projects }: { projects: Project[] }) {
           warning: j.warning ? String(j.warning) : undefined,
           copied: Array.isArray(j.copied) ? (j.copied as string[]) : undefined,
           driveFolder: j.driveFolder ? String(j.driveFolder) : undefined,
+          driveShared: j.driveShared === true,
         });
         resetForm();
       }
@@ -172,6 +185,7 @@ export default function ProjectAdmin({ projects }: { projects: Project[] }) {
     setDescription(p.description);
     setUrl(p.url ?? "");
     setAdminPw("");
+    setShareLink(driveShared[p.slug] ?? false);
     setConfirmSlug("");
     setError("");
     formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -244,6 +258,7 @@ export default function ProjectAdmin({ projects }: { projects: Project[] }) {
                 「{created.name}」 폴더
               </a>
               를 만들었습니다. 사진은 그 안에 운수사/차량번호 폴더로 저장됩니다.
+              {created.driveShared ? " 링크가 있는 사용자는 누구나 볼 수 있게 공유했습니다." : " (비공개 — 드라이브 계정 주인만 볼 수 있음)"}
             </p>
           )}
           <ol className="mt-2 list-decimal space-y-1 pl-5 text-xs leading-relaxed">
@@ -431,6 +446,22 @@ export default function ProjectAdmin({ projects }: { projects: Project[] }) {
                   {showPw ? "숨기기" : "보기"}
                 </button>
               </div>
+              {(!editing || editing.driveFolderId) && (
+                <label className="flex items-start gap-2 rounded-xl bg-gray-50 px-3 py-2.5 text-xs text-gray-600">
+                  <input
+                    type="checkbox"
+                    checked={shareLink}
+                    onChange={(e) => setShareLink(e.target.checked)}
+                    className="mt-0.5 h-4 w-4"
+                  />
+                  <span>
+                    구글드라이브 사진 폴더를 <b>링크가 있는 사용자에게 공유</b>(보기 전용)
+                    <span className="block text-[11px] text-gray-400">
+                      끄면 드라이브 계정 주인만 볼 수 있습니다. 안의 운수사·차량 폴더와 사진도 같은 설정을 따릅니다.
+                    </span>
+                  </span>
+                </label>
+              )}
               {!editing && (
                 <label className="flex items-start gap-2 rounded-xl bg-gray-50 px-3 py-2.5 text-xs text-gray-600">
                   <input
@@ -525,7 +556,7 @@ export default function ProjectAdmin({ projects }: { projects: Project[] }) {
                     rel="noreferrer"
                     className="block truncate text-xs text-blue-500"
                   >
-                    구글드라이브 「{p.name}」 폴더 열기
+                    구글드라이브 「{p.name}」 폴더 열기{driveShared[p.slug] ? " · 링크 공유 중" : " · 비공개"}
                   </a>
                 )}
               </span>

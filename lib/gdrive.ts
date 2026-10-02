@@ -72,6 +72,24 @@ export async function renameFile(fileId: string, name: string): Promise<void> {
   await drive().files.update({ fileId, requestBody: { name } });
 }
 
+// '링크가 있는 모든 사용자'(보기) 공유 켜기/끄기 — 프로젝트 폴더에 걸면 안의 운수사·차량 폴더와 사진이 상속한다.
+// 기본은 비공개(앱 계정만). 두 번 켜도 권한이 중복 생기지 않게 먼저 조회한다.
+export async function setLinkSharing(fileId: string, on: boolean): Promise<void> {
+  const d = drive();
+  const { data } = await d.permissions.list({ fileId, fields: "permissions(id,type,role)" });
+  const anyone = (data.permissions ?? []).find((p) => p.type === "anyone");
+  if (on && !anyone) {
+    await d.permissions.create({ fileId, requestBody: { type: "anyone", role: "reader" } });
+  } else if (!on && anyone?.id) {
+    await d.permissions.delete({ fileId, permissionId: anyone.id });
+  }
+}
+
+export async function isLinkShared(fileId: string): Promise<boolean> {
+  const { data } = await drive().permissions.list({ fileId, fields: "permissions(type)" });
+  return (data.permissions ?? []).some((p) => p.type === "anyone");
+}
+
 export function folderLink(folderId: string): string {
   return `https://drive.google.com/drive/folders/${folderId}`;
 }

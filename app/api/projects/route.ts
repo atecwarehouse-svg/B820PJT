@@ -10,7 +10,7 @@ import {
   projectHome,
 } from "@/lib/project";
 import { colorKey, iconKey } from "@/components/ProjectIcon";
-import { createProjectFolder, deleteFolder, folderLink, renameFile, trashFile } from "@/lib/gdrive";
+import { createProjectFolder, deleteFolder, folderLink, renameFile, setLinkSharing, trashFile } from "@/lib/gdrive";
 import { TEMPLATE_BUCKET } from "@/lib/template-path";
 import { INSTALL_TEAMS_KEY, INSPECT_CHECKLIST_KEY, REPORT_MAIL_KEY } from "@/lib/settings";
 
@@ -20,9 +20,9 @@ export const maxDuration = 60;
 
 // 프로젝트 레지스트리(public.projects) 관리 — 런처(마스터=B820) 관리자 쿠키 또는 body.pw 필수.
 //   POST   { kind:"link",  name, description, icon, color, url }                       → 링크 카드 추가
-//   POST   { kind:"album", slug, name, description, icon, color, admin_password, copySettings? } → 앨범 프로젝트 생성 (copySettings: B820 설치팀·검수항목·리포트 수신자 복사)
+//   POST   { kind:"album", slug, name, description, icon, color, admin_password, copySettings?, shareLink? } → 앨범 프로젝트 생성 (copySettings: B820 설치팀·검수항목·리포트 수신자 복사, shareLink: 드라이브 폴더를 링크 공유로)
 //            (드라이브 폴더 → DB 스키마 복제(create_project_schema) → 레지스트리 행. 실패 시 되감기)
-//   PUT    { slug, name?, description?, icon?, color?, url?, admin_password? }           → 수정 (b820은 색만, 앨범 이름 변경 시 드라이브 폴더명도 변경)
+//   PUT    { slug, name?, description?, icon?, color?, url?, admin_password?, shareLink? } → 수정 (b820은 색만, 앨범 이름 변경 시 드라이브 폴더명도 변경, shareLink: 드라이브 링크 공유 켜기/끄기)
 //   DELETE { slug }                     → 링크 카드 삭제
 //   DELETE { slug, confirm: <slug> }    → 앨범 프로젝트 삭제 (DB 스키마·양식 삭제, 드라이브 사진 폴더 영구 삭제. B820 불가)
 
@@ -141,6 +141,16 @@ export async function POST(req: NextRequest) {
     }
     let exposed = !!(rpc as { exposed?: boolean } | null)?.exposed;
     let warning: string | undefined;
+    // 드라이브 폴더 링크 공유(보기) — 실패해도 프로젝트는 만들어지고 경고만
+    let driveShared = false;
+    if (body.shareLink === true) {
+      try {
+        await setLinkSharing(folderId, true);
+        driveShared = true;
+      } catch {
+        warning = "구글드라이브 폴더 링크 공유 설정에 실패했습니다. 프로젝트 수정에서 다시 켜거나 드라이브에서 직접 공유하세요.";
+      }
+    }
     if (!exposed) {
       exposed = await exposeSchemaViaApi(slug);
       if (!exposed) {
@@ -195,7 +205,7 @@ export async function POST(req: NextRequest) {
         }
       }
     }
-    return NextResponse.json({ ok: true, slug, home: projectHome(slug), exposed, warning, copied, driveFolder: folderLink(folderId) });
+    return NextResponse.json({ ok: true, slug, home: projectHome(slug), exposed, warning, copied, driveFolder: folderLink(folderId), driveShared });
   }
 
   // 링크 카드
@@ -254,16 +264,25 @@ export async function PUT(req: NextRequest) {
       patch.admin_password_hash = cookieToken(slug, body.admin_password);
     }
   }
-  if (!Object.keys(patch).length) return bad("바꿀 내용이 없습니다.");
+  const shareLink = row.kind === "album" && row.drive_folder_id && typeof body.shareLink === "boolean" ? body.shareLink : undefined;
+  if (!Object.keys(patch).length && shareLink === undefined) return bad("바꿀 내용이 없습니다.");
 
-  const { error } = await sb.from("projects").update(patch).eq("slug", slug);
-  if (error) return bad("저장 실패: " + hint(error.message), 500);
-  invalidateProjectCache(slug);
-  // 앨범 프로젝트명이 바뀌면 드라이브 사진 폴더 이름도 같이 (실패해도 프로젝트 수정은 유지)
+  if (Object.keys(patch).length) {
+    const { error } = await sb.from("projects").update(patch).eq("slug", slug);
+    if (error) return bad("저장 실패: " + hint(error.message), 500);
+    invalidateProjectCache(slug);
+  }
   let warning: string | undefined;
+  // 드라이브 폴더 링크 공유 켜기/끄기 (실패해도 나머지 수정은 유지)
+  if (shareLink !== undefined) {
+    await setLinkSharing(row.drive_folder_id as string, shareLink).catch(() => {
+      warning = "구글드라이브 폴더 링크 공유 설정에 실패했습니다. 드라이브에서 직접 바꿔 주세요.";
+    });
+  }
+  // 앨범 프로젝트명이 바뀌면 드라이브 사진 폴더 이름도 같이 (실패해도 프로젝트 수정은 유지)
   if (row.kind === "album" && row.drive_folder_id && typeof patch.name === "string" && patch.name !== row.name) {
     await renameFile(row.drive_folder_id, patch.name).catch(() => {
-      warning = "프로젝트는 수정됐지만 구글드라이브 폴더 이름 변경에 실패했습니다. 드라이브에서 직접 바꿔 주세요.";
+      warning = (warning ? warning + " " : "") + "프로젝트는 수정됐지만 구글드라이브 폴더 이름 변경에 실패했습니다. 드라이브에서 직접 바꿔 주세요.";
     });
   }
   return NextResponse.json({ ok: true, warning });
