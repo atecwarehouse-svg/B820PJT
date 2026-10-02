@@ -60,7 +60,12 @@ function fmtDate(d: string | null): string {
 // 1) 파일 선택 → 변경 내역 미리보기(DB 미변경) → 2) '변경 반영' 확인 시 실제 반영.
 // initial: 새 프로젝트(B820 아님)의 첫 차량리스트 등록 모드 — 같은 양식을 올리되 시범설치 판정 없이
 //          전부 등록하고, 전개일정 대상수량을 차량리스트에 맞춰 정리한 파일을 양식으로 저장한다.
-export default function ScheduleUploadModal({ initial = false, projectName = "" }: { initial?: boolean; projectName?: string }) {
+// period: 프로젝트 기간 — 빈 양식 다운로드 링크(전개일정 3행 날짜)에 전달
+export default function ScheduleUploadModal({
+  initial = false,
+  projectName = "",
+  period = null,
+}: { initial?: boolean; projectName?: string; period?: { start: string; end: string } | null }) {
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState<"select" | "preview" | "done">("select");
   const [busy, setBusy] = useState(false);
@@ -351,12 +356,12 @@ export default function ScheduleUploadModal({ initial = false, projectName = "" 
                         다운로드 양식이 됩니다.
                       </p>
                       <p className="mt-1 text-gray-500">
-                        B820 파일을 복사해 쓰셔도 됩니다. <b>전개일정 시트의 대상수량은 차량리스트에 맞춰
-                        자동으로 정리</b>되므로 숫자를 손볼 필요가 없습니다. (B820의 시범설치 기준도 적용하지
-                        않습니다)
+                        B820 파일을 복사해 쓰셔도 됩니다. <b>전개일정 시트의 운수사·노선·차고지·대상수량은
+                        차량리스트에 맞춰 자동으로 채워지므로</b> 손볼 필요가 없습니다. (B820의 시범설치 기준도
+                        적용하지 않습니다)
                       </p>
                       <div className="mt-2">
-                        <RawDataGuide projectName={projectName} />
+                        <RawDataGuide projectName={projectName} start={period?.start} end={period?.end} />
                       </div>
                     </div>
                   ) : (

@@ -96,6 +96,7 @@ export default function ProjectAdmin({
   const [slugTouched, setSlugTouched] = useState(false); // ID를 직접 편집했으면 자동 제안 중단
   const [photoSlots, setPhotoSlots] = useState<SlotConfigJson>(DEFAULT_SLOTS); // 새 프로젝트 사진 양식
   const [reportMail, setReportMail] = useState(""); // 완료리포트 메일 수신자 (쉼표·줄바꿈 구분)
+  const [period, setPeriod] = useState({ start: "", end: "" }); // 프로젝트 기간 — 빈 양식 전개일정 3행 날짜
   const [slotsOpen, setSlotsOpen] = useState(false); // 사진 양식 팝업
   const [slotsError, setSlotsError] = useState("");
   const [pledge, setPledge] = useState<PledgeTemplate>(DEFAULT_PLEDGE_TEMPLATE); // 새 프로젝트 서약서 양식
@@ -142,6 +143,7 @@ export default function ProjectAdmin({
     setLater(false);
     if (rawRef.current) rawRef.current.value = "";
     setReportMail("");
+    setPeriod({ start: "", end: "" });
     setError("");
   }
 
@@ -210,6 +212,7 @@ export default function ProjectAdmin({
         ...(isDefaultSlots(photoSlots) ? {} : { photoSlots }),
         ...(isDefaultPledgeTemplate(pledge) ? {} : { pledgeTemplate: pledge }),
         reportMail: mailList,
+        ...(period.start && period.end ? { period } : {}),
       });
       if (j) {
         // 로우데이터를 붙였으면 바로 차량 리스트 등록 (API 노출 실패 시엔 건너뛰고 안내만)
@@ -296,6 +299,7 @@ export default function ProjectAdmin({
   const isB820 = editing?.slug === "b820";
   const mailList = [...new Set(reportMail.split(/[,;\s]+/).map((s) => s.trim()).filter(Boolean))];
   const badMail = mailList.filter((s) => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s));
+  const badPeriod = !!period.start && !!period.end && period.end < period.start;
   const input =
     "w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-base transition-colors focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-100";
   const canSubmit =
@@ -303,7 +307,7 @@ export default function ProjectAdmin({
     (editing
       ? isB820 || !!name
       : kind === "album"
-        ? !!name && SLUG_RE.test(slug.trim().toLowerCase()) && adminPw.length >= 4 && badMail.length === 0 && (!!rawFile || later)
+        ? !!name && SLUG_RE.test(slug.trim().toLowerCase()) && adminPw.length >= 4 && badMail.length === 0 && !badPeriod && (!!rawFile || later)
         : !!name && !!url);
 
   return (
@@ -496,6 +500,33 @@ export default function ProjectAdmin({
               className={input}
             />
           )}
+          {kind === "album" && !isB820 && !editing && (
+            <div>
+              <div className="flex items-center gap-2">
+                <input
+                  type="date"
+                  value={period.start}
+                  onChange={(e) => setPeriod({ ...period, start: e.target.value })}
+                  aria-label="프로젝트 시작일"
+                  className={input}
+                />
+                <span className="text-gray-400">~</span>
+                <input
+                  type="date"
+                  value={period.end}
+                  min={period.start || undefined}
+                  onChange={(e) => setPeriod({ ...period, end: e.target.value })}
+                  aria-label="프로젝트 종료일"
+                  className={input}
+                />
+              </div>
+              <p className={`mt-1 px-1 text-[11px] ${badPeriod ? "text-red-500" : "text-gray-400"}`}>
+                {badPeriod
+                  ? "종료일이 시작일보다 빠릅니다."
+                  : "프로젝트 기간(시작일~종료일, 선택) — 빈 양식의 전개일정 3행 날짜가 이 기간으로 자동 기입됩니다(최대 61일)."}
+              </p>
+            </div>
+          )}
           {kind === "album" && !isB820 && (
             <>
               <div>
@@ -628,7 +659,7 @@ export default function ProjectAdmin({
                       : "진행현황 양식 엑셀을 올리면 차량 리스트·설치 일정이 바로 등록됩니다."}
                   </p>
                   <div className="mt-2">
-                    <RawDataGuide projectName={name} />
+                    <RawDataGuide projectName={name} start={period.start} end={period.end} />
                   </div>
                   <label className="mt-2 flex items-center gap-2">
                     <input

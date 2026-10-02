@@ -33,6 +33,7 @@ export interface ParseResult {
   rows: ScheduleRow[];
   pilotCount: number;
   skipped: number;
+  depots: Map<string, string>; // "운수사|||노선" → 차고지(D열, 그룹의 첫 비어있지 않은 값) — 전개일정 D열 자동 채움용
 }
 
 // 셀 값 → 트림 문자열 (리치텍스트/하이퍼링크 객체 처리)
@@ -77,6 +78,7 @@ async function parseWorkbook(wb: ExcelJS.Workbook): Promise<ParseResult> {
   }
 
   const map = new Map<string, ScheduleRow>();
+  const depots = new Map<string, string>();
   let skipped = 0;
   let pilotCount = 0;
   for (let r = 2; r <= vws.rowCount; r++) {
@@ -98,9 +100,12 @@ async function parseWorkbook(wb: ExcelJS.Workbook): Promise<ParseResult> {
     const is_pilot = planned_date !== null && planned_date < PILOT_CUTOFF;
     if (is_pilot) pilotCount++;
     map.set(plate, { plate, operator, route, planned_date, is_pilot, year, model, list_no, tacho });
+    const depot = txt(row.getCell("D").value);
+    const key = `${operator}|||${route}`;
+    if (depot && !depots.has(key)) depots.set(key, depot);
   }
 
-  return { rows: [...map.values()], pilotCount, skipped };
+  return { rows: [...map.values()], pilotCount, skipped, depots };
 }
 
 /** 파일 경로에서 읽어 파싱 (스크립트용). */

@@ -8,6 +8,17 @@ import { parseSlotConfig, type SlotConfig } from "@/lib/slots";
 export const REPORT_MAIL_KEY = "report_mail_to";
 export const INSTALL_TEAMS_KEY = "install_teams"; // 설치팀 목록 (JSON [{team,name,phone}], 구버전 문자열 배열 호환)
 export const INSPECT_CHECKLIST_KEY = "inspect_checklist"; // 배차표 검수항목 (JSON {vehicle,device})
+export const PROJECT_PERIOD_KEY = "project_period"; // 프로젝트 시작일~종료일 "YYYY-MM-DD~YYYY-MM-DD" — 빈 양식 전개일정 3행 날짜용
+
+const YMD = /^\d{4}-\d{2}-\d{2}$/;
+/** "YYYY-MM-DD~YYYY-MM-DD" 또는 {start,end} → 검증된 {start,end}, 아니면 null */
+export function parsePeriod(v: unknown): { start: string; end: string } | null {
+  const o = typeof v === "string" ? (([s, e]) => ({ start: s, end: e }))(v.split("~")) : (v as { start?: unknown; end?: unknown } | null);
+  const start = String(o?.start ?? "").trim();
+  const end = String(o?.end ?? "").trim();
+  if (!YMD.test(start) || !YMD.test(end) || end < start) return null;
+  return { start, end };
+}
 
 // 업무일별 설치시작 보고 현황 — JSON {운수사: [담당 검수자…]}.
 // 두 가지를 겸한다: (1) 보고 완료 운수사 잠금(키 존재 여부), (2) 그날 담당 검수자 배정

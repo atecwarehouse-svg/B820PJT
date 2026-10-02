@@ -35,6 +35,7 @@ import RefreshButton from "@/components/RefreshButton";
 import DashboardDetailTabs from "@/components/DashboardDetailTabs";
 import { isProgressUnlocked } from "@/lib/admin-auth";
 import { brandName, currentProject, currentSlug, isDefault } from "@/lib/project";
+import { PROJECT_PERIOD_KEY, getSetting, parsePeriod } from "@/lib/settings";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -161,6 +162,8 @@ export default async function DashboardPage() {
   const remainCount = Math.max(0, s.totalVehicles - s.complete - inProgressCount);
   // 새 프로젝트(B820 아님)에서 아직 설치 기록이 하나도 없으면 "최초 업로드" 모드
   const initialUpload = !isDefault(slug) && s.totalVehicles === 0;
+  // 프로젝트 기간(생성 시 지정) — 최초 업로드 팝업의 빈 양식 링크(전개일정 3행 날짜)에 전달
+  const period = initialUpload ? parsePeriod(await getSetting(PROJECT_PERIOD_KEY, slug)) : null;
 
   // 진행현황 다운로드 기준일 기본값 = 현재 업무일. 팝업에서 날짜를 바꾸면
   // 그 날짜까지의 스냅샷(계획·기준일·완료)으로 받는다. 계획수량은 예정일(planned_date)에서 파생.
@@ -323,7 +326,7 @@ export default async function DashboardPage() {
         <h2 className="text-sm font-bold text-gray-800">🔎 상세 현황</h2>
         <div className="flex flex-wrap items-center gap-2">
           <ConsultationModal operators={operatorSchedules} />
-          <ScheduleUploadModal initial={initialUpload} projectName={projectInfo.name} />
+          <ScheduleUploadModal initial={initialUpload} projectName={projectInfo.name} period={period} />
         </div>
       </div>
 

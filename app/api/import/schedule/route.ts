@@ -243,7 +243,7 @@ export async function POST(req: NextRequest) {
         warn: foreign ? undefined : t.warn,
         initialNote:
           foreign && t.ok
-            ? `전개일정 대상수량을 차량리스트(${parsed.rows.length.toLocaleString()}대) 기준으로 자동 정리합니다.`
+            ? `전개일정 운수사·노선·차고지·대상수량을 차량리스트(${parsed.rows.length.toLocaleString()}대) 기준으로 자동으로 채웁니다.`
             : undefined,
       },
     });
@@ -304,11 +304,11 @@ export async function POST(req: NextRequest) {
       let tplBuffer = prep.buffer;
       let initialNote: string | undefined;
       if (foreign) {
-        const n = await normalizeScheduleQuantities(prep.buffer, groupCounts(parsed.rows));
+        const n = await normalizeScheduleQuantities(prep.buffer, groupCounts(parsed.rows), parsed.depots);
         tplBuffer = n.buffer;
         initialNote =
-          `전개일정 대상수량을 차량리스트 기준으로 정리했습니다(${n.rows}행).` +
-          (n.unmatched.length ? ` 전개일정에 행이 없는 노선 ${n.unmatched.length}개: ${n.unmatched.slice(0, 5).join(", ")}${n.unmatched.length > 5 ? " …" : ""}` : "");
+          `전개일정 운수사·노선·차고지·대상수량을 차량리스트 기준으로 채웠습니다(${n.rows}행).` +
+          (n.unmatched.length ? ` 전개일정 빈 행이 모자라 못 넣은 노선 ${n.unmatched.length}개: ${n.unmatched.slice(0, 5).join(", ")}${n.unmatched.length > 5 ? " …" : ""}` : "");
       }
       const storage = supabase.storage.from(TEMPLATE_BUCKET);
       // 프로젝트별 양식 경로 — B820은 progress-template.xlsx, 그 외는 <slug>/progress-template.xlsx

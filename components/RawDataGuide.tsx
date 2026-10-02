@@ -16,8 +16,20 @@ const COLS: { col: string; name: string; need: "필수" | "권장" | "선택"; n
 const TONE = { 필수: "bg-rose-100 text-rose-700", 권장: "bg-amber-100 text-amber-700", 선택: "bg-gray-100 text-gray-500" };
 
 // projectName: 빈 양식의 전개일정·진행현황 시트 제목 "(프로젝트명) 진행현황"에 넣을 이름 (없으면 "(프로젝트명)" 그대로)
-export default function RawDataGuide({ open = false, projectName = "" }: { open?: boolean; projectName?: string }) {
-  const href = projectName.trim() ? `/api/import/schedule/template?name=${encodeURIComponent(projectName.trim())}` : "/api/import/schedule/template";
+// start/end: 프로젝트 기간(YYYY-MM-DD) — 빈 양식 전개일정 3행 날짜를 이 기간으로 채운다(없으면 예시 날짜 하나)
+export default function RawDataGuide({
+  open = false,
+  projectName = "",
+  start = "",
+  end = "",
+}: { open?: boolean; projectName?: string; start?: string; end?: string }) {
+  const q = new URLSearchParams();
+  if (projectName.trim()) q.set("name", projectName.trim());
+  if (start && end) {
+    q.set("start", start);
+    q.set("end", end);
+  }
+  const href = `/api/import/schedule/template${q.size ? `?${q}` : ""}`;
   return (
     <details open={open} className="group rounded-xl bg-white/80 text-xs text-gray-600 ring-1 ring-black/5">
       <summary className="cursor-pointer select-none px-3 py-2 font-semibold text-gray-700">
@@ -62,7 +74,7 @@ export default function RawDataGuide({ open = false, projectName = "" }: { open?
         </div>
         <ul className="space-y-0.5 text-[11px] leading-relaxed text-gray-500">
           <li>· 빈 양식 2행의 회색 예시는 지우지 않아도 됩니다(차량번호가 「예)」로 시작하면 건너뜁니다). 적지 않은 열(G·H·K 등)은 읽지 않으니 자유롭게 써도 됩니다.</li>
-          <li>· 빈 양식에는 「전개일정」·「진행현황」 시트도 들어 있습니다(수식 유지, 값만 비움). 전개일정 5행·진행현황 12행의 회색 예시를 참고해 운수사·노선 행을 채우고, 전개일정 3행에 설치 날짜를 적으세요. 대상수량은 업로드 때 차량리스트에 맞춰 자동 정리되고, 이 파일이 진행현황 다운로드 양식으로도 저장됩니다.</li>
+          <li>· 빈 양식에는 「전개일정」·「진행현황」 시트도 들어 있습니다(수식 유지, 값만 비움). 전개일정의 운수사·노선·차고지·대상수량은 업로드 때 차량리스트(B·C·D열) 기준으로 자동으로 채워지고, 진행현황 시트는 전개일정을 수식으로 따라갑니다(진행현황 기준일은 내려받은 날짜). 전개일정 3행 날짜는 프로젝트 기간을 지정했으면 그 기간으로 들어가고(최대 61일), 날짜별 계획 수량(H열~)만 직접 적으면 됩니다. 이 파일이 진행현황 다운로드 양식으로도 저장됩니다.</li>
           <li>· 전개일정·진행현황 시트 1행 제목은 「(프로젝트명) 진행현황」처럼 프로젝트명으로 들어갑니다(프로젝트명을 먼저 적고 내려받으면 그 이름이 박힙니다).</li>
           <li>· 시트 이름은 꼭 「차량리스트」여야 합니다. 설치 예정일은 나중에 「설치일정 변경 업로드」로 바꿀 수 있습니다.</li>
         </ul>

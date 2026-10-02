@@ -73,7 +73,7 @@ function escapeXml(s: string): string {
 
 // 셀 하나(<c r="REF" …/> 또는 …>…</c>)를 스타일(s=…)만 유지한 채 inlineStr 텍스트로 교체.
 // (공유문자열 인덱스 변경 없이 해당 셀 표시값만 바꾸므로 다른 셀에 영향 없음.)
-function replaceCellText(xml: string, ref: string, text: string): string {
+export function replaceCellText(xml: string, ref: string, text: string): string {
   const re = new RegExp(`<c r="${ref}"([^>]*?)(?:/>|>[\\s\\S]*?</c>)`);
   return xml.replace(re, (_m, attrs: string) => {
     const s = (attrs.match(/\bs="(\d+)"/) || [])[1];
@@ -93,7 +93,7 @@ export function setCellNumber(xml: string, ref: string, val: number): string {
 }
 
 // 셀 값만 비우고 스타일은 유지 (설치제외 사유를 지울 때)
-function clearCellText(xml: string, ref: string): string {
+export function clearCellText(xml: string, ref: string): string {
   const re = new RegExp(`<c r="${ref}"([^>]*?)(?:/>|>[\\s\\S]*?</c>)`);
   return xml.replace(re, (_m, attrs: string) => {
     const s = (attrs.match(/\bs="(\d+)"/) || [])[1];
