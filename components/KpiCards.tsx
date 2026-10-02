@@ -30,7 +30,7 @@ export default function KpiCards({
         <CompletedListModal
           list={completedList}
           title="설치완료 차량"
-          cardClassName="rounded-2xl border border-green-100 bg-green-50 p-4 text-center hover:bg-green-100"
+          cardClassName="rounded-2xl bg-green-50 p-4 text-center shadow-sm ring-1 ring-black/5 hover:bg-green-100"
         >
           <p className="text-3xl font-bold tabular-nums text-green-700">{complete.toLocaleString()}</p>
           <p className="mt-1 text-xs font-medium text-green-700">
@@ -41,7 +41,7 @@ export default function KpiCards({
         <button
           type="button"
           onClick={() => inProgress > 0 && setOpen(true)}
-          className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-center transition-colors hover:bg-amber-100 disabled:opacity-60"
+          className="rounded-2xl bg-amber-50 p-4 text-center shadow-sm ring-1 ring-black/5 transition-colors hover:bg-amber-100 disabled:opacity-60"
           disabled={inProgress === 0}
         >
           <p className="text-3xl font-bold tabular-nums text-amber-700">{inProgress.toLocaleString()}</p>
@@ -50,7 +50,7 @@ export default function KpiCards({
           </p>
         </button>
 
-        <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4 text-center">
+        <div className="rounded-2xl bg-gray-50 p-4 text-center shadow-sm ring-1 ring-black/5">
           <p className="text-3xl font-bold tabular-nums text-gray-600">{notStarted.toLocaleString()}</p>
           <p className="mt-1 text-xs font-medium text-gray-600">설치대상(잔여)</p>
         </div>

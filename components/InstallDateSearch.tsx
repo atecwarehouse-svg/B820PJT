@@ -31,14 +31,14 @@ export default function InstallDateSearch({
   }, [matched]);
 
   return (
-    <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+    <div className="rounded-3xl bg-white p-4 shadow-sm ring-1 ring-black/5">
       <div className="flex flex-wrap items-center gap-2">
         <label className="text-sm font-medium text-gray-700">날짜별 완료 검색</label>
         <input
           type="date"
           value={date}
           onChange={(e) => setDate(e.target.value)}
-          className="rounded-lg border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
+          className="rounded-xl border border-gray-200 bg-gray-50 px-2 py-1.5 text-sm transition-colors focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-100"
         />
         <button
           type="button"

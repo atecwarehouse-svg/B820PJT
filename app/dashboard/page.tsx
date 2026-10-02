@@ -204,8 +204,8 @@ export default async function DashboardPage() {
 
       {/* ===== 설치 진행현황 (완료 = 저장 + 설치 전·후 사진 완료) — 최상단 + 버튼 ===== */}
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-sm font-semibold text-gray-700">
-          설치 진행현황
+        <h2 className="text-sm font-bold text-gray-800">
+          🏁 설치 진행현황
           <span className="ml-1 font-normal text-gray-400">(완료 = 저장 + 설치 전·후 사진 완료)</span>
         </h2>
         <div className="flex flex-wrap items-center gap-2">
@@ -241,11 +241,11 @@ export default async function DashboardPage() {
       </div>
 
       {ip === null ? (
-        <p className="rounded-xl border border-gray-200 bg-white py-8 text-center text-sm text-gray-400">
+        <p className="rounded-2xl bg-white shadow-sm ring-1 ring-black/5 py-8 text-center text-sm text-gray-400">
           진행현황을 불러오지 못했습니다.
         </p>
       ) : (
-        <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+        <section className="rounded-3xl bg-white p-5 shadow-sm ring-1 ring-black/5">
           <div className="flex items-end justify-between">
             <div>
               <p className="text-sm text-gray-500">설치 완료(저장)</p>
@@ -279,12 +279,12 @@ export default async function DashboardPage() {
       />
 
       {/* ===== 금일 설치현황 — 금일 설치대상(예정일 기준) vs 설치완료(저장 기준) ===== */}
-      <h2 className="mb-2 mt-5 text-sm font-semibold text-gray-700">
-        금일 설치현황
+      <h2 className="mb-2 mt-5 text-sm font-bold text-gray-800">
+        📅 금일 설치현황
         <span className="ml-1 font-normal text-gray-400">({today.replace(/-/g, ".")})</span>
       </h2>
       <div className="grid grid-cols-3 gap-2">
-        <div className="rounded-2xl border border-blue-100 bg-blue-50 p-4 text-center">
+        <div className="rounded-2xl bg-blue-50 p-4 text-center shadow-sm ring-1 ring-black/5">
           <p className="text-3xl font-bold tabular-nums text-blue-700">
             {todayTarget.toLocaleString()}
           </p>
@@ -294,7 +294,7 @@ export default async function DashboardPage() {
           list={(ip?.completedList ?? []).filter((c) => c.workDate === today)}
           title="금일 설치완료 차량"
           defaultAll
-          cardClassName="rounded-2xl border border-green-100 bg-green-50 p-4 text-center hover:bg-green-100"
+          cardClassName="rounded-2xl bg-green-50 p-4 text-center shadow-sm ring-1 ring-black/5 hover:bg-green-100"
         >
           <p className="text-3xl font-bold tabular-nums text-green-700">
             {todayDone.toLocaleString()}
@@ -303,7 +303,7 @@ export default async function DashboardPage() {
             설치완료 {todayDone > 0 && <span className="text-green-500">▸</span>}
           </p>
         </CompletedListModal>
-        <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4 text-center">
+        <div className="rounded-2xl bg-gray-50 p-4 text-center shadow-sm ring-1 ring-black/5">
           <p className="text-3xl font-bold tabular-nums text-gray-600">
             {todayExcluded.toLocaleString()}
           </p>
@@ -317,7 +317,7 @@ export default async function DashboardPage() {
 
       {/* ===== 운수사 협의사항 · 설치일정 변경 업로드 (잠금과 무관하게 항상 노출) ===== */}
       <div className="mb-2 mt-6 flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-sm font-bold text-gray-700">상세 현황</h2>
+        <h2 className="text-sm font-bold text-gray-800">🔎 상세 현황</h2>
         <div className="flex flex-wrap items-center gap-2">
           <ConsultationModal operators={operatorSchedules} />
           <ScheduleUploadModal initial={initialUpload} />
@@ -339,7 +339,7 @@ export default async function DashboardPage() {
                 </p>
                 <ScheduleMoveModal />
               </div>
-              <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+              <section className="rounded-3xl bg-white p-5 shadow-sm ring-1 ring-black/5">
                 {sch === null ? (
                   <p className="py-8 text-center text-sm text-gray-400">
                     설치 일정 데이터가 없습니다. (예정일 임포트 필요)
@@ -358,7 +358,7 @@ export default async function DashboardPage() {
                 진척율
                 <span className="ml-1 font-normal text-gray-400">(주별 · 월별 계획 대비 실적)</span>
               </p>
-              <section className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+              <section className="rounded-3xl bg-white p-4 shadow-sm ring-1 ring-black/5">
                 {sch === null ? (
                   <p className="py-8 text-center text-sm text-gray-400">
                     설치 일정 데이터가 없습니다. (예정일 임포트 필요)
@@ -380,7 +380,7 @@ export default async function DashboardPage() {
               {s.byOperator.length === 0 ? (
                 <p className="py-8 text-center text-sm text-gray-400">아직 시작된 운수사가 없습니다.</p>
               ) : (
-                <ul className="divide-y divide-gray-100 overflow-hidden rounded-xl border border-gray-200 bg-white">
+                <ul className="divide-y divide-gray-100 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-black/5">
                   {s.byOperator.map((o) => {
                     const opct = o.total ? (o.complete / o.total) * 100 : 0;
                     const allDone = o.complete === o.total;
@@ -419,7 +419,7 @@ export default async function DashboardPage() {
               {ip.groups.length === 0 ? (
                 <p className="py-6 text-center text-sm text-gray-400">아직 저장 완료된 차량이 없습니다.</p>
               ) : (
-                <ul className="divide-y divide-gray-100 overflow-hidden rounded-xl border border-gray-200 bg-white">
+                <ul className="divide-y divide-gray-100 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-black/5">
                   {ip.groups.map((g) => {
                     const gp = g.total ? (g.complete / g.total) * 100 : 0;
                     const allDone = g.complete === g.total;

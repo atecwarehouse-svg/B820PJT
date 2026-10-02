@@ -182,7 +182,7 @@ function RowTime({
           const nh = e.target.value;
           onChange(nh ? `${nh}:${m || "00"}` : null);
         }}
-        className="rounded-lg border border-gray-300 px-1.5 py-1.5 text-base focus:border-blue-500 focus:outline-none disabled:bg-gray-50 disabled:text-gray-400"
+        className="rounded-xl border border-gray-200 bg-gray-50 px-1.5 py-1.5 text-base transition-colors focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-100 disabled:bg-gray-50 disabled:text-gray-400"
       >
         <option value="">--</option>
         {HOURS.map((x) => (
@@ -198,7 +198,7 @@ function RowTime({
         onChange={(e) => {
           if (h) onChange(`${h}:${e.target.value}`);
         }}
-        className="rounded-lg border border-gray-300 px-1.5 py-1.5 text-base focus:border-blue-500 focus:outline-none disabled:bg-gray-50 disabled:text-gray-400"
+        className="rounded-xl border border-gray-200 bg-gray-50 px-1.5 py-1.5 text-base transition-colors focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-100 disabled:bg-gray-50 disabled:text-gray-400"
       >
         {!h && <option value="">--</option>}
         {minuteOptions.map((x) => (
@@ -854,10 +854,10 @@ export default function DispatchButton() {
           onClick={() => setOpen(false)}
         >
           <div
-            className="mb-12 mt-8 w-full max-w-md rounded-2xl bg-white shadow-xl"
+            className="mb-12 mt-8 w-full max-w-md rounded-3xl bg-white shadow-xl motion-safe:animate-rise"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-start justify-between rounded-t-2xl bg-blue-600 px-4 py-3 text-white">
+            <div className="flex items-start justify-between rounded-t-3xl bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-3 text-white">
               <div>
                 <p className="text-sm font-bold">🚌 배차표</p>
                 <p className="text-xs text-blue-200">
@@ -934,7 +934,7 @@ export default function DispatchButton() {
                   <button
                     onClick={() => handleSave()}
                     disabled={saving || !dbReady}
-                    className="w-full rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white active:bg-blue-700 disabled:opacity-50"
+                    className="w-full rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm active:bg-blue-700 disabled:opacity-50"
                   >
                     {saving ? "저장 중…" : "💾 저장"}
                   </button>
@@ -1017,7 +1017,7 @@ export default function DispatchButton() {
                   <select
                     value={operator}
                     onChange={(e) => selectOperator(e.target.value)}
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-base focus:border-blue-500 focus:outline-none"
+                    className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-base transition-colors focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-100"
                   >
                     <option value="">운수사 선택</option>
                     {operators.map((o) => (
@@ -1038,7 +1038,7 @@ export default function DispatchButton() {
                   <select
                     value={date}
                     onChange={(e) => selectDate(e.target.value)}
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-base focus:border-blue-500 focus:outline-none"
+                    className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-base transition-colors focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-100"
                   >
                     <option value="">날짜 선택</option>
                     {selectedOp.dates.map((d) => (
@@ -1059,7 +1059,7 @@ export default function DispatchButton() {
                   <select
                     value={routeFilter}
                     onChange={(e) => setRouteFilter(e.target.value)}
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-base focus:border-blue-500 focus:outline-none"
+                    className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-base transition-colors focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-100"
                   >
                     <option value="">전체 ({selectedDate.count}대)</option>
                     {selectedDate.routes.map((r) => (
@@ -1117,7 +1117,7 @@ export default function DispatchButton() {
                         </div>
                       )}
                       {/* 관리자용 한눈 요약 — 탭하면 그 항목만 보기(다시 탭하면 전체) */}
-                      <div className="mb-2 grid grid-cols-4 gap-px overflow-hidden rounded-xl border border-gray-200 bg-gray-200 text-center">
+                      <div className="mb-2 grid grid-cols-4 gap-1.5 text-center">
                         {TILES.map((t) => {
                           const on = tileFilter === t.key;
                           return (
@@ -1125,7 +1125,7 @@ export default function DispatchButton() {
                               key={t.key}
                               type="button"
                               onClick={() => setTileFilter(on ? null : t.key)}
-                              className={`py-2 ${on ? "bg-blue-100" : "bg-gray-50 active:bg-gray-100"}`}
+                              className={`rounded-xl py-2 shadow-sm ring-1 transition-colors ${on ? "bg-blue-50 ring-blue-300" : "bg-white ring-black/5 active:bg-gray-50"}`}
                             >
                               <p
                                 className={`text-[10px] ${on ? "font-semibold text-blue-700" : "text-gray-500"}`}
@@ -1157,12 +1157,12 @@ export default function DispatchButton() {
                         )}
                       </p>
                       {mainList.length === 0 && (
-                        <p className="rounded-lg border border-gray-200 py-4 text-center text-sm text-gray-400">
+                        <p className="rounded-2xl bg-white py-4 text-center shadow-sm ring-1 ring-black/5 text-sm text-gray-400">
                           해당 차량이 없습니다.
                         </p>
                       )}
                       <ul
-                        className={`divide-y divide-gray-100 rounded-lg border border-gray-200 ${mainList.length === 0 ? "hidden" : ""}`}
+                        className={`divide-y divide-gray-100 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-black/5 ${mainList.length === 0 ? "hidden" : ""}`}
                       >
                         {mainList.map((e) => {
                           const isOff = e.outTime === OFF;
@@ -1191,12 +1191,12 @@ export default function DispatchButton() {
                                 >
                                   <span>{e.plate}</span>
                                   {e.completed && (
-                                    <span className="rounded bg-green-100 px-1.5 py-0.5 text-[10px] font-semibold text-green-700">
+                                    <span className="rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-semibold text-green-700">
                                       설치완료
                                     </span>
                                   )}
                                   {!e.completed && e.installing && (
-                                    <span className="rounded bg-blue-100 px-1.5 py-0.5 text-[10px] font-semibold text-blue-700">
+                                    <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-semibold text-blue-700">
                                       설치중
                                     </span>
                                   )}
@@ -1380,7 +1380,7 @@ export default function DispatchButton() {
                   maxLength={200}
                   autoFocus
                   placeholder="예) 타코메타 단자 불량으로 연결 불가"
-                  className="mt-3 w-full resize-none rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none"
+                  className="mt-3 w-full resize-none rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm transition-colors focus:border-amber-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-amber-100"
                 />
                 <p className="mt-1 text-[11px] text-gray-400">
                   사유를 적으면 &lsquo;타코 미연결&rsquo;로 표시되고, 금일 완료
@@ -1393,7 +1393,7 @@ export default function DispatchButton() {
                     <button
                       type="button"
                       onClick={() => applyTachoReason(tachoEdit.plate, "")}
-                      className="flex-1 rounded-lg border border-gray-300 px-3 py-2.5 text-sm font-medium text-gray-600 active:bg-gray-100"
+                      className="flex-1 rounded-xl bg-white px-3 py-2.5 text-sm font-medium text-gray-600 active:bg-gray-100 shadow-sm ring-1 ring-black/5"
                     >
                       정상으로 되돌리기
                     </button>
@@ -1401,7 +1401,7 @@ export default function DispatchButton() {
                     <button
                       type="button"
                       onClick={() => setTachoEdit(null)}
-                      className="flex-1 rounded-lg border border-gray-300 px-3 py-2.5 text-sm font-medium text-gray-600 active:bg-gray-100"
+                      className="flex-1 rounded-xl bg-white px-3 py-2.5 text-sm font-medium text-gray-600 active:bg-gray-100 shadow-sm ring-1 ring-black/5"
                     >
                       취소
                     </button>
@@ -1452,7 +1452,7 @@ export default function DispatchButton() {
                   maxLength={50}
                   autoFocus
                   placeholder="예) 1057034"
-                  className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-base focus:border-purple-500 focus:outline-none"
+                  className="mt-1 w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-base transition-colors focus:border-purple-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-100"
                 />
 
                 <label className="mt-3 block text-xs font-medium text-gray-500">
@@ -1463,7 +1463,7 @@ export default function DispatchButton() {
                   onChange={(e) =>
                     setSpareEdit({ ...spareEdit, symptom: e.target.value })
                   }
-                  className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-base focus:border-purple-500 focus:outline-none"
+                  className="mt-1 w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-base transition-colors focus:border-purple-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-100"
                 >
                   <option value="">선택 안 함</option>
                   {MODEM_SYMPTOMS.map((x) => (
@@ -1487,7 +1487,7 @@ export default function DispatchButton() {
                     type="button"
                     disabled={modemSaving}
                     onClick={() => setSpareEdit(null)}
-                    className="flex-1 rounded-lg border border-gray-300 px-3 py-2.5 text-sm font-medium text-gray-600 active:bg-gray-100 disabled:opacity-40"
+                    className="flex-1 rounded-xl bg-white px-3 py-2.5 text-sm font-medium text-gray-600 active:bg-gray-100 shadow-sm ring-1 ring-black/5 disabled:opacity-40"
                   >
                     취소
                   </button>
@@ -1556,7 +1556,7 @@ export default function DispatchButton() {
                       onChange={(e) =>
                         setModemEdit({ ...modemEdit, symptom: e.target.value })
                       }
-                      className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-base focus:border-purple-500 focus:outline-none"
+                      className="mt-1 w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-base transition-colors focus:border-purple-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-100"
                     >
                       <option value="">선택 안 함</option>
                       {MODEM_SYMPTOMS.map((x) => (
@@ -1577,7 +1577,7 @@ export default function DispatchButton() {
                       inputMode="numeric"
                       maxLength={50}
                       placeholder="예) 1023921"
-                      className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-base focus:border-purple-500 focus:outline-none"
+                      className="mt-1 w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-base transition-colors focus:border-purple-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-100"
                     />
                   </>
                 )}
@@ -1596,7 +1596,7 @@ export default function DispatchButton() {
                       inputMode="numeric"
                       maxLength={50}
                       placeholder="예) 1057034"
-                      className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-base focus:border-purple-500 focus:outline-none"
+                      className="mt-1 w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-base transition-colors focus:border-purple-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-100"
                     />
                   </>
                 )}
@@ -1654,7 +1654,7 @@ export default function DispatchButton() {
                       type="button"
                       disabled={modemSaving}
                       onClick={() => saveModem(true)}
-                      className="flex-1 rounded-lg border border-gray-300 px-3 py-2.5 text-sm font-medium text-gray-600 active:bg-gray-100 disabled:opacity-40"
+                      className="flex-1 rounded-xl bg-white px-3 py-2.5 text-sm font-medium text-gray-600 active:bg-gray-100 shadow-sm ring-1 ring-black/5 disabled:opacity-40"
                     >
                       정상으로 되돌리기
                     </button>
@@ -1663,7 +1663,7 @@ export default function DispatchButton() {
                       type="button"
                       disabled={modemSaving}
                       onClick={() => setModemEdit(null)}
-                      className="flex-1 rounded-lg border border-gray-300 px-3 py-2.5 text-sm font-medium text-gray-600 active:bg-gray-100 disabled:opacity-40"
+                      className="flex-1 rounded-xl bg-white px-3 py-2.5 text-sm font-medium text-gray-600 active:bg-gray-100 shadow-sm ring-1 ring-black/5 disabled:opacity-40"
                     >
                       취소
                     </button>
@@ -1776,7 +1776,7 @@ export default function DispatchButton() {
                 </p>
 
                 {/* 첫차 출발시간 + 분 간격 */}
-                <div className="mt-3 flex flex-wrap items-end gap-4 rounded-xl border border-orange-200 bg-orange-50 px-3 py-3">
+                <div className="mt-3 flex flex-wrap items-end gap-4 rounded-2xl bg-orange-50 px-3 py-3 ring-1 ring-orange-100">
                   <div>
                     <p className="mb-1 text-[11px] font-medium text-gray-600">
                       첫차 출발시간
@@ -1785,7 +1785,7 @@ export default function DispatchButton() {
                       <select
                         value={autoH}
                         onChange={(e) => setAutoH(e.target.value)}
-                        className="rounded-lg border border-gray-300 bg-white px-1.5 py-1.5 text-base focus:border-orange-500 focus:outline-none"
+                        className="rounded-xl border border-gray-200 bg-gray-50 px-1.5 py-1.5 text-base transition-colors focus:border-orange-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-orange-100"
                       >
                         {HOURS.map((x) => (
                           <option key={x} value={x}>
@@ -1797,7 +1797,7 @@ export default function DispatchButton() {
                       <select
                         value={autoM}
                         onChange={(e) => setAutoM(e.target.value)}
-                        className="rounded-lg border border-gray-300 bg-white px-1.5 py-1.5 text-base focus:border-orange-500 focus:outline-none"
+                        className="rounded-xl border border-gray-200 bg-gray-50 px-1.5 py-1.5 text-base transition-colors focus:border-orange-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-orange-100"
                       >
                         {MINUTES.map((x) => (
                           <option key={x} value={x}>
@@ -1816,7 +1816,7 @@ export default function DispatchButton() {
                       <select
                         value={autoGap}
                         onChange={(e) => setAutoGap(Number(e.target.value))}
-                        className="rounded-lg border border-gray-300 bg-white px-1.5 py-1.5 text-base focus:border-orange-500 focus:outline-none"
+                        className="rounded-xl border border-gray-200 bg-gray-50 px-1.5 py-1.5 text-base transition-colors focus:border-orange-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-orange-100"
                       >
                         {Array.from({ length: 90 }, (_, i) => i + 1).map(
                           (n) => (
@@ -1836,7 +1836,7 @@ export default function DispatchButton() {
                   나가는 순번 (1 = 첫차 · 빈칸은 건너뜀 · 설치제외 차량은
                   목록에서 제외 · 휴차는 체크)
                 </p>
-                <ul className="divide-y divide-gray-100 rounded-lg border border-gray-200">
+                <ul className="divide-y divide-gray-100 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-black/5">
                   {autoTargets.map((e) => {
                     const isOff = e.outTime === OFF;
                     const raw = (seqMap[e.plate] ?? "").trim();

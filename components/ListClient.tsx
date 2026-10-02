@@ -185,7 +185,7 @@ export default function ListClient({
     <div>
       {/* 운수사별 저장 */}
       {operators.length > 0 && (
-        <div className="mb-3 rounded-lg border border-blue-200 bg-blue-50 p-2.5">
+        <div className="mb-3 rounded-2xl bg-blue-50 p-3 ring-1 ring-blue-100">
           <div className="mb-1.5 text-xs font-medium text-blue-800">
             운수사별 저장 <span className="font-normal text-blue-500">(사진 있는 차량 전체)</span>
           </div>
@@ -194,7 +194,7 @@ export default function ListClient({
               value={operator}
               onChange={(e) => setOperator(e.target.value)}
               disabled={busy !== null}
-              className="min-w-0 flex-1 rounded-lg border border-gray-300 px-2 py-2 text-sm focus:border-blue-500 focus:outline-none disabled:opacity-50"
+              className="min-w-0 flex-1 rounded-xl border border-gray-200 bg-gray-50 px-2 py-2 text-sm transition-colors focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-100 disabled:opacity-50"
             >
               <option value="">운수사 선택…</option>
               {operators.map((op) => (
@@ -206,14 +206,14 @@ export default function ListClient({
             <button
               onClick={() => downloadOperator("pdf")}
               disabled={busy !== null || !operator}
-              className="shrink-0 rounded-lg bg-rose-600 px-3 py-2 text-sm font-semibold text-white active:bg-rose-700 disabled:opacity-40"
+              className="shrink-0 rounded-xl bg-rose-600 px-3 py-2 text-sm font-semibold text-white shadow-sm active:bg-rose-700 disabled:opacity-40"
             >
               PDF
             </button>
             <button
               onClick={() => downloadOperator("xlsx")}
               disabled={busy !== null || !operator}
-              className="shrink-0 rounded-lg bg-green-600 px-3 py-2 text-sm font-semibold text-white active:bg-green-700 disabled:opacity-40"
+              className="shrink-0 rounded-xl bg-green-600 px-3 py-2 text-sm font-semibold text-white shadow-sm active:bg-green-700 disabled:opacity-40"
             >
               엑셀
             </button>
@@ -239,7 +239,7 @@ export default function ListClient({
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="차량번호 · 운수사 · 노선 · 완료일 검색"
-              className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:border-blue-500 focus:outline-none"
+              className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm transition-colors focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-100"
             />
             {/* 완료일(업무일) 검색 */}
             <div className="flex items-center gap-2">
@@ -248,7 +248,7 @@ export default function ListClient({
                 type="date"
                 value={dateFilter}
                 onChange={(e) => setDateFilter(e.target.value)}
-                className="min-w-0 flex-1 rounded-lg border border-gray-300 px-2 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                className="min-w-0 flex-1 rounded-xl border border-gray-200 bg-gray-50 px-2 py-2 text-sm transition-colors focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-100"
               />
               {dateFilter && (
                 <button
@@ -289,7 +289,7 @@ export default function ListClient({
           {filtered.length === 0 ? (
             <p className="mt-12 text-center text-sm text-gray-400">검색 결과가 없습니다.</p>
           ) : (
-            <ul className="divide-y divide-gray-100 overflow-hidden rounded-xl border border-gray-200 bg-white">
+            <ul className="divide-y divide-gray-100 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-black/5">
               {filtered.map((it) => {
                 const done = it.photoCount >= it.target;
                 return (
@@ -308,11 +308,11 @@ export default function ListClient({
                             {String(it.photoCount).padStart(2, "0")}장/{it.target}장
                           </span>
                           {done ? (
-                            <span className="rounded bg-green-100 px-1.5 py-0.5 text-[10px] font-semibold text-green-700">
+                            <span className="rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-semibold text-green-700">
                               완료
                             </span>
                           ) : (
-                            <span className="rounded bg-rose-100 px-1.5 py-0.5 text-[10px] font-semibold text-rose-700">
+                            <span className="rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-semibold text-rose-700">
                               미완료
                             </span>
                           )}
@@ -371,19 +371,19 @@ export default function ListClient({
 
       {/* 하단 고정: 선택 차량 저장 */}
       {items.length > 0 && (
-        <div className="fixed inset-x-0 bottom-0 border-t border-gray-200 bg-white/95 p-3 backdrop-blur">
+        <div className="fixed inset-x-0 bottom-0 rounded-t-3xl bg-white/95 p-3 shadow-[0_-6px_24px_rgba(0,0,0,.08)] backdrop-blur">
           <div className="mx-auto grid max-w-3xl grid-cols-2 gap-2">
             <button
               onClick={() => downloadSelected("pdf")}
               disabled={busy !== null}
-              className="rounded-lg bg-rose-600 px-4 py-3 text-sm font-semibold text-white active:bg-rose-700 disabled:opacity-50"
+              className="rounded-xl bg-rose-600 px-4 py-3 text-sm font-semibold text-white shadow-sm active:bg-rose-700 disabled:opacity-50"
             >
               {busy === "pdf" ? "PDF 저장 중…" : `선택 PDF 저장${selected.size ? ` (${selected.size})` : ""}`}
             </button>
             <button
               onClick={() => downloadSelected("xlsx")}
               disabled={busy !== null}
-              className="rounded-lg bg-green-600 px-4 py-3 text-sm font-semibold text-white active:bg-green-700 disabled:opacity-50"
+              className="rounded-xl bg-green-600 px-4 py-3 text-sm font-semibold text-white shadow-sm active:bg-green-700 disabled:opacity-50"
             >
               {busy === "xlsx" ? "엑셀 저장 중…" : `선택 엑셀 저장${selected.size ? ` (${selected.size})` : ""}`}
             </button>

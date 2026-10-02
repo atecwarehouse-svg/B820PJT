@@ -86,7 +86,7 @@ export default function DashboardDetailTabs({
               onChange={(e) => setPw(e.target.value)}
               placeholder="비밀번호"
               autoFocus
-              className="rounded-xl border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-blue-500"
+              className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm outline-none transition-colors focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-100"
             />
             {error && <p className="text-xs text-red-500">{error}</p>}
             <div className="flex gap-2">
@@ -104,7 +104,7 @@ export default function DashboardDetailTabs({
                   setError(null);
                   setPw("");
                 }}
-                className="rounded-xl border border-gray-300 px-4 py-2.5 text-sm font-medium text-gray-600 active:bg-gray-100"
+                className="rounded-xl bg-white px-4 py-2.5 text-sm font-medium text-gray-600 active:bg-gray-100 shadow-sm ring-1 ring-black/5"
               >
                 취소
               </button>

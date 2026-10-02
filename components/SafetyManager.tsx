@@ -141,12 +141,12 @@ export default function SafetyManager({ sessions }: { sessions: PledgeSessionRow
   }
 
   const inputCls =
-    "mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-base focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500";
+    "mt-1 w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-base transition-colors focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-100 focus:ring-1 focus:ring-blue-500";
 
   return (
     <div className="space-y-6">
       {/* 세션 생성 폼 */}
-      <section className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+      <section className="rounded-3xl bg-white p-4 shadow-sm ring-1 ring-black/5">
         <h2 className="text-sm font-bold text-blue-700">새 서약서 링크 만들기</h2>
         <p className="mt-1 text-xs text-gray-500">
           설치일자·장소·운수사·본인 이름을 입력하면 작업자용 서명 링크가 생성됩니다.
@@ -196,7 +196,7 @@ export default function SafetyManager({ sessions }: { sessions: PledgeSessionRow
         <button
           onClick={create}
           disabled={creating}
-          className="mt-4 w-full rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white active:bg-blue-700 disabled:opacity-50"
+          className="mt-4 w-full rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm active:bg-blue-700 disabled:opacity-50"
         >
           {creating ? "생성 중…" : "링크 생성"}
         </button>
@@ -215,7 +215,7 @@ export default function SafetyManager({ sessions }: { sessions: PledgeSessionRow
                   <div className="mt-2 flex gap-2">
                     <button
                       onClick={() => copyLink(link, key)}
-                      className="flex-1 rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white active:bg-blue-700"
+                      className="flex-1 rounded-xl bg-blue-600 px-3 py-2 text-xs font-semibold text-white shadow-sm active:bg-blue-700"
                     >
                       {copied === key ? "복사됨 ✓" : "링크 복사"}
                     </button>
@@ -255,7 +255,7 @@ export default function SafetyManager({ sessions }: { sessions: PledgeSessionRow
         ) : (
           <ul className="space-y-2">
             {sessions.map((s) => (
-              <li key={s.id} className="rounded-xl border border-gray-200 bg-white p-3 shadow-sm">
+              <li key={s.id} className="rounded-2xl bg-white shadow-sm ring-1 ring-black/5 p-3 shadow-sm">
                 <div className="flex items-center justify-between gap-2">
                   <div className="min-w-0">
                     <p className="truncate text-sm font-semibold text-gray-800">
@@ -283,7 +283,7 @@ export default function SafetyManager({ sessions }: { sessions: PledgeSessionRow
                   </div>
                   <button
                     onClick={() => downloadUrl(`/api/export/safety?session=${s.id}`)}
-                    className="shrink-0 rounded-lg bg-green-600 px-3 py-1.5 text-xs font-semibold text-white active:bg-green-700"
+                    className="shrink-0 rounded-xl bg-green-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm active:bg-green-700"
                   >
                     PDF
                   </button>

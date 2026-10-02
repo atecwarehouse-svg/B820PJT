@@ -10,6 +10,7 @@ export default function AdminLogin({ backHref = "/b820" }: { backHref?: string }
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [entering, setEntering] = useState(false);
   const router = useRouter();
 
   async function submit(e: React.FormEvent) {
@@ -26,10 +27,10 @@ export default function AdminLogin({ backHref = "/b820" }: { backHref?: string }
         const j = await res.json().catch(() => null);
         throw new Error(j?.error ?? "로그인 실패");
       }
+      setEntering(true); // 서버가 관리자 화면을 내려줄 때까지(router.refresh) 오버레이 — 화면이 바뀌면 이 컴포넌트는 사라진다
       router.refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : "로그인 실패");
-    } finally {
       setBusy(false);
     }
   }
@@ -64,6 +65,12 @@ export default function AdminLogin({ backHref = "/b820" }: { backHref?: string }
       <Link href={backHref} className="pill mx-auto mt-6">
         ← 처음으로
       </Link>
+      {(busy || entering) && (
+        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-3 bg-white/80 backdrop-blur-sm motion-safe:animate-fade-in">
+          <span className="h-10 w-10 animate-spin rounded-full border-4 border-blue-600 border-t-transparent" />
+          <p className="text-sm font-semibold text-blue-700">{entering ? "관리자 페이지로 들어가는 중…" : "비밀번호 확인 중…"}</p>
+        </div>
+      )}
     </main>
   );
 }
