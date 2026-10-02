@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isAdmin } from "@/lib/admin-auth";
 import { getSetting, setSetting, REPORT_MAIL_KEY } from "@/lib/settings";
+import { currentSlug, isDefault } from "@/lib/project";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -12,13 +13,14 @@ function parseList(raw: string | null | undefined): string[] {
     .filter((s) => s.includes("@"));
 }
 
-// GET → 저장된 완료리포트 수신자 목록. DB에 저장된 적 없으면 env(REPORT_MAIL_TO)를 보여줌.
+// GET → 저장된 완료리포트 수신자 목록. DB에 저장된 적 없으면 B820만 env(REPORT_MAIL_TO)를 보여줌
+//        (다른 프로젝트는 지정된 주소만 쓰므로 빈 목록).
 export async function GET() {
   if (!(await isAdmin())) {
     return NextResponse.json({ error: "관리자 인증이 필요합니다." }, { status: 401 });
   }
   const saved = await getSetting(REPORT_MAIL_KEY);
-  const list = saved !== null ? parseList(saved) : parseList(process.env.REPORT_MAIL_TO);
+  const list = saved !== null ? parseList(saved) : isDefault(currentSlug()) ? parseList(process.env.REPORT_MAIL_TO) : [];
   return NextResponse.json({ list, source: saved !== null ? "db" : "env" });
 }
 

@@ -152,15 +152,16 @@ export async function POST(req: NextRequest) {
   }
 
   // 받는사람(2차 메일 발송에서만 필요): 요청값 > 관리자 페이지 저장값(DB) >
-  // env REPORT_MAIL_TO > 발신자 본인.
+  // (B820만) env REPORT_MAIL_TO > 발신자 본인.
   // 단, 관리자 페이지에서 '저장은 했는데 비어 있는' 경우는 일부러 지운 것이므로
   // env·발신자로 폴백하지 않는다 — 지웠는데도 옛 주소로 나가는 사고를 막는다.
+  // 다른 프로젝트는 그 프로젝트에 지정된 수신자만 — B820 env 주소로 새어 나가지 않게 한다.
   let recipients = parseRecipients(body.to);
   const savedTo = await getSetting(REPORT_MAIL_KEY);
   if (recipients.length === 0) recipients = parseRecipients(savedTo ?? undefined);
-  if (recipients.length === 0 && savedTo !== null) {
+  if (recipients.length === 0 && (savedTo !== null || !isDefault(project.slug))) {
     return NextResponse.json(
-      { error: "받는사람이 비어 있습니다. 관리자 페이지에서 수신자를 등록해주세요." },
+      { error: "받는사람이 비어 있습니다. 관리자 페이지 '메일 수신자'에서 이 프로젝트의 수신자를 등록해주세요." },
       { status: 400 },
     );
   }

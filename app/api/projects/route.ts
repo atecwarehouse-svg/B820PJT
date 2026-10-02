@@ -12,7 +12,7 @@ import {
 import { colorKey, iconKey } from "@/components/ProjectIcon";
 import { createProjectFolder, deleteFolder, folderLink, renameFile, setLinkSharing, trashFile } from "@/lib/gdrive";
 import { TEMPLATE_BUCKET } from "@/lib/template-path";
-import { PHOTO_SLOTS_KEY } from "@/lib/settings";
+import { PHOTO_SLOTS_KEY, REPORT_MAIL_KEY } from "@/lib/settings";
 import { toSlotConfigJson, validateSlotConfig } from "@/lib/slots";
 
 export const runtime = "nodejs";
@@ -21,7 +21,8 @@ export const maxDuration = 60;
 
 // 프로젝트 레지스트리(public.projects) 관리 — 런처(마스터=B820) 관리자 쿠키 또는 body.pw 필수.
 //   POST   { kind:"link",  name, description, icon, color, url }                       → 링크 카드 추가
-//   POST   { kind:"album", slug, name, description, icon, color, admin_password, shareLink?, photoSlots? } → 앨범 프로젝트 생성 (shareLink: 드라이브 폴더를 링크 공유로, photoSlots: 사진 양식 SlotConfigJson — 없으면 B820 기본)
+//   POST   { kind:"album", slug, name, description, icon, color, admin_password, shareLink?, photoSlots?, reportMail? } → 앨범 프로젝트 생성
+//            (shareLink: 드라이브 폴더를 링크 공유로, photoSlots: 사진 양식 SlotConfigJson — 없으면 B820 기본, reportMail: 완료리포트 수신자 string[])
 //            (드라이브 폴더 → DB 스키마 복제(create_project_schema) → 레지스트리 행. 실패 시 되감기)
 //   PUT    { slug, name?, description?, icon?, color?, url?, admin_password?, shareLink? } → 수정 (b820은 색만, 앨범 이름 변경 시 드라이브 폴더명도 변경, shareLink: 드라이브 링크 공유 켜기/끄기)
 //   DELETE { slug }                     → 링크 카드 삭제
@@ -123,11 +124,22 @@ export async function POST(req: NextRequest) {
     const { data: dup } = await sb.from("projects").select("slug").eq("slug", slug).maybeSingle();
     if (dup) return bad("이미 있는 프로젝트 ID입니다.");
     // 사진 양식(선택) — 폴더·DB 만들기 전에 먼저 검증
-    let slotsJson: string | undefined;
+    const settings: { key: string; value: string }[] = []; // 새 스키마 app_settings에 넣을 초기 설정
     if (body.photoSlots != null) {
       const c = validateSlotConfig(body.photoSlots);
       if (typeof c === "string") return bad("사진 양식: " + c);
-      slotsJson = JSON.stringify(toSlotConfigJson(c));
+      settings.push({ key: PHOTO_SLOTS_KEY, value: JSON.stringify(toSlotConfigJson(c)) });
+    }
+    // 완료리포트 메일 수신자 — 관리자 '메일 수신자' 탭(PUT /api/admin/report-recipients)과 같은 규칙
+    let reportMail = 0;
+    if (Array.isArray(body.reportMail) && body.reportMail.length) {
+      const list = [...new Set(body.reportMail.map((v) => String(v).trim()).filter(Boolean))].slice(0, 50);
+      const badMail = list.filter((s) => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s));
+      if (badMail.length) return bad(`메일 주소 형식이 올바르지 않습니다: ${badMail.join(", ")}`);
+      if (list.length) {
+        settings.push({ key: REPORT_MAIL_KEY, value: list.join(", ") });
+        reportMail = list.length;
+      }
     }
 
     // 1) 드라이브 폴더
@@ -189,23 +201,26 @@ export async function POST(req: NextRequest) {
     }
     invalidateProjectCache();
 
-    // 4) (선택) 사진 양식 저장 — 새 스키마가 PostgREST에 막 노출된 직후라 캐시 갱신 전이면
-    //    실패할 수 있어 짧게 재시도한다.
-    let photoSlots = false;
-    if (slotsJson && exposed) {
+    // 4) (선택) 초기 설정 저장(사진 양식·리포트 수신자) — 새 스키마가 PostgREST에 막 노출된 직후라
+    //    캐시 갱신 전이면 실패할 수 있어 짧게 재시도한다.
+    let saved = false;
+    if (settings.length && exposed) {
       const dst = createServiceClient(slug);
-      for (let attempt = 0; attempt < 4 && !photoSlots; attempt++) {
+      const now = new Date().toISOString();
+      for (let attempt = 0; attempt < 4 && !saved; attempt++) {
         if (attempt) await new Promise((r) => setTimeout(r, 700));
         const { error } = await dst
           .from("app_settings")
-          .upsert({ key: PHOTO_SLOTS_KEY, value: slotsJson, updated_at: new Date().toISOString() }, { onConflict: "key" });
-        if (!error) photoSlots = true;
+          .upsert(settings.map((s) => ({ ...s, updated_at: now })), { onConflict: "key" });
+        if (!error) saved = true;
       }
-      if (!photoSlots) {
-        warning = (warning ? warning + " " : "") + "사진 양식 저장은 실패했습니다. 관리자 '사진 양식' 탭에서 다시 지정하세요.";
+      if (!saved) {
+        warning = (warning ? warning + " " : "") + "사진 양식·메일 수신자 저장은 실패했습니다. 관리자 페이지에서 다시 지정하세요.";
       }
     }
-    return NextResponse.json({ ok: true, slug, home: projectHome(slug), exposed, warning, photoSlots, driveFolder: folderLink(folderId), driveShared });
+    const photoSlots = saved && settings.some((s) => s.key === PHOTO_SLOTS_KEY);
+    if (!saved) reportMail = 0;
+    return NextResponse.json({ ok: true, slug, home: projectHome(slug), exposed, warning, photoSlots, reportMail, driveFolder: folderLink(folderId), driveShared });
   }
 
   // 링크 카드

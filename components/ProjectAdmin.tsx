@@ -67,6 +67,7 @@ export default function ProjectAdmin({
   const [showPw, setShowPw] = useState(false);
   const [slugTouched, setSlugTouched] = useState(false); // ID를 직접 편집했으면 자동 제안 중단
   const [photoSlots, setPhotoSlots] = useState<SlotConfigJson>(DEFAULT_SLOTS); // 새 프로젝트 사진 양식
+  const [reportMail, setReportMail] = useState(""); // 완료리포트 메일 수신자 (쉼표·줄바꿈 구분)
   const [slotsOpen, setSlotsOpen] = useState(false); // 사진 양식 팝업
   const [slotsError, setSlotsError] = useState("");
   const [shareLink, setShareLink] = useState(true); // 드라이브 폴더를 '링크가 있는 사용자'에게 보기 공유
@@ -78,6 +79,7 @@ export default function ProjectAdmin({
     exposed: boolean;
     warning?: string;
     customSlots?: boolean; // 전용 사진 양식을 적용했는지
+    reportMail?: number; // 저장된 리포트 수신자 수
     driveFolder?: string; // 구글드라이브 사진 폴더 링크
     driveShared?: boolean;
   } | null>(null);
@@ -96,6 +98,7 @@ export default function ProjectAdmin({
     setShowPw(false);
     setPhotoSlots(DEFAULT_SLOTS);
     setSlotsOpen(false);
+    setReportMail("");
     setError("");
   }
 
@@ -160,6 +163,7 @@ export default function ProjectAdmin({
         admin_password: adminPw,
         shareLink,
         ...(isDefaultSlots(photoSlots) ? {} : { photoSlots }),
+        reportMail: mailList,
       });
       if (j) {
         setCreated({
@@ -168,6 +172,7 @@ export default function ProjectAdmin({
           exposed: !!j.exposed,
           warning: j.warning ? String(j.warning) : undefined,
           customSlots: j.photoSlots === true,
+          reportMail: typeof j.reportMail === "number" ? j.reportMail : 0,
           driveFolder: j.driveFolder ? String(j.driveFolder) : undefined,
           driveShared: j.driveShared === true,
         });
@@ -226,6 +231,8 @@ export default function ProjectAdmin({
   }
 
   const isB820 = editing?.slug === "b820";
+  const mailList = [...new Set(reportMail.split(/[,;\s]+/).map((s) => s.trim()).filter(Boolean))];
+  const badMail = mailList.filter((s) => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s));
   const input =
     "w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-base transition-colors focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-100";
   const canSubmit =
@@ -233,7 +240,7 @@ export default function ProjectAdmin({
     (editing
       ? isB820 || !!name
       : kind === "album"
-        ? !!name && SLUG_RE.test(slug.trim().toLowerCase()) && adminPw.length >= 4
+        ? !!name && SLUG_RE.test(slug.trim().toLowerCase()) && adminPw.length >= 4 && badMail.length === 0
         : !!name && !!url);
 
   return (
@@ -277,7 +284,10 @@ export default function ProjectAdmin({
               대시보드 → <b>최초 업로드</b>로 전개현황 엑셀을 올려 차량리스트를 등록합니다.
             </li>
             <li>
-              관리자(방금 정한 비밀번호) → 설치팀·리포트 수신자를 등록합니다.
+              관리자(방금 정한 비밀번호) → 설치팀을 등록합니다.
+              {created.reportMail
+                ? ` 완료리포트 메일 수신자 ${created.reportMail}명을 저장했습니다(관리자 '메일 수신자' 탭에서 수정).`
+                : " 완료리포트 메일 수신자는 관리자 '메일 수신자' 탭에서 등록해야 발송됩니다."}
               {created.customSlots ? " 사진 양식은 지정한 대로 적용했고, 관리자 '사진 양식' 탭에서 고칠 수 있습니다." : ""}
             </li>
           </ol>
@@ -467,6 +477,27 @@ export default function ProjectAdmin({
                 </label>
               )}
               {!editing && (
+                <div>
+                  <textarea
+                    value={reportMail}
+                    onChange={(e) => setReportMail(e.target.value)}
+                    rows={2}
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    spellCheck={false}
+                    placeholder="완료리포트 메일 수신자 (쉼표나 줄바꿈으로 구분, 선택)"
+                    className={`${input} resize-none`}
+                  />
+                  <p className={`mt-1 px-1 text-[11px] ${badMail.length ? "text-red-500" : "text-gray-400"}`}>
+                    {badMail.length
+                      ? `형식이 잘못된 주소: ${badMail.join(", ")}`
+                      : mailList.length
+                        ? `${mailList.length}명 — 이 프로젝트의 금일 완료 리포트는 여기 적은 주소로만 발송됩니다.`
+                        : "비워 두면 관리자 '메일 수신자' 탭에서 등록할 때까지 리포트 메일이 발송되지 않습니다."}
+                  </p>
+                </div>
+              )}
+              {!editing && (
                 <button
                   type="button"
                   onClick={() => { setSlotsError(""); setSlotsOpen(true); }}
@@ -480,7 +511,7 @@ export default function ProjectAdmin({
                         : `전용 양식 · 설치전 특이사항 ${photoSlots.check.length}칸 · 설치 전 ${photoSlots.before.length}칸 · 설치 후 ${photoSlots.after.length}칸`}
                     </span>
                   </span>
-                  <span className="text-blue-600">설정 ›</span>
+                  <span className="shrink-0 whitespace-nowrap pl-2 text-blue-600">설정 ›</span>
                 </button>
               )}
             </>
