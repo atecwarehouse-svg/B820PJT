@@ -842,9 +842,10 @@ export default function DispatchButton() {
           setOpen(true);
           setTableView(false);
         }}
-        className="mt-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-center text-sm font-semibold text-blue-700 shadow-sm active:bg-blue-100"
+        className="home-tile"
       >
-        🚌 배차표
+        <span className="emoji bg-blue-50">🚌</span>
+        배차표
       </button>
 
       {open && (

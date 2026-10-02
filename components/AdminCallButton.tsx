@@ -182,9 +182,10 @@ export default function AdminCallButton() {
       <button
         type="button"
         onClick={openModal}
-        className="mt-8 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-center text-sm font-semibold text-red-700 shadow-sm active:bg-red-100"
+        className="home-tile col-span-2 !flex-row gap-2 !py-3 text-red-700"
       >
-        🚨 관리자 호출
+        <span className="emoji !h-9 !w-9 bg-red-50 text-xl">🚨</span>
+        관리자 호출
       </button>
 
       {open && (

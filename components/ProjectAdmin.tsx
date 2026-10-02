@@ -246,11 +246,11 @@ export default function ProjectAdmin({
   return (
     <main className="mx-auto max-w-md px-4 pb-16 pt-6">
       <div className="mb-5 flex items-center justify-between">
-        <Link href="/" className="text-sm text-blue-600">
+        <Link href="/" className="pill">
           ← 프로젝트 선택
         </Link>
-        <h1 className="text-lg font-bold text-gray-900">프로젝트 관리</h1>
-        <button type="button" onClick={logout} className="text-sm text-gray-400">
+        <h1 className="text-lg font-bold tracking-tight text-gray-900">프로젝트 관리</h1>
+        <button type="button" onClick={logout} className="pill-muted text-xs">
           로그아웃
         </button>
       </div>
@@ -312,7 +312,7 @@ export default function ProjectAdmin({
       {/* 추가/수정 폼 */}
       <section
         ref={formRef}
-        className="scroll-mt-4 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-black/5 motion-safe:animate-rise"
+        className="scroll-mt-4 rounded-3xl bg-white p-4 shadow-sm ring-1 ring-black/5 motion-safe:animate-rise"
       >
         <div className="mb-4 flex items-start gap-4">
           {/* 첫 화면에 보일 모습 미리보기 */}
@@ -356,7 +356,7 @@ export default function ProjectAdmin({
           </div>
         </div>
 
-        <p className="mb-2 text-xs font-semibold text-gray-500">아이콘</p>
+        <p className="mb-2 text-xs font-bold text-gray-500">🎨 아이콘</p>
         <div className="mb-4 grid grid-cols-5 gap-2">
           {ICON_KEYS.map((k) => {
             const on = icon === k;
@@ -380,7 +380,7 @@ export default function ProjectAdmin({
           })}
         </div>
 
-        <p className="mb-2 text-xs font-semibold text-gray-500">카드 색상</p>
+        <p className="mb-2 text-xs font-bold text-gray-500">🌈 카드 색상</p>
         <div className="mb-4 flex items-center justify-between px-1">
           {COLOR_KEYS.map((k) => {
             const on = color === k;
@@ -400,6 +400,7 @@ export default function ProjectAdmin({
         </div>
 
         <div className="space-y-2">
+          {!isB820 && <p className="pt-1 text-xs font-bold text-gray-500">✏️ 기본 정보</p>}
           {!isB820 && (
             <input
               value={name}
@@ -443,6 +444,7 @@ export default function ProjectAdmin({
                     : "주소에 쓰이는 영문 ID (예: b900 → /p/b900)"}
                 </p>
               </div>
+              <p className="pt-2 text-xs font-bold text-gray-500">🔐 보안 · 저장</p>
               <div className="relative">
                 <input
                   value={adminPw}
@@ -476,6 +478,7 @@ export default function ProjectAdmin({
                   </span>
                 </label>
               )}
+              {!editing && <p className="pt-2 text-xs font-bold text-gray-500">📮 양식 · 알림</p>}
               {!editing && (
                 <div>
                   <textarea
@@ -501,7 +504,7 @@ export default function ProjectAdmin({
                 <button
                   type="button"
                   onClick={() => { setSlotsError(""); setSlotsOpen(true); }}
-                  className="flex w-full items-center justify-between rounded-xl bg-gray-50 px-3 py-2.5 text-left text-xs text-gray-600 active:bg-gray-100"
+                  className="flex w-full items-center justify-between rounded-xl border border-dashed border-blue-200 bg-blue-50/60 px-3 py-2.5 text-left text-xs text-gray-600 active:bg-blue-100"
                 >
                   <span>
                     <b>사진 양식 지정</b>
@@ -577,7 +580,7 @@ export default function ProjectAdmin({
           return (
             <li
               key={p.slug}
-              className={`flex flex-wrap items-center gap-3 rounded-2xl px-3 py-2.5 shadow-sm ring-1 transition-colors ${
+              className={`flex flex-wrap items-center gap-3 rounded-2xl px-3 py-3 shadow-sm ring-1 transition-colors ${
                 isEditing ? "bg-blue-50 ring-blue-200" : "bg-white ring-black/5"
               }`}
             >

@@ -89,12 +89,12 @@ export default async function ListPage() {
 
   return (
     <main className="mx-auto max-w-3xl px-3 pb-28 pt-4">
-      <div className="mb-3 flex items-center justify-between">
-        <Link href="/b820" className="text-sm text-blue-600">
+      <div className="page-head">
+        <Link href="/b820" className="pill">
           ← 차량 입력
         </Link>
-        <h1 className="text-lg font-bold text-blue-700">저장 목록</h1>
-        <span className="text-xs text-gray-400">{items.length}대</span>
+        <h1>📋 저장 목록</h1>
+        <span className="pill-muted text-xs">{items.length}대</span>
       </div>
 
       <ListClient items={items} operators={operators} exportTitle={`${brandName(await currentProject())}_설치사진첩`} />

@@ -38,9 +38,10 @@ export default function TeamCallButton() {
       <button
         type="button"
         onClick={onClick}
-        className="mt-2 rounded-xl border border-green-300 bg-white px-4 py-3 text-center text-sm font-semibold text-green-700 shadow-sm active:bg-green-50"
+        className="home-tile"
       >
-        {loading ? "연락처 불러오는 중…" : "📞 설치팀 호출"}
+        <span className="emoji bg-emerald-50">📞</span>
+        {loading ? "불러오는 중…" : "설치팀 호출"}
       </button>
 
       {open && (

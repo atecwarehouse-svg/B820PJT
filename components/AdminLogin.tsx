@@ -36,9 +36,10 @@ export default function AdminLogin({ backHref = "/b820" }: { backHref?: string }
 
   return (
     <main className="mx-auto flex min-h-screen max-w-sm flex-col justify-center px-6">
+      <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-black/5 motion-safe:animate-rise">
       <div className="mb-4 text-center">
-        <div className="text-3xl">🔒</div>
-        <h1 className="mt-2 text-xl font-bold text-blue-700">관리자</h1>
+        <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500 to-blue-700 text-2xl shadow-lg shadow-blue-200">🔒</span>
+        <h1 className="mt-3 text-xl font-bold text-gray-900">관리자</h1>
         <p className="mt-1 text-sm text-gray-500">비밀번호를 입력하세요</p>
       </div>
       <form onSubmit={submit} className="flex flex-col gap-3">
@@ -48,18 +49,19 @@ export default function AdminLogin({ backHref = "/b820" }: { backHref?: string }
           onChange={(e) => setPassword(e.target.value)}
           placeholder="비밀번호"
           autoFocus
-          className="rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none focus:border-blue-500"
+          className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm outline-none transition-colors focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-100"
         />
         {error && <p className="text-xs text-red-500">{error}</p>}
         <button
           type="submit"
           disabled={busy || !password}
-          className="rounded-xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white active:bg-blue-700 disabled:opacity-50"
+          className="rounded-xl bg-gradient-to-r from-blue-600 to-blue-700 px-4 py-3 text-sm font-semibold text-white shadow-md shadow-blue-200 active:scale-[.98] disabled:opacity-50 disabled:shadow-none"
         >
           {busy ? "확인 중…" : "입장"}
         </button>
       </form>
-      <Link href={backHref} className="mt-6 text-center text-sm text-blue-600">
+      </div>
+      <Link href={backHref} className="pill mx-auto mt-6">
         ← 처음으로
       </Link>
     </main>

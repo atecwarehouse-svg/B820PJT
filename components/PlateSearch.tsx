@@ -91,7 +91,7 @@ export default function PlateSearch() {
         value={q}
         onChange={(e) => setQ(e.target.value)}
         placeholder="차량번호 입력"
-        className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 shadow-sm outline-none focus:border-blue-500"
+        className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 outline-none transition-colors focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-100"
       />
 
       {loading && <p className="mt-3 text-sm text-gray-400">검색 중…</p>}

@@ -100,12 +100,12 @@ export default function AdminPanel() {
 
   return (
     <main className="mx-auto max-w-2xl px-4 pb-16 pt-6">
-      <div className="mb-4 flex items-center justify-between">
-        <Link href="/b820" className="text-sm text-blue-600">
+      <div className="page-head">
+        <Link href="/b820" className="pill">
           ← 처음으로
         </Link>
-        <h1 className="text-lg font-bold text-blue-700">관리자</h1>
-        <button onClick={logout} className="text-sm text-gray-400">
+        <h1>🔒 관리자</h1>
+        <button onClick={logout} className="pill-muted text-xs">
           로그아웃
         </button>
       </div>
@@ -113,20 +113,20 @@ export default function AdminPanel() {
       {/* 기준사진 관리 이동 */}
       <Link
         href="/admin/reference"
-        className="mb-5 flex items-center justify-between rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm font-medium text-gray-700 shadow-sm active:bg-gray-100"
+        className="mb-5 flex items-center justify-between rounded-2xl bg-white px-4 py-3 text-sm font-medium text-gray-700 shadow-sm ring-1 ring-black/5 active:bg-gray-50"
       >
         <span>🖼️ 기준(양식) 사진 관리</span>
         <span className="text-gray-400">→</span>
       </Link>
 
       {/* 섹션별 탭 */}
-      <div className="mb-5 flex gap-1 overflow-x-auto rounded-xl border border-gray-200 bg-gray-50 p-1">
+      <div className="mb-5 flex gap-1 overflow-x-auto rounded-2xl bg-white p-1 shadow-sm ring-1 ring-black/5">
         {TABS.map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
             className={`shrink-0 flex-1 whitespace-nowrap rounded-lg px-3 py-2 text-xs font-semibold transition-colors ${
-              tab === t ? "bg-white text-blue-700 shadow-sm" : "text-gray-500"
+              tab === t ? "bg-blue-600 text-white shadow-sm" : "text-gray-500 active:bg-gray-100"
             }`}
           >
             {t}

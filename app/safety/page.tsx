@@ -65,12 +65,12 @@ export default async function SafetyPage() {
 
   return (
     <main className="mx-auto min-h-screen max-w-md px-4 pb-16 pt-6">
-      <div className="mb-4 flex items-center justify-between">
-        <Link href="/b820" className="text-sm text-blue-600 active:text-blue-800">
+      <div className="page-head">
+        <Link href="/b820" className="pill">
           ← 차량 입력
         </Link>
-        <h1 className="text-base font-bold text-gray-800">안전관리 서약서</h1>
-        <span className="w-14" />
+        <h1>🖊️ 안전관리 서약서</h1>
+        <span className="w-20" />
       </div>
       <SafetyManager sessions={rows} />
     </main>

@@ -186,12 +186,12 @@ export default async function DashboardPage() {
 
   return (
     <main className="mx-auto max-w-3xl px-3 pb-16 pt-4">
-      <div className="mb-4 flex items-center justify-between">
-        <Link href="/b820" className="text-sm text-blue-600">
+      <div className="page-head">
+        <Link href="/b820" className="pill">
           ← 차량 입력
         </Link>
-        <h1 className="text-lg font-bold text-blue-700">진행 현황</h1>
-        <Link href="/list" className="text-sm text-blue-600">
+        <h1>📊 진행 현황</h1>
+        <Link href="/list" className="pill">
           저장 목록 →
         </Link>
       </div>

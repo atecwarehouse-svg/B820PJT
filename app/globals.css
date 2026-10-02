@@ -9,7 +9,8 @@
 html,
 body {
   -webkit-text-size-adjust: 100%;
-  background: #f3f4f6;
+  /* 런처(첫 화면)와 같은 결의 부드러운 배경 — 프로젝트 안 모든 페이지가 같이 쓴다 */
+  background: #f3f4f6 linear-gradient(180deg, #eff6ff 0, #f3f4f6 360px) no-repeat;
 }
 
 /* iOS 입력 확대 방지: 입력 폰트 16px 이상 유지 */
@@ -17,6 +18,29 @@ input,
 select,
 textarea {
   font-size: 16px;
+}
+
+/* 프로젝트 안 페이지 공통 머리 — 뒤로가기 알약·제목·오른쪽 보조 링크 */
+@layer components {
+  .page-head {
+    @apply mb-4 flex items-center justify-between gap-2;
+  }
+  .page-head h1 {
+    @apply text-lg font-bold tracking-tight text-gray-900;
+  }
+  .pill {
+    @apply inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-white px-3 py-1.5 text-sm text-blue-600 shadow-sm ring-1 ring-black/5 active:bg-blue-50;
+  }
+  .pill-muted {
+    @apply inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-white px-3 py-1.5 text-sm text-gray-500 shadow-sm ring-1 ring-black/5 active:bg-gray-50;
+  }
+  /* 프로젝트 홈 메뉴 타일 — 흰 카드 + 큰 이모지 + 한 줄 이름 */
+  .home-tile {
+    @apply flex flex-col items-center justify-center gap-1.5 rounded-2xl bg-white px-2 py-4 text-center text-sm font-semibold text-gray-800 shadow-sm ring-1 ring-black/5 transition-transform duration-150 active:scale-[.97] active:bg-gray-50;
+  }
+  .home-tile > .emoji {
+    @apply flex h-11 w-11 items-center justify-center rounded-xl text-2xl;
+  }
 }
 
 /* 인쇄(PDF) 시 화면 전용 요소 숨김 */

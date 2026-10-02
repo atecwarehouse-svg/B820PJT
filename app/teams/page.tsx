@@ -43,11 +43,14 @@ export default async function TeamsPage() {
 
   return (
     <main className="mx-auto min-h-screen max-w-md px-4 pb-16 pt-6">
-      <Link href="/b820" className="text-sm text-blue-600 hover:underline">
-        ← 홈
-      </Link>
-      <h1 className="mt-2 text-xl font-bold text-sky-700">👷 설치팀별 확인</h1>
-      <p className="mt-1 text-xs text-gray-500">
+      <div className="page-head">
+        <Link href="/b820" className="pill">
+          ← 홈
+        </Link>
+        <h1>👷 설치팀별 확인</h1>
+        <span className="w-14" />
+      </div>
+      <p className="-mt-2 mb-3 text-center text-xs text-gray-500">
         설치(저장) 완료 기준 · 설치일은 업무일(20시~익일 12시) 기준
       </p>
       <TeamsClient vehicles={vehicles} companyMap={companyMap} />

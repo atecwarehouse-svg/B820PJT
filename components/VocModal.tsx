@@ -230,9 +230,10 @@ export default function VocModal() {
       <button
         type="button"
         onClick={openModal}
-        className="mt-2 rounded-xl border border-green-300 bg-white px-4 py-3 text-center text-sm font-semibold text-green-700 shadow-sm active:bg-green-50"
+        className="home-tile"
       >
-        📣 VOC 접수
+        <span className="emoji bg-green-50">📣</span>
+        VOC 접수
       </button>
 
       {open && (
