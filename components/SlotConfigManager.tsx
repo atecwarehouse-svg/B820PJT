@@ -18,90 +18,21 @@ const SECTIONS: { key: Section; title: string; hint: string; color: string }[] =
   { key: "after", title: "설치 후", hint: "완료 판정·PDF/엑셀에 포함 ('추가 촬영'은 제외)", color: "bg-indigo-600" },
 ];
 
-export default function SlotConfigManager() {
-  const [data, setData] = useState<SlotConfigJson | null>(null); // null = 로딩 중
-  const [defaults, setDefaults] = useState<SlotConfigJson | null>(null);
-  const [used, setUsed] = useState<Record<string, number>>({});
-  const [isDefault, setIsDefault] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [dirty, setDirty] = useState(false);
-  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
-
-  useEffect(() => {
-    (async () => {
-      try {
-        const res = await fetch("/api/admin/photo-slots", { cache: "no-store" });
-        const j = await res.json();
-        if (!res.ok) throw new Error(j.error ?? "불러오기 실패");
-        setData(j.config);
-        setDefaults(j.defaults);
-        setUsed(j.used ?? {});
-        setIsDefault(!!j.isDefault);
-      } catch (e) {
-        setMsg({ ok: false, text: e instanceof Error ? e.message : "불러오기 실패" });
-      }
-    })();
-  }, []);
-
-  function mutate(section: Section, fn: (list: Item[]) => Item[]) {
-    setData((d) => (d ? { ...d, [section]: fn(d[section] as Item[]) } : d));
-    setDirty(true);
-    setMsg(null);
-  }
-
-  async function save() {
-    if (!data) return;
-    setSaving(true);
-    setMsg(null);
-    try {
-      const res = await fetch("/api/admin/photo-slots", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      });
-      const j = await res.json();
-      if (!res.ok) throw new Error(j.error ?? "저장 실패");
-      setData(j.config);
-      setIsDefault(!!j.isDefault);
-      setDirty(false);
-      setMsg({ ok: true, text: "저장했습니다. 촬영 화면·PDF·완료 판정에 바로 적용됩니다." });
-    } catch (e) {
-      setMsg({ ok: false, text: e instanceof Error ? e.message : "저장 실패" });
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function reset() {
-    setSaving(true);
-    setMsg(null);
-    try {
-      const res = await fetch("/api/admin/photo-slots", { method: "DELETE" });
-      const j = await res.json();
-      if (!res.ok) throw new Error(j.error ?? "초기화 실패");
-      setData(j.config);
-      setIsDefault(true);
-      setDirty(false);
-      setMsg({ ok: true, text: "B820 기본 양식으로 되돌렸습니다." });
-    } catch (e) {
-      setMsg({ ok: false, text: e instanceof Error ? e.message : "초기화 실패" });
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  if (!data) return <p className="py-6 text-center text-sm text-gray-400">{msg?.text ?? "불러오는 중…"}</p>;
-
+// 칸 편집 본문 — 관리자 '사진 양식' 탭과 프로젝트 생성 팝업이 같이 쓴다 (값·변경만 받는 제어 컴포넌트).
+export function SlotEditor({
+  value,
+  used = {},
+  onChange,
+}: {
+  value: SlotConfigJson;
+  used?: Record<string, number>; // 칸별 이미 올라간 사진 수 (삭제 경고용)
+  onChange: (next: SlotConfigJson) => void;
+}) {
+  const data = value;
+  const mutate = (section: Section, fn: (list: Item[]) => Item[]) =>
+    onChange({ ...data, [section]: fn(data[section] as Item[]) } as SlotConfigJson);
   return (
-    <div className="space-y-4">
-      <div className="rounded-lg bg-blue-50 px-3 py-2.5 text-xs leading-relaxed text-gray-600">
-        <p className="font-semibold text-blue-700">촬영 칸(양식)을 이 프로젝트에 맞게 조정합니다</p>
-        <p className="mt-1">
-          칸 이름을 고치거나 추가·삭제할 수 있습니다. 저장하면 차량 촬영 화면, PDF/엑셀 사진첩, 설치 시작·완료
-          판정이 모두 이 구성을 따릅니다. {isDefault ? "지금은 B820 기본 양식입니다." : "현재 이 프로젝트 전용 양식이 적용돼 있습니다."}
-        </p>
-      </div>
-
+    <>
       {SECTIONS.map((sec) => {
         const list = data[sec.key] as Item[];
         return (
@@ -196,6 +127,90 @@ export default function SlotConfigManager() {
           </section>
         );
       })}
+
+    </>
+  );
+}
+
+export default function SlotConfigManager() {
+  const [data, setData] = useState<SlotConfigJson | null>(null); // null = 로딩 중
+  const [defaults, setDefaults] = useState<SlotConfigJson | null>(null);
+  const [used, setUsed] = useState<Record<string, number>>({});
+  const [isDefault, setIsDefault] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [dirty, setDirty] = useState(false);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch("/api/admin/photo-slots", { cache: "no-store" });
+        const j = await res.json();
+        if (!res.ok) throw new Error(j.error ?? "불러오기 실패");
+        setData(j.config);
+        setDefaults(j.defaults);
+        setUsed(j.used ?? {});
+        setIsDefault(!!j.isDefault);
+      } catch (e) {
+        setMsg({ ok: false, text: e instanceof Error ? e.message : "불러오기 실패" });
+      }
+    })();
+  }, []);
+
+  async function save() {
+    if (!data) return;
+    setSaving(true);
+    setMsg(null);
+    try {
+      const res = await fetch("/api/admin/photo-slots", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      const j = await res.json();
+      if (!res.ok) throw new Error(j.error ?? "저장 실패");
+      setData(j.config);
+      setIsDefault(!!j.isDefault);
+      setDirty(false);
+      setMsg({ ok: true, text: "저장했습니다. 촬영 화면·PDF·완료 판정에 바로 적용됩니다." });
+    } catch (e) {
+      setMsg({ ok: false, text: e instanceof Error ? e.message : "저장 실패" });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function reset() {
+    setSaving(true);
+    setMsg(null);
+    try {
+      const res = await fetch("/api/admin/photo-slots", { method: "DELETE" });
+      const j = await res.json();
+      if (!res.ok) throw new Error(j.error ?? "초기화 실패");
+      setData(j.config);
+      setIsDefault(true);
+      setDirty(false);
+      setMsg({ ok: true, text: "B820 기본 양식으로 되돌렸습니다." });
+    } catch (e) {
+      setMsg({ ok: false, text: e instanceof Error ? e.message : "초기화 실패" });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (!data) return <p className="py-6 text-center text-sm text-gray-400">{msg?.text ?? "불러오는 중…"}</p>;
+
+  return (
+    <div className="space-y-4">
+      <div className="rounded-lg bg-blue-50 px-3 py-2.5 text-xs leading-relaxed text-gray-600">
+        <p className="font-semibold text-blue-700">촬영 칸(양식)을 이 프로젝트에 맞게 조정합니다</p>
+        <p className="mt-1">
+          칸 이름을 고치거나 추가·삭제할 수 있습니다. 저장하면 차량 촬영 화면, PDF/엑셀 사진첩, 설치 시작·완료
+          판정이 모두 이 구성을 따릅니다. {isDefault ? "지금은 B820 기본 양식입니다." : "현재 이 프로젝트 전용 양식이 적용돼 있습니다."}
+        </p>
+      </div>
+
+      <SlotEditor value={data} used={used} onChange={(next) => { setData(next); setDirty(true); setMsg(null); }} />
 
       {msg && (
         <p className={`rounded-lg px-3 py-2 text-xs ${msg.ok ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-600"}`}>

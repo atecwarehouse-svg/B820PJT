@@ -4,6 +4,8 @@ import { useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { Project } from "@/lib/project";
+import { DEFAULT_SLOT_CONFIG, toSlotConfigJson, validateSlotConfig, type SlotConfigJson } from "@/lib/slots";
+import { SlotEditor } from "@/components/SlotConfigManager";
 import {
   CARD_COLORS,
   COLOR_KEYS,
@@ -39,8 +41,8 @@ function suggestSlug(name: string): string {
   return `p${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}`;
 }
 
-// 새 프로젝트에 복사할 B820 설정 (app_settings 키)
-const COPY_SETTINGS_LABEL = "B820의 설치팀 목록·배차표 검수항목·리포트 수신자를 복사";
+const DEFAULT_SLOTS = toSlotConfigJson(DEFAULT_SLOT_CONFIG);
+const isDefaultSlots = (c: SlotConfigJson) => JSON.stringify(c) === JSON.stringify(DEFAULT_SLOTS);
 
 export default function ProjectAdmin({
   projects,
@@ -64,7 +66,9 @@ export default function ProjectAdmin({
   const [adminPw, setAdminPw] = useState("");
   const [showPw, setShowPw] = useState(false);
   const [slugTouched, setSlugTouched] = useState(false); // ID를 직접 편집했으면 자동 제안 중단
-  const [copySettings, setCopySettings] = useState(true);
+  const [photoSlots, setPhotoSlots] = useState<SlotConfigJson>(DEFAULT_SLOTS); // 새 프로젝트 사진 양식
+  const [slotsOpen, setSlotsOpen] = useState(false); // 사진 양식 팝업
+  const [slotsError, setSlotsError] = useState("");
   const [shareLink, setShareLink] = useState(true); // 드라이브 폴더를 '링크가 있는 사용자'에게 보기 공유
   const [confirmSlug, setConfirmSlug] = useState(""); // 삭제 확인 대기 중인 프로젝트
   const [confirmText, setConfirmText] = useState(""); // 앨범 삭제 확인용 ID 입력
@@ -73,7 +77,7 @@ export default function ProjectAdmin({
     home: string;
     exposed: boolean;
     warning?: string;
-    copied?: string[];
+    customSlots?: boolean; // 전용 사진 양식을 적용했는지
     driveFolder?: string; // 구글드라이브 사진 폴더 링크
     driveShared?: boolean;
   } | null>(null);
@@ -90,7 +94,8 @@ export default function ProjectAdmin({
     setUrl("");
     setAdminPw("");
     setShowPw(false);
-    setCopySettings(true);
+    setPhotoSlots(DEFAULT_SLOTS);
+    setSlotsOpen(false);
     setError("");
   }
 
@@ -153,8 +158,8 @@ export default function ProjectAdmin({
         ...common,
         slug: slug.trim().toLowerCase(),
         admin_password: adminPw,
-        copySettings,
         shareLink,
+        ...(isDefaultSlots(photoSlots) ? {} : { photoSlots }),
       });
       if (j) {
         setCreated({
@@ -162,7 +167,7 @@ export default function ProjectAdmin({
           home: String(j.home ?? projectHome(slug)),
           exposed: !!j.exposed,
           warning: j.warning ? String(j.warning) : undefined,
-          copied: Array.isArray(j.copied) ? (j.copied as string[]) : undefined,
+          customSlots: j.photoSlots === true,
           driveFolder: j.driveFolder ? String(j.driveFolder) : undefined,
           driveShared: j.driveShared === true,
         });
@@ -272,9 +277,8 @@ export default function ProjectAdmin({
               대시보드 → <b>최초 업로드</b>로 전개현황 엑셀을 올려 차량리스트를 등록합니다.
             </li>
             <li>
-              {created.copied?.length
-                ? "B820 설정(설치팀·검수항목·리포트 수신자)을 복사했습니다. 관리자(방금 정한 비밀번호)에서 확인·수정하세요."
-                : "관리자(방금 정한 비밀번호) → 설치팀·리포트 수신자를 등록합니다."}
+              관리자(방금 정한 비밀번호) → 설치팀·리포트 수신자를 등록합니다.
+              {created.customSlots ? " 사진 양식은 지정한 대로 적용했고, 관리자 '사진 양식' 탭에서 고칠 수 있습니다." : ""}
             </li>
           </ol>
           <div className="mt-3 flex gap-2">
@@ -463,18 +467,21 @@ export default function ProjectAdmin({
                 </label>
               )}
               {!editing && (
-                <label className="flex items-start gap-2 rounded-xl bg-gray-50 px-3 py-2.5 text-xs text-gray-600">
-                  <input
-                    type="checkbox"
-                    checked={copySettings}
-                    onChange={(e) => setCopySettings(e.target.checked)}
-                    className="mt-0.5 h-4 w-4"
-                  />
+                <button
+                  type="button"
+                  onClick={() => { setSlotsError(""); setSlotsOpen(true); }}
+                  className="flex w-full items-center justify-between rounded-xl bg-gray-50 px-3 py-2.5 text-left text-xs text-gray-600 active:bg-gray-100"
+                >
                   <span>
-                    {COPY_SETTINGS_LABEL}
-                    <span className="block text-[11px] text-gray-400">같은 설치팀이 작업하면 켜 두세요. 나중에 관리자에서 바꿀 수 있습니다.</span>
+                    <b>사진 양식 지정</b>
+                    <span className="block text-[11px] text-gray-400">
+                      {isDefaultSlots(photoSlots)
+                        ? "B820 기본 양식 — 촬영 칸을 이 프로젝트에 맞게 바꾸려면 누르세요"
+                        : `전용 양식 · 이상유무 ${photoSlots.check.length}칸 · 설치 전 ${photoSlots.before.length}칸 · 설치 후 ${photoSlots.after.length}칸`}
+                    </span>
                   </span>
-                </label>
+                  <span className="text-blue-600">설정 ›</span>
+                </button>
               )}
             </>
           )}
@@ -625,6 +632,52 @@ export default function ProjectAdmin({
           );
         })}
       </ul>
+
+      {/* 사진 양식 팝업 — 생성 시 app_settings.photo_slots 로 저장된다 */}
+      {slotsOpen && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center" onClick={() => setSlotsOpen(false)}>
+          <div
+            className="flex max-h-[90vh] w-full max-w-md flex-col rounded-t-2xl bg-white sm:rounded-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
+              <h3 className="text-base font-bold text-gray-900">사진 양식 지정</h3>
+              <button type="button" onClick={() => setSlotsOpen(false)} className="text-sm text-gray-400">
+                닫기
+              </button>
+            </div>
+            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-3">
+              <p className="rounded-lg bg-blue-50 px-3 py-2 text-xs leading-relaxed text-gray-600">
+                새 프로젝트의 촬영 칸(차량 이상유무 · 설치 전 · 설치 후)을 정합니다. 만든 뒤에도 관리자 「사진 양식」 탭에서 바꿀 수 있습니다.
+              </p>
+              <SlotEditor value={photoSlots} onChange={(n) => { setPhotoSlots(n); setSlotsError(""); }} />
+              {slotsError && <p className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600">{slotsError}</p>}
+            </div>
+            <div className="flex gap-2 border-t border-gray-100 px-4 py-3">
+              <button
+                type="button"
+                onClick={() => { setPhotoSlots(DEFAULT_SLOTS); setSlotsError(""); }}
+                disabled={isDefaultSlots(photoSlots)}
+                className="rounded-xl border border-gray-300 px-4 py-2.5 text-sm text-gray-600 active:bg-gray-100 disabled:opacity-40"
+              >
+                기본 양식으로
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const v = validateSlotConfig(photoSlots);
+                  if (typeof v === "string") return setSlotsError(v);
+                  setPhotoSlots(toSlotConfigJson(v)); // 공백 정리된 값으로
+                  setSlotsOpen(false);
+                }}
+                className="flex-1 rounded-xl bg-blue-600 py-2.5 text-sm font-semibold text-white active:bg-blue-700"
+              >
+                적용
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }

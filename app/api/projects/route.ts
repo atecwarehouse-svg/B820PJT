@@ -12,7 +12,8 @@ import {
 import { colorKey, iconKey } from "@/components/ProjectIcon";
 import { createProjectFolder, deleteFolder, folderLink, renameFile, setLinkSharing, trashFile } from "@/lib/gdrive";
 import { TEMPLATE_BUCKET } from "@/lib/template-path";
-import { INSTALL_TEAMS_KEY, INSPECT_CHECKLIST_KEY, REPORT_MAIL_KEY } from "@/lib/settings";
+import { PHOTO_SLOTS_KEY } from "@/lib/settings";
+import { toSlotConfigJson, validateSlotConfig } from "@/lib/slots";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -20,7 +21,7 @@ export const maxDuration = 60;
 
 // 프로젝트 레지스트리(public.projects) 관리 — 런처(마스터=B820) 관리자 쿠키 또는 body.pw 필수.
 //   POST   { kind:"link",  name, description, icon, color, url }                       → 링크 카드 추가
-//   POST   { kind:"album", slug, name, description, icon, color, admin_password, copySettings?, shareLink? } → 앨범 프로젝트 생성 (copySettings: B820 설치팀·검수항목·리포트 수신자 복사, shareLink: 드라이브 폴더를 링크 공유로)
+//   POST   { kind:"album", slug, name, description, icon, color, admin_password, shareLink?, photoSlots? } → 앨범 프로젝트 생성 (shareLink: 드라이브 폴더를 링크 공유로, photoSlots: 사진 양식 SlotConfigJson — 없으면 B820 기본)
 //            (드라이브 폴더 → DB 스키마 복제(create_project_schema) → 레지스트리 행. 실패 시 되감기)
 //   PUT    { slug, name?, description?, icon?, color?, url?, admin_password?, shareLink? } → 수정 (b820은 색만, 앨범 이름 변경 시 드라이브 폴더명도 변경, shareLink: 드라이브 링크 공유 켜기/끄기)
 //   DELETE { slug }                     → 링크 카드 삭제
@@ -33,9 +34,6 @@ const RESERVED = new Set([
   "vault", "net", "pgsodium", "pgsodium_masks", "supabase_functions", "supabase_migrations",
   "information_schema", "cron", "pgbouncer", "repack", "tiger", "topology", "api", "p", "projects",
 ]);
-
-// 새 프로젝트에 복사해 주는 B820 설정 키 (app_settings)
-const COPY_KEYS = [INSTALL_TEAMS_KEY, INSPECT_CHECKLIST_KEY, REPORT_MAIL_KEY];
 
 const bad = (error: string, status = 400) => NextResponse.json({ error }, { status });
 const unauthorized = () => bad("관리자 비밀번호가 올바르지 않습니다.", 401);
@@ -124,6 +122,13 @@ export async function POST(req: NextRequest) {
     if (pw.length < 4) return bad("프로젝트 관리자 비밀번호는 4자 이상으로 정하세요.");
     const { data: dup } = await sb.from("projects").select("slug").eq("slug", slug).maybeSingle();
     if (dup) return bad("이미 있는 프로젝트 ID입니다.");
+    // 사진 양식(선택) — 폴더·DB 만들기 전에 먼저 검증
+    let slotsJson: string | undefined;
+    if (body.photoSlots != null) {
+      const c = validateSlotConfig(body.photoSlots);
+      if (typeof c === "string") return bad("사진 양식: " + c);
+      slotsJson = JSON.stringify(toSlotConfigJson(c));
+    }
 
     // 1) 드라이브 폴더
     let folderId: string;
@@ -184,28 +189,23 @@ export async function POST(req: NextRequest) {
     }
     invalidateProjectCache();
 
-    // 4) (선택) B820 설정 복사 — 설치팀·검수항목·리포트 수신자. 새 스키마가 PostgREST에
-    //    막 노출된 직후라 캐시 갱신 전이면 실패할 수 있어 짧게 재시도한다.
-    let copied: string[] = [];
-    if (body.copySettings === true && exposed) {
-      const { data: src } = await sb.from("app_settings").select("key, value").in("key", COPY_KEYS);
-      const rows = (src ?? []).filter((r: { key: string; value: string }) => r.value);
-      if (rows.length) {
-        const dst = createServiceClient(slug);
-        for (let attempt = 0; attempt < 4 && !copied.length; attempt++) {
-          if (attempt) await new Promise((r) => setTimeout(r, 700));
-          const { error } = await dst.from("app_settings").upsert(
-            rows.map((r: { key: string; value: string }) => ({ key: r.key, value: r.value, updated_at: new Date().toISOString() })),
-            { onConflict: "key" },
-          );
-          if (!error) copied = rows.map((r: { key: string }) => r.key);
-        }
-        if (!copied.length) {
-          warning = (warning ? warning + " " : "") + "B820 설정 복사는 실패했습니다. 관리자 페이지에서 직접 등록하세요.";
-        }
+    // 4) (선택) 사진 양식 저장 — 새 스키마가 PostgREST에 막 노출된 직후라 캐시 갱신 전이면
+    //    실패할 수 있어 짧게 재시도한다.
+    let photoSlots = false;
+    if (slotsJson && exposed) {
+      const dst = createServiceClient(slug);
+      for (let attempt = 0; attempt < 4 && !photoSlots; attempt++) {
+        if (attempt) await new Promise((r) => setTimeout(r, 700));
+        const { error } = await dst
+          .from("app_settings")
+          .upsert({ key: PHOTO_SLOTS_KEY, value: slotsJson, updated_at: new Date().toISOString() }, { onConflict: "key" });
+        if (!error) photoSlots = true;
+      }
+      if (!photoSlots) {
+        warning = (warning ? warning + " " : "") + "사진 양식 저장은 실패했습니다. 관리자 '사진 양식' 탭에서 다시 지정하세요.";
       }
     }
-    return NextResponse.json({ ok: true, slug, home: projectHome(slug), exposed, warning, copied, driveFolder: folderLink(folderId), driveShared });
+    return NextResponse.json({ ok: true, slug, home: projectHome(slug), exposed, warning, photoSlots, driveFolder: folderLink(folderId), driveShared });
   }
 
   // 링크 카드
