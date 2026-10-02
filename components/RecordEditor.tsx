@@ -641,20 +641,13 @@ export default function RecordEditor({ plate, initial, teamOptions = [], brand =
               {plate} · 나중에 차량번호로 다시 들어오면 촬영 안 한 페이지부터
               이어서 촬영할 수 있습니다.
             </p>
-            <div className="mt-4 flex gap-2">
-              <button
-                onClick={() => setMidSavedPopup(false)}
-                className="flex-1 rounded-lg border border-gray-300 px-4 py-2.5 text-sm font-medium text-gray-600 active:bg-gray-100"
-              >
-                계속 촬영
-              </button>
-              <button
-                onClick={() => router.push(clientProjectPath("/list"))}
-                className="flex-1 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white active:bg-blue-700"
-              >
-                목록으로
-              </button>
-            </div>
+            {/* '목록으로'는 제거 — 목록(/list)은 비밀번호가 걸려 있어 현장에서 번거롭다 */}
+            <button
+              onClick={() => setMidSavedPopup(false)}
+              className="mt-4 w-full rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white active:bg-blue-700"
+            >
+              계속 촬영
+            </button>
           </div>
         </div>
       )}
