@@ -75,9 +75,11 @@ async function uploadRawData(slug: string, pw: string, file: File): Promise<{ to
 export default function ProjectAdmin({
   projects,
   driveShared = {},
+  periods = {},
 }: {
   projects: Project[];
   driveShared?: Record<string, boolean>; // 앨범 프로젝트 드라이브 폴더 링크 공유 여부
+  periods?: Record<string, { start: string; end: string }>; // 앨범 프로젝트 기간 (수정 폼 프리필)
 }) {
   const router = useRouter();
   const formRef = useRef<HTMLElement>(null);
@@ -191,6 +193,12 @@ export default function ProjectAdmin({
         if (editing.kind === "album" && editing.driveFolderId && shareLink !== (driveShared[editing.slug] ?? false)) {
           body.shareLink = shareLink;
         }
+        // 기간이 바뀌었을 때만 — 둘 다 비우면 지움, 한쪽만 있으면 보내지 않음(그대로 유지)
+        const was = periods[editing.slug];
+        if (editing.kind === "album" && (period.start !== (was?.start ?? "") || period.end !== (was?.end ?? ""))) {
+          if (period.start && period.end) body.period = period;
+          else if (!period.start && !period.end) body.period = "";
+        }
       }
       const j = await call("PUT", body);
       if (j) {
@@ -262,6 +270,7 @@ export default function ProjectAdmin({
     setUrl(p.url ?? "");
     setAdminPw("");
     setShareLink(driveShared[p.slug] ?? false);
+    setPeriod(periods[p.slug] ?? { start: "", end: "" });
     setConfirmSlug("");
     setError("");
     formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -299,13 +308,14 @@ export default function ProjectAdmin({
   const isB820 = editing?.slug === "b820";
   const mailList = [...new Set(reportMail.split(/[,;\s]+/).map((s) => s.trim()).filter(Boolean))];
   const badMail = mailList.filter((s) => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s));
-  const badPeriod = !!period.start && !!period.end && period.end < period.start;
+  const halfPeriod = !!period.start !== !!period.end; // 한쪽만 고름
+  const badPeriod = halfPeriod || (!!period.start && !!period.end && period.end < period.start);
   const input =
     "w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-base transition-colors focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-100";
   const canSubmit =
     !busy &&
     (editing
-      ? isB820 || !!name
+      ? isB820 || (!!name && !badPeriod)
       : kind === "album"
         ? !!name && SLUG_RE.test(slug.trim().toLowerCase()) && adminPw.length >= 4 && badMail.length === 0 && !badPeriod && (!!rawFile || later)
         : !!name && !!url);
@@ -500,7 +510,7 @@ export default function ProjectAdmin({
               className={input}
             />
           )}
-          {kind === "album" && !isB820 && !editing && (
+          {kind === "album" && !isB820 && (
             <div>
               <div className="flex items-center gap-2">
                 <input
@@ -521,9 +531,11 @@ export default function ProjectAdmin({
                 />
               </div>
               <p className={`mt-1 px-1 text-[11px] ${badPeriod ? "text-red-500" : "text-gray-400"}`}>
-                {badPeriod
-                  ? "종료일이 시작일보다 빠릅니다."
-                  : "프로젝트 기간(시작일~종료일, 선택) — 빈 양식의 전개일정 3행 날짜가 이 기간으로 자동 기입됩니다(최대 61일)."}
+                {halfPeriod
+                  ? "시작일과 종료일을 모두 고르세요. (둘 다 비우면 기간 없음)"
+                  : badPeriod
+                    ? "종료일이 시작일보다 빠릅니다."
+                    : "프로젝트 기간(시작일~종료일, 선택) — 빈 양식의 전개일정 3행 날짜가 이 기간으로 자동 기입됩니다(최대 61일). 업로드 때는 설치 예정일이 함께 들어갑니다."}
               </p>
             </div>
           )}

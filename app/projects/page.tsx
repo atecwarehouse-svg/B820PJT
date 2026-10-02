@@ -1,5 +1,6 @@
 import { isAdmin } from "@/lib/admin-auth";
-import { DEFAULT_SLUG, listProjects } from "@/lib/project";
+import { DEFAULT_SLUG, isDefault, listProjects } from "@/lib/project";
+import { PROJECT_PERIOD_KEY, getSetting, parsePeriod } from "@/lib/settings";
 import AdminLogin from "@/components/AdminLogin";
 import ProjectAdmin from "@/components/ProjectAdmin";
 import { isLinkShared } from "@/lib/gdrive";
@@ -16,12 +17,17 @@ export default async function ProjectsPage() {
   const projects = await listProjects();
   // 앨범 프로젝트 드라이브 폴더의 링크 공유 여부 (조회 실패 = 비공개로 표시)
   const driveShared: Record<string, boolean> = {};
+  // 앨범 프로젝트 기간(빈 양식 전개일정 3행 날짜) — 수정 폼 프리필용
+  const periods: Record<string, { start: string; end: string }> = {};
   await Promise.all(
     projects
-      .filter((p) => p.kind === "album" && p.driveFolderId)
+      .filter((p) => p.kind === "album")
       .map(async (p) => {
-        driveShared[p.slug] = await isLinkShared(p.driveFolderId as string).catch(() => false);
+        if (p.driveFolderId) driveShared[p.slug] = await isLinkShared(p.driveFolderId).catch(() => false);
+        if (isDefault(p.slug)) return;
+        const period = parsePeriod(await getSetting(PROJECT_PERIOD_KEY, p.slug));
+        if (period) periods[p.slug] = period;
       }),
   );
-  return <ProjectAdmin projects={projects} driveShared={driveShared} />;
+  return <ProjectAdmin projects={projects} driveShared={driveShared} periods={periods} />;
 }

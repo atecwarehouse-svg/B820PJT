@@ -12,7 +12,7 @@ import {
 import { colorKey, iconKey } from "@/components/ProjectIcon";
 import { createProjectFolder, deleteFolder, folderLink, renameFile, setLinkSharing, trashFile } from "@/lib/gdrive";
 import { TEMPLATE_BUCKET } from "@/lib/template-path";
-import { PHOTO_SLOTS_KEY, PLEDGE_TEMPLATE_KEY, PROJECT_PERIOD_KEY, REPORT_MAIL_KEY, parsePeriod } from "@/lib/settings";
+import { PHOTO_SLOTS_KEY, PLEDGE_TEMPLATE_KEY, PROJECT_PERIOD_KEY, REPORT_MAIL_KEY, parsePeriod, setSetting } from "@/lib/settings";
 import { toSlotConfigJson, validateSlotConfig } from "@/lib/slots";
 import { validatePledgeTemplate } from "@/lib/pledge-template";
 
@@ -27,7 +27,7 @@ export const maxDuration = 60;
 //             period: {start,end} 프로젝트 기간(app_settings.project_period, 빈 양식 전개일정 3행 날짜용),
 //             pledgeTemplate: 안전관리 서약서 양식 — 없으면 기준양식. 차량 리스트(로우데이터)는 생성 후 화면이 /p/<slug>/api/import/schedule 로 따로 올린다)
 //            (드라이브 폴더 → DB 스키마 복제(create_project_schema) → 레지스트리 행. 실패 시 되감기)
-//   PUT    { slug, name?, description?, icon?, color?, url?, admin_password?, shareLink? } → 수정 (b820은 색만, 앨범 이름 변경 시 드라이브 폴더명도 변경, shareLink: 드라이브 링크 공유 켜기/끄기)
+//   PUT    { slug, name?, description?, icon?, color?, url?, admin_password?, shareLink?, period? } → 수정 (b820은 색만, 앨범 이름 변경 시 드라이브 폴더명도 변경, shareLink: 드라이브 링크 공유 켜기/끄기, period: {start,end} 또는 ""=지움)
 //   DELETE { slug }                     → 링크 카드 삭제
 //   DELETE { slug, confirm: <slug> }    → 앨범 프로젝트 삭제 (DB 스키마·양식 삭제, 드라이브 사진 폴더 영구 삭제. B820 불가)
 
@@ -295,7 +295,17 @@ export async function PUT(req: NextRequest) {
     }
   }
   const shareLink = row.kind === "album" && row.drive_folder_id && typeof body.shareLink === "boolean" ? body.shareLink : undefined;
-  if (!Object.keys(patch).length && shareLink === undefined) return bad("바꿀 내용이 없습니다.");
+  // 프로젝트 기간 — 빈 값("")이면 지운다 (그 프로젝트 스키마의 app_settings)
+  let period: string | undefined;
+  if (row.kind === "album" && !isDefault(slug) && body.period !== undefined) {
+    if (body.period === null || body.period === "") period = "";
+    else {
+      const p = parsePeriod(body.period);
+      if (!p) return bad("프로젝트 기간: 시작일·종료일(종료일은 시작일 이후)을 확인하세요.");
+      period = `${p.start}~${p.end}`;
+    }
+  }
+  if (!Object.keys(patch).length && shareLink === undefined && period === undefined) return bad("바꿀 내용이 없습니다.");
 
   if (Object.keys(patch).length) {
     const { error } = await sb.from("projects").update(patch).eq("slug", slug);
@@ -303,6 +313,11 @@ export async function PUT(req: NextRequest) {
     invalidateProjectCache(slug);
   }
   let warning: string | undefined;
+  if (period !== undefined) {
+    await setSetting(PROJECT_PERIOD_KEY, period, slug).catch(() => {
+      warning = "프로젝트 기간 저장에 실패했습니다. 잠시 뒤 다시 저장해 주세요.";
+    });
+  }
   // 드라이브 폴더 링크 공유 켜기/끄기 (실패해도 나머지 수정은 유지)
   if (shareLink !== undefined) {
     await setLinkSharing(row.drive_folder_id as string, shareLink).catch(() => {
