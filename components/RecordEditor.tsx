@@ -132,7 +132,7 @@ export default function RecordEditor({ plate, initial, teamOptions = [], brand =
       if (toastTimer.current) clearTimeout(toastTimer.current);
       toastTimer.current = setTimeout(() => {
         setToast((t) => (t && t.id === id ? null : t));
-      }, 2000);
+      }, msg.length > 40 ? 5000 : 2000); // 빈 칸 목록처럼 긴 안내는 읽을 시간을 준다
     },
     [],
   );
@@ -325,6 +325,14 @@ export default function RecordEditor({ plate, initial, teamOptions = [], brand =
     return missing.length ? missing.map((s) => s.label).join("·") : null;
   }, [checkSlots, urls, cfg.requiredCheckKeys]);
 
+  // 사진도 '없음' 체크도 없는 설치전 특이사항 칸 — 이 칸이 남아 있으면 팀즈 설치 시작 카드가 나가지 않으므로
+  // 다음·저장 때 「없으면 '없음'에 체크」 안내로 막는다 (2026-10-13 공항 B800 미발송 사례)
+  const unmarkedCheck = useCallback(() => {
+    const missing = checkSlots.filter((s) => !urls[s.slotKey] && !checkNaSlots.includes(s.slotKey));
+    return missing.length ? missing.map((s) => s.label).join("·") : null;
+  }, [checkSlots, urls, checkNaSlots]);
+  const unmarkedMsg = (labels: string) => `${labels} 칸이 비어 있습니다. 해당 항목이 없으면 「없음」에 체크하고, 있으면 촬영해주세요`;
+
   const [submitting, setSubmitting] = useState(false);
   const [savedPopup, setSavedPopup] = useState(false); // 저장 완료 팝업
   const [midSavedPopup, setMidSavedPopup] = useState(false); // 중간 저장 완료 팝업
@@ -377,6 +385,11 @@ export default function RecordEditor({ plate, initial, teamOptions = [], brand =
       showToast(`${missing} 사진은 필수입니다. 촬영해주세요`, "error");
       return;
     }
+    const unmarked = unmarkedCheck();
+    if (unmarked) {
+      showToast(unmarkedMsg(unmarked), "error");
+      return;
+    }
     setStep(1);
   }
 
@@ -400,6 +413,12 @@ export default function RecordEditor({ plate, initial, teamOptions = [], brand =
       showToast(`${missing} 사진은 필수입니다. 촬영해주세요`, "error");
       return;
     }
+    const unmarked = unmarkedCheck();
+    if (unmarked) {
+      setStep(0); // 설치전 특이사항 단계로 되돌려 바로 체크할 수 있게
+      showToast(unmarkedMsg(unmarked), "error");
+      return;
+    }
     setSubmitting(true);
     const ok = await saveRecord({
       saved: true,
@@ -416,7 +435,8 @@ export default function RecordEditor({ plate, initial, teamOptions = [], brand =
 
   async function handleSave(naOverride?: string[]) {
     const missingReq = missingRequiredCheck();
-    if (!team.trim() || !checkNote.trim() || missingReq) {
+    const unmarked = unmarkedCheck();
+    if (!team.trim() || !checkNote.trim() || missingReq || unmarked) {
       // 앞 단계 입력이 비어 있으면(다른 탭 수정 등) 해당 단계로 되돌린다
       setStep(0);
       showToast(
@@ -424,7 +444,9 @@ export default function RecordEditor({ plate, initial, teamOptions = [], brand =
           ? "팀명을 입력해야 저장할 수 있습니다"
           : !checkNote.trim()
             ? "비고(설치전 특이사항)를 입력해주세요. 없으면 '없음'"
-            : `${missingReq} 사진은 필수입니다. 촬영해주세요`,
+            : missingReq
+              ? `${missingReq} 사진은 필수입니다. 촬영해주세요`
+              : unmarkedMsg(unmarked!),
         "error",
       );
       return;
