@@ -8,6 +8,7 @@ import { DEFAULT_SLOT_CONFIG, toSlotConfigJson, validateSlotConfig, type SlotCon
 import { SlotEditor } from "@/components/SlotConfigManager";
 import { PledgeTemplateEditor } from "@/components/PledgeTemplateManager";
 import RawDataGuide from "@/components/RawDataGuide";
+import DonePopup from "@/components/DonePopup";
 import { DEFAULT_PLEDGE_TEMPLATE, PLEDGE_BASE_NAME, isDefaultPledgeTemplate, validatePledgeTemplate, type PledgeTemplate } from "@/lib/pledge-template";
 import {
   CARD_COLORS,
@@ -124,6 +125,8 @@ export default function ProjectAdmin({
     driveFolder?: string; // 구글드라이브 사진 폴더 링크
     driveShared?: boolean;
   } | null>(null);
+  const [donePopup, setDonePopup] = useState(false); // 생성 완료 팝업(애니메이션) — 닫으면 아래 초록 안내 카드만 남는다
+  const [deleted, setDeleted] = useState<{ name: string; kind: Project["kind"]; note?: string } | null>(null); // 삭제 완료 팝업
 
   function resetForm() {
     setEditing(null);
@@ -249,6 +252,7 @@ export default function ProjectAdmin({
           driveFolder: j.driveFolder ? String(j.driveFolder) : undefined,
           driveShared: j.driveShared === true,
         });
+        setDonePopup(true);
         resetForm();
       }
       setPhase("");
@@ -296,8 +300,19 @@ export default function ProjectAdmin({
     const j = await call("DELETE", body);
     if (!j) return;
     if (editing?.slug === p.slug) resetForm();
-    if (j.drive === "trashed") setError("프로젝트는 삭제됐지만 구글드라이브 폴더는 영구 삭제가 안 돼 휴지통으로 옮겼습니다.");
-    else if (j.drive === "failed") setError("프로젝트는 삭제됐지만 구글드라이브 폴더 삭제에 실패했습니다. 드라이브에서 직접 지워 주세요.");
+    setCreated(null);
+    setDeleted({
+      name: p.name,
+      kind: p.kind,
+      note:
+        j.drive === "trashed"
+          ? "구글드라이브 폴더는 영구 삭제가 안 돼 휴지통으로 옮겼습니다(30일 안에 복구 가능)."
+          : j.drive === "failed"
+            ? "구글드라이브 폴더 삭제에는 실패했습니다. 드라이브에서 직접 지워 주세요."
+            : j.drive === "deleted"
+              ? "차량·기록·사진 데이터와 구글드라이브 폴더를 모두 지웠습니다."
+              : undefined,
+    });
   }
 
   async function logout() {
@@ -331,6 +346,46 @@ export default function ProjectAdmin({
           로그아웃
         </button>
       </div>
+
+      {/* 생성 완료 팝업 — 이동 버튼 + 애니메이션. 닫으면 아래 초록 안내 카드가 남는다 */}
+      {donePopup && created && (
+        <DonePopup
+          tone="success"
+          title={`${created.name} 프로젝트를 만들었습니다`}
+          onClose={() => setDonePopup(false)}
+          actions={[
+            { label: "프로젝트 홈으로 이동 →", href: created.home, primary: true },
+            { label: created.uploaded !== undefined ? "대시보드 열기" : "대시보드에서 최초 업로드", href: `${created.home}/dashboard` },
+            { label: "여기서 안내 보기", onClick: () => setDonePopup(false) },
+          ]}
+        >
+          <p>
+            {created.uploaded !== undefined
+              ? `차량 리스트 ${created.uploaded.toLocaleString()}대를 등록했습니다.`
+              : created.uploadError
+                ? "차량 리스트는 등록하지 못했습니다. 대시보드 최초 업로드로 올려주세요."
+                : "차량 리스트는 대시보드 「최초 업로드」로 등록합니다."}
+          </p>
+          <p>프로젝트 홈에 들어가면 설정 체크리스트 안내가 뜹니다. 오른쪽 위 「링크 복사」로 작업자에게 공유하세요.</p>
+          {created.warning && <p className="text-amber-700">{created.warning}</p>}
+        </DonePopup>
+      )}
+
+      {/* 삭제 완료 팝업 */}
+      {deleted && (
+        <DonePopup
+          tone="delete"
+          title={`${deleted.name} 프로젝트를 삭제했습니다`}
+          onClose={() => setDeleted(null)}
+          actions={[
+            { label: "확인", onClick: () => setDeleted(null), primary: true },
+            { label: "첫 화면으로", href: "/" },
+          ]}
+        >
+          {deleted.kind === "album" ? <p>{deleted.note ?? "프로젝트 데이터를 지웠습니다."}</p> : <p>첫 화면의 링크 카드를 지웠습니다.</p>}
+          <p>첫 화면 카드 목록에서도 사라졌습니다.</p>
+        </DonePopup>
+      )}
 
       {/* 생성 직후 안내 */}
       {created && (
