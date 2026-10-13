@@ -13,7 +13,7 @@ import {
   type VehicleDbInfo,
 } from "@/lib/export/fill-progress-xlsx";
 import { buildV2Workbook } from "@/lib/export/v2-form";
-import { VCOL, isExample, isTarget, readVehicleTable, type VehicleRow } from "@/lib/import/vehicle-columns";
+import { VCOL, cellText, isExample, isTarget, readVehicleTable, type VehicleRow } from "@/lib/import/vehicle-columns";
 import { workDateString, workDateExcelSerial, excelSerialFromDate } from "@/lib/work-day";
 
 import { TEMPLATE_BUCKET, templateObject } from "@/lib/template-path";
@@ -147,7 +147,8 @@ export async function buildProgressXlsx(opts?: { asOfDate?: string; slug?: strin
 // 새 프로젝트(B820 아님): 저장된 업로드 파일의 차량리스트 ⊕ DB → 마스터 양식(lib/export/v2-form.ts)으로 새로 만든다.
 //   대상 차량(J≠제외·말소): 운수사·노선·번호·설치 예정일은 DB 값, 설치 완료여부/완료일(L/M)은 완료 맵.
 //   DB에 없는 대상 차량 행은 뺀다(삭제), 파일에 없는 DB 차량(증차)은 뒤에 붙인다. 비대상 행은 그대로, 예시 행은 제외.
-//   배차표 설치제외 차량은 운수사 비고(M열)에 대수·차량번호로 적는다.
+//   진행현황 시트는 마스터로 새로 만들므로 저장 양식(업로드 파일)의 운수사별 비고(M열)는 따로 읽어 다시 채운다
+//   (업로드 뒤 비고가 사라진 10/13 실사례). 배차표 설치제외 차량은 그 뒤에 대수·차량번호로 덧붙인다.
 export async function buildV2Progress(
   template: Buffer,
   name: string,
@@ -203,14 +204,35 @@ export async function buildV2Progress(
   const order = new Map(out.map((r, i) => [r, i]));
   const no = (r: VehicleRow) => (typeof r[VCOL.listNo] === "number" ? (r[VCOL.listNo] as number) : Infinity);
   out.sort((a, b) => no(a) - no(b) || order.get(a)! - order.get(b)!);
-  const notes = new Map<string, string[]>();
-  for (const e of exclusions) notes.set(e.operator, [...(notes.get(e.operator) ?? []), e.plate + (e.reason ? `(${e.reason})` : "")]);
+  const operatorNotes = savedNotes(wb, "설치 진행현황");
+  const excl = new Map<string, string[]>();
+  for (const e of exclusions) excl.set(e.operator, [...(excl.get(e.operator) ?? []), e.plate + (e.reason ? `(${e.reason})` : "")]);
+  for (const [op, plates] of excl) {
+    const line = `설치제외 ${plates.length}대: ${plates.join(", ")}`;
+    const prev = operatorNotes.get(op);
+    operatorNotes.set(op, prev && !prev.includes(line) ? `${prev} / ${line}` : line);
+  }
   const buffer = await buildV2Workbook({
     name,
     vehicles: out,
     period,
     asOfSerial,
-    operatorNotes: new Map([...notes].map(([op, plates]) => [op, `설치제외 ${plates.length}대: ${plates.join(", ")}`])),
+    operatorNotes,
+    surveyNotes: savedNotes(wb, "실사 진행현황"),
   });
   return { buffer, filled, added, removed };
+}
+
+// 저장 양식의 진행현황 시트(운수사 블록 12행~합계 전)에서 운수사(B) → 비고(M)를 읽는다.
+function savedNotes(wb: ExcelJS.Workbook, sheet: string): Map<string, string> {
+  const notes = new Map<string, string>();
+  const ws = wb.getWorksheet(sheet);
+  if (!ws) return notes;
+  for (let r = 12; r <= ws.rowCount; r++) {
+    const op = cellText(ws.getRow(r).getCell("B").value).trim();
+    if (!op || op.replace(/\s/g, "") === "합계") break;
+    const note = cellText(ws.getRow(r).getCell("M").value).trim();
+    if (note) notes.set(op, note);
+  }
+  return notes;
 }

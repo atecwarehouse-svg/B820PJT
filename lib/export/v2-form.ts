@@ -28,7 +28,8 @@ export interface V2BuildOptions {
   vehicles: VehicleRow[]; // 차량리스트 행 (마스터 열 글자 → 값)
   period?: { start: string; end: string } | null; // 프로젝트 기간 (요약 줄)
   asOfSerial?: number; // 기준일(Excel 직렬값). 없으면 =TODAY()
-  operatorNotes?: Map<string, string>; // 운수사 → 설치 진행현황 비고(M열) — 배차표 설치제외 등
+  operatorNotes?: Map<string, string>; // 운수사 → 설치 진행현황 비고(M열) — 저장 양식에 적어둔 비고 + 배차표 설치제외
+  surveyNotes?: Map<string, string>; // 운수사 → 실사 진행현황 비고(M열) — 저장 양식에 적어둔 비고
 }
 
 // 시트 묶음: 설치(차량리스트 K/L/M) · 실사(G/H/I). 실사 시트는 마스터에서 숨김 상태.
@@ -139,7 +140,8 @@ export async function buildV2Workbook(o: V2BuildOptions): Promise<Buffer> {
       setValue(prog, 1, OP_ROW.prog + i, i + 1);
       setValue(prog, colNum("B"), OP_ROW.prog + i, op.name);
       setValue(prog, colNum("C"), OP_ROW.prog + i, op.depot || null);
-      if (g.key === "설치" && o.operatorNotes?.get(op.name)) setValue(prog, colNum("M"), OP_ROW.prog + i, o.operatorNotes.get(op.name)!);
+      const note = (g.key === "설치" ? o.operatorNotes : o.surveyNotes)?.get(op.name);
+      if (note) setValue(prog, colNum("M"), OP_ROW.prog + i, note);
     });
     setValue(prog, 1, 1, title("진행현황"));
     setValue(prog, 1, 2, summary);
