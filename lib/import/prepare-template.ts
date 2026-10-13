@@ -36,10 +36,14 @@ function num(v: unknown): number | null {
   return isFinite(n) ? n : null;
 }
 
+// legacy(기본 true)=B820 옛 양식: 차량리스트·전개일정·진행현황 시트가 다 있어야 하고 대상수량 합을 검사한다.
+// legacy=false(새 프로젝트): 저장 파일은 차량리스트 원본일 뿐이고 진행현황 엑셀은 다운로드 때 마스터 양식(lib/export/v2-form.ts)으로
+//   다시 만들어지므로 차량리스트 시트만 있으면 된다.
 export async function prepareTemplateBuffer(
   buf: Buffer,
-  opts?: { checkOnly?: boolean },
+  opts?: { checkOnly?: boolean; legacy?: boolean },
 ): Promise<TemplateCheck> {
+  const legacy = opts?.legacy ?? true;
   const wb = new ExcelJS.Workbook();
   try {
     await wb.xlsx.load(buf as unknown as ArrayBuffer);
@@ -50,8 +54,8 @@ export async function prepareTemplateBuffer(
   const names = wb.worksheets.map((w) => w.name);
   const missing: string[] = [];
   if (!names.includes("차량리스트")) missing.push("차량리스트");
-  if (!names.includes("전개일정")) missing.push("전개일정");
-  if (!names.some((n) => n.includes("진행현황"))) missing.push("진행현황");
+  if (legacy && !names.includes("전개일정")) missing.push("전개일정");
+  if (legacy && !names.some((n) => n.includes("진행현황"))) missing.push("진행현황");
   if (missing.length > 0) {
     return {
       ok: false,
@@ -59,30 +63,32 @@ export async function prepareTemplateBuffer(
     };
   }
 
-  // 자체 정합 검사: 전개일정 대상수량(E열) 합 vs 차량리스트 대수.
+  // 자체 정합 검사(옛 양식): 전개일정 대상수량(E열) 합 vs 차량리스트 대수.
   // (이 둘이 다른 채로 템플릿이 되면 진행현황 총대수가 DB와 어긋난다)
   let warn: string | undefined;
-  const vws = wb.getWorksheet("차량리스트")!;
-  let vCount = 0;
-  for (let r = 2; r <= vws.rowCount; r++) {
-    if (txt(vws.getRow(r).getCell("F").value)) vCount++;
-  }
-  const sws = wb.getWorksheet("전개일정")!;
-  let eSum = 0;
-  let eUnknown = false; // 수식 캐시 없음 등으로 값을 못 읽으면 검사 포기(오탐 방지)
-  for (let r = 5; r <= sws.rowCount; r++) {
-    const row = sws.getRow(r);
-    const op = txt(row.getCell("A").value);
-    if (!op || op === "합계") continue;
-    const e = num(row.getCell("E").value);
-    if (e == null) {
-      eUnknown = true;
-      break;
+  if (legacy) {
+    const vws = wb.getWorksheet("차량리스트")!;
+    let vCount = 0;
+    for (let r = 2; r <= vws.rowCount; r++) {
+      if (txt(vws.getRow(r).getCell("F").value)) vCount++;
     }
-    eSum += e;
-  }
-  if (!eUnknown && eSum !== vCount) {
-    warn = `이 파일의 전개일정 대상수량 합(${eSum.toLocaleString()})과 차량리스트 대수(${vCount.toLocaleString()})가 다릅니다. 진행현황 총대수가 어긋날 수 있으니 양식 숫자를 확인해주세요.`;
+    const sws = wb.getWorksheet("전개일정")!;
+    let eSum = 0;
+    let eUnknown = false; // 수식 캐시 없음 등으로 값을 못 읽으면 검사 포기(오탐 방지)
+    for (let r = 5; r <= sws.rowCount; r++) {
+      const row = sws.getRow(r);
+      const op = txt(row.getCell("A").value);
+      if (!op || op === "합계") continue;
+      const e = num(row.getCell("E").value);
+      if (e == null) {
+        eUnknown = true;
+        break;
+      }
+      eSum += e;
+    }
+    if (!eUnknown && eSum !== vCount) {
+      warn = `이 파일의 전개일정 대상수량 합(${eSum.toLocaleString()})과 차량리스트 대수(${vCount.toLocaleString()})가 다릅니다. 진행현황 총대수가 어긋날 수 있으니 양식 숫자를 확인해주세요.`;
+    }
   }
 
   if (opts?.checkOnly) return { ok: true, warn };

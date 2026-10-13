@@ -155,22 +155,6 @@ export function makeRestyler(stylesXml: string) {
   return { green: fillFor(9), beige: fillFor(7), white, restyle, serialize };
 }
 
-/** 진행현황 데이터 행(12행~, 전개일정!F 참조가 있는 행) A~N 채움을 흰색으로 — 새 프로젝트 양식 초기화.
- *  색은 다운로드 때 paintProgressRows가 완료=녹색·설치제외=베이지로 다시 칠한다. */
-export function whitenProgressRows(pXml: string, stylesXml: string): { pXml: string; stylesXml: string } {
-  const r = makeRestyler(stylesXml);
-  if (!r) return { pXml, stylesXml };
-  const out = pXml.replace(/<row r="(\d+)"([^>]*?)(?:\/>|>([\s\S]*?)<\/row>)/g, (whole, rn: string, attrs: string, inner?: string) => {
-    if (inner === undefined || Number(rn) < 12 || !/전개일정'?!\$?F\$?\d+/.test(inner)) return whole;
-    const cells = inner.replace(/<c r="[A-N]\d+"[^>]*?\bs="(\d+)"/g, (c, s: string) => {
-      const ns = r.restyle(Number(s), r.white);
-      return ns === Number(s) ? c : c.replace(/\bs="\d+"/, `s="${ns}"`);
-    });
-    return `<row r="${rn}"${attrs}>${cells}</row>`;
-  });
-  return { pXml: out, stylesXml: r.serialize() };
-}
-
 // sharedStrings.xml → 문자열 배열 (각 <si>의 <t>들을 이어붙임)
 export function parseSharedStrings(xml: string): string[] {
   const out: string[] = [];

@@ -1,216 +1,46 @@
 import { NextRequest, NextResponse } from "next/server";
-import ExcelJS from "exceljs";
 import JSZip from "jszip";
-import { createServiceClient } from "@/lib/supabase/server";
-import { DEFAULT_SLUG } from "@/lib/project";
-import { TEMPLATE_BUCKET, templateObject } from "@/lib/template-path";
 import { parsePeriod } from "@/lib/settings";
 import { addGuideSheet, type GuideRow } from "@/lib/import/guide-sheet";
 import { RAW_DATA_COLS } from "@/components/RawDataGuide";
-import { parseSharedStrings, resolveSheetPaths, setCellNumber, whitenProgressRows } from "@/lib/export/fill-progress-xlsx";
-import { MAX_PLAN_DAYS, colName, colNum, colorDateRow, expandPlanColumns, fixProgressPlanRange } from "@/lib/import/schedule-columns";
+import { buildV2Workbook, exampleVehicle } from "@/lib/export/v2-form";
+import { serialFromYmd } from "@/lib/import/vehicle-columns";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// GET /api/import/schedule/template?name=<프로젝트명>&start=YYYY-MM-DD&end=YYYY-MM-DD → 로우데이터 빈 양식(xlsx) 다운로드.
-// B820 진행현황 양식(Storage templates/progress-template.xlsx)을 바탕으로 zip 셀 수술만 한다
-// (수식·서식·병합·피벗은 그대로 — 행을 지우면 SUM 범위·공유수식이 깨지므로 행은 남기고 값만 비운다).
-//   차량리스트 : 1행 제목줄(E1=설치 장소) + 2행 작성 예시(차량번호 "예)…"는 업로드 파서가 건너뜀), 나머지 행 삭제
-//   전개일정   : A1 제목=(프로젝트명) 전개일정, 3행 날짜=start~end 하루씩(61일 넘으면 열 쌍을 늘림, 최대 366일, 없으면 H3 예시 날짜만),
-//                5행 예시(○○교통/5311), 6~341행 값 비움·수식 유지 (운수사·노선·차고지·대상수량은 업로드 때 차량리스트로 자동 채움)
-//   진행현황   : A1 제목=(프로젝트명) 진행현황, A10 기준일=다운로드 당일(KST),
-//                12~348행 A(NO)·B(영업소)·C(노선)·D(대상대수)는 같은 행의 전개일정(A/B/E) 참조 수식
-//                → 전개일정에 운수사·노선을 적는 만큼 진행현황 행이 따라 채워진다(빈 행은 공란)
-//   workbook   : fullCalcOnLoad — 열 때 수식 재계산(캐시값은 지움), 진행현황 탭 이름=(프로젝트명) 진행현황
-//   작성 안내  : 맨 앞 탭(열 때 보이는 시트)에 작성 순서·열 안내 — 업로드 때 lib/import/guide-sheet removeGuideSheet로 빠진다
-//   색         : 진행현황 12행~ 바탕 흰색(다운로드 때 완료=녹색·설치제외=베이지), 전개일정 3행 날짜 글자 평일 검정·토 파랑·일/공휴일 빨강,
-//                차량리스트 숨긴 열(D·E 등) 보이기
-// 그래서 이 파일을 채워 올리면 진행현황 다운로드 양식으로도 저장된다. Storage를 못 읽으면 차량리스트만 있는 간단 양식.
+// GET /api/import/schedule/template?name=<프로젝트명>&start=YYYY-MM-DD&end=YYYY-MM-DD → 새 프로젝트 빈 양식(xlsx).
+//   마스터 양식(lib/export/templates/v2-master.xlsx)에 예시 차량 1대(차량번호 "예)…"는 업로드 파서가 건너뜀)를 넣어 만든다.
+//   시트: 설치 진행현황·설치 전개일정·설치 일자별 현황(+숨김 실사 3종)·차량리스트 — 집계는 전부 차량리스트 수식이라
+//   사용자는 차량리스트만 채우면 된다. 제목은 "(프로젝트명) 설치 진행현황", 기준일 K1=TODAY().
+//   맨 앞 「작성 안내」 시트는 업로드 때 lib/import/guide-sheet removeGuideSheet로 빠진다.
+//   이 파일을 채워 올리면 차량리스트가 이 프로젝트의 진행현황 원본으로 저장되고, 다운로드 때 같은 양식으로 다시 생성된다.
 
 const XLSX_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
-const EXAMPLE_DATE = Date.UTC(2026, 9, 15);
-const excelSerial = (ms: number) => Math.round((ms - Date.UTC(1899, 11, 30)) / 86400000);
-const EX_OP = "○○교통";
-const EX_ROUTE = "5311";
-const EX_DEPOT = "○○차고지";
+const EXAMPLE_DATE = "2026-10-15";
 
-// 차량리스트 2행 예시 — 열 위치는 lib/import/parse-schedule.ts 가 읽는 자리
-const VEHICLE_EXAMPLE: Record<string, string | number> = {
-  A: 1, B: EX_OP, C: EX_ROUTE, D: EX_DEPOT, E: "인천 서구 ○○동 123", F: "예) 인천70바4005",
-  I: excelSerial(EXAMPLE_DATE), J: 2023, L: "유니버스 수소", U: "○○전자",
-};
-// 전개일정 5행 예시 — A 운수사·B 노선·C/E 대상수량·D 차고지·H 첫 날짜 계획
-const SCHEDULE_EXAMPLE: Record<string, string | number> = { A: EX_OP, B: EX_ROUTE, C: 1, D: EX_DEPOT, E: 1, H: 1 };
-// 오늘(KST) Excel 직렬값 — 진행현황 A10 기준일
-const todaySerial = () => Math.floor((Date.now() + 9 * 3600000) / 86400000) + 25569;
-// "YYYY-MM-DD" 시작~종료(포함) 하루 간격 Excel 직렬값 목록 — 전개일정 3행 날짜
-function dateSerials(start: string, end: string): number[] {
-  const ser = (s: string) => excelSerial(Date.UTC(Number(s.slice(0, 4)), Number(s.slice(5, 7)) - 1, Number(s.slice(8, 10))));
-  const out: number[] = [];
-  for (let d = ser(start); d <= ser(end); d++) out.push(d);
-  return out;
-}
-
-const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-const CELL_RE = /<c r="([A-Z]+)(\d+)"([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/g;
-const styleOf = (attrs: string) => (attrs.match(/\bs="(\d+)"/) || [])[1];
-const sAttr = (s?: string) => (s ? ` s="${s}"` : "");
-
-function valueCell(ref: string, s: string | undefined, v: string | number): string {
-  return typeof v === "number"
-    ? `<c r="${ref}"${sAttr(s)}><v>${v}</v></c>`
-    : `<c r="${ref}"${sAttr(s)} t="inlineStr"><is><t>${esc(v)}</t></is></c>`;
-}
-
-/** 셀 하나를 '빈 양식' 셀로: 수식은 유지(캐시값 제거), 값 셀은 example에 있으면 그 값, 없으면 빈 셀(서식 유지) */
-function blankCell(col: string, row: string, attrs: string, inner: string | undefined, example: Record<string, string | number>): string {
-  const ref = `${col}${row}`;
-  const s = styleOf(attrs);
-  const f = inner?.match(/<f\b[^>]*(?:\/>|>[\s\S]*?<\/f>)/)?.[0];
-  if (f) return `<c r="${ref}"${sAttr(s)}>${f}</c>`;
-  const v = example[col];
-  return v === undefined ? `<c r="${ref}"${sAttr(s)}/>` : valueCell(ref, s, v);
-}
-
-/** 시트 XML의 rows[from..to] 값 비우기 (exampleRow 행에는 example 값) */
-function blankRows(xml: string, from: number, to: number, exampleRow: number, example: Record<string, string | number>): string {
-  return xml.replace(/<row r="(\d+)"([^>]*?)(?:\/>|>([\s\S]*?)<\/row>)/g, (whole, rnStr: string, rowAttrs: string, inner?: string) => {
-    const rn = Number(rnStr);
-    if (rn < from || rn > to || inner === undefined) return whole;
-    const ex = rn === exampleRow ? example : {};
-    const cells = inner.replace(CELL_RE, (_c, col: string, row: string, attrs: string, cin?: string) => blankCell(col, row, attrs, cin, ex));
-    return `<row r="${rn}"${rowAttrs}>${cells}</row>`;
+export async function GET(req: NextRequest) {
+  const q = req.nextUrl.searchParams;
+  const projectName = (q.get("name") ?? "").trim().slice(0, 40) || "(프로젝트명)";
+  const period = parsePeriod({ start: q.get("start"), end: q.get("end") }); // 잘못되면 null
+  const exampleDate = period?.start ?? EXAMPLE_DATE;
+  const buf = await buildV2Workbook({ name: projectName, period, vehicles: [exampleVehicle(serialFromYmd(exampleDate))] });
+  const zip = await JSZip.loadAsync(buf);
+  await addGuideSheet(zip, guideRows(projectName, period), [10, 16, 9, 60]);
+  const out = await zip.generateAsync({ type: "nodebuffer", compression: "DEFLATE" });
+  const filename = `${projectName} 진행현황_빈양식.xlsx`;
+  return new NextResponse(new Uint8Array(out), {
+    headers: {
+      "Content-Type": XLSX_TYPE,
+      "Content-Disposition": `attachment; filename="raw_template.xlsx"; filename*=UTF-8''${encodeURIComponent(filename)}`,
+      "Cache-Control": "no-store",
+      "X-Template-Full": "1",
+    },
   });
-}
-
-/** A{row} 제목 셀을 inline 문자열로 교체 */
-function setTitle(xml: string, ref: string, text: string): string {
-  return xml.replace(new RegExp(`<c r="${ref}"([^>]*?)(?:/>|>[\\s\\S]*?</c>)`), (_m, attrs: string) => valueCell(ref, styleOf(attrs), text));
-}
-
-// 템플릿 캐시 — 4MB 파일을 요청마다 받지 않도록 10분 보관
-let cache: { at: number; buf: Buffer } | null = null;
-
-async function loadB820Template(): Promise<Buffer | null> {
-  if (cache && Date.now() - cache.at < 10 * 60 * 1000) return cache.buf;
-  try {
-    const { data, error } = await createServiceClient(DEFAULT_SLUG)
-      .storage.from(TEMPLATE_BUCKET)
-      .download(templateObject(DEFAULT_SLUG));
-    if (error || !data) return null;
-    const buf = Buffer.from(await data.arrayBuffer());
-    cache = { at: Date.now(), buf };
-    return buf;
-  } catch {
-    return null;
-  }
-}
-
-/** B820 양식 → 빈 양식. 구조가 예상과 다르면 null. period: 프로젝트 기간(전개일정 3행 날짜) */
-async function blankFromTemplate(src: Buffer, projectName: string, period: { start: string; end: string } | null): Promise<Buffer | null> {
-  const zip = await JSZip.loadAsync(src);
-  const paths = await resolveSheetPaths(zip);
-  const vFile = zip.file(paths.vehicle);
-  const sFile = zip.file(paths.schedule);
-  const pFile = zip.file(paths.progress);
-  const wbFile = zip.file("xl/workbook.xml");
-  if (!vFile || !sFile || !pFile || !wbFile) return null;
-
-  // ── 차량리스트: 1행 + 예시 2행만 남긴다 ──
-  let vx = await vFile.async("string");
-  const open = vx.indexOf("<sheetData>");
-  const close = vx.indexOf("</sheetData>");
-  if (open < 0 || close < 0) return null;
-  const rows = vx.slice(open + "<sheetData>".length, close).match(/<row r="\d+"[^>]*?(?:\/>|>[\s\S]*?<\/row>)/g);
-  if (!rows || rows.length < 2 || !rows[0].startsWith('<row r="1"')) return null;
-  let header = rows[0];
-  const e1 = header.match(/<c r="E1"([^>]*?)(?:\/>|>[\s\S]*?<\/c>)/);
-  if (e1) header = header.replace(e1[0], valueCell("E1", styleOf(e1[1]), "설치 장소"));
-  const src2 = rows.find((r) => r.startsWith('<row r="2"')) ?? rows[1];
-  const rowAttrs = (src2.match(/^<row r="\d+"([^>]*?)\/?>/) || ["", ""])[1].replace(/\s*\/$/, "");
-  const cells: string[] = [];
-  for (const m of src2.matchAll(CELL_RE)) {
-    const v = VEHICLE_EXAMPLE[m[1]];
-    const s = styleOf(m[3]);
-    cells.push(v === undefined ? `<c r="${m[1]}2"${sAttr(s)}/>` : valueCell(`${m[1]}2`, s, v));
-  }
-  if (!cells.some((c) => c.startsWith('<c r="F2"'))) return null;
-  vx = vx.slice(0, open) + "<sheetData>" + header + `<row r="2"${rowAttrs}>${cells.join("")}</row>` + vx.slice(close);
-  vx = vx.replace(/<dimension ref="A1:([A-Z]+)\d+"\/>/, '<dimension ref="A1:$12"/>');
-  vx = vx.replace(/<autoFilter ref="A1:([A-Z]+)\d+"/, '<autoFilter ref="A1:$12"');
-  // B820 원본에서 숨겨 둔 열(D 차고지·E 설치 장소 등) 다시 보이기 — 새 프로젝트는 여기에 직접 적는다
-  vx = vx.replace(/<cols>[\s\S]*?<\/cols>/, (c) => c.replace(/ hidden="1"/g, ""));
-  zip.file(paths.vehicle, vx);
-  const stylesFile = zip.file("xl/styles.xml");
-  let styles = (await stylesFile?.async("string")) ?? "";
-
-  // ── 전개일정: 제목, 3행 날짜(프로젝트 기간이면 시작일부터 하루씩, 없으면 H3만 예시 날짜), 5행 예시, 6행~합계 전 행 비움 ──
-  //    날짜 칸 = 4행 "계획" 열(H·J·L…, B820 양식 61쌍). 기간이 더 길면 계획·완료 열 쌍을 늘린다(최대 MAX_PLAN_DAYS).
-  let sx = await sFile.async("string");
-  const sTotal = findTotalRow(sx, 5); // "합계" 행(A열 공유문자열은 못 읽으니 SUM(E5:E…) 수식으로 찾는다)
-  sx = setTitle(sx, "A1", `${projectName} 전개일정`);
-  const dates = period ? dateSerials(period.start, period.end).slice(0, MAX_PLAN_DAYS) : [excelSerial(EXAMPLE_DATE)];
-  // 3행 B820 날짜 비우기 (A~G는 라벨·수식이라 그대로)
-  sx = sx.replace(/<row r="3"([^>]*?)>([\s\S]*?)<\/row>/, (_m, attrs: string, inner: string) =>
-    `<row r="3"${attrs}>${inner.replace(CELL_RE, (c, col: string, row: string, cattrs: string, cin?: string) =>
-      col.length === 1 && col < "H" ? c : blankCell(col, row, cattrs, cin, {}))}</row>`);
-  sx = blankRows(sx, 5, sTotal - 1, 5, SCHEDULE_EXAMPLE);
-  const shared = parseSharedStrings((await zip.file("xl/sharedStrings.xml")?.async("string")) ?? "");
-  const ex = expandPlanColumns(sx, shared, dates.length);
-  if (!ex.cols.length) return null;
-  sx = ex.sx.replace(/<row r="3"[^>]*>[\s\S]*?<\/row>/, (row) =>
-    dates.reduce((r, d, i) => setCellNumber(r, `${ex.cols[i]}3`, d), row));
-  // 3행 날짜 글자색: 평일 검정 · 토 파랑 · 일·공휴일 빨강
-  if (styles) ({ sx, styles } = colorDateRow(sx, styles, ex.cols));
-  zip.file(paths.schedule, sx);
-  const lastCol = colName(colNum(ex.cols[ex.cols.length - 1]) + 1); // 마지막 완료 열
-
-  // ── 진행현황: 제목, A10 기준일=오늘, 12행~합계 전 행 값 비움 + A/B/C/D는 전개일정 참조 수식 ──
-  let px = await pFile.async("string");
-  const pTotal = findTotalRow(px, 12);
-  px = setTitle(px, "A1", `${projectName} 진행현황`);
-  px = setCellNumber(px, "A10", todaySerial());
-  px = fixProgressPlanRange(px, lastCol); // 금일·누적 계획(A6·F6) SUMIF 범위 = 전개일정 마지막 열까지
-  px = blankRows(px, 12, pTotal - 1, 0, {});
-  px = px.replace(/<row r="(\d+)"([^>]*?)>([\s\S]*?)<\/row>/g, (whole, rnStr: string, attrs: string, inner: string) => {
-    const rn = Number(rnStr);
-    // 같은 행의 F열 수식(전개일정!F{n})에서 전개일정 행 번호를 읽는다 — 행 오프셋을 상수로 두지 않음
-    const sr = rn >= 12 && rn < pTotal ? inner.match(/전개일정!F(\d+)/)?.[1] : undefined;
-    if (!sr) return whole;
-    const f: Record<string, string> = {
-      A: `IF(전개일정!A${sr}="","",ROW()-11)`,
-      B: `IF(전개일정!A${sr}="","",전개일정!A${sr})`,
-      C: `IF(전개일정!B${sr}="","",전개일정!B${sr})`,
-      D: `전개일정!E${sr}`, // 다운로드 보정(fill-progress-xlsx)이 이 참조를 읽어 Δ를 더한다
-    };
-    const cells = inner.replace(CELL_RE, (c, col: string, row: string, cattrs: string) =>
-      f[col] ? `<c r="${col}${row}"${sAttr(styleOf(cattrs))}><f>${f[col]}</f></c>` : c);
-    return `<row r="${rn}"${attrs}>${cells}</row>`;
-  });
-  // 12행~ 데이터 행 바탕 흰색으로 초기화 (B820의 녹색·베이지 제거) — 다운로드 때 완료=녹색·설치제외=베이지로 칠해진다
-  if (styles) ({ pXml: px, stylesXml: styles } = whitenProgressRows(px, styles));
-  zip.file(paths.progress, px);
-  if (styles) zip.file("xl/styles.xml", styles);
-
-  // ── 열 때 전부 재계산 (캐시값을 지웠으므로) ──
-  let wx = await wbFile.async("string");
-  wx = /<calcPr\b/.test(wx)
-    ? wx.replace(/<calcPr\b([^>]*?)\/?>/, (m, attrs: string) => (/fullCalcOnLoad=/.test(attrs) ? m : `<calcPr${attrs} fullCalcOnLoad="1"${m.endsWith("/>") ? "/>" : ">"}`))
-    : wx.replace("</workbook>", '<calcPr fullCalcOnLoad="1"/></workbook>');
-  // 진행현황 시트 탭 이름도 "(프로젝트명) 진행현황" — 다른 시트 수식이 이 이름을 참조하지 않아 안전 (31자·금지문자 제한)
-  const tab = `${projectName} 진행현황`.replace(/[[\]:*?\/\\]/g, " ").slice(0, 31);
-  wx = wx.replace(/<sheet name="[^"]*진행현황[^"]*"/, `<sheet name="${esc(tab)}"`);
-  zip.file("xl/workbook.xml", wx);
-
-  // ── 맨 앞 「작성 안내」 시트 (업로드 때 prepare-template이 뺀다) ──
-  await addGuideSheet(zip, guideRows(projectName, tab, period), [10, 16, 9, 60]);
-
-  return zip.generateAsync({ type: "nodebuffer", compression: "DEFLATE" });
 }
 
 /** 「작성 안내」 시트 내용 — 긴 문장은 A열에 쓰고 오른쪽 빈 칸으로 넘쳐 보이게(병합하면 줄 높이가 안 맞음) */
-function guideRows(projectName: string, tab: string, period: { start: string; end: string } | null): GuideRow[] {
+function guideRows(projectName: string, period: { start: string; end: string } | null): GuideRow[] {
   const today = new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 10);
   const line = (text: string, s: GuideRow["s"] = "body"): GuideRow => ({ s, cells: [text] });
   const gap: GuideRow = { cells: [] };
@@ -220,84 +50,24 @@ function guideRows(projectName: string, tab: string, period: { start: string; en
     gap,
     line("■ 작성 순서", "head"),
     line("1. 「차량리스트」 시트 2행부터 차량 한 대를 한 줄씩 적습니다. 어느 열에 무엇을 넣는지는 아래 표를 보세요."),
-    line("2. 2행의 회색 예시는 지우지 않아도 됩니다. 차량번호가 「예)」로 시작하는 줄은 업로드 때 건너뜁니다."),
-    line(`3. 「전개일정」·「${tab}」 시트는 손대지 않아도 됩니다. 업로드하면 차량리스트를 기준으로 자동으로 채워집니다.`),
-    line("     · 전개일정: 운수사·노선·차고지·대상수량, 3행 날짜(프로젝트 기간 + 설치 예정일), 날짜별 계획 수량"),
-    line("     · 진행현황: 영업소·노선·대상대수가 전개일정을 따라 채워지고, 완료 수량은 앱에서 설치가 끝나면 집계됩니다."),
+    line("2. 2행의 예시(○○교통 / 예) 인천70바4005)는 지우지 않아도 됩니다. 차량번호가 「예)」로 시작하는 줄은 업로드 때 건너뜁니다."),
+    line("3. 「설치 진행현황」·「설치 전개일정」·「설치 일자별 현황」 시트는 손대지 않아도 됩니다. 전부 차량리스트를 보는 수식이라 차량리스트를 채우면 바로 따라 바뀝니다."),
+    line("     · 설치 대상(J열)이 「대상」인 차량만 집계합니다. 「제외」·「말소」로 적은 차량은 리스트에 남지만 대상·계획에서 빠집니다."),
+    line("     · 운수사 행과 날짜 열은 앱에서 진행현황을 다운로드할 때 차량리스트의 운수사·설치 예정일 수만큼 자동으로 늘어납니다."),
     line("4. 저장한 뒤 「프로젝트 만들기」 화면에 첨부하거나, 대시보드의 「최초 업로드」로 올립니다."),
-    line("     · 그 뒤로 일정이 바뀌면 같은 파일을 고쳐 「설치일정 변경 업로드」로 올리면 됩니다. 날짜별 계획도 다시 계산됩니다."),
-    line("5. 시트 이름(차량리스트·전개일정)과 열 위치는 바꾸지 마세요."),
+    line("     · 그 뒤로 일정이 바뀌면 같은 파일의 차량리스트를 고쳐 「설치일정 변경 업로드」로 올리면 됩니다."),
+    line("5. 시트 이름(차량리스트)과 1행 제목은 바꾸지 마세요. 열 순서는 제목으로 찾으니 바뀌어도 됩니다."),
     gap,
     line("■ 차량리스트 열 안내", "head"),
     { s: "th", cells: ["열", "내용", "구분", "설명"] },
     ...RAW_DATA_COLS.map((c) => ({ cells: [c.col, c.name, c.need, c.note] })),
-    { cells: ["G · H", "완료여부·완료일", "비워 둠", "앱이 설치 완료 때 채우는 칸입니다. 적지 마세요."] },
+    { cells: ["L · M", "설치 완료여부·완료일", "비워 둠", "앱이 설치 완료 때 채우는 칸입니다. 적지 마세요."] },
+    { cells: ["G · H · I", "실사 예정일·완료여부·완료일", "선택", "현장실사를 했으면 적습니다. 숨겨진 「실사 …」 시트 3개가 이 열로 집계됩니다."] },
     gap,
     line("■ 참고", "head"),
-    line(`· 「${tab}」 시트 A10 기준일은 이 파일을 내려받은 날짜입니다. 앱에서 진행현황을 다운로드하면 고른 날짜로 바뀝니다.`),
-    line(`· 「${tab}」 시트 행은 흰 바탕입니다. 앱에서 받은 진행현황 엑셀에서는 완료된 노선이 녹색, 설치제외가 있으면 베이지로 칠해집니다.`),
-    line("· 전개일정 3행 날짜는 평일 검정, 토요일 파랑, 일요일·공휴일 빨강 글자로 표시됩니다."),
-    line("· 표에 없는 열(K 등)은 읽지 않으니 메모용으로 써도 됩니다."),
+    line("· 「설치 진행현황」 K1 기준일은 엑셀을 여는 날짜(TODAY)입니다. 앱에서 진행현황을 다운로드하면 고른 날짜로 바뀝니다."),
+    line("· 설치 예정일이 같은 차량이 그 날의 계획 수량이 됩니다. 예정일이 비어 있으면 대상에는 들어가지만 날짜별 계획에는 빠집니다."),
+    line("· 표에 없는 열(제조사·차대번호 등)은 앱이 읽지 않지만 리스트에 그대로 보존됩니다. 메모용으로 써도 됩니다."),
     line("· 같은 차량번호가 여러 줄이면 마지막 줄만 반영됩니다. 차량리스트에서 지운 차량은 업로드 때 앱에서도 지워집니다(설치 기록이 있는 차량은 보호)."),
   ];
-}
-
-/** 합계 행 번호 — E열 또는 D열에 SUM(?from:?…) 수식이 있는 첫 행. 못 찾으면 마지막 행+1 */
-function findTotalRow(xml: string, from: number): number {
-  const m = xml.match(new RegExp(`<c r="[DE](\\d+)"[^>]*><f>SUM\\([DE]${from}:[DE]\\d+\\)</f>`));
-  if (m) return Number(m[1]);
-  const last = [...xml.matchAll(/<row r="(\d+)"/g)].map((r) => Number(r[1]));
-  return (last.length ? Math.max(...last) : from) + 1;
-}
-
-/** 폴백 — 차량리스트 시트만 있는 간단한 양식 */
-async function simpleBlank(): Promise<Buffer> {
-  const wb = new ExcelJS.Workbook();
-  const ws = wb.addWorksheet("차량리스트");
-  const headers: Record<string, string> = {
-    A: "번호", B: "운수사", C: "노선", D: "차고지", E: "설치 장소", F: "차량번호", G: "완료여부", H: "완료일",
-    I: "설치 예정일", J: "연식", L: "모델명", U: "타코 제조사",
-  };
-  for (const [col, name] of Object.entries(headers)) {
-    const cell = ws.getCell(`${col}1`);
-    cell.value = name;
-    cell.font = { bold: true };
-    cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFE5E7EB" } };
-    cell.alignment = { horizontal: "center" };
-  }
-  for (const [col, v] of Object.entries(VEHICLE_EXAMPLE)) {
-    const cell = ws.getCell(`${col}2`);
-    cell.value = col === "I" ? new Date(EXAMPLE_DATE) : v;
-    cell.font = { color: { argb: "FF9CA3AF" }, italic: true };
-  }
-  ws.getColumn("I").numFmt = "yyyy-mm-dd";
-  ws.views = [{ state: "frozen", ySplit: 1 }];
-  return Buffer.from(await wb.xlsx.writeBuffer());
-}
-
-export async function GET(req: NextRequest) {
-  const q = req.nextUrl.searchParams;
-  const projectName = (q.get("name") ?? "").trim().slice(0, 40) || "(프로젝트명)";
-  const period = parsePeriod({ start: q.get("start"), end: q.get("end") }); // 잘못되면 null → 예시 날짜
-  let buf: Buffer | null = null;
-  let full = false;
-  const src = await loadB820Template();
-  if (src) {
-    try {
-      buf = await blankFromTemplate(src, projectName, period);
-      full = !!buf;
-    } catch (e) {
-      console.warn("[template] 양식 비우기 실패 — 간단 양식으로 대체:", e instanceof Error ? e.message : e);
-    }
-  }
-  if (!buf) buf = await simpleBlank();
-  const filename = full ? `${projectName} 진행현황_빈양식.xlsx` : "차량리스트_빈양식.xlsx";
-  return new NextResponse(new Uint8Array(buf), {
-    headers: {
-      "Content-Type": XLSX_TYPE,
-      "Content-Disposition": `attachment; filename="raw_template.xlsx"; filename*=UTF-8''${encodeURIComponent(filename)}`,
-      "Cache-Control": "no-store",
-      "X-Template-Full": full ? "1" : "0",
-    },
-  });
 }

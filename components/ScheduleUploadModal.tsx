@@ -351,14 +351,14 @@ export default function ScheduleUploadModal({
                     <div className="rounded-lg bg-blue-50 px-3 py-2.5 text-xs leading-relaxed text-gray-600">
                       <p className="font-semibold text-blue-700">이 프로젝트의 첫 차량리스트</p>
                       <p className="mt-1">
-                        진행현황 양식(「차량리스트」·「전개일정」·「진행현황」 시트) 엑셀을 올려주세요.{" "}
-                        <b>차량리스트 시트의 차량이 전부 등록</b>되고, 이 파일이 이 프로젝트의 진행현황
-                        다운로드 양식이 됩니다.
+                        「차량리스트」 시트가 있는 전개현황 엑셀(빈 양식을 채운 파일)을 올려주세요.{" "}
+                        <b>차량리스트의 설치 대상 차량이 전부 등록</b>되고, 이 차량리스트가 이 프로젝트의
+                        진행현황 원본으로 저장됩니다.
                       </p>
                       <p className="mt-1 text-gray-500">
-                        B820 파일을 복사해 쓰셔도 됩니다. <b>전개일정 시트의 운수사·노선·차고지·대상수량은
-                        차량리스트에 맞춰 자동으로 채워지므로</b> 손볼 필요가 없습니다. (B820의 시범설치 기준도
-                        적용하지 않습니다)
+                        진행현황 엑셀(설치 진행현황·전개일정·일자별 현황)은 <b>다운로드할 때 차량리스트 기준으로
+                        자동 생성</b>되므로 다른 시트는 손볼 필요가 없습니다. 설치 대상 열이 「제외」·「말소」인
+                        차량은 등록하지 않습니다. (B820의 시범설치 기준도 적용하지 않습니다)
                       </p>
                       <div className="mt-2">
                         <RawDataGuide projectName={projectName} start={period?.start} end={period?.end} />
@@ -369,7 +369,7 @@ export default function ScheduleUploadModal({
                     <p className="font-semibold text-blue-700">수정 방법</p>
                     <p className="mt-1">
                       다운로드한 진행현황 엑셀의 <b>「차량리스트」 시트</b>에서{" "}
-                      <b>I열(설치 예정일)</b>을 바꾼 뒤 그 파일을 올려주세요.
+                      <b>「설치 예정일」 열</b>을 바꾼 뒤 그 파일을 올려주세요.
                     </p>
                     <p className="mt-1 text-gray-500">
                       날짜만 바꾸면 됩니다. <b>계획수량</b>은 예정일에서 자동으로 계산되어

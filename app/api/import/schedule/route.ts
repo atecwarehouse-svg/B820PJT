@@ -7,7 +7,6 @@ import { prepareTemplateBuffer } from "@/lib/import/prepare-template";
 import { checkAdminPassword, isAdmin } from "@/lib/admin-auth";
 import { currentSlug, isDefault } from "@/lib/project";
 import { TEMPLATE_BUCKET, templateObject, templateBackup } from "@/lib/template-path";
-import { normalizeScheduleQuantities } from "@/lib/import/normalize-schedule";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -231,8 +230,19 @@ export async function POST(req: NextRequest) {
 
   // 미리보기(apply=false): DB 변경 없이 변경내역만 반환.
   // + 이 파일이 다운로드 양식(템플릿)으로 교체 가능한지 미리 알려준다.
+  // 새 프로젝트(B820 아님)의 저장 양식 = 올린 파일의 차량리스트 그대로. 진행현황 엑셀은 다운로드 때
+  // 마스터 양식(설치 진행현황·전개일정·일자별 현황)에 차량리스트 ⊕ DB 완료를 넣어 새로 만든다(lib/export/v2-form.ts).
+  const v2Note = () => {
+    const ops = new Set(parsed.rows.map((r) => r.operator)).size;
+    const days = new Set(parsed.rows.map((r) => r.planned_date).filter(Boolean)).size;
+    return (
+      `차량리스트 ${parsed.rows.length.toLocaleString()}대(운수사 ${ops}곳, 설치 예정일 ${days}일)` +
+      (parsed.excluded ? ` · 설치 대상이 아닌(제외·말소) ${parsed.excluded}대는 등록하지 않습니다` : "") +
+      ". 진행현황 엑셀(설치 진행현황·전개일정·일자별 현황)은 다운로드 때 이 차량리스트 기준으로 자동 생성됩니다."
+    );
+  };
   if (!apply) {
-    const t = await prepareTemplateBuffer(buf, { checkOnly: true });
+    const t = await prepareTemplateBuffer(buf, { checkOnly: true, legacy: !foreign });
     return NextResponse.json({
       applied: false,
       ...summary,
@@ -241,10 +251,7 @@ export async function POST(req: NextRequest) {
         ok: t.ok,
         reason: t.reason,
         warn: foreign ? undefined : t.warn,
-        initialNote:
-          foreign && t.ok
-            ? `전개일정 운수사·노선·차고지·대상수량과 날짜별 계획(설치 예정일 기준)을 차량리스트(${parsed.rows.length.toLocaleString()}대)로 자동으로 채웁니다.`
-            : undefined,
+        initialNote: foreign && t.ok ? v2Note() : undefined,
       },
     });
   }
@@ -297,21 +304,12 @@ export async function POST(req: NextRequest) {
   let templateReplaced = false;
   let templateNote: string | undefined;
   try {
-    const prep = await prepareTemplateBuffer(buf);
+    const prep = await prepareTemplateBuffer(buf, { legacy: !foreign });
     if (!prep.ok || !prep.buffer) {
       templateNote = prep.reason;
     } else {
-      let tplBuffer = prep.buffer;
-      let initialNote: string | undefined;
-      if (foreign) {
-        const n = await normalizeScheduleQuantities(prep.buffer, parsed.rows, parsed.depots);
-        tplBuffer = n.buffer;
-        initialNote =
-          `전개일정 운수사·노선·차고지·대상수량을 차량리스트 기준으로 채웠습니다(${n.rows}행).` +
-          (n.planDays ? ` 날짜별 계획 수량도 설치 예정일 기준으로 채웠습니다(${n.planDays}일).` : "") +
-          (n.droppedDays ? ` 날짜가 최대 366일을 넘어 마지막 ${n.droppedDays}일의 계획은 빠졌습니다.` : "") +
-          (n.unmatched.length ? ` 전개일정 빈 행이 모자라 못 넣은 노선 ${n.unmatched.length}개: ${n.unmatched.slice(0, 5).join(", ")}${n.unmatched.length > 5 ? " …" : ""}` : "");
-      }
+      const tplBuffer = prep.buffer;
+      const initialNote = foreign ? v2Note() : undefined;
       const storage = supabase.storage.from(TEMPLATE_BUCKET);
       // 프로젝트별 양식 경로 — B820은 progress-template.xlsx, 그 외는 <slug>/progress-template.xlsx
       const TEMPLATE_OBJECT = templateObject(currentSlug());

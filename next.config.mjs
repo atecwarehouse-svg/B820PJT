@@ -27,6 +27,10 @@ const nextConfig = {
         "./node_modules/@sparticuz/chromium/**",
         "./fonts/**", // 서버리스 크롬에 없는 한글 폰트
       ],
+      // 새 프로젝트 진행현황 양식 마스터(lib/export/v2-form.ts가 process.cwd()로 읽음) — 빈 양식·다운로드·리포트 첨부
+      "/api/import/schedule/template": ["./lib/export/templates/v2-master.xlsx"],
+      "/api/export/progress": ["./lib/export/templates/v2-master.xlsx"],
+      "/api/report/send": ["./lib/export/templates/v2-master.xlsx"],
     },
   },
 };

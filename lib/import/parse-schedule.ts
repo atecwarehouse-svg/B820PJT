@@ -1,16 +1,16 @@
 /**
- * 진행현황 양식(xlsx)에서 차량별 설치 예정일(planned_date) + 시범설치(is_pilot)를 파싱.
+ * 진행현황 양식(xlsx) 차량리스트 → 차량별 설치 예정일(planned_date) + 시범설치(is_pilot) 파싱.
  *
- *   - 차량리스트 시트: A=번호(list_no), F=차량번호, B=운수사, C=노선,
- *     I=설치 예정일(planned_date), J=연식(year), L=모델명(model), U=타코 제조사(tacho)
- *   - 시범설치: 예정일(I열)이 PILOT_CUTOFF(2026-07-30) 이전이면 is_pilot=true
- *     (2026-07-10 기준 변경 — 이전의 진행현황 시트 비고란 "시범설치" 글자 판정은 폐기)
+ *   - 열은 1행 제목 이름으로 찾는다(lib/import/vehicle-columns.ts): 차량번호·운수사·노선·설치 예정일·연식·모델명·번호·타코 제조사·차고지.
+ *     새 양식(설치 예정일 K열)과 옛 B820 양식(기존 설치 예정일 I열) 모두 인식.
+ *   - 설치 대상(J열)이 "제외"·"말소" 등 대상이 아닌 차량은 등록하지 않는다(excluded).
+ *   - 시범설치: 예정일이 PILOT_CUTOFF(2026-07-30) 이전이면 is_pilot=true (B820 전용 — 다른 프로젝트는 라우트가 끈다)
  *
- * scripts/import-schedule.ts(파일 경로 임포트)와 /api/import/schedule(웹 업로드)가
- * 동일 로직을 쓰도록 공용화한 파서. vehicles upsert 페이로드 형태로 반환.
+ * scripts/import-schedule.ts(파일 경로)와 /api/import/schedule(웹 업로드)가 같은 로직을 쓴다. vehicles upsert 페이로드 형태로 반환.
  */
 
 import ExcelJS from "exceljs";
+import { VCOL, cellText, cellDate, isExample, isTarget, readVehicleTable, ymdFromSerial, type VehicleRow } from "./vehicle-columns";
 
 const VEHICLE_SHEET = "차량리스트";
 
@@ -23,89 +23,70 @@ export interface ScheduleRow {
   route: string;
   planned_date: string | null;
   is_pilot: boolean;
-  year: string | null; // 연식 (차량리스트 J열)
-  model: string | null; // 모델명 (차량리스트 L열)
-  list_no: number | null; // 번호 (차량리스트 A열)
-  tacho: string | null; // 타코 제조사 (차량리스트 U열) — 배차표 '타코확인' 표시용
+  year: string | null; // 연식
+  model: string | null; // 모델명
+  list_no: number | null; // 번호
+  tacho: string | null; // 타코 제조사 — 배차표 '타코확인' 표시용
 }
 
 export interface ParseResult {
   rows: ScheduleRow[];
   pilotCount: number;
-  skipped: number;
-  depots: Map<string, string>; // "운수사|||노선" → 차고지(D열, 그룹의 첫 비어있지 않은 값) — 전개일정 D열 자동 채움용
+  skipped: number; // 운수사·노선이 비어 건너뛴 행
+  excluded: number; // 설치 대상이 아닌(제외·말소) 행
+  depots: Map<string, string>; // "운수사|||노선" → 차고지(그룹의 첫 값)
 }
 
-// 셀 값 → 트림 문자열 (리치텍스트/하이퍼링크 객체 처리)
-export function txt(v: unknown): string {
-  if (v == null) return "";
-  if (typeof v === "object") {
-    const o = v as Record<string, unknown>;
-    if (Array.isArray(o.richText)) {
-      return (o.richText as { text: string }[]).map((t) => t.text).join("").trim();
-    }
-    if ("text" in o) return String(o.text).trim();
-    if ("result" in o) return String(o.result).trim();
-  }
-  return String(v).trim();
-}
+// 다른 모듈이 쓰는 셀 변환 (호환 유지)
+export const txt = cellText;
+export const toDate = cellDate;
 
-// 셀 값 → YYYY-MM-DD (date) | null
-export function toDate(v: unknown): string | null {
-  if (v == null || v === "") return null;
-  if (v instanceof Date) return v.toISOString().slice(0, 10);
-  if (typeof v === "number") {
-    // Excel 직렬값 → 날짜 (1900 시스템)
-    const ms = Date.UTC(1899, 11, 30) + v * 86400000;
-    return new Date(ms).toISOString().slice(0, 10);
-  }
-  const s = String(v).trim();
-  // "2026.7.30" · "2026/07/30" 같은 텍스트 날짜는 시간대 변환 없이 숫자 그대로 조합 —
-  // new Date(문자열)는 실행 컴퓨터의 로컬 자정으로 읽혀 KST에서 하루 밀린다.
-  const m = /^(\d{4})[.\-/]\s*(\d{1,2})[.\-/]\s*(\d{1,2})\.?$/.exec(s);
-  if (m) {
-    return `${m[1]}-${m[2].padStart(2, "0")}-${m[3].padStart(2, "0")}`;
-  }
-  const d = new Date(s);
-  return isNaN(d.getTime()) ? null : d.toISOString().slice(0, 10);
-}
+const str = (v: VehicleRow[string]) => (v == null ? "" : String(v).trim());
 
-async function parseWorkbook(wb: ExcelJS.Workbook): Promise<ParseResult> {
-  // 차량리스트 시트에서 차량별 예정일 + 시범설치 여부 구성
+function parseWorkbook(wb: ExcelJS.Workbook): ParseResult {
   const vws = wb.getWorksheet(VEHICLE_SHEET);
   if (!vws) {
     throw new Error(`"${VEHICLE_SHEET}" 시트를 찾을 수 없습니다. 진행현황 양식인지 확인해주세요.`);
   }
+  const { rows: table } = readVehicleTable(vws);
 
   const map = new Map<string, ScheduleRow>();
   const depots = new Map<string, string>();
   let skipped = 0;
+  let excluded = 0;
   let pilotCount = 0;
-  for (let r = 2; r <= vws.rowCount; r++) {
-    const row = vws.getRow(r);
-    const plate = txt(row.getCell("F").value);
-    if (!plate || plate.startsWith("예)")) continue; // 빈 양식의 2행 작성 예시("예) 인천70바4005")는 건너뜀
-    const operator = txt(row.getCell("B").value);
-    const route = txt(row.getCell("C").value);
+  for (const v of table) {
+    if (isExample(v)) continue; // 빈 양식의 작성 예시("예) 인천70바4005")
+    if (!isTarget(v)) {
+      excluded++;
+      continue;
+    }
+    const plate = str(v[VCOL.plate]);
+    const operator = str(v[VCOL.operator]);
+    const route = str(v[VCOL.route]);
     if (!operator || !route) {
       skipped++;
       continue; // vehicles.operator/route 는 not null
     }
-    const planned_date = toDate(row.getCell("I").value);
-    const year = txt(row.getCell("J").value) || null;
-    const model = txt(row.getCell("L").value) || null;
-    const listRaw = txt(row.getCell("A").value);
+    const pl = v[VCOL.planned];
+    const planned_date = typeof pl === "number" ? ymdFromSerial(pl) : cellDate(pl);
+    const listRaw = str(v[VCOL.listNo]);
     const list_no = /^\d+$/.test(listRaw) ? Number(listRaw) : null;
-    const tacho = txt(row.getCell("U").value) || null;
     const is_pilot = planned_date !== null && planned_date < PILOT_CUTOFF;
     if (is_pilot) pilotCount++;
-    map.set(plate, { plate, operator, route, planned_date, is_pilot, year, model, list_no, tacho });
-    const depot = txt(row.getCell("D").value);
+    map.set(plate, {
+      plate, operator, route, planned_date, is_pilot,
+      year: str(v[VCOL.year]) || null,
+      model: str(v[VCOL.model]) || null,
+      list_no,
+      tacho: str(v[VCOL.tacho]) || null,
+    });
+    const depot = str(v[VCOL.depot]);
     const key = `${operator}|||${route}`;
     if (depot && !depots.has(key)) depots.set(key, depot);
   }
 
-  return { rows: [...map.values()], pilotCount, skipped, depots };
+  return { rows: [...map.values()], pilotCount, skipped, excluded, depots };
 }
 
 /** 파일 경로에서 읽어 파싱 (스크립트용). */

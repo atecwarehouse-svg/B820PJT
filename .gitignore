@@ -43,3 +43,6 @@ lib/export/templates/*.xlsx
 
 # 로컬 체크리스트 파일 (저장소 제외)
 인천 B820 설치완료 체크리스트.xlsx
+
+# 새 프로젝트 양식 마스터(차량 데이터 없음) — 배포 번들에 들어가야 하므로 커밋
+!lib/export/templates/v2-master.xlsx
