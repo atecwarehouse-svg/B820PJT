@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
 // POST /api/progress/unlock  { password } → 일치 시 대시보드 상세 잠금 해제 쿠키 발급
 export async function POST(req: NextRequest) {
   const { password } = await req.json().catch(() => ({ password: "" }));
-  if (!password || password !== progressDownloadPassword()) {
+  if (!password || password !== (await progressDownloadPassword())) {
     return NextResponse.json(
       { error: "비밀번호가 올바르지 않습니다." },
       { status: 401 },
@@ -20,7 +20,7 @@ export async function POST(req: NextRequest) {
   }
   const res = NextResponse.json({ ok: true });
   // 쿠키에는 비밀번호가 아니라 해시를 담는다(평문 노출 방지)
-  res.cookies.set(PROGRESS_COOKIE, progressCookieValue(), {
+  res.cookies.set(PROGRESS_COOKIE, await progressCookieValue(), {
     httpOnly: true,
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",

@@ -132,7 +132,7 @@ export default async function DashboardPage() {
   const projectInfo = await currentProject();
   const brand = brandName(projectInfo); // 카드 미리보기 제목용 프로젝트명
   const projectLabel = isDefault(slug) ? undefined : `${projectInfo.name} 프로젝트`; // 리포트 머리말
-  const detailUnlocked = isProgressUnlocked();
+  const detailUnlocked = await isProgressUnlocked(slug);
   const todayWork = workDateString(new Date()); // 현재 업무일
   const [s, ip, sch, inProgressList, operatorSchedules] = await Promise.all([
     getStats(slug),

@@ -6,6 +6,7 @@
 import { createHash } from "node:crypto";
 import { cookies } from "next/headers";
 import { currentSlug, DEFAULT_SLUG, getProject, isDefault } from "@/lib/project";
+import { SHARED_PASSWORD_KEY, getSetting } from "@/lib/settings";
 
 // 쿠키에는 비밀번호가 아니라 해시를 담는다 — 평문을 넣으면 기기·브라우저 확장·로그를 보는 사람에게
 // 비밀번호가 그대로 노출된다. (slug를 앞에 붙여 프로젝트·서비스 간 같은 비밀번호 해시가 겹치지 않게 한다)
@@ -46,22 +47,22 @@ export async function checkAdminPassword(pw: unknown, slug: string = currentSlug
   return !!expected && cookieToken(slug, pw) === expected;
 }
 
-// 진행현황 엑셀 다운로드 비밀번호 — 환경변수 PROGRESS_DOWNLOAD_PASSWORD, 미설정 시 기본값.
-// (전 프로젝트 공통)
-export function progressDownloadPassword(): string {
-  return process.env.PROGRESS_DOWNLOAD_PASSWORD || "wktks2020!!";
+// 협력업체 공용 비밀번호(진행현황 엑셀 다운로드·대시보드 상세 잠금) — 프로젝트별 app_settings.shared_password,
+// 비어 있으면 환경변수 PROGRESS_DOWNLOAD_PASSWORD, 그것도 없으면 기본값. 프로젝트 만들 때 정하고 프로젝트 관리에서 수정.
+export async function progressDownloadPassword(slug: string = currentSlug()): Promise<string> {
+  return (await getSetting(SHARED_PASSWORD_KEY, slug)) || process.env.PROGRESS_DOWNLOAD_PASSWORD || "wktks2020!!";
 }
 
 // 대시보드 상세(설치 일정·운수사별·영업소별·날짜별) 잠금 해제 쿠키.
-// 진행현황 다운로드와 같은 비밀번호를 쓴다.
+// 진행현황 다운로드와 같은 비밀번호를 쓴다. 토큰에 slug가 들어가 프로젝트마다 따로 풀린다(B820은 종전과 같은 값).
 export const PROGRESS_COOKIE = "progress_unlock";
 export const PROGRESS_MAX_AGE = 60 * 30; // 30분
 
-export function isProgressUnlocked(): boolean {
+export async function isProgressUnlocked(slug: string = currentSlug()): Promise<boolean> {
   const v = cookies().get(PROGRESS_COOKIE)?.value;
-  return !!v && v === progressCookieValue();
+  return !!v && v === (await progressCookieValue(slug));
 }
 
-export function progressCookieValue(): string {
-  return cookieToken(DEFAULT_SLUG, progressDownloadPassword());
+export async function progressCookieValue(slug: string = currentSlug()): Promise<string> {
+  return cookieToken(slug, await progressDownloadPassword(slug));
 }

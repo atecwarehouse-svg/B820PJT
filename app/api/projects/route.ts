@@ -12,7 +12,7 @@ import {
 import { colorKey, iconKey } from "@/components/ProjectIcon";
 import { createProjectFolder, deleteFolder, folderLink, renameFile, setLinkSharing, trashFile } from "@/lib/gdrive";
 import { TEMPLATE_BUCKET } from "@/lib/template-path";
-import { PHOTO_SLOTS_KEY, PLEDGE_TEMPLATE_KEY, PROJECT_PERIOD_KEY, REPORT_MAIL_KEY, parsePeriod, setSetting } from "@/lib/settings";
+import { PHOTO_SLOTS_KEY, PLEDGE_TEMPLATE_KEY, PROJECT_PERIOD_KEY, REPORT_MAIL_KEY, SHARED_PASSWORD_KEY, parsePeriod, setSetting } from "@/lib/settings";
 import { toSlotConfigJson, validateSlotConfig } from "@/lib/slots";
 import { validatePledgeTemplate } from "@/lib/pledge-template";
 
@@ -154,6 +154,12 @@ export async function POST(req: NextRequest) {
         settings.push({ key: REPORT_MAIL_KEY, value: list.join(", ") });
         reportMail = list.length;
       }
+    }
+    // 협력업체 공용 비밀번호(선택) — 진행현황 엑셀 다운로드·대시보드 상세 잠금. 비우면 기본값(wktks2020!!)
+    if (typeof body.shared_password === "string" && body.shared_password.trim()) {
+      const sp = body.shared_password.trim();
+      if (sp.length < 4 || sp.length > 40) return bad("협력업체 공용 비밀번호는 4~40자로 정하세요.");
+      settings.push({ key: SHARED_PASSWORD_KEY, value: sp });
     }
 
     // 1) 드라이브 폴더
@@ -305,7 +311,14 @@ export async function PUT(req: NextRequest) {
       period = `${p.start}~${p.end}`;
     }
   }
-  if (!Object.keys(patch).length && shareLink === undefined && period === undefined) return bad("바꿀 내용이 없습니다.");
+  // 협력업체 공용 비밀번호 — 앨범 프로젝트(B820 포함). ""이면 기본값으로 되돌림
+  let sharedPw: string | undefined;
+  if (row.kind === "album" && typeof body.shared_password === "string") {
+    const sp = body.shared_password.trim();
+    if (sp && (sp.length < 4 || sp.length > 40)) return bad("협력업체 공용 비밀번호는 4~40자로 정하세요.");
+    sharedPw = sp;
+  }
+  if (!Object.keys(patch).length && shareLink === undefined && period === undefined && sharedPw === undefined) return bad("바꿀 내용이 없습니다.");
 
   if (Object.keys(patch).length) {
     const { error } = await sb.from("projects").update(patch).eq("slug", slug);
@@ -316,6 +329,11 @@ export async function PUT(req: NextRequest) {
   if (period !== undefined) {
     await setSetting(PROJECT_PERIOD_KEY, period, slug).catch(() => {
       warning = "프로젝트 기간 저장에 실패했습니다. 잠시 뒤 다시 저장해 주세요.";
+    });
+  }
+  if (sharedPw !== undefined) {
+    await setSetting(SHARED_PASSWORD_KEY, sharedPw, slug).catch(() => {
+      warning = (warning ? warning + " " : "") + "협력업체 공용 비밀번호 저장에 실패했습니다. 잠시 뒤 다시 저장해 주세요.";
     });
   }
   // 드라이브 폴더 링크 공유 켜기/끄기 (실패해도 나머지 수정은 유지)

@@ -9,6 +9,7 @@ import { parseSlotConfig, type SlotConfig } from "@/lib/slots";
 export const REPORT_MAIL_KEY = "report_mail_to";
 export const INSTALL_TEAMS_KEY = "install_teams"; // 설치팀 목록 (JSON [{team,name,phone}], 구버전 문자열 배열 호환)
 export const INSPECT_CHECKLIST_KEY = "inspect_checklist"; // 배차표 검수항목 (JSON {vehicle,device})
+export const SHARED_PASSWORD_KEY = "shared_password"; // 협력업체 공용 비밀번호(진행현황 엑셀 다운로드·대시보드 상세 잠금) — 비면 env/기본값
 export const PROJECT_PERIOD_KEY = "project_period"; // 프로젝트 시작일~종료일 "YYYY-MM-DD~YYYY-MM-DD" — 빈 양식 전개일정 3행 날짜용
 
 const YMD = /^\d{4}-\d{2}-\d{2}$/;

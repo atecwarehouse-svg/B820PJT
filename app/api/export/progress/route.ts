@@ -14,7 +14,7 @@ export const maxDuration = 60;
 export async function GET(req: Request) {
   const params = new URL(req.url).searchParams;
 
-  if ((params.get("pw") ?? "") !== progressDownloadPassword()) {
+  if ((params.get("pw") ?? "") !== (await progressDownloadPassword())) {
     return NextResponse.json({ error: "비밀번호가 올바르지 않습니다." }, { status: 401 });
   }
   if (params.get("check") === "1") {

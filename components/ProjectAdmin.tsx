@@ -77,10 +77,12 @@ export default function ProjectAdmin({
   projects,
   driveShared = {},
   periods = {},
+  sharedPasswords = {},
 }: {
   projects: Project[];
   driveShared?: Record<string, boolean>; // 앨범 프로젝트 드라이브 폴더 링크 공유 여부
   periods?: Record<string, { start: string; end: string }>; // 앨범 프로젝트 기간 (수정 폼 프리필)
+  sharedPasswords?: Record<string, string>; // 협력업체 공용 비밀번호 (수정 폼 프리필, ""=기본값)
 }) {
   const router = useRouter();
   const formRef = useRef<HTMLElement>(null);
@@ -96,6 +98,8 @@ export default function ProjectAdmin({
   const [url, setUrl] = useState("");
   const [adminPw, setAdminPw] = useState("");
   const [showPw, setShowPw] = useState(false);
+  const [sharedPw, setSharedPw] = useState(""); // 협력업체 공용 비밀번호 (""=기본값 wktks2020!!)
+  const [showSharedPw, setShowSharedPw] = useState(false);
   const [slugTouched, setSlugTouched] = useState(false); // ID를 직접 편집했으면 자동 제안 중단
   const [photoSlots, setPhotoSlots] = useState<SlotConfigJson>(DEFAULT_SLOTS); // 새 프로젝트 사진 양식
   const [reportMail, setReportMail] = useState(""); // 완료리포트 메일 수신자 (쉼표·줄바꿈 구분)
@@ -140,6 +144,8 @@ export default function ProjectAdmin({
     setUrl("");
     setAdminPw("");
     setShowPw(false);
+    setSharedPw("");
+    setShowSharedPw(false);
     setPhotoSlots(DEFAULT_SLOTS);
     setSlotsOpen(false);
     setPledge(DEFAULT_PLEDGE_TEMPLATE);
@@ -189,6 +195,8 @@ export default function ProjectAdmin({
   async function submit() {
     if (editing) {
       const body: Record<string, unknown> = { slug: editing.slug, color };
+      // 협력업체 공용 비밀번호 — 바뀌었을 때만 (B820 포함, 비우면 기본값으로)
+      if (editing.kind === "album" && sharedPw.trim() !== (sharedPasswords[editing.slug] ?? "")) body.shared_password = sharedPw.trim();
       if (editing.slug !== "b820") {
         Object.assign(body, { name, description, icon });
         if (editing.kind === "link") body.url = url;
@@ -219,6 +227,7 @@ export default function ProjectAdmin({
         ...common,
         slug: newSlug,
         admin_password: adminPw,
+        ...(sharedPw.trim() ? { shared_password: sharedPw.trim() } : {}),
         shareLink,
         ...(isDefaultSlots(photoSlots) ? {} : { photoSlots }),
         ...(isDefaultPledgeTemplate(pledge) ? {} : { pledgeTemplate: pledge }),
@@ -273,6 +282,8 @@ export default function ProjectAdmin({
     setDescription(p.description);
     setUrl(p.url ?? "");
     setAdminPw("");
+    setSharedPw(sharedPasswords[p.slug] ?? "");
+    setShowSharedPw(false);
     setShareLink(driveShared[p.slug] ?? false);
     setPeriod(periods[p.slug] ?? { start: "", end: "" });
     setConfirmSlug("");
@@ -591,6 +602,34 @@ export default function ProjectAdmin({
                   : badPeriod
                     ? "종료일이 시작일보다 빠릅니다."
                     : "프로젝트 기간(시작일~종료일, 선택) — 빈 양식의 전개일정 3행 날짜가 이 기간으로 자동 기입되고, 61일이 넘으면 날짜 열이 그만큼 늘어납니다(최대 366일). 업로드 때는 설치 예정일이 함께 들어갑니다."}
+              </p>
+            </div>
+          )}
+          {kind === "album" && (
+            <div>
+              <p className="pt-2 text-xs font-bold text-gray-500">🤝 협력업체 공용 비밀번호</p>
+              <div className="relative mt-1">
+                <input
+                  value={sharedPw}
+                  onChange={(e) => setSharedPw(e.target.value)}
+                  type={showSharedPw ? "text" : "password"}
+                  autoComplete="off"
+                  maxLength={40}
+                  placeholder="비우면 기본값 wktks2020!!"
+                  className={`${input} pr-14`}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowSharedPw((v) => !v)}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md px-2 py-1 text-[11px] text-gray-500 active:bg-gray-100"
+                >
+                  {showSharedPw ? "숨기기" : "보기"}
+                </button>
+              </div>
+              <p className="mt-1 px-1 text-[11px] text-gray-400">
+                진행현황 엑셀 다운로드와 대시보드 상세(설치 일정·운수사별 현황) 잠금을 푸는 비밀번호입니다. 관리자 비밀번호와 달리
+                협력업체에 알려 주는 용도이며, 4~40자. 만든 뒤에도 여기서 바꿀 수 있습니다.
+                {editing && !sharedPw ? " 지금은 기본값을 쓰고 있습니다." : ""}
               </p>
             </div>
           )}
