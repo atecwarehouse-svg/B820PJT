@@ -3,6 +3,7 @@ import { parsePledgeTemplate, type PledgeTemplate } from "@/lib/pledge-template"
 // 관리자 페이지에서 수정하는 값(완료리포트 수신자 등)을 저장한다.
 
 import { createServiceClient } from "@/lib/supabase/server";
+import { currentSlug, isDefault } from "@/lib/project";
 import { parseSlotConfig, type SlotConfig } from "@/lib/slots";
 
 export const REPORT_MAIL_KEY = "report_mail_to";
@@ -71,13 +72,31 @@ export async function getStartReportForUpdate(date: string, slug?: string): Prom
   return parseStartReport(typeof data?.value === "string" ? data.value : null);
 }
 
-export const TEAM_COMPANIES = ["아림기술", "모리온"] as const; // 설치팀 소속사 선택지
+// 설치팀 소속사 선택지 — 관리자 '소속' 탭에서 추가·이름 변경·삭제(app_settings.team_companies, JSON string[]).
+// 저장값이 없으면 B820은 기존 두 회사, 다른 프로젝트는 빈 목록(팀에 적힌 소속은 항상 목록에 합쳐진다).
+export const TEAM_COMPANIES_KEY = "team_companies";
+export const DEFAULT_TEAM_COMPANIES = ["아림기술", "모리온"];
+
+export async function getTeamCompanies(slug?: string): Promise<string[]> {
+  const raw = await getSetting(TEAM_COMPANIES_KEY, slug);
+  let list: string[] = raw === null && isDefault(slug ?? currentSlug()) ? [...DEFAULT_TEAM_COMPANIES] : [];
+  if (raw) {
+    try {
+      const arr = JSON.parse(raw);
+      if (Array.isArray(arr)) list = arr.map((v) => String(v).trim()).filter(Boolean);
+    } catch {
+      /* 깨진 값 → 빈 목록 */
+    }
+  }
+  for (const t of await getInstallTeamsFull(slug)) if (t.company && !list.includes(t.company)) list.push(t.company);
+  return list;
+}
 
 export interface InstallTeam {
   team: string; // 팀명 (예: 1팀)
   name: string; // 이름
   phone: string; // 전화번호 (설치팀 호출 버튼에서만 사용, 카드·드롭다운 미노출)
-  company: string; // 소속사 (TEAM_COMPANIES 중 하나 또는 "" = 미지정)
+  company: string; // 소속사 (소속사 목록 중 하나 또는 "" = 미지정)
 }
 
 // 팀 표시 라벨 = "팀명 이름" — 기록 페이지 드롭다운·팀즈 카드에 쓰이는 문자열
@@ -100,8 +119,8 @@ export function makeTeamNormalizer(installTeams: InstallTeam[]) {
 
 // 설치팀 전체(팀명·이름·전화) 읽기 — 미설정/테이블 미생성이면 빈 배열.
 // 구버전 문자열 배열(["1팀"])은 {team:"1팀", name:"", phone:""}로 변환.
-export async function getInstallTeamsFull(): Promise<InstallTeam[]> {
-  const raw = await getSetting(INSTALL_TEAMS_KEY);
+export async function getInstallTeamsFull(slug?: string): Promise<InstallTeam[]> {
+  const raw = await getSetting(INSTALL_TEAMS_KEY, slug);
   if (!raw) return [];
   try {
     const arr = JSON.parse(raw);

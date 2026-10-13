@@ -324,7 +324,8 @@ export default function HelpPage() {
         <Section id="admin" tone="blue" emoji="🔒" title="관리자 페이지" sub="프로젝트별 관리자 비밀번호 · 탭 구성">
           <Grid>
             <Mini tone="blue" title="설치팀 · 소속">
-              팀명·이름·전화·소속(아림기술/모리온) 통합 관리. 카드와 드롭다운에는 팀명+이름만 보입니다.
+              팀명·이름·전화·소속 통합 관리. 소속 탭에서 소속사를 추가·이름 변경·삭제할 수 있고(이름을 바꾸면 그 소속 팀도 함께 바뀜),
+              카드와 드롭다운에는 팀명+이름만 보입니다.
             </Mini>
             <Mini tone="blue" title="검수항목">
               배차표 ‘검수항목 보기’의 체크리스트.

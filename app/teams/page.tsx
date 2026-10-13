@@ -1,7 +1,8 @@
 import Link from "@/components/PLink";
 import { createServiceClient } from "@/lib/supabase/server";
 import { fetchAll } from "@/lib/supabase/paginate";
-import { getInstallTeamsFull, makeTeamNormalizer, teamLabel } from "@/lib/settings";
+import { DEFAULT_TEAM_COMPANIES, getInstallTeamsFull, getTeamCompanies, makeTeamNormalizer, teamLabel } from "@/lib/settings";
+import { currentSlug, isDefault } from "@/lib/project";
 import { workDateString } from "@/lib/work-day";
 import TeamsClient from "./TeamsClient";
 
@@ -18,6 +19,8 @@ export default async function TeamsPage() {
   const companyMap = Object.fromEntries(
     installTeams.filter((t) => t.company).map((t) => [teamLabel(t), t.company]),
   );
+  // 그룹 버튼 = 소속사 목록(관리자 '소속' 탭). B820은 소속 미지정 팀을 팀명 앞글자로 나누던 옛 규칙의 두 회사도 포함.
+  const groups = [...new Set([...(await getTeamCompanies()), ...(isDefault(currentSlug()) ? DEFAULT_TEAM_COMPANIES : [])])];
   const rows = await fetchAll<{
     plate: string;
     operator: string | null;
@@ -53,7 +56,7 @@ export default async function TeamsPage() {
       <p className="-mt-2 mb-3 text-center text-xs text-gray-500">
         설치(저장) 완료 기준 · 설치일은 업무일(20시~익일 12시) 기준
       </p>
-      <TeamsClient vehicles={vehicles} companyMap={companyMap} />
+      <TeamsClient vehicles={vehicles} companyMap={companyMap} groups={groups} />
     </main>
   );
 }

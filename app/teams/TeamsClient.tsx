@@ -42,9 +42,11 @@ function groupOf(team: string, companyMap: Record<string, string>): string | nul
 export default function TeamsClient({
   vehicles,
   companyMap,
+  groups,
 }: {
   vehicles: Vehicle[];
   companyMap: Record<string, string>;
+  groups: string[]; // 그룹 버튼(소속사 목록) — 관리자 '소속' 탭에서 추가·변경
 }) {
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
@@ -410,8 +412,8 @@ export default function TeamsClient({
           </select>
         </div>
         {/* 그룹(소속사)별 보기 */}
-        <div className="mt-2 flex gap-1.5">
-          {["", ...TEAM_GROUPS.map(([g]) => g)].map((g) => (
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {["", ...groups].map((g) => (
             <button
               key={g || "전체"}
               type="button"
