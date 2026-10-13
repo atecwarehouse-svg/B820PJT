@@ -8,6 +8,7 @@ import VocModal from "@/components/VocModal";
 import TeamCallButton from "@/components/TeamCallButton";
 import WeatherWidget from "@/components/WeatherWidget";
 import ProjectTutorial, { type SetupStep } from "@/components/ProjectTutorial";
+import ShareInstallBar from "@/components/ShareInstallBar";
 import { CARD_COLORS, PROJECT_ICONS, Svg } from "@/components/ProjectIcon";
 import { currentSlug, isDefault } from "@/lib/project";
 import { createServiceClient } from "@/lib/supabase/server";
@@ -49,7 +50,17 @@ const COMMIT = process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? "";
 export const dynamic = "force-dynamic";
 
 export async function generateMetadata(): Promise<Metadata> {
-  return { title: (await currentProject()).name };
+  // 프로젝트별 PWA: 매니페스트·애플 아이콘·앱 이름을 이 프로젝트 것으로 — 공유 링크로 들어온 작업자가 홈 화면에 추가하면
+  // 이 프로젝트 홈에서 시작하는 앱이 된다 (B820은 접두사 없음)
+  const project = await currentProject();
+  const slug = currentSlug();
+  const api = isDefault(slug) ? "/api" : `/p/${slug}/api`;
+  return {
+    title: project.name,
+    manifest: `${api}/project-manifest`,
+    appleWebApp: { capable: true, statusBarStyle: "default", title: project.name },
+    icons: { apple: `/api/project-icon?size=180&color=${project.color}&icon=${project.icon}` },
+  };
 }
 
 // 홈 메뉴 타일(링크) — 이모지 배경색은 메뉴마다 다르게
@@ -72,6 +83,8 @@ export default async function HomePage() {
       <Link href="/" className="pill absolute left-4 top-3 text-xs">
         ← 프로젝트 선택
       </Link>
+      {/* 오른쪽 위: 작업자 공유용 링크 복사 + 앱(PWA) 설치 */}
+      <ShareInstallBar projectName={project.name} />
 
       {/* 머리 — 런처 카드와 같은 색의 아이콘 타일 + 프로젝트명 */}
       <header className="mb-5 flex flex-col items-center text-center motion-safe:animate-rise">

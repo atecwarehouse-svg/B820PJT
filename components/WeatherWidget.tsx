@@ -36,7 +36,7 @@ export default function WeatherWidget() {
   if (items.length === 0) return null;
 
   return (
-    <div className="absolute right-4 top-3 flex flex-col items-end gap-1">
+    <div className="absolute right-4 top-14 flex flex-col items-end gap-1">
       {items.map((w) => (
         <div
           key={w.label}
