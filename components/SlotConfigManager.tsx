@@ -128,6 +128,53 @@ export function SlotEditor({
         );
       })}
 
+      {/* 팀즈 설치 시작 카드 발송 시점 — 서버 판정(lib/install-status.ts)과 촬영 화면 안내가 이 값을 따른다 */}
+      {(() => {
+        const sn = data.startNotify ?? { mode: "all" as const };
+        const max = data.check.length + data.before.length;
+        const hasRequired = data.check.some((c) => c.required);
+        const set = (next: SlotConfigJson["startNotify"]) => {
+          const { startNotify: _drop, ...rest } = data; // 기본(all)은 키를 빼서 기본 양식 비교(JSON)가 어긋나지 않게
+          void _drop;
+          onChange(!next || next.mode === "all" ? rest : { ...rest, startNotify: next });
+        };
+        const opt = "flex items-start gap-2 px-3 py-2 text-sm text-gray-700";
+        return (
+          <section className="rounded-xl border border-gray-200 bg-white">
+            <div className="rounded-t-xl bg-amber-600 px-3 py-2 text-white">
+              <p className="text-sm font-bold">팀즈 설치 시작 카드 발송 시점</p>
+              <p className="text-[11px] opacity-80">저장을 눌렀을 때 아래 조건이 되면 설치 시작 카드가 나갑니다 (완료 카드는 설치 전·후 전부)</p>
+            </div>
+            <div className="divide-y divide-gray-100">
+              <label className={opt}>
+                <input type="radio" name="startNotify" className="mt-1" checked={sn.mode === "all"} onChange={() => set(undefined)} />
+                <span><b>모든 칸을 채우면</b> (기본) <span className="block text-[11px] text-gray-500">설치전 특이사항 전부(사진 또는 「없음」 체크) + 설치 전 전부. 빈 칸이 있으면 다음·저장 때 안내가 뜹니다.</span></span>
+              </label>
+              <label className={`${opt} ${hasRequired ? "" : "opacity-50"}`}>
+                <input type="radio" name="startNotify" className="mt-1" disabled={!hasRequired} checked={sn.mode === "required"} onChange={() => set({ mode: "required" })} />
+                <span><b>사진 필수 칸만 찍으면</b> <span className="block text-[11px] text-gray-500">설치전 특이사항에서 「사진 필수」로 표시한 칸의 사진이 모두 있으면 발송{hasRequired ? "" : " — 먼저 위에서 사진 필수 칸을 지정하세요"}</span></span>
+              </label>
+              <label className={opt}>
+                <input type="radio" name="startNotify" className="mt-1" checked={sn.mode === "count"} onChange={() => set({ mode: "count", count: Math.min(3, max) })} />
+                <span className="flex flex-wrap items-center gap-1">
+                  <b>사진</b>
+                  <input
+                    type="number"
+                    min={1}
+                    max={max}
+                    value={sn.mode === "count" ? sn.count : ""}
+                    disabled={sn.mode !== "count"}
+                    onChange={(e) => set({ mode: "count", count: Math.max(1, Math.min(max, Number(e.target.value) || 1)) })}
+                    className="w-16 rounded-lg border border-gray-300 px-2 py-1 text-center text-sm disabled:bg-gray-50"
+                  />
+                  <b>장부터</b>
+                  <span className="basis-full text-[11px] text-gray-500">설치전 특이사항 + 설치 전 사진을 합쳐 이 장수 이상이면 발송 (최대 {max}장, 「없음」 체크는 세지 않음)</span>
+                </span>
+              </label>
+            </div>
+          </section>
+        );
+      })()}
     </>
   );
 }

@@ -327,10 +327,12 @@ export default function RecordEditor({ plate, initial, teamOptions = [], brand =
 
   // 사진도 '없음' 체크도 없는 설치전 특이사항 칸 — 이 칸이 남아 있으면 팀즈 설치 시작 카드가 나가지 않으므로
   // 다음·저장 때 「없으면 '없음'에 체크」 안내로 막는다 (2026-10-13 공항 B800 미발송 사례)
+  // 발송 시점이 '사진 필수 칸만'·'N장부터'(사진 양식 설정)면 빈 칸이 카드를 막지 않으므로 안내도 하지 않는다
   const unmarkedCheck = useCallback(() => {
+    if (cfg.startNotify.mode !== "all") return null;
     const missing = checkSlots.filter((s) => !urls[s.slotKey] && !checkNaSlots.includes(s.slotKey));
     return missing.length ? missing.map((s) => s.label).join("·") : null;
-  }, [checkSlots, urls, checkNaSlots]);
+  }, [checkSlots, urls, checkNaSlots, cfg.startNotify.mode]);
   const unmarkedMsg = (labels: string) => `${labels} 칸이 비어 있습니다. 해당 항목이 없으면 「없음」에 체크하고, 있으면 촬영해주세요`;
 
   const [submitting, setSubmitting] = useState(false);

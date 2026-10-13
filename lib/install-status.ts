@@ -116,7 +116,19 @@ export async function notifyInstallProgress(opts: {
       : checkRes.error
         ? false
         : cfg.check.every((s) => checkPresent.has(s.slotKey) || checkNa.has(s.slotKey));
-  const started = checkOk && cfg.before.every((s) => satisfied(s.slotKey));
+  // 설치 시작 카드 발송 시점(사진 양식 설정) — all: 특이사항 전부 + 설치 전 전부 / required: 사진 필수 칸 사진만 /
+  // count: 특이사항+설치 전 사진 N장 이상(없음 체크는 세지 않음). 완료 카드 조건은 그대로.
+  const sn = cfg.startNotify;
+  const beforeKeys = new Set(cfg.before.map((s) => s.slotKey));
+  const photoCount =
+    (photoRows ?? []).filter((p) => beforeKeys.has(p.slot_key) || p.slot_key.startsWith("before_")).length +
+    (checkRes.data ?? []).length;
+  const started =
+    sn.mode === "required"
+      ? cfg.requiredCheckKeys.every((k) => checkPresent.has(k))
+      : sn.mode === "count"
+        ? photoCount >= sn.count
+        : checkOk && cfg.before.every((s) => satisfied(s.slotKey));
   const completed =
     cfg.before.every((s) => satisfied(s.slotKey)) &&
     cfg.after.every((s) => satisfied(s.slotKey));

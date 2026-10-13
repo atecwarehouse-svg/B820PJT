@@ -111,18 +111,24 @@ export function makeCheckCustomSlotKey(seq: number): string {
 // 키는 한 번 정하면 바꾸지 않는다(사진·없음체크가 키로 저장됨). 라벨만 바꾸는 건 안전.
 // ────────────────────────────────────────────────────────────────
 
+// 팀즈 '설치 시작' 카드 발송 시점 — all: 설치전 특이사항 전부(사진 또는 없음) + 설치 전 전부(기본, B820)
+//   required: 설치전 특이사항 중 '사진 필수' 칸 사진만 있으면 / count: 설치전 특이사항+설치 전 사진이 N장 이상이면
+export type StartNotify = { mode: "all" } | { mode: "required" } | { mode: "count"; count: number };
+
 export interface SlotConfig {
   before: SlotDef[]; // 설치 전 (완료 판정 포함)
   after: SlotDef[]; // 설치 후 (완료 판정 포함)
   afterExtra: SlotDef[]; // 설치 후 추가 촬영 (저장만, 완료 판정·PDF 제외)
   check: SlotDef[]; // 차량 이상유무 (설치 시작 판정)
   requiredCheckKeys: string[]; // 이상유무 중 사진 필수('없음' 불가)
+  startNotify: StartNotify; // 설치 시작 카드 발송 시점
 }
 
 export interface SlotConfigJson {
   before: { key: string; label: string }[];
   after: { key: string; label: string; extra?: boolean }[];
   check: { key: string; label: string; required?: boolean }[];
+  startNotify?: StartNotify; // 없으면 all
 }
 
 export const DEFAULT_SLOT_CONFIG: SlotConfig = {
@@ -131,6 +137,7 @@ export const DEFAULT_SLOT_CONFIG: SlotConfig = {
   afterExtra: AFTER_EXTRA_SLOTS,
   check: CHECK_SLOTS,
   requiredCheckKeys: REQUIRED_CHECK_KEYS,
+  startNotify: { mode: "all" },
 };
 
 export const SLOT_KEY_RE = /^(before|after|check)_[a-z0-9_]{1,40}$/;
@@ -145,6 +152,7 @@ export function toSlotConfigJson(c: SlotConfig): SlotConfigJson {
       ...c.afterExtra.map((s) => ({ key: s.slotKey, label: s.label, extra: true })),
     ],
     check: c.check.map((s) => ({ key: s.slotKey, label: s.label, ...(req.has(s.slotKey) ? { required: true } : {}) })),
+    ...(c.startNotify.mode === "all" ? {} : { startNotify: c.startNotify }), // 기본(all)은 생략 → B820 기본 JSON 불변
   };
 }
 
@@ -181,6 +189,20 @@ export function validateSlotConfig(v: unknown): SlotConfig | string {
   if (typeof check === "string") return check;
   if (before.length === 0) return "설치 전 칸은 최소 1개 필요합니다.";
   if (after.filter((s) => !s.extra).length === 0) return "설치 후(완료 판정) 칸은 최소 1개 필요합니다.";
+  // 설치 시작 카드 발송 시점
+  const sn = (o as { startNotify?: unknown }).startNotify as { mode?: unknown; count?: unknown } | undefined;
+  let startNotify: StartNotify = { mode: "all" };
+  if (sn != null) {
+    if (sn.mode === "required") {
+      if (!check.some((s) => s.required)) return "설치 시작 카드를 '사진 필수 칸만'으로 보내려면 설치전 특이사항에 사진 필수 칸이 1개 이상 있어야 합니다.";
+      startNotify = { mode: "required" };
+    } else if (sn.mode === "count") {
+      const max = check.length + before.length;
+      const count = Number(sn.count);
+      if (!Number.isInteger(count) || count < 1 || count > max) return `설치 시작 카드 사진 장수는 1~${max}장 사이로 입력하세요.`;
+      startNotify = { mode: "count", count };
+    } else if (sn.mode !== "all" && sn.mode !== undefined) return "설치 시작 카드 발송 시점 값이 잘못되었습니다.";
+  }
   const def = (s: { key: string; label: string }, section: Section): SlotDef => ({ slotKey: s.key, label: s.label, section });
   return {
     before: before.map((s) => def(s, "before")),
@@ -188,6 +210,7 @@ export function validateSlotConfig(v: unknown): SlotConfig | string {
     afterExtra: after.filter((s) => s.extra).map((s) => def(s, "after")),
     check: check.map((s) => def(s, "check")),
     requiredCheckKeys: check.filter((s) => s.required).map((s) => s.key),
+    startNotify,
   };
 }
 
