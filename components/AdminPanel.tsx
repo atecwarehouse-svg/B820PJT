@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "@/components/PLink";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import ReportRecipientsManager from "@/components/ReportRecipientsManager";
 import TeamNamesManager from "@/components/TeamNamesManager";
 import TeamCompanyManager from "@/components/TeamCompanyManager";
@@ -39,7 +39,9 @@ const TABS = [
 type Tab = (typeof TABS)[number];
 
 export default function AdminPanel() {
-  const [tab, setTab] = useState<Tab>("설치팀");
+  // ?tab=소속 처럼 탭 딥링크 (프로젝트 홈 설정 체크리스트 바로가기) — 모르는 값이면 첫 탭
+  const wanted = useSearchParams()?.get("tab") as Tab | null;
+  const [tab, setTab] = useState<Tab>(wanted && (TABS as readonly string[]).includes(wanted) ? wanted : "설치팀");
   const [q, setQ] = useState("");
   const [list, setList] = useState<AdminRecord[]>([]);
   const [loading, setLoading] = useState(false);
