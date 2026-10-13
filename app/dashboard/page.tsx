@@ -31,6 +31,7 @@ import InstallDateSearch from "@/components/InstallDateSearch";
 import DailyReportModal from "@/components/DailyReportModal";
 import KpiCards from "@/components/KpiCards";
 import CompletedListModal from "@/components/CompletedListModal";
+import DriveOpenButton from "@/components/DriveOpenButton";
 import RefreshButton from "@/components/RefreshButton";
 import DashboardDetailTabs from "@/components/DashboardDetailTabs";
 import { isProgressUnlocked } from "@/lib/admin-auth";
@@ -205,6 +206,7 @@ export default async function DashboardPage() {
       {/* 새로고침 + 갱신 시각 — 홈 화면 앱에는 브라우저 새로고침이 없어 입력 반영 확인용 */}
       <div className="mb-4 flex items-center justify-center gap-2">
         <RefreshButton />
+        <DriveOpenButton />
         <span className="text-xs text-gray-400">갱신 {updatedAt}</span>
       </div>
 
