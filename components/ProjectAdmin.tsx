@@ -9,6 +9,7 @@ import { SlotEditor } from "@/components/SlotConfigManager";
 import { PledgeTemplateEditor } from "@/components/PledgeTemplateManager";
 import RawDataGuide from "@/components/RawDataGuide";
 import DonePopup from "@/components/DonePopup";
+import LoadingOverlay from "@/components/LoadingOverlay";
 import { DEFAULT_PLEDGE_TEMPLATE, PLEDGE_BASE_NAME, isDefaultPledgeTemplate, validatePledgeTemplate, type PledgeTemplate } from "@/lib/pledge-template";
 import {
   CARD_COLORS,
@@ -111,7 +112,7 @@ export default function ProjectAdmin({
   const [pledgeError, setPledgeError] = useState("");
   const [rawFile, setRawFile] = useState<File | null>(null); // 차량 리스트(전개현황 엑셀) — 생성 직후 등록
   const [later, setLater] = useState(false); // 차량 리스트는 나중에 대시보드에서 등록
-  const [phase, setPhase] = useState<"" | "create" | "upload">("");
+  const [phase, setPhase] = useState<"" | "create" | "upload" | "save" | "delete">(""); // 로딩 오버레이 문구용
   const rawRef = useRef<HTMLInputElement>(null);
   const [shareLink, setShareLink] = useState(true); // 드라이브 폴더를 '링크가 있는 사용자'에게 보기 공유
   const [confirmSlug, setConfirmSlug] = useState(""); // 삭제 확인 대기 중인 프로젝트
@@ -211,7 +212,9 @@ export default function ProjectAdmin({
           else if (!period.start && !period.end) body.period = "";
         }
       }
+      setPhase("save");
       const j = await call("PUT", body);
+      setPhase("");
       if (j) {
         resetForm();
         if (j.warning) setError(String(j.warning));
@@ -308,7 +311,9 @@ export default function ProjectAdmin({
       body.confirm = confirmText.trim();
     }
     setConfirmSlug("");
+    setPhase("delete");
     const j = await call("DELETE", body);
+    setPhase("");
     if (!j) return;
     if (editing?.slug === p.slug) resetForm();
     setCreated(null);
@@ -357,6 +362,32 @@ export default function ProjectAdmin({
           로그아웃
         </button>
       </div>
+
+      {/* 로딩 오버레이 — 생성(드라이브·DB)·차량 등록·저장·삭제 중 */}
+      {busy && (
+        <LoadingOverlay
+          label={
+            phase === "upload"
+              ? "차량 리스트 등록 중…"
+              : phase === "delete"
+                ? "프로젝트 삭제 중…"
+                : phase === "save"
+                  ? "저장 중…"
+                  : phase === "create" || !editing
+                    ? "프로젝트 만드는 중…"
+                    : "처리 중…"
+          }
+          sub={
+            phase === "upload"
+              ? "엑셀을 읽어 차량과 설치 일정을 등록하고 있어요"
+              : phase === "delete"
+                ? "차량·기록·사진 데이터와 구글드라이브 폴더를 지우고 있어요"
+                : phase === "create" || (!editing && phase !== "save")
+                  ? "구글드라이브 폴더와 데이터베이스를 만들고 있어요 (10초 정도)"
+                  : undefined
+          }
+        />
+      )}
 
       {/* 생성 완료 팝업 — 이동 버튼 + 애니메이션. 닫으면 아래 초록 안내 카드가 남는다 */}
       {donePopup && created && (

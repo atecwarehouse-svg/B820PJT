@@ -18,6 +18,7 @@ import {
 import { publicPhotoUrl } from "@/lib/photo-url";
 import PhotoSlot from "@/components/PhotoSlot";
 import { clientProjectPath } from "@/components/PLink";
+import { navLoading } from "@/components/NavLoading";
 
 interface Props {
   brand?: string; // 제목 "<brand> 설치 사진" — 프로젝트명(기본 B820)
@@ -643,7 +644,10 @@ export default function RecordEditor({ plate, initial, teamOptions = [], brand =
                 사진 다시 확인하기
               </button>
               <button
-                onClick={() => router.push(clientProjectPath("/b820"))}
+                onClick={() => {
+                  navLoading();
+                  router.push(clientProjectPath("/b820"));
+                }}
                 className="flex-1 rounded-lg bg-blue-600 px-3 py-2.5 text-sm font-semibold text-white active:bg-blue-700"
               >
                 처음으로

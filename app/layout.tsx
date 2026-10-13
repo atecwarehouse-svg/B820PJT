@@ -1,4 +1,6 @@
 import type { Metadata, Viewport } from "next";
+import { Suspense } from "react";
+import NavLoading from "@/components/NavLoading";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -26,7 +28,13 @@ export default function RootLayout({
 }) {
   return (
     <html lang="ko">
-      <body className="min-h-screen text-gray-900 antialiased">{children}</body>
+      <body className="min-h-screen text-gray-900 antialiased">
+        {/* 페이지 이동 로딩 오버레이 — useSearchParams를 쓰므로 Suspense 경계 필요 */}
+        <Suspense fallback={null}>
+          <NavLoading />
+        </Suspense>
+        {children}
+      </body>
     </html>
   );
 }
