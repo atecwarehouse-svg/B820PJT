@@ -408,10 +408,13 @@ function StatusTab({ setMsg }: { setMsg: SetMsg }) {
     c.t++;
     if (v.done_at) c.d++;
     byCenter.set(centerOf(v), c);
-    const r = byRoute.get(v.route) ?? { t: 0, d: 0, center: centerOf(v) };
-    r.t++;
-    if (v.done_at) r.d++;
-    byRoute.set(v.route, r);
+    for (const route of v.route.split(" / ")) {
+      // 공동배차 차량은 각 노선에 모두 집계(노선 대수 = 로우데이터 행 수)
+      const r = byRoute.get(route) ?? { t: 0, d: 0, center: centerOf(v) };
+      r.t++;
+      if (v.done_at) r.d++;
+      byRoute.set(route, r);
+    }
   }
   const pct = (d: number, t: number) => (t ? Math.round((d / t) * 100) : 0);
   const shown = todoOnly ? vehicles.filter((v) => !v.done_at) : vehicles;

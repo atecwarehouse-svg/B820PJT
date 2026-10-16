@@ -123,7 +123,11 @@ export default function HandoverChecklist({ worker }: { worker: Worker }) {
   function toggle(v: Vehicle) {
     const done = !v.done_at;
     const me = worker.rank ? `${worker.rank} ${worker.name}` : worker.name;
-    if (!done && v.done_by && v.done_by !== me && !window.confirm(`${v.done_by}님이 완료한 차량입니다. 완료를 해제할까요?`)) return;
+    // 완료 해제는 잘못 누르기 쉬우니 항상 재확인(본인 것도) — 누가 완료했는지 함께 보여 준다
+    if (!done) {
+      const who = v.done_by ? (v.done_by === me ? "내가" : `${v.done_by}님이`) : "이미";
+      if (!window.confirm(`${v.plate}\n${who} 완료한 차량입니다. 완료를 해제할까요?`)) return;
+    }
     // 낙관적 반영 — 서버 응답으로 덮는다
     setVehicles((prev) =>
       prev?.map((x) => (x.plate === v.plate ? { ...x, done_at: done ? new Date().toISOString() : null, done_by: done ? me : null } : x)) ?? prev,
@@ -150,17 +154,20 @@ export default function HandoverChecklist({ worker }: { worker: Worker }) {
   const done = list.filter((v) => v.done_at).length;
   const pct = total ? Math.round((done / total) * 100) : 0;
 
+  // 노선별 묶음 — 공동배차(route "A / B / C") 차량은 각 노선에 모두 들어간다(노선 대수 = 로우데이터 행 수). 전체 대수는 차량 기준(중복 없음).
   const groups = useMemo(() => {
     const qq = q.replace(/\s+/g, "").toLowerCase();
     const m = new Map<string, { all: Vehicle[]; shown: Vehicle[] }>();
     for (const v of vehicles ?? []) {
-      const g = m.get(v.route) ?? { all: [], shown: [] };
-      g.all.push(v);
       const pass = (filter === "all" || (filter === "done") === !!v.done_at) && (!qq || v.plate.toLowerCase().includes(qq));
-      if (pass) g.shown.push(v);
-      m.set(v.route, g);
+      for (const route of v.route.split(" / ")) {
+        const g = m.get(route) ?? { all: [], shown: [] };
+        g.all.push(v);
+        if (pass) g.shown.push(v);
+        m.set(route, g);
+      }
     }
-    return [...m.entries()];
+    return [...m.entries()].sort(([a], [b]) => a.localeCompare(b, "ko"));
   }, [vehicles, filter, q]);
 
   const shownGroups = routeTab === "all" ? groups : groups.filter(([route]) => route === routeTab);
