@@ -43,6 +43,7 @@ export default function HandoverChecklist({ worker }: { worker: Worker }) {
   const [now, setNow] = useState(Date.now());
   const [error, setError] = useState("");
   const [filter, setFilter] = useState<"all" | "todo" | "done">("all");
+  const [routeTab, setRouteTab] = useState<string>("all"); // 노선 탭 — "all" 또는 route 값
   const [q, setQ] = useState("");
   const [noteFor, setNoteFor] = useState<Vehicle | null>(null);
   const [noteText, setNoteText] = useState("");
@@ -162,6 +163,7 @@ export default function HandoverChecklist({ worker }: { worker: Worker }) {
     return [...m.entries()];
   }, [vehicles, filter, q]);
 
+  const shownGroups = routeTab === "all" ? groups : groups.filter(([route]) => route === routeTab);
   const ago = syncedAt ? Math.max(0, Math.round((now - syncedAt) / 1000)) : null;
   const chip = (on: boolean) =>
     `rounded-full px-3 py-1.5 text-xs font-semibold ring-1 ${on ? "bg-gray-900 text-white ring-gray-900" : "bg-white text-gray-600 ring-black/10 active:bg-gray-50"}`;
@@ -238,6 +240,32 @@ export default function HandoverChecklist({ worker }: { worker: Worker }) {
         )}
       </section>
 
+      {/* 노선 탭 — 전체 + 노선별(완료/전체). 가로 스크롤 */}
+      {groups.length > 1 && (
+        <div className="-mx-4 flex gap-1.5 overflow-x-auto px-4 pb-0.5 [scrollbar-width:none]">
+          {[["all", null] as const, ...groups.map(([route, g]) => [route, g] as const)].map(([key, g]) => {
+            const on = routeTab === key;
+            const d = g ? g.all.filter((v) => v.done_at).length : done;
+            const t = g ? g.all.length : total;
+            return (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setRouteTab(key)}
+                className={`shrink-0 whitespace-nowrap rounded-xl px-3 py-2 text-xs font-semibold ring-1 transition-colors ${
+                  on ? "bg-blue-600 text-white ring-blue-600 shadow-sm" : "bg-white text-gray-700 ring-black/5 active:bg-blue-50"
+                }`}
+              >
+                {g ? shortRoute(key) : "전체"}
+                <span className={`ml-1 tabular-nums ${on ? "text-blue-100" : d === t && t ? "text-green-600" : "text-gray-400"}`}>
+                  {d}/{t}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       {/* 필터 */}
       <div className="flex items-center gap-2">
         <input
@@ -263,7 +291,7 @@ export default function HandoverChecklist({ worker }: { worker: Worker }) {
       {vehicles === null ? (
         <p className="py-10 text-center text-sm text-gray-400">차량 목록 불러오는 중…</p>
       ) : (
-        groups.map(([route, g]) =>
+        shownGroups.map(([route, g]) =>
           g.shown.length === 0 ? null : (
             <section key={route}>
               <div className="mb-1.5 flex items-baseline justify-between px-1">
@@ -306,7 +334,7 @@ export default function HandoverChecklist({ worker }: { worker: Worker }) {
           ),
         )
       )}
-      {vehicles && total > 0 && groups.every(([, g]) => g.shown.length === 0) && (
+      {vehicles && total > 0 && shownGroups.every(([, g]) => g.shown.length === 0) && (
         <p className="py-6 text-center text-sm text-gray-400">조건에 맞는 차량이 없습니다.</p>
       )}
 
