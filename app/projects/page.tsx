@@ -23,7 +23,7 @@ export default async function ProjectsPage() {
   const sharedPasswords: Record<string, string> = {};
   await Promise.all(
     projects
-      .filter((p) => p.kind === "album")
+      .filter((p) => p.kind !== "link") // 앨범·양도양수 — 자기 스키마가 있는 프로젝트
       .map(async (p) => {
         if (p.driveFolderId) driveShared[p.slug] = await isLinkShared(p.driveFolderId).catch(() => false);
         sharedPasswords[p.slug] = (await getSetting(SHARED_PASSWORD_KEY, p.slug)) ?? "";

@@ -9,6 +9,8 @@ import TeamCallButton from "@/components/TeamCallButton";
 import WeatherWidget from "@/components/WeatherWidget";
 import ProjectTutorial, { type SetupStep } from "@/components/ProjectTutorial";
 import ShareInstallBar from "@/components/ShareInstallBar";
+import HandoverHome from "@/components/handover/HandoverHome";
+import { currentWorker } from "@/lib/handover";
 import { CARD_COLORS, PROJECT_ICONS, Svg } from "@/components/ProjectIcon";
 import { currentSlug, isDefault } from "@/lib/project";
 import { createServiceClient } from "@/lib/supabase/server";
@@ -74,6 +76,10 @@ const MENU: { href: string; emoji: string; label: string; tint: string }[] = [
 
 export default async function HomePage() {
   const project = await currentProject();
+  // 양도양수 체크리스트 프로젝트 — 홈이 곧 체크리스트(로그인 → 내 센터 차량 완료 체크). 튜토리얼·촬영 메뉴 없음.
+  if (project.kind === "handover") {
+    return <HandoverHome project={project} worker={await currentWorker()} version={`v${BUILD_TIME}${COMMIT ? ` · ${COMMIT}` : ""}`} />;
+  }
   const icon = PROJECT_ICONS[project.icon];
   const slug = currentSlug();
   const steps = isDefault(slug) ? null : await setupSteps(slug); // B820은 운영 중 — 튜토리얼 없음

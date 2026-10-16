@@ -1404,3 +1404,64 @@ export async function sendModemDefectCard(d: {
 
   await post(url, card, "모뎀교체");
 }
+
+// 양도양수 체크리스트 — 차량 1대 완료 체크마다 관리자 호출방(TEAMS_ADMIN_CALL_WEBHOOK_URL)으로 보내는 카드.
+// 완료 차량·작업자와 함께 그 센터의 완료/잔여/진척율, 프로젝트 전체 완료/잔여/진척율을 적는다.
+// 해제·메모 변경은 보내지 않는다. 미설정이면 조용히 건너뛴다(체크 자체는 성공이어야 하므로).
+export interface HandoverProgress {
+  label: string; // "강남센터" | "전체"
+  total: number;
+  done: number;
+}
+export async function sendHandoverDoneCard(d: {
+  projectName: string;
+  plate: string;
+  operator: string;
+  route: string;
+  worker: string;
+  note?: string | null;
+  center: HandoverProgress;
+  overall: HandoverProgress;
+}): Promise<void> {
+  const url = process.env.TEAMS_ADMIN_CALL_WEBHOOK_URL;
+  if (!url) return;
+  const doneAt = new Date().toLocaleString("ko-KR", {
+    timeZone: "Asia/Seoul",
+    month: "numeric",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+  const pct = (p: HandoverProgress) => (p.total ? Math.round((p.done / p.total) * 100) : 0);
+  const line = (p: HandoverProgress) => `완료 ${p.done} / ${p.total}대 · 잔여 ${p.total - p.done}대 · 진척율 ${pct(p)}%`;
+  const card = {
+    type: "message",
+    attachments: [
+      {
+        contentType: "application/vnd.microsoft.card.adaptive",
+        content: {
+          $schema: "http://adaptivecards.io/schemas/adaptive-card.json",
+          type: "AdaptiveCard",
+          version: "1.4",
+          body: [
+            { type: "TextBlock", size: "Large", weight: "Bolder", color: "Good", text: `✅ 양도양수 완료 — ${d.projectName}`, wrap: true },
+            { type: "TextBlock", size: "Medium", weight: "Bolder", color: "Accent", text: `${d.center.label} · ${d.worker}`, spacing: "None", wrap: true },
+            {
+              type: "FactSet",
+              facts: [
+                { title: "차량번호", value: d.plate },
+                { title: "영업소", value: d.operator },
+                { title: "노선", value: d.route },
+                { title: "완료 시각", value: doneAt },
+                ...(d.note ? [{ title: "메모", value: d.note }] : []),
+              ],
+            },
+            { type: "TextBlock", weight: "Bolder", text: `📊 ${d.center.label}: ${line(d.center)}`, wrap: true },
+            { type: "TextBlock", text: `전체: ${line(d.overall)}`, isSubtle: true, spacing: "None", wrap: true },
+          ],
+        },
+      },
+    ],
+  };
+  await post(url, card, "양도양수 완료");
+}

@@ -22,6 +22,8 @@ export const maxDuration = 60;
 
 // 프로젝트 레지스트리(public.projects) 관리 — 런처(마스터=B820) 관리자 쿠키 또는 body.pw 필수.
 //   POST   { kind:"link",  name, description, icon, color, url }                       → 링크 카드 추가
+//   POST   { kind:"handover", slug, name, description, icon, color, admin_password, shared_password(직원 비밀번호, 필수) }
+//            → 양도양수 체크리스트 프로젝트 생성(드라이브 없음, create_handover_schema. 로우데이터는 화면이 /p/<slug>/api/handover/import 로 따로 올린다)
 //   POST   { kind:"album", slug, name, description, icon, color, admin_password, shareLink?, photoSlots?, reportMail?, period? } → 앨범 프로젝트 생성
 //            (shareLink: 드라이브 폴더를 링크 공유로, photoSlots: 사진 양식 SlotConfigJson — 없으면 B820 기본, reportMail: 완료리포트 수신자 string[],
 //             period: {start,end} 프로젝트 기간(app_settings.project_period, 빈 양식 전개일정 3행 날짜용),
@@ -61,6 +63,9 @@ function validUrl(url: string): boolean {
 
 // DB 오류 메시지에 사용자가 할 일을 덧붙인다
 function hint(message: string): string {
+  if (/create_handover_schema|projects_kind_check/i.test(message)) {
+    return `${message} — supabase/migration_handover.sql 을 Supabase SQL Editor에서 먼저 실행하세요.`;
+  }
   if (/create_project_schema|drop_project_schema|relation .*projects/i.test(message)) {
     return `${message} — supabase/migration_projects.sql 을 Supabase SQL Editor에서 먼저 실행하세요.`;
   }
@@ -244,6 +249,69 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, slug, home: projectHome(slug), exposed, warning, photoSlots, pledge, reportMail, driveFolder: folderLink(folderId), driveShared });
   }
 
+  // 양도양수 체크리스트 — 드라이브 폴더 없음, 스키마는 create_handover_schema(vehicles 에 완료 컬럼 추가), 직원 비밀번호 필수
+  if (body.kind === "handover") {
+    const slug = String(body.slug ?? "").trim().toLowerCase();
+    if (!SLUG_RE.test(slug)) {
+      return bad("프로젝트 ID는 영문 소문자로 시작하는 소문자·숫자·_ 2~20자여야 합니다. (예: smb)");
+    }
+    if (RESERVED.has(slug) || slug.startsWith("pg_")) return bad("쓸 수 없는 프로젝트 ID입니다.");
+    const pw = String(body.admin_password ?? "");
+    if (pw.length < 4) return bad("프로젝트 관리자 비밀번호는 4자 이상으로 정하세요.");
+    const staffPw = String(body.shared_password ?? "").trim();
+    if (staffPw.length < 4 || staffPw.length > 40) return bad("직원 비밀번호는 4~40자로 정하세요.");
+    const { data: dup } = await sb.from("projects").select("slug").eq("slug", slug).maybeSingle();
+    if (dup) return bad("이미 있는 프로젝트 ID입니다.");
+
+    const { data: rpc, error: rpcErr } = await sb.rpc("create_handover_schema", { slug });
+    if (rpcErr) return bad("프로젝트 DB 생성 실패: " + hint(rpcErr.message), 500);
+    let exposed = !!(rpc as { exposed?: boolean } | null)?.exposed;
+    let warning: string | undefined;
+    if (!exposed) {
+      exposed = await exposeSchemaViaApi(slug);
+      if (!exposed) {
+        warning =
+          "DB는 만들어졌지만 API 노출 설정이 자동으로 되지 않았습니다. Supabase 대시보드 → Settings → API → Exposed schemas 에 '" +
+          slug +
+          "' 을(를) 추가하거나, Vercel 환경변수 SUPABASE_ACCESS_TOKEN·SUPABASE_PROJECT_REF 를 넣어 주세요. 그 전까지 이 프로젝트는 열리지 않습니다.";
+      }
+    }
+    const rollback = async () => {
+      const { error } = await sb.rpc("drop_project_schema", { slug });
+      return error ? ` (되감기 실패: ${error.message} — SQL에서 select drop_project_schema('${slug}') 실행 필요)` : "";
+    };
+    const { error: insErr } = await sb.from("projects").insert({
+      slug,
+      kind: "handover",
+      name,
+      description,
+      icon,
+      color,
+      admin_password_hash: cookieToken(slug, pw),
+    });
+    if (insErr) return bad("프로젝트 등록 실패: " + hint(insErr.message) + (await rollback()), 500);
+    invalidateProjectCache();
+
+    // 직원 비밀번호는 로그인 자체라 저장 실패를 경고로 넘기지 않는다(기본값으로 열리는 프로젝트 방지)
+    if (exposed) {
+      const dst = createServiceClient(slug);
+      let saved = false;
+      let last = "";
+      for (let attempt = 0; attempt < 4 && !saved; attempt++) {
+        if (attempt) await new Promise((r) => setTimeout(r, 700));
+        const { error } = await dst
+          .from("app_settings")
+          .upsert({ key: SHARED_PASSWORD_KEY, value: staffPw, updated_at: new Date().toISOString() }, { onConflict: "key" });
+        if (!error) saved = true;
+        else last = error.message;
+      }
+      if (!saved) {
+        return bad("직원 비밀번호 저장 실패: " + last + (await rollback()), 500);
+      }
+    }
+    return NextResponse.json({ ok: true, slug, home: projectHome(slug), exposed, warning });
+  }
+
   // 링크 카드
   const url = String(body.url ?? "").trim();
   if (!validUrl(url)) return bad("앱 주소는 https://… 형식으로 입력하세요.");
@@ -295,7 +363,7 @@ export async function PUT(req: NextRequest) {
       if (!validUrl(url)) return bad("앱 주소는 https://… 형식으로 입력하세요.");
       patch.url = url;
     }
-    if (row.kind === "album" && typeof body.admin_password === "string" && body.admin_password) {
+    if (row.kind !== "link" && typeof body.admin_password === "string" && body.admin_password) {
       if (body.admin_password.length < 4) return bad("프로젝트 관리자 비밀번호는 4자 이상으로 정하세요.");
       patch.admin_password_hash = cookieToken(slug, body.admin_password);
     }
@@ -311,11 +379,13 @@ export async function PUT(req: NextRequest) {
       period = `${p.start}~${p.end}`;
     }
   }
-  // 협력업체 공용 비밀번호 — 앨범 프로젝트(B820 포함). ""이면 기본값으로 되돌림
+  // 협력업체 공용 비밀번호 — 앨범 프로젝트(B820 포함). ""이면 기본값으로 되돌림.
+  // 양도양수 프로젝트에선 같은 키가 '직원 비밀번호'(로그인)라 비울 수 없다.
   let sharedPw: string | undefined;
-  if (row.kind === "album" && typeof body.shared_password === "string") {
+  if (row.kind !== "link" && typeof body.shared_password === "string") {
     const sp = body.shared_password.trim();
-    if (sp && (sp.length < 4 || sp.length > 40)) return bad("협력업체 공용 비밀번호는 4~40자로 정하세요.");
+    if (row.kind === "handover" && !sp) return bad("직원 비밀번호는 비울 수 없습니다(4~40자).");
+    if (sp && (sp.length < 4 || sp.length > 40)) return bad((row.kind === "handover" ? "직원" : "협력업체 공용") + " 비밀번호는 4~40자로 정하세요.");
     sharedPw = sp;
   }
   if (!Object.keys(patch).length && shareLink === undefined && period === undefined && sharedPw === undefined) return bad("바꿀 내용이 없습니다.");
@@ -366,9 +436,9 @@ export async function DELETE(req: NextRequest) {
   if (rowErr) return bad(hint(rowErr.message), 500);
   if (!row) return bad("해당 프로젝트가 없습니다.");
 
-  if (row.kind === "album") {
+  if (row.kind !== "link") {
     // 앨범 프로젝트 삭제 = DB 스키마(차량·기록·사진 메타·서약서…) 통째 삭제 + 양식 삭제 + 드라이브 사진 폴더 영구 삭제.
-    // 되돌릴 수 없으므로 프로젝트 ID를 그대로 입력해 확인받는다. B820은 불가.
+    // 양도양수 프로젝트는 스키마만(양식·드라이브 없음). 되돌릴 수 없으므로 프로젝트 ID를 그대로 입력해 확인받는다. B820은 불가.
     if (isDefault(slug)) return bad("B820은 삭제할 수 없습니다.");
     if (String(body.confirm ?? "").trim() !== slug) {
       return bad("확인을 위해 프로젝트 ID를 똑같이 입력하세요.");
@@ -376,9 +446,11 @@ export async function DELETE(req: NextRequest) {
     // 실패할 수 있는 DB 삭제를 먼저 — 성공한 뒤에만 양식·드라이브를 정리(반쯤 지워진 상태 방지)
     const { error } = await sb.rpc("drop_project_schema", { slug }); // 스키마 + 레지스트리 행
     if (error) return bad("삭제 실패: " + hint(error.message), 500);
-    const st = sb.storage.from(TEMPLATE_BUCKET);
-    const { data: objs } = await st.list(slug);
-    if (objs?.length) await st.remove(objs.map((o) => `${slug}/${o.name}`)).catch(() => {});
+    if (row.kind === "album") {
+      const st = sb.storage.from(TEMPLATE_BUCKET);
+      const { data: objs } = await st.list(slug);
+      if (objs?.length) await st.remove(objs.map((o) => `${slug}/${o.name}`)).catch(() => {});
+    }
     // 드라이브 사진 폴더(운수사·차량 폴더·사진 포함) 영구 삭제 — 안 되면 휴지통으로라도 옮기고 결과를 알린다
     let drive: "deleted" | "trashed" | "failed" | "none" = "none";
     if (row.drive_folder_id) {

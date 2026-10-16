@@ -73,7 +73,7 @@ export default async function ProjectSelectPage() {
             );
             return (
               <li key={p.slug} className="motion-safe:animate-rise" style={rise(i)}>
-                {p.kind === "album" ? (
+                {p.kind !== "link" ? (
                   <Link href={projectHome(p.slug)} className={card(p.color)}>
                     {inner}
                   </Link>

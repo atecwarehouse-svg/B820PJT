@@ -1,4 +1,5 @@
 import Link from "@/components/PLink";
+import { notFound } from "next/navigation";
 import { brandName, currentProject } from "@/lib/project";
 import { createServiceClient } from "@/lib/supabase/server";
 import { getInstallTeams, getSlotConfig } from "@/lib/settings";
@@ -16,6 +17,8 @@ export default async function RecordPage({
   params: { plate: string };
 }) {
   const plate = decodeURIComponent(params.plate).trim();
+  // 양도양수 체크리스트 프로젝트에는 촬영 기록이 없다(사진이 B820 드라이브로 가는 사고 방지)
+  if ((await currentProject()).kind === "handover") notFound();
   const supabase = createServiceClient();
 
   // planned_date·is_added는 오입력 경고용 — 컬럼 없는 옛 DB면 빼고 재시도(경고만 생략)

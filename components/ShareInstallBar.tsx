@@ -14,7 +14,7 @@ interface BeforeInstallPromptEvent extends Event {
   userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
 }
 
-export default function ShareInstallBar({ projectName }: { projectName: string }) {
+export default function ShareInstallBar({ projectName, kindLabel = "설치 사진첩" }: { projectName: string; kindLabel?: string }) {
   const pathname = usePathname() ?? "";
   const [toast, setToast] = useState<string | null>(null);
   const [installEvt, setInstallEvt] = useState<BeforeInstallPromptEvent | null>(null);
@@ -45,7 +45,7 @@ export default function ShareInstallBar({ projectName }: { projectName: string }
     const nav = navigator as Navigator & { share?: (d: ShareData) => Promise<void> };
     try {
       if (nav.share) {
-        await nav.share({ title: projectName, text: `${projectName} 설치 사진첩 — 링크를 열고 홈 화면에 추가하세요`, url });
+        await nav.share({ title: projectName, text: `${projectName} ${kindLabel} — 링크를 열고 홈 화면에 추가하세요`, url });
         return;
       }
     } catch {

@@ -25,7 +25,7 @@ export async function GET() {
     id: home,
     name: project.name,
     short_name: project.name.length > 12 ? project.name.slice(0, 12) : project.name,
-    description: project.description || `${project.name} — 설치 사진첩`,
+    description: project.description || `${project.name} — ${project.kind === "handover" ? "양도양수 체크리스트" : "설치 사진첩"}`,
     start_url: home,
     scope,
     display: "standalone",

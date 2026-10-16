@@ -13,9 +13,13 @@ import { colorKey, iconKey, type ColorKey, type IconKey } from "@/components/Pro
 export const DEFAULT_SLUG = "b820";
 export const SLUG_RE = /^[a-z][a-z0-9_]{1,19}$/;
 
+// kind: album = B820 같은 설치 사진첩(자기 스키마+드라이브 폴더), link = 다른 앱 주소 카드,
+//       handover = 양도양수 체크리스트(자기 스키마, 드라이브 없음 — lib/handover.ts)
+export type ProjectKind = "album" | "link" | "handover";
+
 export interface Project {
   slug: string;
-  kind: "album" | "link";
+  kind: ProjectKind;
   name: string;
   description: string;
   icon: IconKey;
@@ -85,7 +89,7 @@ type Row = {
 function fromRow(r: Row): Project {
   return {
     slug: r.slug,
-    kind: r.kind === "link" ? "link" : "album",
+    kind: r.kind === "link" || r.kind === "handover" ? r.kind : "album",
     name: String(r.name ?? "").trim() || r.slug,
     description: String(r.description ?? "").trim(),
     icon: iconKey(r.icon),

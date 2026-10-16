@@ -46,6 +46,8 @@ function rootFolderId(): string {
 // 현재 프로젝트의 사진 루트 — B820은 env 루트, 그 외 프로젝트는 만들 때 생성한 프로젝트 폴더
 async function projectRoot(): Promise<string> {
   const p = await currentProject();
+  // 폴더 없는 프로젝트(양도양수 체크리스트)가 env 루트(B820 폴더)로 떨어지면 안 된다
+  if (!isDefault(p.slug) && !p.driveFolderId) throw new Error("이 프로젝트에는 구글드라이브 폴더가 없습니다.");
   return p.driveFolderId ?? rootFolderId();
 }
 
@@ -232,6 +234,7 @@ export async function uploadExport(
 ): Promise<{ id: string; link: string; folderLink: string; folderName: string }> {
   const d = drive();
   const p = await currentProject();
+  if (!isDefault(p.slug) && !p.driveFolderId) throw new Error("이 프로젝트에는 구글드라이브 폴더가 없습니다.");
   const folderName = isDefault(p.slug) ? `인천B820 ${kind}` : `${p.name} ${kind}`;
   const folderId =
     isDefault(p.slug) || !p.driveFolderId

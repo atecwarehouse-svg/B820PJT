@@ -23,7 +23,7 @@
 -- ----- 프로젝트 레지스트리 (런처 카드 + 앨범 프로젝트 메타) -----
 create table if not exists public.projects (
   slug                text primary key,             -- album: ^[a-z][a-z0-9_]{1,19}$ (= 스키마명). link 카드: 기존 uuid
-  kind                text not null check (kind in ('album','link')),
+  kind                text not null check (kind in ('album','link','handover')),  -- handover 는 migration_handover.sql 이 추가
   name                text not null,
   description         text not null default '',
   icon                text not null default 'folder',

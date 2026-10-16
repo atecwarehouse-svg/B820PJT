@@ -26,7 +26,9 @@ import {
 // 위: 추가/수정 폼(미리보기 포함), 아래: 등록된 프로젝트 목록(연필=수정, 휴지통=링크 카드 삭제).
 //   앨범 프로젝트: B820과 같은 기능을 이 앱 안에서 쓰는 프로젝트 (자기 DB·드라이브 폴더·관리자 비밀번호)
 //   링크 카드  : 다른 앱 주소로 이동하는 바로가기 (예: 공항 현장실사 사진첩)
-type Kind = "album" | "link";
+//   양도양수 체크리스트(handover): 직원 전용 — 차량별 완료 체크(자기 DB, 드라이브 없음, 직원 비밀번호 로그인)
+type Kind = "album" | "link" | "handover";
+const KIND_LABEL: Record<Kind, string> = { album: "앨범 프로젝트", handover: "양도양수 체크리스트", link: "링크 카드" };
 
 const SLUG_RE = /^[a-z][a-z0-9_]{1,19}$/;
 const projectHome = (slug: string) => (slug === "b820" ? "/b820" : `/p/${slug}`);
@@ -51,7 +53,8 @@ const isDefaultSlots = (c: SlotConfigJson) => JSON.stringify(c) === JSON.stringi
 
 // 생성 직후 차량 리스트(로우데이터) 등록 — 새 프로젝트 주소(/p/<slug>/api/…)로 올리면 미들웨어가 그 프로젝트 DB로 보낸다.
 // 스키마가 막 노출된 직후라 첫 시도가 실패할 수 있어 짧게 재시도. 파일 자체 문제(읽기 실패)는 재시도하지 않는다.
-async function uploadRawData(slug: string, pw: string, file: File): Promise<{ total?: number; error?: string }> {
+// 앨범은 /api/import/schedule(전개현황 양식), 양도양수는 /api/handover/import(노선별 차량현황 로우데이터).
+async function uploadRawData(slug: string, pw: string, file: File, kind: Kind = "album"): Promise<{ total?: number; error?: string }> {
   let last = "";
   for (let attempt = 0; attempt < 3; attempt++) {
     if (attempt) await new Promise((r) => setTimeout(r, 1500));
@@ -62,7 +65,8 @@ async function uploadRawData(slug: string, pw: string, file: File): Promise<{ to
       form.append("pw", pw);
       form.append("initial", "true");
       form.append("slug", slug);
-      const res = await fetch(`/p/${slug}/api/import/schedule`, { method: "POST", body: form });
+      const api = kind === "handover" ? "handover/import" : "import/schedule";
+      const res = await fetch(`/p/${slug}/api/${api}`, { method: "POST", body: form });
       const j = (await res.json().catch(() => ({}))) as { total?: number; error?: string };
       if (res.ok) return { total: Number(j.total ?? 0) };
       last = j.error ?? `HTTP ${res.status}`;
@@ -119,6 +123,7 @@ export default function ProjectAdmin({
   const [confirmText, setConfirmText] = useState(""); // 앨범 삭제 확인용 ID 입력
   const [created, setCreated] = useState<{
     name: string;
+    kind: Kind;
     home: string;
     exposed: boolean;
     warning?: string;
@@ -161,7 +166,7 @@ export default function ProjectAdmin({
 
   function onNameChange(v: string) {
     setName(v);
-    if (!editing && kind === "album" && !slugTouched) setSlug(suggestSlug(v));
+    if (!editing && kind !== "link" && !slugTouched) setSlug(suggestSlug(v));
   }
 
   async function call(method: "POST" | "PUT" | "DELETE", body: Record<string, unknown>) {
@@ -197,11 +202,11 @@ export default function ProjectAdmin({
     if (editing) {
       const body: Record<string, unknown> = { slug: editing.slug, color };
       // 협력업체 공용 비밀번호 — 바뀌었을 때만 (B820 포함, 비우면 기본값으로)
-      if (editing.kind === "album" && sharedPw.trim() !== (sharedPasswords[editing.slug] ?? "")) body.shared_password = sharedPw.trim();
+      if (editing.kind !== "link" && sharedPw.trim() !== (sharedPasswords[editing.slug] ?? "")) body.shared_password = sharedPw.trim();
       if (editing.slug !== "b820") {
         Object.assign(body, { name, description, icon });
         if (editing.kind === "link") body.url = url;
-        if (editing.kind === "album" && adminPw) body.admin_password = adminPw;
+        if (editing.kind !== "link" && adminPw) body.admin_password = adminPw;
         if (editing.kind === "album" && editing.driveFolderId && shareLink !== (driveShared[editing.slug] ?? false)) {
           body.shareLink = shareLink;
         }
@@ -253,6 +258,7 @@ export default function ProjectAdmin({
         }
         setCreated({
           name,
+          kind,
           home: String(j.home ?? projectHome(newSlug)),
           exposed: !!j.exposed,
           warning: j.warning ? String(j.warning) : undefined,
@@ -263,6 +269,37 @@ export default function ProjectAdmin({
           uploadError,
           driveFolder: j.driveFolder ? String(j.driveFolder) : undefined,
           driveShared: j.driveShared === true,
+        });
+        setDonePopup(true);
+        resetForm();
+      }
+      setPhase("");
+    } else if (kind === "handover") {
+      // 양도양수 체크리스트 — 드라이브·양식 없음. 직원 비밀번호 필수, 로우데이터는 생성 후 /p/<slug>/api/handover/import 로.
+      const newSlug = slug.trim().toLowerCase();
+      setPhase("create");
+      const j = await call("POST", { kind, ...common, slug: newSlug, admin_password: adminPw, shared_password: sharedPw.trim() });
+      if (j) {
+        let uploaded: number | undefined;
+        let uploadError: string | undefined;
+        if (rawFile && j.exposed) {
+          setPhase("upload");
+          setBusy(true);
+          const r = await uploadRawData(newSlug, adminPw, rawFile, "handover");
+          setBusy(false);
+          uploaded = r.total;
+          uploadError = r.error;
+        } else if (rawFile) {
+          uploadError = "DB API 노출이 안 돼 차량 리스트는 등록하지 못했습니다. 노출 설정 후 관리자 '차량 업로드'로 올려주세요.";
+        }
+        setCreated({
+          name,
+          kind,
+          home: String(j.home ?? projectHome(newSlug)),
+          exposed: !!j.exposed,
+          warning: j.warning ? String(j.warning) : undefined,
+          uploaded,
+          uploadError,
         });
         setDonePopup(true);
         resetForm();
@@ -303,7 +340,7 @@ export default function ProjectAdmin({
       return;
     }
     const body: Record<string, unknown> = { slug: p.slug };
-    if (p.kind === "album") {
+    if (p.kind !== "link") {
       if (confirmText.trim() !== p.slug) {
         setError("확인을 위해 프로젝트 ID를 똑같이 입력하세요.");
         return;
@@ -321,13 +358,15 @@ export default function ProjectAdmin({
       name: p.name,
       kind: p.kind,
       note:
-        j.drive === "trashed"
-          ? "구글드라이브 폴더는 영구 삭제가 안 돼 휴지통으로 옮겼습니다(30일 안에 복구 가능)."
-          : j.drive === "failed"
-            ? "구글드라이브 폴더 삭제에는 실패했습니다. 드라이브에서 직접 지워 주세요."
-            : j.drive === "deleted"
-              ? "차량·기록·사진 데이터와 구글드라이브 폴더를 모두 지웠습니다."
-              : undefined,
+        p.kind === "handover"
+          ? "차량·완료 체크·작업자 명단을 모두 지웠습니다."
+          : j.drive === "trashed"
+            ? "구글드라이브 폴더는 영구 삭제가 안 돼 휴지통으로 옮겼습니다(30일 안에 복구 가능)."
+            : j.drive === "failed"
+              ? "구글드라이브 폴더 삭제에는 실패했습니다. 드라이브에서 직접 지워 주세요."
+              : j.drive === "deleted"
+                ? "차량·기록·사진 데이터와 구글드라이브 폴더를 모두 지웠습니다."
+                : undefined,
     });
   }
 
@@ -349,7 +388,9 @@ export default function ProjectAdmin({
       ? isB820 || (!!name && !badPeriod)
       : kind === "album"
         ? !!name && SLUG_RE.test(slug.trim().toLowerCase()) && adminPw.length >= 4 && badMail.length === 0 && !badPeriod && (!!rawFile || later)
-        : !!name && !!url);
+        : kind === "handover"
+          ? !!name && SLUG_RE.test(slug.trim().toLowerCase()) && adminPw.length >= 4 && sharedPw.trim().length >= 4 && (!!rawFile || later)
+          : !!name && !!url);
 
   return (
     <main className="mx-auto max-w-md px-4 pb-16 pt-6">
@@ -379,18 +420,44 @@ export default function ProjectAdmin({
           }
           sub={
             phase === "upload"
-              ? "엑셀을 읽어 차량과 설치 일정을 등록하고 있어요"
+              ? kind === "handover" || created?.kind === "handover"
+                ? "엑셀을 읽어 차량 목록을 등록하고 있어요"
+                : "엑셀을 읽어 차량과 설치 일정을 등록하고 있어요"
               : phase === "delete"
-                ? "차량·기록·사진 데이터와 구글드라이브 폴더를 지우고 있어요"
+                ? "프로젝트 데이터를 지우고 있어요"
                 : phase === "create" || (!editing && phase !== "save")
-                  ? "구글드라이브 폴더와 데이터베이스를 만들고 있어요 (10초 정도)"
+                  ? kind === "handover"
+                    ? "데이터베이스를 만들고 있어요"
+                    : "구글드라이브 폴더와 데이터베이스를 만들고 있어요 (10초 정도)"
                   : undefined
           }
         />
       )}
 
       {/* 생성 완료 팝업 — 이동 버튼 + 애니메이션. 닫으면 아래 초록 안내 카드가 남는다 */}
-      {donePopup && created && (
+      {donePopup && created && created.kind === "handover" && (
+        <DonePopup
+          tone="success"
+          title={`${created.name} 체크리스트를 만들었습니다`}
+          onClose={() => setDonePopup(false)}
+          actions={[
+            { label: "센터 배정하기 →", href: `${created.home}/admin?tab=${encodeURIComponent("센터 배정")}`, primary: true },
+            { label: "작업자 등록", href: `${created.home}/admin?tab=${encodeURIComponent("작업자")}` },
+            { label: "프로젝트 홈 열기", href: created.home },
+          ]}
+        >
+          <p>
+            {created.uploaded !== undefined
+              ? `차량 ${created.uploaded.toLocaleString()}대를 등록했습니다.`
+              : created.uploadError
+                ? "차량 목록은 등록하지 못했습니다. 관리자 「차량 업로드」로 올려주세요."
+                : "차량 목록은 관리자 「차량 업로드」에서 등록합니다."}
+          </p>
+          <p>관리자(방금 정한 비밀번호)에서 영업소별 담당 센터를 배정하고 작업자(센터·직급·이름)를 등록하면, 직원은 홈에서 이름을 고르고 직원 비밀번호로 들어옵니다.</p>
+          {created.warning && <p className="text-amber-700">{created.warning}</p>}
+        </DonePopup>
+      )}
+      {donePopup && created && created.kind !== "handover" && (
         <DonePopup
           tone="success"
           title={`${created.name} 프로젝트를 만들었습니다`}
@@ -424,13 +491,53 @@ export default function ProjectAdmin({
             { label: "첫 화면으로", href: "/" },
           ]}
         >
-          {deleted.kind === "album" ? <p>{deleted.note ?? "프로젝트 데이터를 지웠습니다."}</p> : <p>첫 화면의 링크 카드를 지웠습니다.</p>}
+          {deleted.kind !== "link" ? <p>{deleted.note ?? "프로젝트 데이터를 지웠습니다."}</p> : <p>첫 화면의 링크 카드를 지웠습니다.</p>}
           <p>첫 화면 카드 목록에서도 사라졌습니다.</p>
         </DonePopup>
       )}
 
-      {/* 생성 직후 안내 */}
-      {created && (
+      {/* 생성 직후 안내 — 양도양수 */}
+      {created && created.kind === "handover" && (
+        <section className="mb-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900 motion-safe:animate-rise">
+          <p className="font-bold">
+            {created.exposed ? "✅ " : "⚠️ "}
+            {created.name} 체크리스트를 만들었습니다
+          </p>
+          {created.warning && <p className="mt-2 text-xs leading-relaxed text-amber-800">{created.warning}</p>}
+          <ol className="mt-2 list-decimal space-y-1 pl-5 text-xs leading-relaxed">
+            <li>
+              {created.uploaded !== undefined ? (
+                <>차량 <b>{created.uploaded.toLocaleString()}대</b>를 등록했습니다. 로우데이터가 바뀌면 관리자 <b>차량 업로드</b>로 다시 올립니다.</>
+              ) : created.uploadError ? (
+                <span className="text-amber-800">차량 등록 실패: {created.uploadError}</span>
+              ) : (
+                <>관리자 → <b>차량 업로드</b>로 노선별 차량현황 엑셀을 올립니다.</>
+              )}
+            </li>
+            <li>
+              관리자 → <b>센터 배정</b>에서 영업소마다 담당 센터를 적습니다(예: 본사 → 강남센터).
+            </li>
+            <li>
+              관리자 → <b>작업자</b>에서 센터·직급·이름을 등록합니다. 직원은{" "}
+              <a href={created.home} className="font-semibold underline">
+                {created.home}
+              </a>{" "}
+              에서 이름을 고르고 직원 비밀번호로 들어옵니다.
+            </li>
+          </ol>
+          <div className="mt-3 flex gap-2">
+            <a href={`${created.home}/admin?tab=${encodeURIComponent("센터 배정")}`} className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white">
+              센터 배정하기 →
+            </a>
+            <button type="button" onClick={() => setCreated(null)} className="rounded-lg bg-white px-3 py-1.5 text-xs text-emerald-800 ring-1 ring-emerald-200">
+              닫기
+            </button>
+          </div>
+        </section>
+      )}
+
+      {/* 생성 직후 안내 — 앨범 */}
+      {created && created.kind !== "handover" && (
         <section className="mb-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900 motion-safe:animate-rise">
           <p className="font-bold">
             {created.exposed ? "✅ " : "⚠️ "}
@@ -518,16 +625,16 @@ export default function ProjectAdmin({
             </h2>
             {!editing && (
               <div className="mt-2 flex rounded-xl bg-gray-100 p-1 text-xs font-semibold">
-                {(["album", "link"] as Kind[]).map((k) => (
+                {(["album", "handover", "link"] as Kind[]).map((k) => (
                   <button
                     key={k}
                     type="button"
                     onClick={() => setKind(k)}
-                    className={`flex-1 rounded-lg py-1.5 transition-colors ${
+                    className={`flex-1 rounded-lg px-1 py-1.5 transition-colors ${
                       kind === k ? "bg-white text-blue-700 shadow-sm" : "text-gray-500"
                     }`}
                   >
-                    {k === "album" ? "앨범 프로젝트" : "링크 카드"}
+                    {KIND_LABEL[k]}
                   </button>
                 ))}
               </div>
@@ -539,7 +646,9 @@ export default function ProjectAdmin({
                   : "이름·설명·아이콘·색을 바꿉니다. 왼쪽은 첫 화면에 보일 모습입니다."
                 : kind === "album"
                   ? "B820 설치 사진첩과 같은 기능을 가진 프로젝트를 이 앱 안에 만듭니다. 데이터·사진 폴더·관리자 비밀번호가 따로 생깁니다."
-                  : "별도로 배포된 앱의 주소를 카드로 등록합니다."}
+                  : kind === "handover"
+                    ? "직원 전용 양도양수 체크리스트. 영업소별 담당 센터 작업자가 폰에서 차량별 완료를 체크하고 서로 실시간으로 공유합니다(사진·협력업체 없음)."
+                    : "별도로 배포된 앱의 주소를 카드로 등록합니다."}
             </p>
           </div>
         </div>
@@ -636,9 +745,9 @@ export default function ProjectAdmin({
               </p>
             </div>
           )}
-          {kind === "album" && (
+          {kind !== "link" && (
             <div>
-              <p className="pt-2 text-xs font-bold text-gray-500">🤝 협력업체 공용 비밀번호</p>
+              <p className="pt-2 text-xs font-bold text-gray-500">{kind === "handover" ? "👤 직원 비밀번호 (필수)" : "🤝 협력업체 공용 비밀번호"}</p>
               <div className="relative mt-1">
                 <input
                   value={sharedPw}
@@ -646,7 +755,7 @@ export default function ProjectAdmin({
                   type={showSharedPw ? "text" : "password"}
                   autoComplete="off"
                   maxLength={40}
-                  placeholder="비우면 기본값 wktks2020!!"
+                  placeholder={kind === "handover" ? "직원들이 체크리스트에 들어올 때 쓰는 비밀번호 (4~40자)" : "비우면 기본값 wktks2020!!"}
                   className={`${input} pr-14`}
                 />
                 <button
@@ -658,13 +767,14 @@ export default function ProjectAdmin({
                 </button>
               </div>
               <p className="mt-1 px-1 text-[11px] text-gray-400">
-                진행현황 엑셀 다운로드와 대시보드 상세(설치 일정·운수사별 현황) 잠금을 푸는 비밀번호입니다. 관리자 비밀번호와 달리
-                협력업체에 알려 주는 용도이며, 4~40자. 만든 뒤에도 여기서 바꿀 수 있습니다.
-                {editing && !sharedPw ? " 지금은 기본값을 쓰고 있습니다." : ""}
+                {kind === "handover"
+                  ? "직원이 홈에서 센터·이름을 고른 뒤 입력하는 공용 비밀번호입니다(관리자 비밀번호와 별개). 외부인은 명단과 이 비밀번호가 없어 못 들어옵니다. 만든 뒤에도 여기서 바꿀 수 있고, 바꾸면 전원 다시 로그인합니다."
+                  : "진행현황 엑셀 다운로드와 대시보드 상세(설치 일정·운수사별 현황) 잠금을 푸는 비밀번호입니다. 관리자 비밀번호와 달리 협력업체에 알려 주는 용도이며, 4~40자. 만든 뒤에도 여기서 바꿀 수 있습니다."}
+                {kind === "album" && editing && !sharedPw ? " 지금은 기본값을 쓰고 있습니다." : ""}
               </p>
             </div>
           )}
-          {kind === "album" && !isB820 && (
+          {kind !== "link" && !isB820 && (
             <>
               <div>
                 <input
@@ -707,7 +817,7 @@ export default function ProjectAdmin({
                   {showPw ? "숨기기" : "보기"}
                 </button>
               </div>
-              {(!editing || editing.driveFolderId) && (
+              {kind === "album" && (!editing || editing.driveFolderId) && (
                 <label className="flex items-start gap-2 rounded-xl bg-gray-50 px-3 py-2.5 text-xs text-gray-600">
                   <input
                     type="checkbox"
@@ -723,8 +833,8 @@ export default function ProjectAdmin({
                   </span>
                 </label>
               )}
-              {!editing && <p className="pt-2 text-xs font-bold text-gray-500">📮 양식 · 알림</p>}
-              {!editing && (
+              {!editing && kind === "album" && <p className="pt-2 text-xs font-bold text-gray-500">📮 양식 · 알림</p>}
+              {!editing && kind === "album" && (
                 <div>
                   <textarea
                     value={reportMail}
@@ -745,7 +855,7 @@ export default function ProjectAdmin({
                   </p>
                 </div>
               )}
-              {!editing && (
+              {!editing && kind === "album" && (
                 <button
                   type="button"
                   onClick={() => { setSlotsError(""); setSlotsOpen(true); }}
@@ -762,7 +872,7 @@ export default function ProjectAdmin({
                   <span className="shrink-0 whitespace-nowrap pl-2 text-blue-600">설정 ›</span>
                 </button>
               )}
-              {!editing && (
+              {!editing && kind === "album" && (
                 <button
                   type="button"
                   onClick={() => { setPledgeError(""); setPledgeOpen(true); }}
@@ -781,7 +891,9 @@ export default function ProjectAdmin({
               )}
               {!editing && (
                 <div className="rounded-xl border border-dashed border-emerald-200 bg-emerald-50/60 px-3 py-2.5 text-xs text-gray-600">
-                  <p className="mb-1.5 font-bold text-gray-700">📂 차량 리스트 (로우데이터 · 전개현황 엑셀)</p>
+                  <p className="mb-1.5 font-bold text-gray-700">
+                    {kind === "handover" ? "📂 차량 리스트 (로우데이터 · 노선별 차량현황 엑셀)" : "📂 차량 리스트 (로우데이터 · 전개현황 엑셀)"}
+                  </p>
                   <input
                     ref={rawRef}
                     type="file"
@@ -791,13 +903,19 @@ export default function ProjectAdmin({
                     className="block w-full text-xs text-gray-600 file:mr-2 file:rounded-lg file:border-0 file:bg-emerald-600 file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-white disabled:opacity-40"
                   />
                   <p className="mt-1 text-[11px] text-gray-400">
-                    {rawFile
-                      ? `${rawFile.name} — 만들면서 차량 리스트를 바로 등록합니다. 이후에는 대시보드 '설치일정 변경 업로드'로 바꿉니다.`
-                      : "진행현황 양식 엑셀을 올리면 차량 리스트·설치 일정이 바로 등록됩니다."}
+                    {kind === "handover"
+                      ? rawFile
+                        ? `${rawFile.name} — 만들면서 차량을 바로 등록합니다. 이후에는 관리자 '차량 업로드'로 바꿉니다.`
+                        : "첫 행 머리글에 버스영업소명·버스노선명·차량번호가 있는 엑셀(예: 노선별 차량현황). 차량번호 기준 1대 1행, 공동배차 차량은 노선을 이어 1대로 등록됩니다."
+                      : rawFile
+                        ? `${rawFile.name} — 만들면서 차량 리스트를 바로 등록합니다. 이후에는 대시보드 '설치일정 변경 업로드'로 바꿉니다.`
+                        : "진행현황 양식 엑셀을 올리면 차량 리스트·설치 일정이 바로 등록됩니다."}
                   </p>
-                  <div className="mt-2">
-                    <RawDataGuide projectName={name} start={period.start} end={period.end} />
-                  </div>
+                  {kind === "album" && (
+                    <div className="mt-2">
+                      <RawDataGuide projectName={name} start={period.start} end={period.end} />
+                    </div>
+                  )}
                   <label className="mt-2 flex items-center gap-2">
                     <input
                       type="checkbox"
@@ -813,7 +931,9 @@ export default function ProjectAdmin({
                     />
                     <span>
                       <b>나중에 등록</b>
-                      <span className="block text-[11px] text-gray-400">대시보드에 처음 들어가면 업로드 안내 팝업이 뜹니다.</span>
+                      <span className="block text-[11px] text-gray-400">
+                        {kind === "handover" ? "관리자 '차량 업로드' 탭에서 올립니다." : "대시보드에 처음 들어가면 업로드 안내 팝업이 뜹니다."}
+                      </span>
                     </span>
                   </label>
                 </div>
@@ -849,16 +969,20 @@ export default function ProjectAdmin({
             >
               <Svg d={editing ? UI.pencil : UI.plus} className="h-4 w-4" />
               {busy
-                ? kind === "album" && !editing
+                ? kind !== "link" && !editing
                   ? phase === "upload"
                     ? "차량 리스트 등록 중… (엑셀 반영)"
-                    : "프로젝트 만드는 중… (10초 정도)"
+                    : kind === "handover"
+                      ? "체크리스트 만드는 중…"
+                      : "프로젝트 만드는 중… (10초 정도)"
                   : "처리 중…"
                 : editing
                   ? "수정 저장"
                   : kind === "album"
                     ? "프로젝트 만들기"
-                    : "링크 카드 추가"}
+                    : kind === "handover"
+                      ? "체크리스트 만들기"
+                      : "링크 카드 추가"}
             </button>
           </div>
           {error && <p className="text-center text-xs text-red-600">{error}</p>}
@@ -879,7 +1003,7 @@ export default function ProjectAdmin({
               ? p.url ?? ""
               : p.slug === "b820"
                 ? "이 앱 자체 (/b820) · 기본 프로젝트"
-                : `${projectHome(p.slug)} · 앨범 프로젝트`;
+                : `${projectHome(p.slug)} · ${KIND_LABEL[p.kind]}`;
           return (
             <li
               key={p.slug}
@@ -923,7 +1047,7 @@ export default function ProjectAdmin({
                 <button
                   type="button"
                   onClick={() => remove(p)}
-                  disabled={busy || (asking && p.kind === "album" && confirmText.trim() !== p.slug)}
+                  disabled={busy || (asking && p.kind !== "link" && confirmText.trim() !== p.slug)}
                   aria-label={asking ? "정말 삭제" : `${p.name} 삭제`}
                   className={`flex shrink-0 items-center gap-1 rounded-lg px-2 py-2 text-xs transition-all duration-150 disabled:opacity-40 ${
                     asking ? "bg-red-600 font-semibold text-white" : "text-gray-400 active:bg-red-50 active:text-red-600"
@@ -934,11 +1058,19 @@ export default function ProjectAdmin({
                 </button>
               )}
               {/* 앨범 프로젝트 삭제 확인 — ID를 그대로 입력해야 버튼이 켜진다 */}
-              {asking && p.kind === "album" && (
+              {asking && p.kind !== "link" && (
                 <div className="mt-2 w-full basis-full rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-800">
-                  <p className="font-semibold">⚠️ 이 프로젝트의 차량·설치기록·사진·서약서 데이터가 전부 삭제됩니다.</p>
+                  <p className="font-semibold">
+                    {p.kind === "handover"
+                      ? "⚠️ 이 프로젝트의 차량·완료 체크·작업자 명단이 전부 삭제됩니다."
+                      : "⚠️ 이 프로젝트의 차량·설치기록·사진·서약서 데이터가 전부 삭제됩니다."}
+                  </p>
                   <p className="mt-1 text-red-700/80">
-                    구글드라이브의 「{p.name}」 사진 폴더(운수사·차량 폴더와 사진 전부)도 함께 <b>영구 삭제</b>됩니다.
+                    {p.kind === "album" && (
+                      <>
+                        구글드라이브의 「{p.name}」 사진 폴더(운수사·차량 폴더와 사진 전부)도 함께 <b>영구 삭제</b>됩니다.{" "}
+                      </>
+                    )}
                     되돌릴 수 없으니 확인을 위해 프로젝트 ID <b>{p.slug}</b> 를 입력하세요.
                   </p>
                   <div className="mt-2 flex gap-2">
