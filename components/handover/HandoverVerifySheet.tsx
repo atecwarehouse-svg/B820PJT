@@ -1,6 +1,7 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { downloadUrl } from "@/lib/download";
 import { shortRoute } from "./HandoverChecklist";
 
 interface Item {
@@ -14,6 +15,8 @@ interface Item {
 }
 interface Result {
   fileName: string;
+  fileAt: string;
+  fileBy: string;
   fileVehicles: number;
   overall: { total: number; ok: number };
   centers: { label: string; total: number; ok: number }[];
@@ -24,14 +27,26 @@ interface Result {
 const pct = (ok: number, t: number) => (t ? Math.round((ok / t) * 100) : 0);
 
 // 🔎 서버 등록 검증 — 차량단말기버전 조회 파일(.xls)을 올리면 차량별 단말기 5종(55000·56000·1560×3) 등록 여부를 대조해 팝업으로 보여 준다.
-// 결과는 저장하지 않고(파일이 곧 서버 상태) 팀즈 관리자 호출방에 진행현황 카드가 간다.
+// 최근 파일은 서버(app_settings)에 저장돼 다시 열면 재업로드 없이 현재 DB 와 다시 대조한다(새 업로드가 교체). 업로드 때만 팀즈 관리자 호출방 카드.
 export default function HandoverVerifySheet({ onClose }: { onClose: () => void }) {
   const fileRef = useRef<HTMLInputElement>(null);
-  const formRef = useRef<HTMLFormElement>(null); // 엑셀 다운로드 = 같은 파일을 ?format=xlsx 로 폼 POST(attachment 응답 → iOS 포함 그대로 다운로드)
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [res, setRes] = useState<Result | null>(null);
   const [onlyPending, setOnlyPending] = useState(true);
+  const [loading, setLoading] = useState(true); // 저장된 최근 파일 불러오는 중
+
+  // 열 때 서버에 저장된 최근 파일로 다시 대조(재업로드 불필요). 새로 올리면 교체.
+  useEffect(() => {
+    fetch("/api/handover/verify", { cache: "no-store" })
+      .then(async (r) => {
+        const j = (await r.json()) as (Result & { saved: boolean }) | { error?: string };
+        if (!r.ok) throw new Error(("error" in j && j.error) || "불러오기 실패");
+        if ("saved" in j && j.saved) setRes(j);
+      })
+      .catch((e) => setError(e instanceof Error ? e.message : "불러오기 실패"))
+      .finally(() => setLoading(false));
+  }, []);
 
   async function upload(file: File) {
     setBusy(true);
@@ -78,10 +93,8 @@ export default function HandoverVerifySheet({ onClose }: { onClose: () => void }
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
-          <form ref={formRef} method="POST" action="/api/handover/verify?format=xlsx" encType="multipart/form-data" className="hidden">
-            <input ref={fileRef} name="file" type="file" accept=".xls,.xlsx" onChange={(e) => e.target.files?.[0] && upload(e.target.files[0])} />
-          </form>
-          {!res && (
+          <input ref={fileRef} type="file" accept=".xls,.xlsx" className="hidden" onChange={(e) => e.target.files?.[0] && upload(e.target.files[0])} />
+          {!res && !loading && (
             <p className="text-xs leading-relaxed text-gray-500">
               서버에서 내려받은 <b>차량단말기버전 조회 파일(.xls)</b>을 올리면 차량마다 단말기 5개(55000… 1개 · 56000… 1개 · 1560… 3개)가 등록됐는지 대조합니다.
               파일에 없거나 5개가 안 되는 차량은 <b className="text-red-600">미완료</b>로 표시되고, 결과는 팀즈 관리자 호출방에도 카드로 갑니다.
@@ -89,18 +102,21 @@ export default function HandoverVerifySheet({ onClose }: { onClose: () => void }
           )}
           <button
             type="button"
-            disabled={busy}
+            disabled={busy || loading}
             onClick={() => fileRef.current?.click()}
             className="mt-3 w-full rounded-xl bg-blue-600 py-3 text-sm font-semibold text-white active:bg-blue-700 disabled:opacity-50"
           >
-            {busy ? "검증 중…" : res ? "📂 다른 파일로 다시 검증" : "📂 차량단말기버전 파일 선택"}
+            {busy ? "검증 중…" : loading ? "최근 파일 불러오는 중…" : res ? "📂 새 파일 올려 교체" : "📂 차량단말기버전 파일 선택"}
           </button>
           {error && <p className="mt-2 rounded-xl bg-red-50 px-3 py-2 text-xs text-red-600">{error}</p>}
 
           {res && (
             <>
               <p className="mt-3 truncate text-[11px] text-gray-400">
-                {res.fileName} · 파일 차량 {res.fileVehicles}대
+                📎 {res.fileName} · 파일 차량 {res.fileVehicles}대
+              </p>
+              <p className="truncate text-[11px] text-gray-400">
+                {new Date(res.fileAt).toLocaleString("ko-KR", { timeZone: "Asia/Seoul", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })} {res.fileBy} 업로드 · 현재 체크 상태로 다시 대조함
               </p>
               <div className="mt-1 flex items-end justify-between">
                 <p className="text-4xl font-bold tabular-nums tracking-tight text-gray-900">
@@ -132,10 +148,9 @@ export default function HandoverVerifySheet({ onClose }: { onClose: () => void }
               {res.extra.length > 0 && (
                 <p className="mt-2 text-[11px] text-gray-400">파일에만 있는 차량(목록에 없음) {res.extra.length}대: {res.extra.join(", ")}</p>
               )}
-              <p className="mt-2 text-[11px] text-gray-400">📨 팀즈 관리자 호출방에 검증 현황 카드를 보냈습니다.</p>
               <button
                 type="button"
-                onClick={() => formRef.current?.submit()}
+                onClick={() => downloadUrl("/api/handover/verify?format=xlsx")}
                 className="mt-2 w-full rounded-xl bg-emerald-600 py-3 text-sm font-semibold text-white active:bg-emerald-700"
               >
                 📥 검증 결과 엑셀 다운로드

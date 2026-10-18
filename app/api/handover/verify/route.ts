@@ -6,7 +6,8 @@ import { createServiceClient } from "@/lib/supabase/server";
 import { fetchAll } from "@/lib/supabase/paginate";
 import { runAfterResponse } from "@/lib/background";
 import { sendHandoverVerifyCard } from "@/lib/teams";
-import { TERMINAL_RULE, checkTerminal, normPlate, parseTerminalBuffer } from "@/lib/import/parse-terminal-xls";
+import { TERMINAL_RULE, checkTerminal, normPlate, parseTerminalBuffer, type TerminalRow } from "@/lib/import/parse-terminal-xls";
+import { getSetting, setSetting } from "@/lib/settings";
 import { VEHICLE_COLS, currentWorker, getCenters, workerLabel, type HandoverVehicle } from "@/lib/handover";
 
 export const runtime = "nodejs";
@@ -15,8 +16,8 @@ export const maxDuration = 60;
 
 // POST /api/handover/verify — 작업자·관리자 쿠키. multipart file = 차량단말기버전 조회(.xls/.xlsx).
 //   DB 차량(전 센터) 하나하나를 파일과 대조: ok(5종 충족) · partial(파일엔 있는데 단말기 부족) · missing(파일에 없음) → partial+missing = 미완료.
-//   저장하지 않는다(파일이 곧 서버 상태). 응답 뒤 관리자 호출방 팀즈 카드.
-//   ?format=xlsx → 같은 대조 결과를 엑셀(검증 결과·요약 시트) 첨부로 응답(팀즈 카드 없음).
+//   파싱 결과는 app_settings.handover_verify_file 에 저장(최근 1건, 새 업로드가 교체). 응답 뒤 관리자 호출방 팀즈 카드.
+//   GET → 저장 파일 기준 재대조(팀즈 카드 없음). GET ?format=xlsx → 엑셀(검증 결과·요약 시트) 첨부.
 export interface VerifyItem {
   plate: string;
   operator: string;
@@ -29,28 +30,104 @@ export interface VerifyItem {
 }
 const bad = (error: string, status = 400) => NextResponse.json({ error }, { status });
 
-export async function POST(req: NextRequest) {
+// 최근 업로드 파일(파싱 결과)을 프로젝트 app_settings 에 저장 — 팝업을 다시 열면 재업로드 없이 이 파일 기준으로 현재 DB 와 다시 대조. 새 업로드가 교체.
+const VERIFY_FILE_KEY = "handover_verify_file";
+interface SavedFile {
+  fileName: string;
+  at: string;
+  by: string;
+  rows: TerminalRow[];
+}
+async function loadSaved(): Promise<SavedFile | null> {
+  try {
+    const v = JSON.parse((await getSetting(VERIFY_FILE_KEY)) ?? "null") as SavedFile | null;
+    return v && Array.isArray(v.rows) ? v : null;
+  } catch {
+    return null;
+  }
+}
+
+async function auth() {
   const worker = await currentWorker();
-  if (!worker && !(await isAdmin())) return bad("로그인이 필요합니다.", 401);
-  const xlsx = req.nextUrl.searchParams.get("format") === "xlsx";
+  if (worker) return workerLabel(worker);
+  return (await isAdmin()) ? "관리자" : null;
+}
+
+// GET → 저장된 최근 파일로 대조한 결과 { saved: true, ... } / 없으면 { saved: false }. ?format=xlsx 면 엑셀 첨부.
+export async function GET(req: NextRequest) {
+  if (!(await auth())) return bad("로그인이 필요합니다.", 401);
+  const saved = await loadSaved();
+  if (!saved) {
+    if (req.nextUrl.searchParams.get("format") === "xlsx") return bad("저장된 검증 파일이 없습니다. 먼저 파일을 올려 주세요.", 404);
+    return NextResponse.json({ saved: false });
+  }
+  const r = await compute(saved);
+  if ("error" in r) return bad(r.error, 500);
+  if (req.nextUrl.searchParams.get("format") === "xlsx") return excel(r, (await getProject(currentSlug()))?.name ?? currentSlug());
+  return NextResponse.json({ saved: true, ...r });
+}
+
+// POST multipart file → 파싱·저장(교체)·대조·팀즈 카드
+export async function POST(req: NextRequest) {
+  const who = await auth();
+  if (!who) return bad("로그인이 필요합니다.", 401);
   const form = await req.formData();
   const file = form.get("file") as File | null;
   if (!file) return bad("파일이 없습니다.");
 
-  let rows;
+  let rows: TerminalRow[];
   try {
     rows = parseTerminalBuffer(Buffer.from(await file.arrayBuffer()));
   } catch (e) {
     return bad("파일을 읽을 수 없습니다: " + (e instanceof Error ? e.message : String(e)));
   }
-  const inFile = new Map(rows.map((r) => [r.plate, r]));
+  const saved: SavedFile = { fileName: file.name, at: new Date().toISOString(), by: who, rows };
+  try {
+    await setSetting(VERIFY_FILE_KEY, JSON.stringify(saved));
+  } catch (e) {
+    return bad("파일 저장 실패: " + (e instanceof Error ? e.message : String(e)), 500);
+  }
+  const result = await compute(saved);
+  if ("error" in result) return bad(result.error, 500);
 
+  const slug = currentSlug();
+  const pending = result.items.filter((i) => i.status !== "ok");
+  runAfterResponse(async () => {
+    const project = await getProject(slug);
+    await sendHandoverVerifyCard({
+      projectName: project?.name ?? slug,
+      worker: who,
+      fileName: file.name,
+      overall: result.overall,
+      centers: result.centers,
+      pending: pending.map((p) => ({ plate: p.plate, center: p.center, route: p.route, reason: p.reason })),
+      doneNotVerified: pending.filter((i) => i.done_by).map((i) => i.plate),
+    });
+  });
+  return NextResponse.json({ saved: true, ...result });
+}
+
+interface VerifyResult {
+  fileName: string;
+  fileAt: string;
+  fileBy: string;
+  fileVehicles: number;
+  overall: { total: number; ok: number };
+  centers: { label: string; total: number; ok: number }[];
+  items: VerifyItem[];
+  extra: string[];
+  at: string;
+}
+
+// 저장 파일 vs 현재 DB 차량 대조
+async function compute(saved: SavedFile): Promise<VerifyResult | { error: string }> {
+  const inFile = new Map(saved.rows.map((r) => [r.plate, r]));
   const sb = createServiceClient();
   let vehicles: HandoverVehicle[];
   try {
     vehicles = await fetchAll<HandoverVehicle>((from, to) => sb.from("vehicles").select(VEHICLE_COLS).order("operator").order("route").order("plate").range(from, to));
   } catch (e) {
-    return bad("차량 목록 조회 실패: " + (e instanceof Error ? e.message : String(e)), 500);
+    return { error: "차량 목록 조회 실패: " + (e instanceof Error ? e.message : String(e)) };
   }
   const centers = await getCenters();
   // 영업소명은 업로드 파일(서버) 기준 새 이름으로 — 파일에 없는 차량은 같은 DB 영업소의 다른 차량에서 배운 이름(최빈값), 그것도 없으면 DB 이름
@@ -71,7 +148,7 @@ export async function POST(req: NextRequest) {
     return c.ok ? { ...base, status: "ok", reason: "", counts: c.counts } : { ...base, status: "partial", reason: c.missing, counts: c.counts };
   });
   const dbPlates = new Set(vehicles.map((v) => normPlate(v.plate)));
-  const extra = rows.filter((r) => !dbPlates.has(r.plate)).map((r) => r.plate); // 파일에만 있는 차량(차량 목록에 없음)
+  const extra = saved.rows.filter((r) => !dbPlates.has(r.plate)).map((r) => r.plate); // 파일에만 있는 차량(차량 목록에 없음)
 
   const byCenter = new Map<string, { total: number; ok: number }>();
   for (const it of items) {
@@ -80,40 +157,21 @@ export async function POST(req: NextRequest) {
     if (it.status === "ok") c.ok++;
     byCenter.set(it.center, c);
   }
-  const overall = { total: items.length, ok: items.filter((i) => i.status === "ok").length };
-  const pending = items.filter((i) => i.status !== "ok");
-  const doneNotVerified = pending.filter((i) => i.done_by).map((i) => i.plate);
-  const result = {
-    fileName: file.name,
-    fileVehicles: rows.length,
-    overall,
+  return {
+    fileName: saved.fileName,
+    fileAt: saved.at,
+    fileBy: saved.by,
+    fileVehicles: saved.rows.length,
+    overall: { total: items.length, ok: items.filter((i) => i.status === "ok").length },
     centers: [...byCenter.entries()].map(([label, c]) => ({ label, ...c })),
     items,
     extra,
     at: new Date().toISOString(),
   };
-
-  const slug = currentSlug();
-  if (xlsx) return excel(result, (await getProject(slug))?.name ?? slug);
-
-  const who = worker ? workerLabel(worker) : "관리자";
-  runAfterResponse(async () => {
-    const project = await getProject(slug);
-    await sendHandoverVerifyCard({
-      projectName: project?.name ?? slug,
-      worker: who,
-      fileName: file.name,
-      overall,
-      centers: result.centers,
-      pending: pending.map((p) => ({ plate: p.plate, center: p.center, route: p.route, reason: p.reason })),
-      doneNotVerified,
-    });
-  });
-  return NextResponse.json(result);
 }
 
 const KST = "Asia/Seoul";
-async function excel(r: { fileName: string; fileVehicles: number; overall: { total: number; ok: number }; centers: { label: string; total: number; ok: number }[]; items: VerifyItem[]; extra: string[] }, projectName: string) {
+async function excel(r: VerifyResult, projectName: string) {
   const pct = (ok: number, t: number) => (t ? Math.round((ok / t) * 100) : 0);
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet("검증 결과");
@@ -155,6 +213,7 @@ async function excel(r: { fileName: string; fileVehicles: number; overall: { tot
   const sm = wb.addWorksheet("요약");
   sm.columns = [{ width: 16 }, { width: 12 }, { width: 12 }, { width: 12 }, { width: 10 }];
   sm.addRow(["파일", r.fileName]);
+  sm.addRow(["업로드", `${new Date(r.fileAt).toLocaleString("ko-KR", { timeZone: KST })} · ${r.fileBy}`]);
   sm.addRow(["파일 차량", r.fileVehicles]);
   sm.addRow(["검증 시각", new Date().toLocaleString("ko-KR", { timeZone: KST })]);
   sm.addRow([]);
