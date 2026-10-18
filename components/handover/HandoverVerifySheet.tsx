@@ -53,6 +53,19 @@ export default function HandoverVerifySheet({ onClose }: { onClose: () => void }
   const pending = res?.items.filter((i) => i.status !== "ok") ?? [];
   const shown = res ? (onlyPending ? pending : res.items) : [];
   const doneNotVerified = pending.filter((i) => i.done_by);
+  // 센터 → 노선별 묶음(팀즈 카드와 같은 규칙). 공동배차(route "A / B")는 각 노선에 모두.
+  const groups = (() => {
+    const m = new Map<string, Map<string, Item[]>>();
+    for (const i of shown) {
+      const routes = m.get(i.center) ?? new Map<string, Item[]>();
+      for (const r of i.route.split(" / ")) {
+        const k = shortRoute(r);
+        routes.set(k, [...(routes.get(k) ?? []), i]);
+      }
+      m.set(i.center, routes);
+    }
+    return [...m.entries()].map(([c, routes]) => [c, [...routes.entries()].sort(([a], [b]) => a.localeCompare(b, "ko"))] as const);
+  })();
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center" onClick={onClose}>
@@ -138,22 +151,32 @@ export default function HandoverVerifySheet({ onClose }: { onClose: () => void }
               {shown.length === 0 ? (
                 <p className="py-6 text-center text-sm text-green-600">✅ 미완료 차량이 없습니다.</p>
               ) : (
-                <ul className="mt-1.5 divide-y divide-gray-100 rounded-2xl bg-white ring-1 ring-black/5">
-                  {shown.map((i) => (
-                    <li key={i.plate} className={`flex items-center justify-between gap-2 px-3 py-2 ${i.status === "ok" ? "" : "bg-red-50/60"}`}>
-                      <div className="min-w-0">
-                        <p className={`text-sm font-bold ${i.status === "ok" ? "text-gray-800" : "text-red-700"}`}>{i.plate}</p>
-                        <p className="truncate text-[11px] text-gray-500">
-                          {i.center} · {shortRoute(i.route)}
-                          {i.done_by && <span className="ml-1 text-green-700">✔ {i.done_by}</span>}
+                groups.map(([center, routes]) => (
+                  <section key={center} className="mt-2">
+                    <h4 className="px-1 text-sm font-bold text-gray-800">📍 {center}</h4>
+                    {routes.map(([route, list]) => (
+                      <div key={route} className="mt-1.5">
+                        <p className="mb-1 flex items-baseline justify-between px-1 text-xs font-semibold text-gray-600">
+                          <span>🚌 {route}</span>
+                          <span className="tabular-nums text-gray-400">{list.length}대</span>
                         </p>
+                        <ul className="divide-y divide-gray-100 rounded-2xl bg-white ring-1 ring-black/5">
+                          {list.map((i) => (
+                            <li key={i.plate} className={`flex items-center justify-between gap-2 px-3 py-2 ${i.status === "ok" ? "" : "bg-red-50/60"}`}>
+                              <div className="min-w-0">
+                                <p className={`text-sm font-bold ${i.status === "ok" ? "text-gray-800" : "text-red-700"}`}>{i.plate}</p>
+                                {i.done_by && <p className="truncate text-[11px] text-green-700">✔ {i.done_by}</p>}
+                              </div>
+                              <span className={`shrink-0 rounded-full px-2 py-1 text-[11px] font-semibold ${i.status === "ok" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
+                                {i.status === "ok" ? "등록 확인" : i.status === "missing" ? "미완료 · 파일에 없음" : `미완료 · ${i.reason}`}
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
                       </div>
-                      <span className={`shrink-0 rounded-full px-2 py-1 text-[11px] font-semibold ${i.status === "ok" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
-                        {i.status === "ok" ? "등록 확인" : i.status === "missing" ? "미완료 · 파일에 없음" : `미완료 · ${i.reason}`}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
+                    ))}
+                  </section>
+                ))
               )}
             </>
           )}
