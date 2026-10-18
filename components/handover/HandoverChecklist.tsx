@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import HandoverStatusSheet from "./HandoverStatusSheet";
 
 interface Worker {
   center: string;
@@ -48,6 +49,7 @@ export default function HandoverChecklist({ worker }: { worker: Worker }) {
   const [noteFor, setNoteFor] = useState<Vehicle | null>(null);
   const [noteText, setNoteText] = useState("");
   const [toast, setToast] = useState("");
+  const [statusOpen, setStatusOpen] = useState(false); // 📊 전체 센터 현황표 시트
   const pendingRef = useRef(new Set<string>()); // 저장 중인 차량 — 폴링 결과로 덮지 않는다
   const seqRef = useRef(0);
 
@@ -184,6 +186,9 @@ export default function HandoverChecklist({ worker }: { worker: Worker }) {
           {worker.name} · <b>{worker.center}</b>
         </span>
         <div className="flex items-center gap-1.5">
+          <button type="button" onClick={() => setStatusOpen(true)} className="pill-muted px-2.5 text-xs" aria-label="전체 센터 현황표" title="현황표">
+            📊
+          </button>
           <button type="button" onClick={() => load()} className="pill-muted text-xs" aria-label="새로고침">
             🔄 {ago === null ? "…" : `${ago}초 전`}
           </button>
@@ -372,6 +377,8 @@ export default function HandoverChecklist({ worker }: { worker: Worker }) {
           </div>
         </div>
       )}
+
+      {statusOpen && <HandoverStatusSheet onClose={() => setStatusOpen(false)} />}
 
       {toast && (
         <div className="fixed left-1/2 top-16 z-[70] -translate-x-1/2 rounded-full bg-gray-900/90 px-4 py-2 text-sm text-white shadow-lg">{toast}</div>

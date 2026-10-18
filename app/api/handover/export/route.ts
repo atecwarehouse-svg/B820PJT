@@ -1,10 +1,10 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import ExcelJS from "exceljs";
 import { isAdmin } from "@/lib/admin-auth";
 import { currentProject } from "@/lib/project";
 import { createServiceClient } from "@/lib/supabase/server";
 import { fetchAll } from "@/lib/supabase/paginate";
-import { VEHICLE_COLS, getCenters, type HandoverVehicle } from "@/lib/handover";
+import { VEHICLE_COLS, currentWorker, getCenters, type HandoverVehicle } from "@/lib/handover";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -15,21 +15,26 @@ const fmtKst = (iso: string | null) =>
     ? new Date(iso).toLocaleString("ko-KR", { timeZone: KST, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false })
     : "";
 
-// GET /api/handover/export — 관리자 쿠키. 전체 차량 현황 xlsx(번호·영업소·센터·노선·차량번호·완료·작업자·완료시각·메모)
-export async function GET() {
-  if (!(await isAdmin())) return NextResponse.json({ error: "관리자 인증이 필요합니다." }, { status: 401 });
+// GET /api/handover/export — 관리자 또는 작업자 쿠키. 전체 차량 현황 xlsx(번호·영업소·센터·노선·차량번호·완료·작업자·완료시각·메모)
+//   ?done=1 → 완료 차량만(완료시각순)
+export async function GET(req: NextRequest) {
+  if (!(await currentWorker()) && !(await isAdmin())) return NextResponse.json({ error: "로그인이 필요합니다." }, { status: 401 });
+  const doneOnly = req.nextUrl.searchParams.get("done") === "1";
   const project = await currentProject();
   const sb = createServiceClient();
   let vehicles: HandoverVehicle[];
   try {
-    vehicles = await fetchAll<HandoverVehicle>((from, to) => sb.from("vehicles").select(VEHICLE_COLS).order("operator").order("route").order("plate").range(from, to));
+    vehicles = await fetchAll<HandoverVehicle>((from, to) => {
+      const q = sb.from("vehicles").select(VEHICLE_COLS);
+      return (doneOnly ? q.not("done_at", "is", null).order("done_at") : q.order("operator").order("route")).order("plate").range(from, to);
+    });
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : "조회 실패" }, { status: 500 });
   }
   const centers = await getCenters();
 
   const wb = new ExcelJS.Workbook();
-  const ws = wb.addWorksheet("양도양수 현황");
+  const ws = wb.addWorksheet(doneOnly ? "완료 차량" : "양도양수 현황");
   ws.columns = [
     { header: "번호", key: "no", width: 6 },
     { header: "영업소", key: "operator", width: 26 },
@@ -61,7 +66,7 @@ export async function GET() {
 
   const buffer = Buffer.from(await wb.xlsx.writeBuffer());
   const ymd = new Date().toLocaleDateString("sv-SE", { timeZone: KST }).replace(/-/g, "");
-  const filename = `${project.name}_양도양수현황_${ymd}.xlsx`;
+  const filename = `${project.name}_${doneOnly ? "완료차량" : "양도양수현황"}_${ymd}.xlsx`;
   return new NextResponse(buffer as unknown as BodyInit, {
     status: 200,
     headers: {

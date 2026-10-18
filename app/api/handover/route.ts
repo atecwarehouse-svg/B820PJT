@@ -19,6 +19,7 @@ export const dynamic = "force-dynamic";
 
 // 양도양수 체크리스트 데이터 — 작업자 쿠키(hw_<slug>) 또는 관리자 쿠키 필수.
 //   GET  → { worker, center, offices, vehicles[], at }  작업자는 자기 센터 영업소 차량만, 관리자(작업자 로그인 없이)는 전체 + centers
+//        ?all=1 → 작업자도 전체 센터 차량 + centers(현황표 보기용, 읽기 전용)
 //   POST { plate, done?: boolean, note?: string } → 완료/해제·메모 저장(부분 update) → { vehicle }
 //        작업자는 자기 센터 차량만 바꿀 수 있다. done_by 는 "직급 이름"(관리자는 "관리자").
 const bad = (error: string, status = 400) => NextResponse.json({ error }, { status });
@@ -30,12 +31,13 @@ async function who() {
   return null;
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   const me = await who();
   if (!me) return bad("로그인이 필요합니다.", 401);
+  const all = req.nextUrl.searchParams.get("all") === "1";
   const sb = createServiceClient();
   const centers = await getCenters();
-  const offices = me.worker ? centerOffices(centers, me.worker.center) : null;
+  const offices = me.worker && !all ? centerOffices(centers, me.worker.center) : null;
   if (offices && !offices.length) {
     return NextResponse.json({ worker: me.worker, center: me.worker!.center, offices: [], vehicles: [], at: new Date().toISOString() });
   }
@@ -54,7 +56,7 @@ export async function GET() {
     center: me.worker?.center ?? null,
     offices,
     vehicles,
-    ...(me.admin ? { centers } : {}),
+    ...(me.admin || all ? { centers } : {}),
     at: new Date().toISOString(),
   });
 }
