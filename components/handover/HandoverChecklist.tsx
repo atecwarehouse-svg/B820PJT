@@ -183,11 +183,13 @@ export default function HandoverChecklist({ worker }: { worker: Worker }) {
     <div className="space-y-3">
       {/* 작업자 줄 */}
       <div className="flex items-center justify-between gap-2">
-        <span className="pill text-xs">
-          👤 {worker.rank ? `${worker.rank} ` : ""}
-          {worker.name} · <b>{worker.center}</b>
+        <span className="pill min-w-0 text-xs">
+          <span className="truncate">
+            👤 {worker.rank ? `${worker.rank} ` : ""}
+            {worker.name} · <b>{worker.center}</b>
+          </span>
         </span>
-        <div className="flex items-center gap-1.5">
+        <div className="flex shrink-0 items-center gap-1.5">
           <button type="button" onClick={() => setStatusOpen(true)} className="pill-muted px-2.5 text-xs" aria-label="전체 센터 현황표" title="현황표">
             📊
           </button>

@@ -41,7 +41,10 @@ interface SavedFile {
 async function loadSaved(): Promise<SavedFile | null> {
   try {
     const v = JSON.parse((await getSetting(VERIFY_FILE_KEY)) ?? "null") as SavedFile | null;
-    return v && Array.isArray(v.rows) ? v : null;
+    if (!v || !Array.isArray(v.rows)) return null;
+    // 손상된 행은 버린다(plate 문자열 + ids 배열만)
+    v.rows = v.rows.filter((r) => r && typeof r.plate === "string" && r.plate && Array.isArray(r.ids)).map((r) => ({ plate: r.plate, office: String(r.office ?? ""), ids: r.ids.map(String) }));
+    return v.rows.length ? v : null;
   } catch {
     return null;
   }
@@ -81,6 +84,7 @@ export async function POST(req: NextRequest) {
   } catch (e) {
     return bad("파일을 읽을 수 없습니다: " + (e instanceof Error ? e.message : String(e)));
   }
+  if (!rows.length) return bad("파일에 차량이 없습니다. 차량단말기버전 조회 파일인지 확인하세요.");
   const saved: SavedFile = { fileName: file.name, at: new Date().toISOString(), by: who, rows };
   try {
     await setSetting(VERIFY_FILE_KEY, JSON.stringify(saved));
