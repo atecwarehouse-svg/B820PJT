@@ -1465,3 +1465,54 @@ export async function sendHandoverDoneCard(d: {
   };
   await post(url, card, "양도양수 완료");
 }
+
+// 양도양수 서버 등록 검증 카드 — 차량단말기버전 파일 업로드(검증 버튼) 결과를 관리자 호출방으로.
+export interface HandoverVerifyCardData {
+  projectName: string;
+  worker: string;
+  fileName: string;
+  overall: { total: number; ok: number };
+  centers: { label: string; total: number; ok: number }[];
+  pending: { plate: string; center: string; reason: string }[]; // 미완료(파일에 없음 또는 단말기 부족)
+  doneNotVerified: string[]; // 체크리스트는 완료인데 서버 미등록
+}
+export async function sendHandoverVerifyCard(d: HandoverVerifyCardData): Promise<void> {
+  const url = process.env.TEAMS_ADMIN_CALL_WEBHOOK_URL;
+  if (!url) return;
+  const at = new Date().toLocaleString("ko-KR", { timeZone: "Asia/Seoul", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" });
+  const pct = (p: { total: number; ok: number }) => (p.total ? Math.round((p.ok / p.total) * 100) : 0);
+  const line = (p: { total: number; ok: number }) => `등록 확인 ${p.ok} / ${p.total}대 · 미완료 ${p.total - p.ok}대 · 진척율 ${pct(p)}%`;
+  const MAX = 40;
+  const list = (xs: string[]) => (xs.length > MAX ? `${xs.slice(0, MAX).join(", ")} 외 ${xs.length - MAX}대` : xs.join(", "));
+  const card = {
+    type: "message",
+    attachments: [
+      {
+        contentType: "application/vnd.microsoft.card.adaptive",
+        content: {
+          $schema: "http://adaptivecards.io/schemas/adaptive-card.json",
+          type: "AdaptiveCard",
+          version: "1.4",
+          body: [
+            { type: "TextBlock", size: "Large", weight: "Bolder", color: "Accent", text: `🔎 양도양수 서버 등록 검증 — ${d.projectName}`, wrap: true },
+            { type: "TextBlock", text: `${d.worker} · ${at} · ${d.fileName}`, isSubtle: true, spacing: "None", wrap: true },
+            { type: "TextBlock", weight: "Bolder", text: `📊 전체: ${line(d.overall)}`, wrap: true },
+            ...d.centers.map((c) => ({ type: "TextBlock", text: `${c.label}: ${line(c)}`, spacing: "None", wrap: true })),
+            {
+              type: "TextBlock",
+              weight: "Bolder",
+              color: d.pending.length ? "Attention" : "Good",
+              text: d.pending.length ? `⚠️ 미완료 ${d.pending.length}대` : "✅ 전 차량 서버 등록 확인",
+              wrap: true,
+            },
+            ...(d.pending.length ? [{ type: "TextBlock", text: list(d.pending.map((p) => `${p.plate}(${p.reason})`)), wrap: true, spacing: "None" }] : []),
+            ...(d.doneNotVerified.length
+              ? [{ type: "TextBlock", text: `체크리스트 완료인데 서버 미등록 ${d.doneNotVerified.length}대: ${list(d.doneNotVerified)}`, color: "Attention", wrap: true }]
+              : []),
+          ],
+        },
+      },
+    ],
+  };
+  await post(url, card, "양도양수 검증");
+}
