@@ -118,7 +118,10 @@ async function excel(r: { fileName: string; fileVehicles: number; overall: { tot
     ...TERMINAL_RULE.map((t, i) => ({ header: `${t.prefix}…(${t.need})`, key: `c${i}`, width: 11 })),
     { header: "체크리스트 완료", key: "done_by", width: 16 },
   ];
-  r.items.forEach((it, i) =>
+  // 센터 → 노선 → 차량번호 순(팝업·팀즈 카드와 같은 묶음)
+  const short = (x: string) => x.replace(/\(.*$/, "").trim();
+  const sorted = [...r.items].sort((a, b) => a.center.localeCompare(b.center, "ko") || short(a.route).localeCompare(short(b.route), "ko") || a.plate.localeCompare(b.plate, "ko"));
+  sorted.forEach((it, i) =>
     ws.addRow({
       no: i + 1,
       center: it.center,
