@@ -1473,8 +1473,44 @@ export interface HandoverVerifyCardData {
   fileName: string;
   overall: { total: number; ok: number };
   centers: { label: string; total: number; ok: number }[];
-  pending: { plate: string; center: string; reason: string }[]; // 미완료(파일에 없음 또는 단말기 부족)
+  pending: { plate: string; center: string; route: string; reason: string }[]; // 미완료(파일에 없음 또는 단말기 부족)
   doneNotVerified: string[]; // 체크리스트는 완료인데 서버 미등록
+}
+const GRID_COLS = 3;
+/** 미완료 차량을 센터 → 노선별로 묶어 3열 격자(ColumnSet)로. 공동배차(route "A / B")는 각 노선에 모두. 단말기 부족은 * 표시 후 사유 줄. */
+function pendingGrid(pending: HandoverVerifyCardData["pending"]): unknown[] {
+  const short = (r: string) => r.replace(/\(.*$/, "").trim();
+  const byCenter = new Map<string, Map<string, typeof pending>>();
+  for (const p of pending) {
+    const routes = byCenter.get(p.center) ?? new Map();
+    for (const r of p.route.split(" / ")) routes.set(short(r), [...(routes.get(short(r)) ?? []), p]);
+    byCenter.set(p.center, routes);
+  }
+  const out: unknown[] = [];
+  for (const [center, routes] of byCenter) {
+    const n = new Set([...routes.values()].flat().map((p) => p.plate)).size;
+    out.push({ type: "TextBlock", weight: "Bolder", color: "Attention", text: `📍 ${center} 미완료 ${n}대`, spacing: "Medium", wrap: true });
+    for (const [route, list] of [...routes.entries()].sort(([a], [b]) => a.localeCompare(b, "ko"))) {
+      out.push({ type: "TextBlock", weight: "Bolder", text: `🚌 ${route} (${list.length}대)`, spacing: "Small", wrap: true });
+      for (let i = 0; i < list.length; i += GRID_COLS) {
+        const row = list.slice(i, i + GRID_COLS);
+        out.push({
+          type: "ColumnSet",
+          spacing: "None",
+          columns: Array.from({ length: GRID_COLS }, (_, k) => ({
+            type: "Column",
+            width: "stretch",
+            items: [{ type: "TextBlock", text: row[k] ? `${row[k].plate}${row[k].reason === "파일에 없음" ? "" : "*"}` : " ", spacing: "None", wrap: false }],
+          })),
+        });
+      }
+      const partial = list.filter((p) => p.reason !== "파일에 없음");
+      if (partial.length) {
+        out.push({ type: "TextBlock", text: `* 단말기 부족: ${partial.map((p) => `${p.plate} ${p.reason}`).join(" · ")}`, isSubtle: true, size: "Small", spacing: "None", wrap: true });
+      }
+    }
+  }
+  return out;
 }
 export async function sendHandoverVerifyCard(d: HandoverVerifyCardData): Promise<void> {
   const url = process.env.TEAMS_ADMIN_CALL_WEBHOOK_URL;
@@ -1493,6 +1529,7 @@ export async function sendHandoverVerifyCard(d: HandoverVerifyCardData): Promise
           $schema: "http://adaptivecards.io/schemas/adaptive-card.json",
           type: "AdaptiveCard",
           version: "1.4",
+          msteams: { width: "Full" },
           body: [
             { type: "TextBlock", size: "Large", weight: "Bolder", color: "Accent", text: `🔎 양도양수 서버 등록 검증 — ${d.projectName}`, wrap: true },
             { type: "TextBlock", text: `${d.worker} · ${at} · ${d.fileName}`, isSubtle: true, spacing: "None", wrap: true },
@@ -1505,7 +1542,7 @@ export async function sendHandoverVerifyCard(d: HandoverVerifyCardData): Promise
               text: d.pending.length ? `⚠️ 미완료 ${d.pending.length}대` : "✅ 전 차량 서버 등록 확인",
               wrap: true,
             },
-            ...(d.pending.length ? [{ type: "TextBlock", text: list(d.pending.map((p) => `${p.plate}(${p.reason})`)), wrap: true, spacing: "None" }] : []),
+            ...pendingGrid(d.pending),
             ...(d.doneNotVerified.length
               ? [{ type: "TextBlock", text: `체크리스트 완료인데 서버 미등록 ${d.doneNotVerified.length}대: ${list(d.doneNotVerified)}`, color: "Attention", wrap: true }]
               : []),

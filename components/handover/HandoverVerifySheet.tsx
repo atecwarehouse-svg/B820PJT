@@ -27,6 +27,7 @@ const pct = (ok: number, t: number) => (t ? Math.round((ok / t) * 100) : 0);
 // 결과는 저장하지 않고(파일이 곧 서버 상태) 팀즈 관리자 호출방에 진행현황 카드가 간다.
 export default function HandoverVerifySheet({ onClose }: { onClose: () => void }) {
   const fileRef = useRef<HTMLInputElement>(null);
+  const formRef = useRef<HTMLFormElement>(null); // 엑셀 다운로드 = 같은 파일을 ?format=xlsx 로 폼 POST(attachment 응답 → iOS 포함 그대로 다운로드)
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [res, setRes] = useState<Result | null>(null);
@@ -46,7 +47,6 @@ export default function HandoverVerifySheet({ onClose }: { onClose: () => void }
       setError(e instanceof Error ? e.message : "검증 실패");
     } finally {
       setBusy(false);
-      if (fileRef.current) fileRef.current.value = "";
     }
   }
 
@@ -65,7 +65,9 @@ export default function HandoverVerifySheet({ onClose }: { onClose: () => void }
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
-          <input ref={fileRef} type="file" accept=".xls,.xlsx" className="hidden" onChange={(e) => e.target.files?.[0] && upload(e.target.files[0])} />
+          <form ref={formRef} method="POST" action="/api/handover/verify?format=xlsx" encType="multipart/form-data" className="hidden">
+            <input ref={fileRef} name="file" type="file" accept=".xls,.xlsx" onChange={(e) => e.target.files?.[0] && upload(e.target.files[0])} />
+          </form>
           {!res && (
             <p className="text-xs leading-relaxed text-gray-500">
               서버에서 내려받은 <b>차량단말기버전 조회 파일(.xls)</b>을 올리면 차량마다 단말기 5개(55000… 1개 · 56000… 1개 · 1560… 3개)가 등록됐는지 대조합니다.
@@ -118,6 +120,13 @@ export default function HandoverVerifySheet({ onClose }: { onClose: () => void }
                 <p className="mt-2 text-[11px] text-gray-400">파일에만 있는 차량(목록에 없음) {res.extra.length}대: {res.extra.join(", ")}</p>
               )}
               <p className="mt-2 text-[11px] text-gray-400">📨 팀즈 관리자 호출방에 검증 현황 카드를 보냈습니다.</p>
+              <button
+                type="button"
+                onClick={() => formRef.current?.submit()}
+                className="mt-2 w-full rounded-xl bg-emerald-600 py-3 text-sm font-semibold text-white active:bg-emerald-700"
+              >
+                📥 검증 결과 엑셀 다운로드
+              </button>
 
               <div className="mt-3 flex items-center justify-between">
                 <h3 className="text-xs font-semibold text-gray-500">차량 {shown.length}대</h3>
