@@ -43,7 +43,7 @@ export async function POST(req: NextRequest) {
   } catch (e) {
     return bad("파일을 읽을 수 없습니다: " + (e instanceof Error ? e.message : String(e)));
   }
-  const inFile = new Map(rows.map((r) => [r.plate, r.ids]));
+  const inFile = new Map(rows.map((r) => [r.plate, r]));
 
   const sb = createServiceClient();
   let vehicles: HandoverVehicle[];
@@ -53,11 +53,21 @@ export async function POST(req: NextRequest) {
     return bad("차량 목록 조회 실패: " + (e instanceof Error ? e.message : String(e)), 500);
   }
   const centers = await getCenters();
+  // 영업소명은 업로드 파일(서버) 기준 새 이름으로 — 파일에 없는 차량은 같은 DB 영업소의 다른 차량에서 배운 이름(최빈값), 그것도 없으면 DB 이름
+  const learned = new Map<string, Map<string, number>>();
+  for (const v of vehicles) {
+    const office = inFile.get(normPlate(v.plate))?.office;
+    if (!office) continue;
+    const cnt = learned.get(v.operator) ?? new Map<string, number>();
+    cnt.set(office, (cnt.get(office) ?? 0) + 1);
+    learned.set(v.operator, cnt);
+  }
+  const newName = (dbOperator: string) => [...(learned.get(dbOperator) ?? [])].sort((a, b) => b[1] - a[1])[0]?.[0] ?? dbOperator;
   const items: VerifyItem[] = vehicles.map((v) => {
-    const ids = inFile.get(normPlate(v.plate));
-    const base = { plate: v.plate, operator: v.operator, route: v.route, center: centers[v.operator] ?? "미배정", done_by: v.done_by };
-    if (!ids) return { ...base, status: "missing", reason: "파일에 없음", counts: TERMINAL_RULE.map(() => 0) };
-    const c = checkTerminal(ids);
+    const f = inFile.get(normPlate(v.plate));
+    const base = { plate: v.plate, operator: f?.office || newName(v.operator), route: v.route, center: centers[v.operator] ?? "미배정", done_by: v.done_by };
+    if (!f) return { ...base, status: "missing", reason: "파일에 없음", counts: TERMINAL_RULE.map(() => 0) };
+    const c = checkTerminal(f.ids);
     return c.ok ? { ...base, status: "ok", reason: "", counts: c.counts } : { ...base, status: "partial", reason: c.missing, counts: c.counts };
   });
   const dbPlates = new Set(vehicles.map((v) => normPlate(v.plate)));
