@@ -1556,6 +1556,66 @@ export async function sendWeeklySummaryCard(d: {
   await post(url, card, `${d.kindLabel} 주간 전체 취합`);
 }
 
+// OS업데이트 적용 검증 카드 — 파일 4종(장애목록·B710·B700·B800) 중 하나를 올릴 때마다 저장된 파일 전부 + 웹 체크로 대조한 결과.
+//   센터 카드(그 센터 수치만) → 그 센터 채팅방 / 전체 취합 카드(전체 + 센터별) → 관리자 호출방(env)에만.
+export interface OsVerifyStat {
+  label: string;
+  total: number;
+  web: number; // 체크리스트 완료
+  asset: number; // 자산등록(장애목록)
+  os: number; // OS 버전 충족
+  all: number; // 셋 다
+}
+interface OsVerifyBase {
+  projectName: string;
+  worker: string;
+  uploaded: string; // 이번에 올린 파일 "B800 OS버전 · 파일명"
+  files: string[]; // 저장된 파일 상태 "장애목록 ✓ 10/26 12:40" / "B710 ✗ 없음"
+}
+const OS_VERIFY_RULE = "기준: 웹 체크리스트 완료 · 자산등록(장애목록 기타/F/W, OS 적용/개선OS 업데이트) · OS버전(B710 32/32, B700 40·39, B800 19·19). 차량별 목록은 앱 🔎 → 엑셀.";
+const osVerifyPct = (s: OsVerifyStat) => (s.total ? Math.round((s.all / s.total) * 100) : 0);
+const osVerifyLine = (s: OsVerifyStat) => `전부완료 ${s.all} / ${s.total}대 (${osVerifyPct(s)}%) · 웹 ${s.web} · 자산 ${s.asset} · OS ${s.os}`;
+function osVerifyCard(d: OsVerifyBase, title: string, body: unknown[]) {
+  return {
+    type: "message",
+    attachments: [
+      {
+        contentType: "application/vnd.microsoft.card.adaptive",
+        content: {
+          $schema: "http://adaptivecards.io/schemas/adaptive-card.json",
+          type: "AdaptiveCard",
+          version: "1.4",
+          body: [
+            { type: "TextBlock", size: "Large", weight: "Bolder", color: "Accent", text: title, wrap: true },
+            { type: "TextBlock", text: `${d.projectName} · ${d.worker} · ${kstStamp()} · 업로드: ${d.uploaded}`, isSubtle: true, spacing: "None", wrap: true },
+            { type: "TextBlock", text: d.files.join("  ·  "), isSubtle: true, size: "Small", spacing: "None", wrap: true },
+            ...body,
+            { type: "TextBlock", text: OS_VERIFY_RULE, isSubtle: true, size: "Small", wrap: true },
+          ],
+        },
+      },
+    ],
+  };
+}
+/** 센터 카드 — 그 센터 수치만, 그 센터 채팅방(webhook)으로 */
+export async function sendOsVerifyCenterCard(d: OsVerifyBase & { webhook: string; center: OsVerifyStat }): Promise<void> {
+  const card = osVerifyCard(d, `🔎 OS업데이트 적용 검증 — ${d.center.label}`, [
+    { type: "TextBlock", size: "ExtraLarge", weight: "Bolder", color: osVerifyPct(d.center) === 100 ? "Good" : "Default", text: `${osVerifyPct(d.center)}%`, spacing: "Medium" },
+    { type: "TextBlock", weight: "Bolder", text: `${d.center.label}: ${osVerifyLine(d.center)}`, spacing: "None", wrap: true },
+  ]);
+  await post(d.webhook, card, `OS업데이트 검증 ${d.center.label}`);
+}
+/** 전체 취합 카드 — 관리자 호출방(TEAMS_ADMIN_CALL_WEBHOOK_URL)에만 */
+export async function sendOsVerifySummaryCard(d: OsVerifyBase & { overall: OsVerifyStat; centers: OsVerifyStat[] }): Promise<void> {
+  const url = process.env.TEAMS_ADMIN_CALL_WEBHOOK_URL;
+  if (!url) return;
+  const card = osVerifyCard(d, "🔎 OS업데이트 적용 검증 — 전체 취합", [
+    { type: "TextBlock", weight: "Bolder", text: `📊 전체: ${osVerifyLine(d.overall)}`, spacing: "Medium", wrap: true },
+    { type: "FactSet", facts: d.centers.map((c) => ({ title: c.label, value: osVerifyLine(c) })) },
+  ]);
+  await post(url, card, "OS업데이트 검증 전체 취합");
+}
+
 // 양도양수 서버 등록 검증 카드 — 차량단말기버전 파일 업로드(검증 버튼) 결과를 관리자 호출방으로.
 export interface HandoverVerifyCardData {
   projectName: string;

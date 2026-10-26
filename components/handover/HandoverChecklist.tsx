@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import HandoverStatusSheet from "./HandoverStatusSheet";
 import HandoverVerifySheet from "./HandoverVerifySheet";
+import OsVerifySheet from "./OsVerifySheet";
 
 interface Worker {
   center: string;
@@ -491,7 +492,7 @@ export default function HandoverChecklist({ worker, kind = "handover" }: { worke
       )}
 
       {statusOpen && <HandoverStatusSheet byOperator={osupdate} onClose={() => setStatusOpen(false)} />}
-      {verifyOpen && <HandoverVerifySheet onClose={() => setVerifyOpen(false)} />}
+      {verifyOpen && (osupdate ? <OsVerifySheet myCenter={worker.center} onClose={() => setVerifyOpen(false)} /> : <HandoverVerifySheet onClose={() => setVerifyOpen(false)} />)}
 
       {toast && (
         <div className="fixed left-1/2 top-16 z-[70] -translate-x-1/2 rounded-full bg-gray-900/90 px-4 py-2 text-sm text-white shadow-lg">{toast}</div>
