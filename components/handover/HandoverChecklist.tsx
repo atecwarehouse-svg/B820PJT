@@ -37,12 +37,12 @@ export const shortRoute = (route: string) =>
     .join(" / ");
 
 const KST = "Asia/Seoul";
+/** 완료 시각 표시 "10/26 11:16" — 날짜를 항상 붙인다(사용자 요청: 리스트에서 완료일자가 보여야 함) */
 export function fmtDone(iso: string): string {
   const d = new Date(iso);
-  const today = new Date().toLocaleDateString("sv-SE", { timeZone: KST });
   const day = d.toLocaleDateString("sv-SE", { timeZone: KST });
   const hm = d.toLocaleTimeString("ko-KR", { timeZone: KST, hour: "2-digit", minute: "2-digit", hour12: false });
-  return day === today ? hm : `${day.slice(5).replace("-", "/")} ${hm}`;
+  return `${day.slice(5).replace("-", "/")} ${hm}`;
 }
 
 // 내 센터 차량 체크리스트(모바일) — 차량번호 검색이 메인, 큰 완료 토글, 묶음별 리스트, 요약 %, 5초 폴링으로 동료 체크 반영.
