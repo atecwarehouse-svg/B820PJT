@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { downloadUrl } from "@/lib/download";
-import { fmtDone, shortRoute, typeEmoji } from "./HandoverChecklist";
+import { FOLD_OVER, fmtDone, shortRoute, typeEmoji } from "./HandoverChecklist";
 
 interface Vehicle {
   plate: string;
@@ -21,8 +21,9 @@ interface Stat {
 
 const pct = (d: number, t: number) => (t ? Math.round((d / t) * 100) : 0);
 
-// 📊 현황표 시트 — 전체 센터 진행률(센터별·노선별) + 완료 차량 리스트 엑셀 다운로드. 읽기 전용(/api/handover?all=1).
-export default function HandoverStatusSheet({ onClose }: { onClose: () => void }) {
+// 📊 현황표 시트 — 전체 센터 진행률(센터별·구분별·노선별/운수사별) + 완료 차량 리스트 엑셀 다운로드. 읽기 전용(/api/handover?all=1).
+//   byOperator(OS업데이트) = 묶음을 노선 대신 운수사로. 묶음이 FOLD_OVER 개를 넘으면 접어 둔다.
+export default function HandoverStatusSheet({ byOperator = false, onClose }: { byOperator?: boolean; onClose: () => void }) {
   const [vehicles, setVehicles] = useState<Vehicle[] | null>(null);
   const [centers, setCenters] = useState<Record<string, string>>({});
   const [error, setError] = useState("");
@@ -56,14 +57,15 @@ export default function HandoverStatusSheet({ onClose }: { onClose: () => void }
       if (v.done_at) x.d++;
       byType.set(v.bus_type, x);
     }
-    for (const route of v.route.split(" / ")) {
+    for (const key of byOperator ? [v.operator] : v.route.split(" / ")) {
       // 공동배차 차량은 각 노선에 모두 집계(노선 대수 = 로우데이터 행 수)
-      const r = byRoute.get(route) ?? { t: 0, d: 0, center: centerOf(v), type: v.bus_type ?? null };
+      const r = byRoute.get(key) ?? { t: 0, d: 0, center: centerOf(v), type: v.bus_type ?? null };
       r.t++;
       if (v.done_at) r.d++;
-      byRoute.set(route, r);
+      byRoute.set(key, r);
     }
   }
+  const groupLabel = (key: string) => (byOperator ? key : shortRoute(key));
   const recent = list.filter((v) => v.done_at).sort((a, b) => b.done_at!.localeCompare(a.done_at!)).slice(0, 5);
 
   const bar = (d: number, t: number) => (
@@ -132,21 +134,25 @@ export default function HandoverStatusSheet({ onClose }: { onClose: () => void }
                 </>
               )}
 
-              <h3 className="mt-4 text-xs font-semibold text-gray-500">노선별</h3>
-              <ul className="mt-1.5 space-y-1.5">
-                {[...byRoute.entries()].sort(([a], [b]) => a.localeCompare(b, "ko")).map(([r, n]) => (
-                  <li key={r} className="flex items-center gap-2 text-xs">
-                    <span className="w-28 shrink-0 truncate font-semibold text-gray-700">
-                      {n.type ? `${typeEmoji(n.type)} ` : ""}
-                      {shortRoute(r)} <span className="font-normal text-gray-400">· {n.center}</span>
-                    </span>
-                    {bar(n.d, n.t)}
-                    <span className="w-14 shrink-0 text-right tabular-nums text-gray-500">
-                      {n.d}/{n.t}
-                    </span>
-                  </li>
-                ))}
-              </ul>
+              <details className="mt-4" open={byRoute.size <= FOLD_OVER}>
+                <summary className="cursor-pointer select-none text-xs font-semibold text-gray-500">
+                  {byOperator ? "운수사별" : "노선별"} ({byRoute.size}개)
+                </summary>
+                <ul className="mt-1.5 space-y-1.5">
+                  {[...byRoute.entries()].sort(([a], [b]) => a.localeCompare(b, "ko")).map(([r, n]) => (
+                    <li key={r} className="flex items-center gap-2 text-xs">
+                      <span className="w-32 shrink-0 truncate font-semibold text-gray-700">
+                        {!byOperator && n.type ? `${typeEmoji(n.type)} ` : ""}
+                        {groupLabel(r)} <span className="font-normal text-gray-400">· {n.center}</span>
+                      </span>
+                      {bar(n.d, n.t)}
+                      <span className="w-14 shrink-0 text-right tabular-nums text-gray-500">
+                        {n.d}/{n.t}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </details>
 
               {recent.length > 0 && (
                 <>

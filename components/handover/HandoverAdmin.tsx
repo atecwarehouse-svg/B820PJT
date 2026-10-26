@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "@/components/PLink";
 import { downloadUrl } from "@/lib/download";
 import { KIND_LABEL, type ProjectKind } from "@/lib/project-kind";
-import { fmtDone, shortRoute } from "./HandoverChecklist";
+import { FOLD_OVER, fmtDone, shortRoute } from "./HandoverChecklist";
 
 interface Worker {
   center: string;
@@ -561,14 +561,15 @@ function StatusTab({ kind, setMsg }: { kind: ProjectKind; setMsg: SetMsg }) {
     c.t++;
     if (v.done_at) c.d++;
     byCenter.set(centerOf(v), c);
-    for (const route of v.route.split(" / ")) {
-      // 공동배차 차량은 각 노선에 모두 집계(노선 대수 = 로우데이터 행 수)
-      const r = byRoute.get(route) ?? { t: 0, d: 0, center: centerOf(v) };
+    // OS업데이트는 운수사별, 양도양수는 노선별(공동배차 차량은 각 노선에 모두 집계 — 노선 대수 = 로우데이터 행 수)
+    for (const key of kind === "osupdate" ? [v.operator] : v.route.split(" / ")) {
+      const r = byRoute.get(key) ?? { t: 0, d: 0, center: centerOf(v) };
       r.t++;
       if (v.done_at) r.d++;
-      byRoute.set(route, r);
+      byRoute.set(key, r);
     }
   }
+  const groupLabel = (key: string) => (kind === "osupdate" ? key : shortRoute(key));
   const byTypeMap = new Map<string, { t: number; d: number }>();
   for (const v of vehicles) {
     if (!v.bus_type) continue;
@@ -618,18 +619,23 @@ function StatusTab({ kind, setMsg }: { kind: ProjectKind; setMsg: SetMsg }) {
             </li>
           ))}
         </ul>
-        <ul className="mt-2 space-y-1 border-t border-gray-100 pt-2 text-xs">
-          {[...byRoute.entries()].map(([r, n]) => (
-            <li key={r} className="flex justify-between gap-2">
-              <span className="min-w-0 truncate text-gray-600">
-                {shortRoute(r)} <span className="text-gray-400">· {n.center}</span>
-              </span>
-              <span className="shrink-0 tabular-nums text-gray-500">
-                {n.d}/{n.t} · {pct(n.d, n.t)}%
-              </span>
-            </li>
-          ))}
-        </ul>
+        <details className="mt-2 border-t border-gray-100 pt-2" open={byRoute.size <= FOLD_OVER}>
+          <summary className="cursor-pointer select-none text-xs font-semibold text-gray-500">
+            {kind === "osupdate" ? "운수사별" : "노선별"} ({byRoute.size}개)
+          </summary>
+          <ul className="mt-1.5 space-y-1 text-xs">
+            {[...byRoute.entries()].sort(([a], [b]) => a.localeCompare(b, "ko")).map(([r, n]) => (
+              <li key={r} className="flex justify-between gap-2">
+                <span className="min-w-0 truncate text-gray-600">
+                  {groupLabel(r)} <span className="text-gray-400">· {n.center}</span>
+                </span>
+                <span className="shrink-0 tabular-nums text-gray-500">
+                  {n.d}/{n.t} · {pct(n.d, n.t)}%
+                </span>
+              </li>
+            ))}
+          </ul>
+        </details>
         <div className="mt-3 flex gap-2">
           <button type="button" onClick={load} className="rounded-lg bg-gray-100 px-3 py-2 text-xs font-medium text-gray-700 active:bg-gray-200">
             🔄 새로고침
