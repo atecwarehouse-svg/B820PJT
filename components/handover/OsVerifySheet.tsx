@@ -130,6 +130,41 @@ export default function OsVerifySheet({ myCenter, onClose, inline = false }: { m
     </span>
   );
 
+  // 발송·엑셀 버튼 묶음 — 본문 모드에선 맨 위(내려가지 않게), 팝업에선 하단 고정
+  const actions = (
+    <>
+      <div className="flex gap-2">
+        <button
+          type="button"
+          disabled={!res || !res.files.some((f) => f.saved) || sending || !!busy}
+          onClick={sendCards}
+          className="flex-1 rounded-xl bg-blue-600 py-3 text-sm font-semibold text-white active:bg-blue-700 disabled:opacity-40"
+        >
+          {sending ? "발송 중…" : "🔔 검증 발송 (팀즈)"}
+        </button>
+        <button
+          type="button"
+          disabled={!res}
+          onClick={() => downloadUrl("/api/handover/osverify?format=xlsx")}
+          className="rounded-xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white active:bg-emerald-700 disabled:opacity-40"
+        >
+          📥 검증 엑셀
+        </button>
+      </div>
+      {sentAt && <p className="mt-1.5 text-center text-[11px] text-green-700">✅ {sentAt} 발송했습니다</p>}
+      {inline && (
+        <div className="mt-2 flex gap-2">
+          <button type="button" onClick={() => downloadUrl("/api/handover/export")} className="flex-1 rounded-xl bg-gray-100 py-2.5 text-xs font-semibold text-gray-700 active:bg-gray-200">
+            📥 현황(OS적용리스트) 엑셀
+          </button>
+          <button type="button" onClick={() => downloadUrl("/api/handover/export?done=1")} className="flex-1 rounded-xl bg-gray-100 py-2.5 text-xs font-semibold text-gray-700 active:bg-gray-200">
+            📥 완료 차량만
+          </button>
+        </div>
+      )}
+    </>
+  );
+
   return (
     <div className={inline ? "" : "fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center"} onClick={inline ? undefined : onClose}>
       <div
@@ -147,9 +182,10 @@ export default function OsVerifySheet({ myCenter, onClose, inline = false }: { m
 
         <div className={inline ? "px-4 py-3" : "min-h-0 flex-1 overflow-y-auto px-4 py-3"}>
           <input ref={fileRef} type="file" accept=".xls,.xlsx" className="hidden" onChange={(e) => e.target.files?.[0] && upload(e.target.files[0])} />
+          {inline && <div className="mb-3">{actions}</div>}
           <p className="text-xs leading-relaxed text-gray-500">
-            차량마다 <b>웹 체크 완료 · 자산등록(장애목록) · 기종별 OS버전</b> 셋을 차량번호로 대조합니다. 파일은 올리면 서버에 저장만 되고(다시 열 때 재업로드 불필요), 4종을 다 올린 뒤
-            아래 <b>검증 발송</b>을 누르면 최종 취합해 팀즈 카드(센터 방 + 관리자 호출방 취합)가 갑니다.
+            차량마다 <b>웹 체크 완료 · 자산등록(장애목록) · 기종별 OS버전</b> 셋을 차량번호로 대조합니다. 파일은 올리면 서버에 저장만 되고(다시 열 때 재업로드 불필요), 4종을 다 올린 뒤{" "}
+            <b>검증 발송</b>을 누르면 최종 취합해 팀즈 카드(센터 방 + 관리자 호출방 취합)가 갑니다.
           </p>
 
           {/* 업로드 4종 */}
@@ -274,45 +310,8 @@ export default function OsVerifySheet({ myCenter, onClose, inline = false }: { m
           )}
         </div>
 
-        <div className="border-t border-gray-100 p-4">
-          <div className="flex gap-2">
-            <button
-              type="button"
-              disabled={!res || !res.files.some((f) => f.saved) || sending || !!busy}
-              onClick={sendCards}
-              className="flex-1 rounded-xl bg-blue-600 py-3 text-sm font-semibold text-white active:bg-blue-700 disabled:opacity-40"
-            >
-              {sending ? "발송 중…" : "🔔 검증 발송 (팀즈)"}
-            </button>
-            <button
-              type="button"
-              disabled={!res}
-              onClick={() => downloadUrl("/api/handover/osverify?format=xlsx")}
-              className="rounded-xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white active:bg-emerald-700 disabled:opacity-40"
-            >
-              📥 엑셀
-            </button>
-          </div>
-          {sentAt && <p className="mt-1.5 text-center text-[11px] text-green-700">✅ {sentAt} 발송했습니다</p>}
-          {inline && (
-            <div className="mt-2 flex gap-2">
-              <button
-                type="button"
-                onClick={() => downloadUrl("/api/handover/export")}
-                className="flex-1 rounded-xl bg-gray-100 py-2.5 text-xs font-semibold text-gray-700 active:bg-gray-200"
-              >
-                📥 현황(OS적용리스트) 엑셀
-              </button>
-              <button
-                type="button"
-                onClick={() => downloadUrl("/api/handover/export?done=1")}
-                className="flex-1 rounded-xl bg-gray-100 py-2.5 text-xs font-semibold text-gray-700 active:bg-gray-200"
-              >
-                📥 완료 차량만
-              </button>
-            </div>
-          )}
-        </div>
+        {/* 팝업에서는 하단 고정 버튼(스크롤 없이 보임). 본문 모드(검증 전담 홈)에선 위쪽 actions 로 대신한다 */}
+        {!inline && <div className="border-t border-gray-100 p-4">{actions}</div>}
       </div>
     </div>
   );
