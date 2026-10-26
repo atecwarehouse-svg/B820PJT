@@ -427,16 +427,17 @@ export default function HandoverChecklist({ worker, kind = "handover" }: { worke
                     <li key={v.plate} className={`flex items-center gap-3 px-3 py-2 ${isDone ? "bg-green-50/60" : ""}`}>
                       <button type="button" onClick={() => openNote(v)} className="min-w-0 flex-1 text-left" aria-label={`${v.plate} 메모`}>
                         <p className={`text-lg font-bold tracking-tight ${isDone ? "text-green-800" : "text-gray-900"}`}>{v.plate}</p>
-                        <p className="truncate text-xs text-gray-500">
-                          {osupdate && (
-                            <span className="mr-1.5 text-gray-600">
-                              {typeEmoji(v.bus_type)} {shortRoute(v.route)}
-                            </span>
-                          )}
+                        {/* 노선 → 완료자·일시 → 메모: 줄을 나눠 긴 내용이 잘리지 않게 */}
+                        {osupdate && (
+                          <p className="truncate text-xs text-gray-600">
+                            {typeEmoji(v.bus_type)} {shortRoute(v.route)}
+                          </p>
+                        )}
+                        <p className={`text-xs ${isDone ? "text-green-700" : "text-gray-500"}`}>
                           {isDone ? `✔ ${v.done_by ?? ""} · ${fmtDone(v.done_at!)}` : "미완료"}
-                          {v.note && <span className="ml-1.5 text-amber-700">📝 {v.note}</span>}
                           {!v.note && <span className="ml-1.5 text-gray-300">메모</span>}
                         </p>
+                        {v.note && <p className="break-words text-xs text-amber-700">📝 {v.note}</p>}
                       </button>
                       <button
                         type="button"
