@@ -152,6 +152,14 @@ export default function OsVerifySheet({ myCenter, onClose, inline = false }: { m
         </button>
       </div>
       {sentAt && <p className="mt-1.5 text-center text-[11px] text-green-700">✅ {sentAt} 발송했습니다</p>}
+      <button
+        type="button"
+        disabled={!res || !res.overall.mismatch}
+        onClick={() => downloadUrl("/api/handover/osverify?format=xlsx&only=mismatch")}
+        className="mt-2 w-full rounded-xl bg-amber-500 py-2.5 text-xs font-semibold text-white active:bg-amber-600 disabled:opacity-40"
+      >
+        ⚠️ 이상 차량만 엑셀 (자산등록 누락 {res?.overall.mismatch ?? 0}대)
+      </button>
       {inline && (
         <div className="mt-2 flex gap-2">
           <button type="button" onClick={() => downloadUrl("/api/handover/export")} className="flex-1 rounded-xl bg-gray-100 py-2.5 text-xs font-semibold text-gray-700 active:bg-gray-200">

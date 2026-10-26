@@ -64,7 +64,10 @@ export async function GET(req: NextRequest) {
   if (!(await auth())) return bad("로그인이 필요합니다.", 401);
   const r = await compute();
   if ("error" in r) return bad(r.error, 500);
-  if (req.nextUrl.searchParams.get("format") === "xlsx") return excel(r, (await getProject(currentSlug()))?.name ?? currentSlug());
+  // ?format=xlsx → 전체 검증 결과 / ?format=xlsx&only=mismatch → 이상 차량(웹 완료·OS 정상·자산등록 없음)만
+  if (req.nextUrl.searchParams.get("format") === "xlsx") {
+    return excel(r, (await getProject(currentSlug()))?.name ?? currentSlug(), req.nextUrl.searchParams.get("only") === "mismatch");
+  }
   return NextResponse.json(r);
 }
 
@@ -195,8 +198,30 @@ async function compute(): Promise<OsVerifyResult | { error: string }> {
   };
 }
 
-async function excel(r: OsVerifyResult, projectName: string) {
+async function excel(r: OsVerifyResult, projectName: string, mismatchOnly = false) {
   const wb = new ExcelJS.Workbook();
+  if (mismatchOnly) {
+    // 이상 차량만 — 센터→운수사→차량 순, 바로 조치용
+    const ws = wb.addWorksheet("자산등록 누락");
+    ws.columns = [
+      { header: "센터", key: "center", width: 12 },
+      { header: "운수사", key: "operator", width: 24 },
+      { header: "노선", key: "route", width: 30 },
+      { header: "차량번호", key: "plate", width: 14 },
+      { header: "기종", key: "model", width: 18 },
+      { header: "OS 상세", key: "osInfo", width: 26 },
+      { header: "웹 완료자", key: "by", width: 14 },
+      { header: "상태", key: "status", width: 30 },
+    ];
+    for (const i of r.items.filter((x) => x.mismatch)) {
+      ws.addRow({ center: i.center, operator: i.operator, route: i.route, plate: i.plate, model: i.model, osInfo: i.osInfo, by: i.done_by ?? "", status: "웹 완료 · OS 정상 · 자산등록(장애목록) 없음" });
+    }
+    ws.getRow(1).font = { bold: true };
+    ws.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFEE2E2" } };
+    ws.views = [{ state: "frozen", ySplit: 1 }];
+    ws.autoFilter = { from: "A1", to: "H1" };
+    return xlsxResponse(wb, `${projectName}_자산등록누락_${new Date().toLocaleDateString("sv-SE", { timeZone: KST }).replace(/-/g, "")}.xlsx`);
+  }
   const ws = wb.addWorksheet("검증 결과");
   ws.columns = [
     { header: "센터", key: "center", width: 12 },
@@ -235,13 +260,17 @@ async function excel(r: OsVerifyResult, projectName: string) {
   sum.addRow({});
   for (const f of r.files) sum.addRow({ label: f.label, total: f.saved ? `${f.fileName} (${f.vehicles}대, 충족 ${f.ok}대, ${fmtAt(f.at!)} ${f.by})` : "파일 없음" });
   sum.getRow(1).font = { bold: true };
-  const buffer = Buffer.from(await wb.xlsx.writeBuffer());
   const ymd = new Date().toLocaleDateString("sv-SE", { timeZone: KST }).replace(/-/g, "");
+  return xlsxResponse(wb, `${projectName}_OS적용검증_${ymd}.xlsx`);
+}
+
+async function xlsxResponse(wb: ExcelJS.Workbook, filename: string) {
+  const buffer = Buffer.from(await wb.xlsx.writeBuffer());
   return new NextResponse(buffer as unknown as BodyInit, {
     status: 200,
     headers: {
       "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      "Content-Disposition": `attachment; filename*=UTF-8''${encodeURIComponent(`${projectName}_OS적용검증_${ymd}.xlsx`)}`,
+      "Content-Disposition": `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`,
     },
   });
 }
