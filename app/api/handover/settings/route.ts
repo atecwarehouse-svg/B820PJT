@@ -7,12 +7,14 @@ import {
   HANDOVER_CENTERS_KEY,
   HANDOVER_WEBHOOKS_KEY,
   HANDOVER_WEBHOOK_KEY,
+  HANDOVER_WEEKLY_KEY,
   HANDOVER_WORKERS_KEY,
   WEBHOOK_RE,
   centerNames,
   getCenters,
   getWebhook,
   getWebhooks,
+  getWeeklyUntil,
   getWorkers,
   type CenterMap,
   type Worker,
@@ -22,19 +24,20 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 // 체크리스트 관리자 설정 — 관리자 쿠키 필수.
-//   GET → { centers: {영업소:센터}, workers: [{center,rank,name}], offices: [{name,count}], centerNames: string[], webhook, webhooks: {센터:url} }
-//         offices = 업로드된 차량의 영업소별 대수, centerNames = 차량 센터(osupdate) ∪ 맵 ∪ 작업자 소속
-//   PUT { centers?, workers?, webhook?: string, webhooks?: {센터:url} } → 보낸 것만 저장(전체 교체). webhook "" = 해제(env 폴백)
+//   GET → { centers: {영업소:센터}, workers: [{center,rank,name}], offices: [{name,count}], centerNames: string[], webhook, webhooks: {센터:url}, weeklyUntil }
+//         offices = 업로드된 차량의 영업소별 대수, centerNames = 차량 센터(osupdate) ∪ 맵 ∪ 작업자 소속, weeklyUntil = 매주 수요일 진척율 카드 종료일("" = 안 보냄)
+//   PUT { centers?, workers?, webhook?: string, webhooks?: {센터:url}, weeklyUntil?: "YYYY-MM-DD"|"" } → 보낸 것만 저장(전체 교체). webhook "" = 해제(env 폴백)
 const bad = (error: string, status = 400) => NextResponse.json({ error }, { status });
 
 export async function GET() {
   if (!(await isAdmin())) return bad("관리자 인증이 필요합니다.", 401);
   const sb = createServiceClient();
-  const [centers, workers, webhook, webhooks, rows] = await Promise.all([
+  const [centers, workers, webhook, webhooks, weeklyUntil, rows] = await Promise.all([
     getCenters(),
     getWorkers(),
     getWebhook(),
     getWebhooks(),
+    getWeeklyUntil(),
     fetchAll<{ operator: string; center: string | null }>((from, to) => sb.from("vehicles").select("operator, center").order("plate").range(from, to)).catch(() => []),
   ]);
   const count = new Map<string, number>();
@@ -45,14 +48,28 @@ export async function GET() {
   }
   const offices = [...count.entries()].map(([name, c]) => ({ name, count: c }));
   const names = [...new Set([...vehicleCenters, ...centerNames(centers, workers)])];
-  return NextResponse.json({ centers, workers, offices, centerNames: names, webhook: webhook ?? "", webhooks });
+  return NextResponse.json({ centers, workers, offices, centerNames: names, webhook: webhook ?? "", webhooks, weeklyUntil: weeklyUntil ?? "" });
 }
 
 export async function PUT(req: NextRequest) {
   if (!(await isAdmin())) return bad("관리자 인증이 필요합니다.", 401);
-  const body = (await req.json().catch(() => null)) as { centers?: unknown; workers?: unknown; webhook?: unknown; webhooks?: unknown } | null;
-  if (!body || (body.centers === undefined && body.workers === undefined && body.webhook === undefined && body.webhooks === undefined)) {
-    return bad("centers·workers·webhook·webhooks 중 하나가 필요합니다.");
+  const body = (await req.json().catch(() => null)) as {
+    centers?: unknown;
+    workers?: unknown;
+    webhook?: unknown;
+    webhooks?: unknown;
+    weeklyUntil?: unknown;
+  } | null;
+  if (!body || [body.centers, body.workers, body.webhook, body.webhooks, body.weeklyUntil].every((x) => x === undefined)) {
+    return bad("centers·workers·webhook·webhooks·weeklyUntil 중 하나가 필요합니다.");
+  }
+
+  let weeklyUntil: string | undefined;
+  if (body.weeklyUntil !== undefined) {
+    if (typeof body.weeklyUntil !== "string") return bad("weeklyUntil 형식이 잘못되었습니다.");
+    weeklyUntil = body.weeklyUntil.trim();
+    if (weeklyUntil && Number.isNaN(Date.parse(weeklyUntil + "T00:00:00+09:00"))) return bad("주간 공유 종료일은 YYYY-MM-DD 형식이어야 합니다.");
+    if (weeklyUntil && !/^\d{4}-\d{2}-\d{2}$/.test(weeklyUntil)) return bad("주간 공유 종료일은 YYYY-MM-DD 형식이어야 합니다.");
   }
 
   const badUrl = (u: string) => !WEBHOOK_RE.test(u) || u.length > 2000;
@@ -109,6 +126,7 @@ export async function PUT(req: NextRequest) {
     if (workers) await setSetting(HANDOVER_WORKERS_KEY, JSON.stringify(workers));
     if (webhook !== undefined) await setSetting(HANDOVER_WEBHOOK_KEY, webhook);
     if (webhooks) await setSetting(HANDOVER_WEBHOOKS_KEY, JSON.stringify(webhooks));
+    if (weeklyUntil !== undefined) await setSetting(HANDOVER_WEEKLY_KEY, weeklyUntil);
   } catch (e) {
     return bad("저장 실패: " + (e instanceof Error ? e.message : "알 수 없는 오류"), 500);
   }
@@ -118,5 +136,6 @@ export async function PUT(req: NextRequest) {
     workers: workers ?? (await getWorkers()),
     webhook: webhook ?? (await getWebhook()) ?? "",
     webhooks: webhooks ?? (await getWebhooks()),
+    weeklyUntil: weeklyUntil ?? (await getWeeklyUntil()) ?? "",
   });
 }

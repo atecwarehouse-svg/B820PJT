@@ -29,6 +29,7 @@ interface Settings {
   centerNames: string[]; // 차량 센터(osupdate) ∪ 맵 ∪ 작업자 소속
   webhook: string; // 기본 웹훅
   webhooks: Record<string, string>; // 센터별 웹훅
+  weeklyUntil: string; // 매주 수요일 진척율 카드 종료일(YYYY-MM-DD, "" = 안 보냄)
 }
 interface ImportResult {
   total: number;
@@ -430,12 +431,16 @@ function WorkersTab({ s, setS, setMsg }: { s: Settings; setS: (s: Settings) => v
 function WebhookTab({ s, setS, setMsg }: { s: Settings; setS: (s: Settings) => void; setMsg: SetMsg }) {
   const [url, setUrl] = useState(s.webhook ?? "");
   const [byCenter, setByCenter] = useState<Record<string, string>>(s.webhooks ?? {});
+  const [weekly, setWeekly] = useState(!!s.weeklyUntil);
+  const [until, setUntil] = useState(s.weeklyUntil ?? "");
   const [saving, setSaving] = useState(false);
   const centers = [...new Set([...s.centerNames, ...Object.keys(s.webhooks ?? {})])];
   const clean = (m: Record<string, string>) => Object.fromEntries(Object.entries(m).map(([k, v]) => [k, v.trim()]).filter(([, v]) => v));
-  const dirty = url.trim() !== (s.webhook ?? "") || JSON.stringify(clean(byCenter)) !== JSON.stringify(clean(s.webhooks ?? {}));
+  const weeklyUntil = weekly ? until.trim() : "";
+  const dirty =
+    url.trim() !== (s.webhook ?? "") || JSON.stringify(clean(byCenter)) !== JSON.stringify(clean(s.webhooks ?? {})) || weeklyUntil !== (s.weeklyUntil ?? "");
   const okUrl = (u: string) => !u.trim() || /^https:\/\/\S+$/.test(u.trim());
-  const valid = okUrl(url) && Object.values(byCenter).every(okUrl);
+  const valid = okUrl(url) && Object.values(byCenter).every(okUrl) && (!weekly || /^\d{4}-\d{2}-\d{2}$/.test(until));
 
   async function save() {
     setSaving(true);
@@ -444,15 +449,15 @@ function WebhookTab({ s, setS, setMsg }: { s: Settings; setS: (s: Settings) => v
       const res = await fetch("/api/handover/settings", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ webhook: url.trim(), webhooks: clean(byCenter) }),
+        body: JSON.stringify({ webhook: url.trim(), webhooks: clean(byCenter), weeklyUntil }),
       });
-      const j = (await res.json().catch(() => ({}))) as { webhook?: string; webhooks?: Record<string, string>; error?: string };
+      const j = (await res.json().catch(() => ({}))) as { webhook?: string; webhooks?: Record<string, string>; weeklyUntil?: string; error?: string };
       if (!res.ok) throw new Error(j.error ?? "저장 실패");
       const nextHooks = j.webhooks ?? clean(byCenter);
-      setS({ ...s, webhook: j.webhook ?? url.trim(), webhooks: nextHooks });
+      setS({ ...s, webhook: j.webhook ?? url.trim(), webhooks: nextHooks, weeklyUntil: j.weeklyUntil ?? weeklyUntil });
       setUrl(j.webhook ?? url.trim());
       setByCenter(nextHooks);
-      setMsg({ ok: true, text: "팀즈 웹훅을 저장했습니다. 다음 완료 체크부터 적용됩니다." });
+      setMsg({ ok: true, text: "팀즈 알림 설정을 저장했습니다. 완료 카드는 다음 체크부터, 주간 진척율은 다음 수요일 아침부터 적용됩니다." });
     } catch (e) {
       setMsg({ ok: false, text: e instanceof Error ? e.message : "저장 실패" });
     } finally {
@@ -491,7 +496,22 @@ function WebhookTab({ s, setS, setMsg }: { s: Settings; setS: (s: Settings) => v
         <label className="text-xs font-bold text-gray-500">기본 (센터 미지정·검증 카드)</label>
         {area(url, setUrl)}
       </div>
-      {!valid && <p className="mt-1 text-xs text-red-600">https:// 로 시작하는 주소여야 합니다.</p>}
+      <div className="mt-4 border-t border-gray-100 pt-3">
+        <label className="flex items-center gap-2 text-xs font-bold text-gray-700">
+          <input type="checkbox" checked={weekly} onChange={(e) => setWeekly(e.target.checked)} className="h-4 w-4" />
+          📅 매주 수요일 아침 센터별 진척율 카드 보내기
+        </label>
+        <p className="mt-1 text-[11px] leading-relaxed text-gray-400">
+          수요일 09:00에 센터마다 위 채팅방으로 「완료/잔여/진척율·이번 주 완료·시내/마을·전체·종료 D-day」 카드를 보냅니다. 종료일이 지나면 자동으로 멈춥니다.
+        </p>
+        {weekly && (
+          <div className="mt-2 flex items-center gap-2">
+            <span className="text-xs text-gray-600">종료일</span>
+            <input type="date" value={until} onChange={(e) => setUntil(e.target.value)} className={`${input}`} />
+          </div>
+        )}
+      </div>
+      {!valid && <p className="mt-1 text-xs text-red-600">{weekly && !/^\d{4}-\d{2}-\d{2}$/.test(until) ? "주간 공유 종료일을 고르세요." : "https:// 로 시작하는 주소여야 합니다."}</p>}
       <button
         type="button"
         onClick={save}

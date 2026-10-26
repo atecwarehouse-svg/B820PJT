@@ -3,6 +3,10 @@
     {
       "path": "/api/teams/cron",
       "schedule": "0 17 * * *"
+    },
+    {
+      "path": "/api/handover/cron",
+      "schedule": "0 0 * * 3"
     }
   ]
 }

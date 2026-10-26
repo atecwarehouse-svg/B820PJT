@@ -1470,6 +1470,49 @@ export async function sendHandoverDoneCard(d: {
   await post(url, card, `${d.kindLabel ?? "양도양수"} 완료`);
 }
 
+// 주간 진척율 카드 — 매주 수요일 크론(app/api/handover/cron)이 센터마다 그 센터 채팅방으로. 종료일까지.
+export interface WeeklyProgress {
+  label: string;
+  total: number;
+  done: number;
+  week: number; // 최근 7일 완료
+}
+export async function sendWeeklyProgressCard(d: {
+  webhook: string;
+  projectName: string;
+  kindLabel: string; // "OS업데이트 적용" 등
+  center: WeeklyProgress;
+  byType: WeeklyProgress[]; // 시내/마을(없으면 [])
+  overall: WeeklyProgress;
+  until: string; // 종료일 YYYY-MM-DD
+  daysLeft: number;
+}): Promise<void> {
+  const pct = (p: WeeklyProgress) => (p.total ? Math.round((p.done / p.total) * 100) : 0);
+  const line = (p: WeeklyProgress) => `완료 ${p.done} / ${p.total}대 · 잔여 ${p.total - p.done}대 · 진척율 ${pct(p)}% (이번 주 +${p.week})`;
+  const card = {
+    type: "message",
+    attachments: [
+      {
+        contentType: "application/vnd.microsoft.card.adaptive",
+        content: {
+          $schema: "http://adaptivecards.io/schemas/adaptive-card.json",
+          type: "AdaptiveCard",
+          version: "1.4",
+          body: [
+            { type: "TextBlock", size: "Large", weight: "Bolder", color: "Accent", text: `📊 ${d.kindLabel} 주간 진척율 — ${d.center.label}`, wrap: true },
+            { type: "TextBlock", text: `${d.projectName} · ${kstStamp()} · 종료 ${d.until} (D-${d.daysLeft})`, isSubtle: true, spacing: "None", wrap: true },
+            { type: "TextBlock", size: "ExtraLarge", weight: "Bolder", color: pct(d.center) === 100 ? "Good" : "Default", text: `${pct(d.center)}%`, spacing: "Medium" },
+            { type: "TextBlock", weight: "Bolder", text: `${d.center.label}: ${line(d.center)}`, spacing: "None", wrap: true },
+            ...d.byType.map((p) => ({ type: "TextBlock", text: `${p.label}: ${line(p)}`, spacing: "None", wrap: true })),
+            { type: "TextBlock", text: `전체: ${line(d.overall)}`, isSubtle: true, spacing: "Small", wrap: true },
+          ],
+        },
+      },
+    ],
+  };
+  await post(d.webhook, card, `${d.kindLabel} 주간 진척율 ${d.center.label}`);
+}
+
 // 양도양수 서버 등록 검증 카드 — 차량단말기버전 파일 업로드(검증 버튼) 결과를 관리자 호출방으로.
 export interface HandoverVerifyCardData {
   projectName: string;

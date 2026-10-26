@@ -14,6 +14,14 @@ export const HANDOVER_WORKERS_KEY = "handover_workers";
 export const HANDOVER_WEBHOOK_KEY = "handover_webhook"; // 프로젝트 기본 팀즈 웹훅(Power Automate). 비면 env TEAMS_ADMIN_CALL_WEBHOOK_URL 폴백
 export const HANDOVER_WEBHOOKS_KEY = "handover_webhooks"; // 센터별 팀즈 웹훅 {"강남센터":"https://…"} — 그 센터 차량 완료 카드는 여기로(없으면 기본)
 
+export const HANDOVER_WEEKLY_KEY = "handover_weekly_until"; // 매주 수요일 센터별 진척율 카드 발송 종료일 "YYYY-MM-DD"(빈 값 = 발송 안 함) — app/api/handover/cron
+
+/** 주간 진척율 발송 종료일(YYYY-MM-DD) — 미설정/형식 오류면 null */
+export async function getWeeklyUntil(slug?: string): Promise<string | null> {
+  const v = (await getSetting(HANDOVER_WEEKLY_KEY, slug))?.trim() ?? "";
+  return /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null;
+}
+
 /** 웹훅 주소 형식 — https:// (로컬 수신기 테스트용 http://localhost 만 예외) */
 export const WEBHOOK_RE = /^(https:\/\/|http:\/\/(localhost|127\.0\.0\.1)[:/])\S+$/;
 
