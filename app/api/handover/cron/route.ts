@@ -73,7 +73,8 @@ async function runFor(p: Project, today: string): Promise<Record<string, unknown
     }
     const byType = ["시내버스", "마을버스"].map((t) => stat(t, xs.filter((r) => r.bus_type === t))).filter((s) => s.total > 0);
     try {
-      await sendWeeklyProgressCard({ webhook, projectName: p.name, kindLabel, center: stat(center, xs), byType, overall, until, daysLeft });
+      // 센터 전용 방에는 그 센터 수치만(양도양수는 전체 줄 유지)
+      await sendWeeklyProgressCard({ webhook, projectName: p.name, kindLabel, center: stat(center, xs), byType, overall: p.kind === "osupdate" ? undefined : overall, until, daysLeft });
       sent.push(center);
     } catch (e) {
       failed.push(`${center}: ${e instanceof Error ? e.message : String(e)}`);

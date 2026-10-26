@@ -117,7 +117,8 @@ export async function POST(req: NextRequest) {
     const centerName = v2.center ?? centers[v2.operator] ?? me.worker?.center ?? "미배정";
     const scope: Scope = osupdate ? { center: centerName } : { offices: centerOffices(centers, centerName).length ? centerOffices(centers, centerName) : [v2.operator] };
     runAfterResponse(async () => {
-      const [webhook, centerProg, overall] = await Promise.all([webhookFor(centerName, slug), progress(sb, scope), progress(sb, null)]);
+      // osupdate: 센터 전용 방이라 프로젝트 전체 줄은 뺀다(각 센터는 자기 진척만). handover 는 전체 줄 유지.
+      const [webhook, centerProg, overall] = await Promise.all([webhookFor(centerName, slug), progress(sb, scope), osupdate ? null : progress(sb, null)]);
       const byType = osupdate
         ? await Promise.all(["시내버스", "마을버스"].map(async (t) => ({ label: t, ...(await progress(sb, scope, t)) })))
         : undefined;
@@ -135,7 +136,7 @@ export async function POST(req: NextRequest) {
         note: v2.note,
         center: { label: centerName, ...centerProg },
         byType: byType?.filter((p) => p.total > 0),
-        overall: { label: "전체", ...overall },
+        overall: overall ? { label: "전체", ...overall } : undefined,
       });
     });
   }

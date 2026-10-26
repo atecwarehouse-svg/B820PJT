@@ -1429,7 +1429,7 @@ export async function sendHandoverDoneCard(d: {
   note?: string | null;
   center: HandoverProgress;
   byType?: HandoverProgress[]; // 센터 안 구분별(시내/마을) 진척
-  overall: HandoverProgress;
+  overall?: HandoverProgress; // 프로젝트 전체 — 센터 전용 방(OS업데이트)엔 다른 센터 수치가 필요 없어 생략
 }): Promise<void> {
   const url = d.webhook || process.env.TEAMS_ADMIN_CALL_WEBHOOK_URL;
   if (!url) return;
@@ -1461,7 +1461,7 @@ export async function sendHandoverDoneCard(d: {
             },
             { type: "TextBlock", weight: "Bolder", text: `📊 ${d.center.label}: ${line(d.center)}`, wrap: true },
             ...(d.byType ?? []).map((p) => ({ type: "TextBlock", text: `${p.label}: ${line(p)}`, spacing: "None", wrap: true })),
-            { type: "TextBlock", text: `전체: ${line(d.overall)}`, isSubtle: true, spacing: "None", wrap: true },
+            ...(d.overall ? [{ type: "TextBlock", text: `전체: ${line(d.overall)}`, isSubtle: true, spacing: "None", wrap: true }] : []),
           ],
         },
       },
@@ -1483,7 +1483,7 @@ export async function sendWeeklyProgressCard(d: {
   kindLabel: string; // "OS업데이트 적용" 등
   center: WeeklyProgress;
   byType: WeeklyProgress[]; // 시내/마을(없으면 [])
-  overall: WeeklyProgress;
+  overall?: WeeklyProgress; // 프로젝트 전체 — 센터 전용 방엔 생략(각 센터는 자기 진척만)
   until: string; // 종료일 YYYY-MM-DD
   daysLeft: number;
 }): Promise<void> {
@@ -1504,7 +1504,7 @@ export async function sendWeeklyProgressCard(d: {
             { type: "TextBlock", size: "ExtraLarge", weight: "Bolder", color: pct(d.center) === 100 ? "Good" : "Default", text: `${pct(d.center)}%`, spacing: "Medium" },
             { type: "TextBlock", weight: "Bolder", text: `${d.center.label}: ${line(d.center)}`, spacing: "None", wrap: true },
             ...d.byType.map((p) => ({ type: "TextBlock", text: `${p.label}: ${line(p)}`, spacing: "None", wrap: true })),
-            { type: "TextBlock", text: `전체: ${line(d.overall)}`, isSubtle: true, spacing: "Small", wrap: true },
+            ...(d.overall ? [{ type: "TextBlock", text: `전체: ${line(d.overall)}`, isSubtle: true, spacing: "Small", wrap: true }] : []),
           ],
         },
       },
