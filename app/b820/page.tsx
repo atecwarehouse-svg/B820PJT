@@ -1,6 +1,6 @@
 import Link from "@/components/PLink";
 import type { Metadata } from "next";
-import { currentProject } from "@/lib/project";
+import { currentProject, isChecklist } from "@/lib/project";
 import PlateSearch from "@/components/PlateSearch";
 import AdminCallButton from "@/components/AdminCallButton";
 import DispatchButton from "@/components/DispatchButton";
@@ -76,8 +76,8 @@ const MENU: { href: string; emoji: string; label: string; tint: string }[] = [
 
 export default async function HomePage() {
   const project = await currentProject();
-  // 양도양수 체크리스트 프로젝트 — 홈이 곧 체크리스트(로그인 → 내 센터 차량 완료 체크). 튜토리얼·촬영 메뉴 없음.
-  if (project.kind === "handover") {
+  // 체크리스트형 프로젝트(양도양수·OS업데이트) — 홈이 곧 체크리스트(로그인 → 내 센터 차량 완료 체크). 튜토리얼·촬영 메뉴 없음.
+  if (isChecklist(project.kind)) {
     return <HandoverHome project={project} worker={await currentWorker()} version={`v${BUILD_TIME}${COMMIT ? ` · ${COMMIT}` : ""}`} />;
   }
   const icon = PROJECT_ICONS[project.icon];

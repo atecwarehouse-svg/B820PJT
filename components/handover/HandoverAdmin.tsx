@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "@/components/PLink";
 import { downloadUrl } from "@/lib/download";
+import { KIND_LABEL, type ProjectKind } from "@/lib/project-kind";
 import { fmtDone, shortRoute } from "./HandoverChecklist";
 
 interface Worker {
@@ -18,11 +19,16 @@ interface Vehicle {
   done_at: string | null;
   done_by: string | null;
   note: string | null;
+  bus_type?: string | null;
+  center?: string | null;
 }
 interface Settings {
   centers: Record<string, string>;
   workers: Worker[];
   offices: { name: string; count: number }[];
+  centerNames: string[]; // 차량 센터(osupdate) ∪ 맵 ∪ 작업자 소속
+  webhook: string; // 기본 웹훅
+  webhooks: Record<string, string>; // 센터별 웹훅
 }
 interface ImportResult {
   total: number;
@@ -30,17 +36,23 @@ interface ImportResult {
   removed: number;
   removedPlates: string[];
   offices: { name: string; count: number }[];
+  byType?: Record<string, number>;
+  centers?: Record<string, number>; // osupdate: 센터별 대수
+  excluded?: number; // osupdate: 공항버스 제외 수
+  assigned: number;
   applied: boolean;
 }
 
-const TABS = ["차량 업로드", "센터 배정", "작업자", "현황"] as const;
-type Tab = (typeof TABS)[number];
+const ALL_TABS = ["차량 업로드", "센터 배정", "작업자", "팀즈 알림", "현황"] as const;
+type Tab = (typeof ALL_TABS)[number];
 
 const input = "rounded-lg border border-gray-300 bg-gray-50 px-2 py-2 text-sm outline-none focus:border-blue-500 focus:bg-white";
 
-// 양도양수 체크리스트 관리자 — 로우데이터 업로드 · 영업소→센터 배정 · 작업자 명단 · 현황(엑셀)
-export default function HandoverAdmin({ projectName }: { projectName: string }) {
+// 체크리스트형(양도양수·OS업데이트) 관리자 — 로우데이터 업로드 · 영업소→센터 배정 · 작업자 명단 · 팀즈 알림(웹훅) · 현황(엑셀)
+export default function HandoverAdmin({ projectName, kind = "handover" }: { projectName: string; kind?: ProjectKind }) {
   const router = useRouter();
+  // osupdate 는 차량마다 센터가 파일(센터 열)에서 오므로 「센터 배정」 탭이 없다
+  const TABS = kind === "osupdate" ? ALL_TABS.filter((t) => t !== "센터 배정") : ALL_TABS;
   const wanted = useSearchParams()?.get("tab") as Tab | null;
   const [tab, setTab] = useState<Tab>(wanted && (TABS as readonly string[]).includes(wanted) ? wanted : "차량 업로드");
   const [s, setS] = useState<Settings | null>(null);
@@ -78,7 +90,9 @@ export default function HandoverAdmin({ projectName }: { projectName: string }) 
           로그아웃
         </button>
       </div>
-      <p className="mb-3 text-xs text-gray-500">{projectName} · 양도양수 체크리스트</p>
+      <p className="mb-3 text-xs text-gray-500">
+        {projectName} · {KIND_LABEL[kind]}
+      </p>
 
       <div className="mb-4 flex gap-1 overflow-x-auto rounded-xl bg-gray-100 p-1 text-xs font-semibold">
         {TABS.map((t) => (
@@ -98,10 +112,11 @@ export default function HandoverAdmin({ projectName }: { projectName: string }) 
 
       {msg && <p className={`mb-3 rounded-xl px-3 py-2 text-xs ${msg.ok ? "bg-green-50 text-green-700" : "bg-red-50 text-red-600"}`}>{msg.text}</p>}
 
-      {tab === "차량 업로드" && <UploadTab onApplied={loadSettings} setMsg={setMsg} />}
+      {tab === "차량 업로드" && <UploadTab kind={kind} centers={s?.centerNames ?? []} onApplied={loadSettings} setMsg={setMsg} />}
       {tab === "센터 배정" && s && <CentersTab s={s} setS={setS} setMsg={setMsg} />}
       {tab === "작업자" && s && <WorkersTab s={s} setS={setS} setMsg={setMsg} />}
-      {tab === "현황" && <StatusTab setMsg={setMsg} />}
+      {tab === "팀즈 알림" && s && <WebhookTab s={s} setS={setS} setMsg={setMsg} />}
+      {tab === "현황" && <StatusTab kind={kind} setMsg={setMsg} />}
       {tab !== "차량 업로드" && tab !== "현황" && !s && <p className="py-8 text-center text-sm text-gray-400">불러오는 중…</p>}
     </main>
   );
@@ -110,11 +125,13 @@ export default function HandoverAdmin({ projectName }: { projectName: string }) 
 type SetMsg = (m: { ok: boolean; text: string } | null) => void;
 
 // ---------- 차량 업로드 ----------
-function UploadTab({ onApplied, setMsg }: { onApplied: () => void; setMsg: SetMsg }) {
+function UploadTab({ kind, centers, onApplied, setMsg }: { kind: ProjectKind; centers: string[]; onApplied: () => void; setMsg: SetMsg }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
+  const [center, setCenter] = useState(""); // 선택 — 파일의 미배정 영업소/운수사를 이 센터로
   const [preview, setPreview] = useState<ImportResult | null>(null);
   const [busy, setBusy] = useState(false);
+  const osupdate = kind === "osupdate";
 
   async function send(apply: boolean) {
     if (!file || busy) return;
@@ -124,12 +141,13 @@ function UploadTab({ onApplied, setMsg }: { onApplied: () => void; setMsg: SetMs
       const form = new FormData();
       form.append("file", file);
       form.append("apply", apply ? "true" : "false");
+      if (center.trim()) form.append("center", center.trim());
       const res = await fetch("/api/handover/import", { method: "POST", body: form });
       const j = (await res.json().catch(() => ({}))) as ImportResult & { error?: string };
       if (!res.ok) throw new Error(j.error ?? `HTTP ${res.status}`);
       setPreview(j);
       if (apply) {
-        setMsg({ ok: true, text: `반영했습니다 — 차량 ${j.total}대 (추가 ${j.added}·삭제 ${j.removed})` });
+        setMsg({ ok: true, text: `반영했습니다 — 차량 ${j.total}대 (추가 ${j.added}·삭제 ${j.removed})${j.assigned ? ` · ${center.trim()}에 ${j.assigned}개 배정` : ""}` });
         setFile(null);
         if (fileRef.current) fileRef.current.value = "";
         onApplied();
@@ -143,9 +161,19 @@ function UploadTab({ onApplied, setMsg }: { onApplied: () => void; setMsg: SetMs
 
   return (
     <section className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-black/5">
-      <h2 className="text-sm font-semibold text-gray-800">📂 로우데이터(노선별 차량현황) 업로드</h2>
+      <h2 className="text-sm font-semibold text-gray-800">{osupdate ? "📂 OS적용리스트 업로드" : "📂 로우데이터(노선별 차량현황) 업로드"}</h2>
       <p className="mt-1 text-xs leading-relaxed text-gray-500">
-        첫 행 머리글에 <b>버스영업소명 · 버스노선명 · 차량번호</b>가 있는 엑셀. 차량번호 기준으로 등록되고(공동배차 차량은 노선을 이어 1대로),
+        {osupdate ? (
+          <>
+            첫 행 머리글에 <b>센터 · 차량(번호) · 기종 · 운수사 · 노선</b>이 있는 엑셀(전체센터_차량.xlsx — 완료여부·완료일·특이사항 열은 무시). <b>센터 열</b>로 차량마다 담당 센터가
+            정해지고, 기종(서울시내버스/서울마을버스)으로 <b>시내·마을</b>을 나눕니다(없으면 노선명으로 판정). <b>공항버스(B620)</b> 기종은 대상이 아니라 제외됩니다. 📥 다운로드한 현황
+            파일을 그대로 다시 올릴 수 있습니다.
+          </>
+        ) : (
+          <>
+            첫 행 머리글에 <b>버스영업소명 · 버스노선명 · 차량번호</b>가 있는 엑셀. 차량번호 기준으로 등록되고(공동배차 차량은 노선을 이어 1대로),
+          </>
+        )}{" "}
         이미 완료 체크된 차량은 다시 올려도 완료 상태가 유지됩니다. 파일에서 빠진 차량은 삭제됩니다.
       </p>
       <input
@@ -153,11 +181,36 @@ function UploadTab({ onApplied, setMsg }: { onApplied: () => void; setMsg: SetMs
         type="file"
         accept=".xlsx,.xlsm,.xls"
         onChange={(e) => {
-          setFile(e.target.files?.[0] ?? null);
+          const f = e.target.files?.[0] ?? null;
+          setFile(f);
           setPreview(null);
+          // 파일명 "강남센터_OS적용리스트.xlsx" → 센터명 자동 채움(비어 있을 때만)
+          const m = f?.name.match(/^([가-힣A-Za-z0-9]+센터)[_\-\s]/);
+          if (m && !center) setCenter(m[1]);
         }}
         className="mt-3 block w-full text-xs text-gray-600 file:mr-2 file:rounded-lg file:border-0 file:bg-blue-600 file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-white"
       />
+      <div className="mt-3">
+        <label className="text-xs font-semibold text-gray-600">🏢 센터 (선택)</label>
+        <input
+          value={center}
+          onChange={(e) => setCenter(e.target.value)}
+          list="upload-center-names"
+          maxLength={30}
+          placeholder={osupdate ? "예: 강남센터 — 파일에 센터 열이 없을 때 전 차량의 센터" : "예: 강남센터 — 파일의 모든 영업소를 이 센터로 배정"}
+          className={`mt-1 w-full ${input}`}
+        />
+        <datalist id="upload-center-names">
+          {centers.map((n) => (
+            <option key={n} value={n} />
+          ))}
+        </datalist>
+        <p className="mt-1 text-[11px] text-gray-400">
+          {osupdate
+            ? "파일에 센터 열이 있으면 그 값을 쓰고, 센터 열이 비어 있는 차량만 여기 적은 센터가 됩니다(센터별 파일을 올릴 때 사용)."
+            : "적으면 반영할 때 아직 센터가 없는 영업소만 이 센터로 배정됩니다(이미 배정된 곳은 그대로). 비우면 「센터 배정」 탭에서 직접 정합니다."}
+        </p>
+      </div>
       <div className="mt-3 flex gap-2">
         <button
           type="button"
@@ -181,6 +234,26 @@ function UploadTab({ onApplied, setMsg }: { onApplied: () => void; setMsg: SetMs
           <p className="font-semibold">
             {preview.applied ? "반영 결과" : "미리보기"} — 차량 {preview.total}대 · 추가 {preview.added} · 삭제 {preview.removed}
           </p>
+          {preview.byType && (
+            <p className="mt-0.5">
+              {Object.entries(preview.byType)
+                .map(([t, n]) => `${t} ${n}대`)
+                .join(" · ")}
+              {preview.excluded ? <span className="text-gray-400"> · 공항버스 {preview.excluded}대 제외</span> : null}
+            </p>
+          )}
+          {preview.centers && (
+            <p className="mt-0.5 text-blue-700">
+              {Object.entries(preview.centers)
+                .map(([c, n]) => `📍 ${c} ${n}대`)
+                .join(" · ")}
+            </p>
+          )}
+          {!osupdate && center.trim() && (
+            <p className="mt-0.5 text-blue-700">
+              {preview.assigned ? `${center.trim()}에 ${preview.applied ? "배정함" : "배정 예정"}: ${preview.assigned}개` : "새로 배정할 곳이 없습니다(이미 모두 배정됨)."}
+            </p>
+          )}
           <ul className="mt-1.5 space-y-0.5">
             {preview.offices.map((o) => (
               <li key={o.name}>
@@ -278,7 +351,7 @@ function WorkersTab({ s, setS, setMsg }: { s: Settings; setS: (s: Settings) => v
   const [rows, setRows] = useState<Worker[]>(s.workers);
   const [saving, setSaving] = useState(false);
   const dirty = JSON.stringify(rows) !== JSON.stringify(s.workers);
-  const names = [...new Set([...Object.values(s.centers), ...rows.map((w) => w.center)])].filter(Boolean);
+  const names = [...new Set([...s.centerNames, ...rows.map((w) => w.center)])].filter(Boolean);
 
   const update = (i: number, patch: Partial<Worker>) => setRows((r) => r.map((x, idx) => (idx === i ? { ...x, ...patch } : x)));
 
@@ -352,8 +425,87 @@ function WorkersTab({ s, setS, setMsg }: { s: Settings; setS: (s: Settings) => v
   );
 }
 
+// ---------- 팀즈 알림 ----------
+// 센터별 채팅방 웹훅 + 기본 웹훅(센터 칸이 비었거나 미배정 차량). 둘 다 비면 B820 관리자 호출방(env).
+function WebhookTab({ s, setS, setMsg }: { s: Settings; setS: (s: Settings) => void; setMsg: SetMsg }) {
+  const [url, setUrl] = useState(s.webhook ?? "");
+  const [byCenter, setByCenter] = useState<Record<string, string>>(s.webhooks ?? {});
+  const [saving, setSaving] = useState(false);
+  const centers = [...new Set([...s.centerNames, ...Object.keys(s.webhooks ?? {})])];
+  const clean = (m: Record<string, string>) => Object.fromEntries(Object.entries(m).map(([k, v]) => [k, v.trim()]).filter(([, v]) => v));
+  const dirty = url.trim() !== (s.webhook ?? "") || JSON.stringify(clean(byCenter)) !== JSON.stringify(clean(s.webhooks ?? {}));
+  const okUrl = (u: string) => !u.trim() || /^https:\/\/\S+$/.test(u.trim());
+  const valid = okUrl(url) && Object.values(byCenter).every(okUrl);
+
+  async function save() {
+    setSaving(true);
+    setMsg(null);
+    try {
+      const res = await fetch("/api/handover/settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ webhook: url.trim(), webhooks: clean(byCenter) }),
+      });
+      const j = (await res.json().catch(() => ({}))) as { webhook?: string; webhooks?: Record<string, string>; error?: string };
+      if (!res.ok) throw new Error(j.error ?? "저장 실패");
+      const nextHooks = j.webhooks ?? clean(byCenter);
+      setS({ ...s, webhook: j.webhook ?? url.trim(), webhooks: nextHooks });
+      setUrl(j.webhook ?? url.trim());
+      setByCenter(nextHooks);
+      setMsg({ ok: true, text: "팀즈 웹훅을 저장했습니다. 다음 완료 체크부터 적용됩니다." });
+    } catch (e) {
+      setMsg({ ok: false, text: e instanceof Error ? e.message : "저장 실패" });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const area = (value: string, onChange: (v: string) => void) => (
+    <textarea
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      rows={3}
+      spellCheck={false}
+      placeholder="https://….powerplatform.com/powerautomate/automations/direct/…"
+      className={`mt-1 w-full resize-none break-all font-mono text-[11px] ${input} ${okUrl(value) ? "" : "border-red-300"}`}
+    />
+  );
+
+  return (
+    <section className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-black/5">
+      <h2 className="text-sm font-semibold text-gray-800">💬 팀즈 알림 채팅방</h2>
+      <p className="mt-1 text-xs leading-relaxed text-gray-500">
+        차량 완료 체크 카드를 받을 채팅방의 <b>Power Automate 웹훅 주소</b>(팀즈 워크플로 「웹후크 요청 수신」으로 발급)를 <b>센터마다</b> 넣습니다. 그 센터 차량의 완료 카드가 그 방으로
+        갑니다. 센터 칸이 비면 아래 기본 주소로, 기본도 비면 B820 관리자 호출방으로 갑니다.
+      </p>
+      {centers.length === 0 && <p className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-800">센터가 없습니다. 차량을 올리거나 작업자를 등록하면 센터가 나타납니다.</p>}
+      <ul className="mt-3 space-y-3">
+        {centers.map((c) => (
+          <li key={c}>
+            <label className="text-xs font-bold text-gray-700">📍 {c}</label>
+            {area(byCenter[c] ?? "", (v) => setByCenter({ ...byCenter, [c]: v }))}
+          </li>
+        ))}
+      </ul>
+      <div className="mt-4 border-t border-gray-100 pt-3">
+        <label className="text-xs font-bold text-gray-500">기본 (센터 미지정·검증 카드)</label>
+        {area(url, setUrl)}
+      </div>
+      {!valid && <p className="mt-1 text-xs text-red-600">https:// 로 시작하는 주소여야 합니다.</p>}
+      <button
+        type="button"
+        onClick={save}
+        disabled={saving || !dirty || !valid}
+        className="mt-3 w-full rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white active:bg-blue-700 disabled:opacity-50"
+      >
+        {saving ? "저장 중…" : dirty ? "저장" : "저장됨 ✓"}
+      </button>
+    </section>
+  );
+}
+
 // ---------- 현황 ----------
-function StatusTab({ setMsg }: { setMsg: SetMsg }) {
+function StatusTab({ kind, setMsg }: { kind: ProjectKind; setMsg: SetMsg }) {
   const router = useRouter();
   const [vehicles, setVehicles] = useState<Vehicle[] | null>(null);
   const [centers, setCenters] = useState<Record<string, string>>({});
@@ -380,6 +532,7 @@ function StatusTab({ setMsg }: { setMsg: SetMsg }) {
   async function toggle(v: Vehicle) {
     const done = !v.done_at;
     if (!done && !window.confirm(`${v.plate} — ${v.done_by ?? ""}님이 완료한 차량입니다. 완료를 해제할까요?`)) return;
+    if (done && kind === "osupdate" && !window.confirm(`${v.plate}\n통합+승하차 전체 적용하셨나요?`)) return;
     setBusy(v.plate);
     try {
       const res = await fetch("/api/handover", {
@@ -400,7 +553,7 @@ function StatusTab({ setMsg }: { setMsg: SetMsg }) {
   if (!vehicles) return <p className="py-8 text-center text-sm text-gray-400">불러오는 중…</p>;
   const total = vehicles.length;
   const done = vehicles.filter((v) => v.done_at).length;
-  const centerOf = (v: Vehicle) => centers[v.operator] ?? "미배정";
+  const centerOf = (v: Vehicle) => v.center ?? centers[v.operator] ?? "미배정";
   const byCenter = new Map<string, { t: number; d: number }>();
   const byRoute = new Map<string, { t: number; d: number; center: string }>();
   for (const v of vehicles) {
@@ -416,6 +569,15 @@ function StatusTab({ setMsg }: { setMsg: SetMsg }) {
       byRoute.set(route, r);
     }
   }
+  const byTypeMap = new Map<string, { t: number; d: number }>();
+  for (const v of vehicles) {
+    if (!v.bus_type) continue;
+    const n = byTypeMap.get(v.bus_type) ?? { t: 0, d: 0 };
+    n.t++;
+    if (v.done_at) n.d++;
+    byTypeMap.set(v.bus_type, n);
+  }
+  const byType = [...byTypeMap.entries()].sort(([a], [b]) => a.localeCompare(b, "ko"));
   const pct = (d: number, t: number) => (t ? Math.round((d / t) * 100) : 0);
   const shown = todoOnly ? vehicles.filter((v) => !v.done_at) : vehicles;
 
@@ -441,6 +603,15 @@ function StatusTab({ setMsg }: { setMsg: SetMsg }) {
           {[...byCenter.entries()].map(([c, n]) => (
             <li key={c} className="flex justify-between">
               <span className="font-semibold text-gray-700">{c}</span>
+              <span className="tabular-nums text-gray-500">
+                {n.d}/{n.t} · {pct(n.d, n.t)}%
+              </span>
+            </li>
+          ))}
+          {/* OS업데이트: 시내/마을버스 구분별 */}
+          {byType.map(([t, n]) => (
+            <li key={t} className="flex justify-between">
+              <span className="text-gray-600">{t === "마을버스" ? "🚐" : "🚌"} {t}</span>
               <span className="tabular-nums text-gray-500">
                 {n.d}/{n.t} · {pct(n.d, n.t)}%
               </span>

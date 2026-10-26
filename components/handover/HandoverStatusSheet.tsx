@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { downloadUrl } from "@/lib/download";
-import { fmtDone, shortRoute } from "./HandoverChecklist";
+import { fmtDone, shortRoute, typeEmoji } from "./HandoverChecklist";
 
 interface Vehicle {
   plate: string;
@@ -11,6 +11,8 @@ interface Vehicle {
   done_at: string | null;
   done_by: string | null;
   note: string | null;
+  bus_type?: string | null; // OS업데이트: 시내/마을버스
+  center?: string | null; // OS업데이트: 차량별 센터
 }
 interface Stat {
   t: number;
@@ -39,17 +41,24 @@ export default function HandoverStatusSheet({ onClose }: { onClose: () => void }
   const list = vehicles ?? [];
   const total = list.length;
   const done = list.filter((v) => v.done_at).length;
-  const centerOf = (v: Vehicle) => centers[v.operator] ?? "미배정";
+  const centerOf = (v: Vehicle) => v.center ?? centers[v.operator] ?? "미배정";
   const byCenter = new Map<string, Stat>();
-  const byRoute = new Map<string, Stat & { center: string }>();
+  const byType = new Map<string, Stat>(); // OS업데이트: 시내/마을버스
+  const byRoute = new Map<string, Stat & { center: string; type: string | null }>();
   for (const v of list) {
     const c = byCenter.get(centerOf(v)) ?? { t: 0, d: 0 };
     c.t++;
     if (v.done_at) c.d++;
     byCenter.set(centerOf(v), c);
+    if (v.bus_type) {
+      const x = byType.get(v.bus_type) ?? { t: 0, d: 0 };
+      x.t++;
+      if (v.done_at) x.d++;
+      byType.set(v.bus_type, x);
+    }
     for (const route of v.route.split(" / ")) {
       // 공동배차 차량은 각 노선에 모두 집계(노선 대수 = 로우데이터 행 수)
-      const r = byRoute.get(route) ?? { t: 0, d: 0, center: centerOf(v) };
+      const r = byRoute.get(route) ?? { t: 0, d: 0, center: centerOf(v), type: v.bus_type ?? null };
       r.t++;
       if (v.done_at) r.d++;
       byRoute.set(route, r);
@@ -104,11 +113,31 @@ export default function HandoverStatusSheet({ onClose }: { onClose: () => void }
                 ))}
               </ul>
 
+              {byType.size > 0 && (
+                <>
+                  <h3 className="mt-4 text-xs font-semibold text-gray-500">구분별</h3>
+                  <ul className="mt-1.5 space-y-2">
+                    {[...byType.entries()].sort(([a], [b]) => a.localeCompare(b, "ko")).map(([t, n]) => (
+                      <li key={t} className="flex items-center gap-2 text-sm">
+                        <span className="w-24 shrink-0 truncate font-bold text-gray-800">
+                          {typeEmoji(t)} {t}
+                        </span>
+                        {bar(n.d, n.t)}
+                        <span className="w-24 shrink-0 text-right text-xs tabular-nums text-gray-500">
+                          {n.d}/{n.t} · {pct(n.d, n.t)}%
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              )}
+
               <h3 className="mt-4 text-xs font-semibold text-gray-500">노선별</h3>
               <ul className="mt-1.5 space-y-1.5">
                 {[...byRoute.entries()].sort(([a], [b]) => a.localeCompare(b, "ko")).map(([r, n]) => (
                   <li key={r} className="flex items-center gap-2 text-xs">
                     <span className="w-28 shrink-0 truncate font-semibold text-gray-700">
+                      {n.type ? `${typeEmoji(n.type)} ` : ""}
                       {shortRoute(r)} <span className="font-normal text-gray-400">· {n.center}</span>
                     </span>
                     {bar(n.d, n.t)}

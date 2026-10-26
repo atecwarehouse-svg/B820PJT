@@ -6,8 +6,10 @@ import {
   DEFAULT_SLUG,
   SLUG_RE,
   invalidateProjectCache,
+  isChecklist,
   isDefault,
   projectHome,
+  type ProjectKind,
 } from "@/lib/project";
 import { colorKey, iconKey } from "@/components/ProjectIcon";
 import { createProjectFolder, deleteFolder, folderLink, renameFile, setLinkSharing, trashFile } from "@/lib/gdrive";
@@ -22,8 +24,8 @@ export const maxDuration = 60;
 
 // 프로젝트 레지스트리(public.projects) 관리 — 런처(마스터=B820) 관리자 쿠키 또는 body.pw 필수.
 //   POST   { kind:"link",  name, description, icon, color, url }                       → 링크 카드 추가
-//   POST   { kind:"handover", slug, name, description, icon, color, admin_password, shared_password(직원 비밀번호, 필수) }
-//            → 양도양수 체크리스트 프로젝트 생성(드라이브 없음, create_handover_schema. 로우데이터는 화면이 /p/<slug>/api/handover/import 로 따로 올린다)
+//   POST   { kind:"handover"|"osupdate", slug, name, description, icon, color, admin_password, shared_password(직원 비밀번호, 필수) }
+//            → 체크리스트 프로젝트 생성(양도양수·OS업데이트 적용차량 — 드라이브 없음, create_handover_schema. 로우데이터는 화면이 /p/<slug>/api/handover/import 로 따로 올린다)
 //   POST   { kind:"album", slug, name, description, icon, color, admin_password, shareLink?, photoSlots?, reportMail?, period? } → 앨범 프로젝트 생성
 //            (shareLink: 드라이브 폴더를 링크 공유로, photoSlots: 사진 양식 SlotConfigJson — 없으면 B820 기본, reportMail: 완료리포트 수신자 string[],
 //             period: {start,end} 프로젝트 기간(app_settings.project_period, 빈 양식 전개일정 3행 날짜용),
@@ -64,7 +66,7 @@ function validUrl(url: string): boolean {
 // DB 오류 메시지에 사용자가 할 일을 덧붙인다
 function hint(message: string): string {
   if (/create_handover_schema|projects_kind_check/i.test(message)) {
-    return `${message} — supabase/migration_handover.sql 을 Supabase SQL Editor에서 먼저 실행하세요.`;
+    return `${message} — supabase/migration_handover.sql(양도양수)·migration_osupdate.sql(OS업데이트) 을 Supabase SQL Editor에서 먼저 실행하세요.`;
   }
   if (/create_project_schema|drop_project_schema|relation .*projects/i.test(message)) {
     return `${message} — supabase/migration_projects.sql 을 Supabase SQL Editor에서 먼저 실행하세요.`;
@@ -249,8 +251,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, slug, home: projectHome(slug), exposed, warning, photoSlots, pledge, reportMail, driveFolder: folderLink(folderId), driveShared });
   }
 
-  // 양도양수 체크리스트 — 드라이브 폴더 없음, 스키마는 create_handover_schema(vehicles 에 완료 컬럼 추가), 직원 비밀번호 필수
-  if (body.kind === "handover") {
+  // 체크리스트형(양도양수·OS업데이트) — 드라이브 폴더 없음, 스키마는 create_handover_schema(vehicles 에 완료·bus_type 컬럼 추가), 직원 비밀번호 필수
+  if (body.kind === "handover" || body.kind === "osupdate") {
+    const kind: ProjectKind = body.kind;
     const slug = String(body.slug ?? "").trim().toLowerCase();
     if (!SLUG_RE.test(slug)) {
       return bad("프로젝트 ID는 영문 소문자로 시작하는 소문자·숫자·_ 2~20자여야 합니다. (예: smb)");
@@ -282,7 +285,7 @@ export async function POST(req: NextRequest) {
     };
     const { error: insErr } = await sb.from("projects").insert({
       slug,
-      kind: "handover",
+      kind,
       name,
       description,
       icon,
@@ -384,8 +387,8 @@ export async function PUT(req: NextRequest) {
   let sharedPw: string | undefined;
   if (row.kind !== "link" && typeof body.shared_password === "string") {
     const sp = body.shared_password.trim();
-    if (row.kind === "handover" && !sp) return bad("직원 비밀번호는 비울 수 없습니다(4~40자).");
-    if (sp && (sp.length < 4 || sp.length > 40)) return bad((row.kind === "handover" ? "직원" : "협력업체 공용") + " 비밀번호는 4~40자로 정하세요.");
+    if (isChecklist(row.kind) && !sp) return bad("직원 비밀번호는 비울 수 없습니다(4~40자).");
+    if (sp && (sp.length < 4 || sp.length > 40)) return bad((isChecklist(row.kind) ? "직원" : "협력업체 공용") + " 비밀번호는 4~40자로 정하세요.");
     sharedPw = sp;
   }
   if (!Object.keys(patch).length && shareLink === undefined && period === undefined && sharedPw === undefined) return bad("바꿀 내용이 없습니다.");

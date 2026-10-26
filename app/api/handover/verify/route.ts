@@ -8,7 +8,7 @@ import { runAfterResponse } from "@/lib/background";
 import { sendHandoverVerifyCard } from "@/lib/teams";
 import { TERMINAL_RULE, checkTerminal, normPlate, parseTerminalBuffer, type TerminalRow } from "@/lib/import/parse-terminal-xls";
 import { getSetting, setSetting } from "@/lib/settings";
-import { VEHICLE_COLS, currentWorker, getCenters, workerLabel, type HandoverVehicle } from "@/lib/handover";
+import { VEHICLE_COLS, currentWorker, getCenters, getWebhook, vehicleCenter, workerLabel, type HandoverVehicle } from "@/lib/handover";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -97,9 +97,11 @@ export async function POST(req: NextRequest) {
   const slug = currentSlug();
   const pending = result.items.filter((i) => i.status !== "ok");
   runAfterResponse(async () => {
-    const project = await getProject(slug);
+    const [project, webhook] = await Promise.all([getProject(slug), getWebhook(slug)]);
     await sendHandoverVerifyCard({
       projectName: project?.name ?? slug,
+      kindLabel: project?.kind === "osupdate" ? "OS업데이트 적용" : undefined,
+      webhook,
       worker: who,
       fileName: file.name,
       overall: result.overall,
@@ -146,7 +148,7 @@ async function compute(saved: SavedFile): Promise<VerifyResult | { error: string
   const newName = (dbOperator: string) => [...(learned.get(dbOperator) ?? [])].sort((a, b) => b[1] - a[1])[0]?.[0] ?? dbOperator;
   const items: VerifyItem[] = vehicles.map((v) => {
     const f = inFile.get(normPlate(v.plate));
-    const base = { plate: v.plate, operator: f?.office || newName(v.operator), route: v.route, center: centers[v.operator] ?? "미배정", done_by: v.done_by };
+    const base = { plate: v.plate, operator: f?.office || newName(v.operator), route: v.route, center: vehicleCenter(v, centers), done_by: v.done_by };
     if (!f) return { ...base, status: "missing", reason: "파일에 없음", counts: TERMINAL_RULE.map(() => 0) };
     const c = checkTerminal(f.ids);
     return c.ok ? { ...base, status: "ok", reason: "", counts: c.counts } : { ...base, status: "partial", reason: c.missing, counts: c.counts };

@@ -1405,25 +1405,32 @@ export async function sendModemDefectCard(d: {
   await post(url, card, "모뎀교체");
 }
 
-// 양도양수 체크리스트 — 차량 1대 완료 체크마다 관리자 호출방(TEAMS_ADMIN_CALL_WEBHOOK_URL)으로 보내는 카드.
-// 완료 차량·작업자와 함께 그 센터의 완료/잔여/진척율, 프로젝트 전체 완료/잔여/진척율을 적는다.
+// 양도양수 체크리스트·OS업데이트 적용차량 — 차량 1대 완료 체크마다 보내는 카드.
+// 방 = 프로젝트 설정 웹훅(app_settings.handover_webhook) → 없으면 관리자 호출방(TEAMS_ADMIN_CALL_WEBHOOK_URL).
+// 완료 차량·작업자와 함께 그 센터의 완료/잔여/진척율(OS업데이트는 시내/마을버스별도), 프로젝트 전체 완료/잔여/진척율을 적는다.
 // 해제·메모 변경은 보내지 않는다. 미설정이면 조용히 건너뛴다(체크 자체는 성공이어야 하므로).
 export interface HandoverProgress {
-  label: string; // "강남센터" | "전체"
+  label: string; // "강남센터" | "전체" | "시내버스"
   total: number;
   done: number;
 }
 export async function sendHandoverDoneCard(d: {
   projectName: string;
+  kindLabel?: string; // 기본 "양도양수"
+  webhook?: string | null; // 프로젝트 전용 웹훅
   plate: string;
   operator: string;
+  operatorLabel?: string; // "영업소"(기본) | "운수사"
   route: string;
+  busType?: string | null; // OS업데이트: "시내버스"/"마을버스"
+  model?: string | null; // OS업데이트: 기종
   worker: string;
   note?: string | null;
   center: HandoverProgress;
+  byType?: HandoverProgress[]; // 센터 안 구분별(시내/마을) 진척
   overall: HandoverProgress;
 }): Promise<void> {
-  const url = process.env.TEAMS_ADMIN_CALL_WEBHOOK_URL;
+  const url = d.webhook || process.env.TEAMS_ADMIN_CALL_WEBHOOK_URL;
   if (!url) return;
   const doneAt = new Date().toLocaleString("ko-KR", {
     timeZone: "Asia/Seoul",
@@ -1444,31 +1451,35 @@ export async function sendHandoverDoneCard(d: {
           type: "AdaptiveCard",
           version: "1.4",
           body: [
-            { type: "TextBlock", size: "Large", weight: "Bolder", color: "Good", text: `✅ 양도양수 완료 — ${d.projectName}`, wrap: true },
+            { type: "TextBlock", size: "Large", weight: "Bolder", color: "Good", text: `✅ ${d.kindLabel ?? "양도양수"} 완료 — ${d.projectName}`, wrap: true },
             { type: "TextBlock", size: "Medium", weight: "Bolder", color: "Accent", text: `${d.center.label} · ${d.worker}`, spacing: "None", wrap: true },
             {
               type: "FactSet",
               facts: [
                 { title: "차량번호", value: d.plate },
-                { title: "영업소", value: d.operator },
+                ...(d.busType ? [{ title: "구분", value: d.model ? `${d.busType} · ${d.model}` : d.busType }] : []),
+                { title: d.operatorLabel ?? "영업소", value: d.operator },
                 { title: "노선", value: d.route },
                 { title: "완료 시각", value: doneAt },
                 ...(d.note ? [{ title: "메모", value: d.note }] : []),
               ],
             },
             { type: "TextBlock", weight: "Bolder", text: `📊 ${d.center.label}: ${line(d.center)}`, wrap: true },
+            ...(d.byType ?? []).map((p) => ({ type: "TextBlock", text: `${p.label}: ${line(p)}`, spacing: "None", wrap: true })),
             { type: "TextBlock", text: `전체: ${line(d.overall)}`, isSubtle: true, spacing: "None", wrap: true },
           ],
         },
       },
     ],
   };
-  await post(url, card, "양도양수 완료");
+  await post(url, card, `${d.kindLabel ?? "양도양수"} 완료`);
 }
 
 // 양도양수 서버 등록 검증 카드 — 차량단말기버전 파일 업로드(검증 버튼) 결과를 관리자 호출방으로.
 export interface HandoverVerifyCardData {
   projectName: string;
+  kindLabel?: string; // 기본 "양도양수"
+  webhook?: string | null; // 프로젝트 전용 웹훅(없으면 관리자 호출방)
   worker: string;
   fileName: string;
   overall: { total: number; ok: number };
@@ -1513,7 +1524,7 @@ function pendingGrid(pending: HandoverVerifyCardData["pending"]): unknown[] {
   return out;
 }
 export async function sendHandoverVerifyCard(d: HandoverVerifyCardData): Promise<void> {
-  const url = process.env.TEAMS_ADMIN_CALL_WEBHOOK_URL;
+  const url = d.webhook || process.env.TEAMS_ADMIN_CALL_WEBHOOK_URL;
   if (!url) return;
   const at = new Date().toLocaleString("ko-KR", { timeZone: "Asia/Seoul", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" });
   const pct = (p: { total: number; ok: number }) => (p.total ? Math.round((p.ok / p.total) * 100) : 0);
@@ -1531,7 +1542,7 @@ export async function sendHandoverVerifyCard(d: HandoverVerifyCardData): Promise
           version: "1.4",
           msteams: { width: "Full" },
           body: [
-            { type: "TextBlock", size: "Large", weight: "Bolder", color: "Accent", text: `🔎 양도양수 서버 등록 검증 — ${d.projectName}`, wrap: true },
+            { type: "TextBlock", size: "Large", weight: "Bolder", color: "Accent", text: `🔎 ${d.kindLabel ?? "양도양수"} 서버 등록 검증 — ${d.projectName}`, wrap: true },
             { type: "TextBlock", text: `${d.worker} · ${at} · ${d.fileName}`, isSubtle: true, spacing: "None", wrap: true },
             { type: "TextBlock", weight: "Bolder", text: `📊 전체: ${line(d.overall)}`, wrap: true },
             ...d.centers.map((c) => ({ type: "TextBlock", text: `${c.label}: ${line(c)}`, spacing: "None", wrap: true })),
@@ -1551,5 +1562,5 @@ export async function sendHandoverVerifyCard(d: HandoverVerifyCardData): Promise
       },
     ],
   };
-  await post(url, card, "양도양수 검증");
+  await post(url, card, `${d.kindLabel ?? "양도양수"} 검증`);
 }

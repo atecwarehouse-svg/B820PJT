@@ -17,9 +17,16 @@ interface Vehicle {
   done_at: string | null;
   done_by: string | null;
   note: string | null;
+  model?: string | null; // OS업데이트: 기종
+  bus_type?: string | null; // OS업데이트: "시내버스" | "마을버스" (양도양수는 null → 구분 UI 숨김)
+  center?: string | null; // OS업데이트: 차량별 센터
 }
 
 const POLL_MS = 5000;
+const BUS_TYPES = ["시내버스", "마을버스"] as const;
+export const typeEmoji = (t: string | null | undefined) => (t === "마을버스" ? "🚐" : "🚌");
+// OS업데이트: 완료 체크 전 재확인 문구(통합+승하차 단말기 모두 적용했는지)
+const OSUPDATE_CONFIRM = "통합+승하차 전체 적용하셨나요?";
 // ponytail: 5초 폴링 — 동시 사용자가 수십 명을 넘으면 Supabase Realtime(anon select 정책+publication)으로 교체
 export const shortRoute = (route: string) =>
   route
@@ -37,7 +44,9 @@ export function fmtDone(iso: string): string {
 }
 
 // 내 센터 차량 체크리스트(모바일) — 큰 완료 토글, 노선별 묶음, 요약 %, 5초 폴링으로 동료 체크 반영.
-export default function HandoverChecklist({ worker }: { worker: Worker }) {
+//   osupdate 면 완료 체크 전 "통합+승하차 전체 적용하셨나요?" 확인, 시내/마을버스 구분 탭.
+export default function HandoverChecklist({ worker, kind = "handover" }: { worker: Worker; kind?: string }) {
+  const osupdate = kind === "osupdate";
   const router = useRouter();
   const [vehicles, setVehicles] = useState<Vehicle[] | null>(null);
   const [offices, setOffices] = useState<string[]>([]);
@@ -46,6 +55,7 @@ export default function HandoverChecklist({ worker }: { worker: Worker }) {
   const [error, setError] = useState("");
   const [filter, setFilter] = useState<"all" | "todo" | "done">("all");
   const [routeTab, setRouteTab] = useState<string>("all"); // 노선 탭 — "all" 또는 route 값
+  const [typeTab, setTypeTab] = useState<string>("all"); // 시내/마을버스 탭(OS업데이트) — "all" 또는 bus_type
   const [q, setQ] = useState("");
   const [noteFor, setNoteFor] = useState<Vehicle | null>(null);
   const [noteText, setNoteText] = useState("");
@@ -131,6 +141,8 @@ export default function HandoverChecklist({ worker }: { worker: Worker }) {
     if (!done) {
       const who = v.done_by ? (v.done_by === me ? "내가" : `${v.done_by}님이`) : "이미";
       if (!window.confirm(`${v.plate}\n${who} 완료한 차량입니다. 완료를 해제할까요?`)) return;
+    } else if (osupdate && !window.confirm(`${v.plate}\n${OSUPDATE_CONFIRM}`)) {
+      return;
     }
     // 낙관적 반영 — 서버 응답으로 덮는다
     setVehicles((prev) =>
@@ -157,22 +169,33 @@ export default function HandoverChecklist({ worker }: { worker: Worker }) {
   const total = list.length;
   const done = list.filter((v) => v.done_at).length;
   const pct = total ? Math.round((done / total) * 100) : 0;
+  // OS업데이트 프로젝트(bus_type 있음)만 시내/마을버스 구분 UI
+  const hasType = list.some((v) => v.bus_type);
+  const typeStats = BUS_TYPES.map((t) => {
+    const xs = list.filter((v) => v.bus_type === t);
+    return { t, total: xs.length, done: xs.filter((v) => v.done_at).length };
+  }).filter((s) => s.total > 0);
 
   // 노선별 묶음 — 공동배차(route "A / B / C") 차량은 각 노선에 모두 들어간다(노선 대수 = 로우데이터 행 수). 전체 대수는 차량 기준(중복 없음).
+  //   구분 탭(시내/마을)이 켜져 있으면 그 구분 차량만으로 묶는다.
   const groups = useMemo(() => {
     const qq = q.replace(/\s+/g, "").toLowerCase();
-    const m = new Map<string, { all: Vehicle[]; shown: Vehicle[] }>();
+    const m = new Map<string, { all: Vehicle[]; shown: Vehicle[]; type: string | null }>();
     for (const v of vehicles ?? []) {
+      if (typeTab !== "all" && v.bus_type !== typeTab) continue;
       const pass = (filter === "all" || (filter === "done") === !!v.done_at) && (!qq || v.plate.toLowerCase().includes(qq));
       for (const route of v.route.split(" / ")) {
-        const g = m.get(route) ?? { all: [], shown: [] };
+        const g = m.get(route) ?? { all: [], shown: [], type: v.bus_type ?? null };
         g.all.push(v);
         if (pass) g.shown.push(v);
         m.set(route, g);
       }
     }
     return [...m.entries()].sort(([a], [b]) => a.localeCompare(b, "ko"));
-  }, [vehicles, filter, q]);
+  }, [vehicles, filter, q, typeTab]);
+  // 구분 탭 안의 합계(요약 막대·'전체' 노선 탭 숫자용)
+  const scoped = typeTab === "all" ? list : list.filter((v) => v.bus_type === typeTab);
+  const scopedDone = scoped.filter((v) => v.done_at).length;
 
   const shownGroups = routeTab === "all" ? groups : groups.filter(([route]) => route === routeTab);
   const ago = syncedAt ? Math.max(0, Math.round((now - syncedAt) / 1000)) : null;
@@ -233,6 +256,27 @@ export default function HandoverChecklist({ worker }: { worker: Worker }) {
         <div className="mt-2 h-2.5 w-full overflow-hidden rounded-full bg-gray-100">
           <div className={`h-full rounded-full transition-all ${pct === 100 && total ? "bg-green-500" : "bg-blue-500"}`} style={{ width: `${pct}%` }} />
         </div>
+        {/* OS업데이트: 시내/마을버스별 진행 */}
+        {hasType && typeStats.length > 0 && (
+          <ul className="mt-3 space-y-1.5 border-b border-gray-100 pb-2.5">
+            {typeStats.map((s) => {
+              const p = Math.round((s.done / s.total) * 100);
+              return (
+                <li key={s.t} className="flex items-center gap-2 text-xs">
+                  <span className="w-28 shrink-0 truncate font-bold text-gray-800">
+                    {typeEmoji(s.t)} {s.t}
+                  </span>
+                  <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-gray-100">
+                    <span className={`block h-full rounded-full ${p === 100 ? "bg-green-500" : "bg-indigo-400"}`} style={{ width: `${p}%` }} />
+                  </span>
+                  <span className="w-14 shrink-0 text-right tabular-nums text-gray-500">
+                    {s.done}/{s.total}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        )}
         {groups.length > 1 && (
           <ul className="mt-3 space-y-1.5">
             {groups.map(([route, g]) => {
@@ -254,18 +298,49 @@ export default function HandoverChecklist({ worker }: { worker: Worker }) {
         )}
         {vehicles && total === 0 && (
           <p className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-800">
-            {offices.length ? "내 센터 영업소에 등록된 차량이 없습니다." : `${worker.center}에 배정된 영업소가 없습니다. 관리자 「센터 배정」에서 영업소를 배정해야 차량이 보입니다.`}
+            {osupdate
+              ? `${worker.center} 차량이 없습니다. 관리자 「차량 업로드」에서 센터 열이 있는 OS적용리스트를 올리면 보입니다.`
+              : offices.length
+                ? "내 센터 영업소에 등록된 차량이 없습니다."
+                : `${worker.center}에 배정된 영업소가 없습니다. 관리자 「센터 배정」에서 영업소를 배정해야 차량이 보입니다.`}
           </p>
         )}
       </section>
+
+      {/* 구분 탭(OS업데이트) — 전체 / 시내버스 / 마을버스 */}
+      {hasType && typeStats.length > 1 && (
+        <div className="flex gap-1.5">
+          {[{ t: "all", total, done }, ...typeStats].map((s) => {
+            const on = typeTab === s.t;
+            return (
+              <button
+                key={s.t}
+                type="button"
+                onClick={() => {
+                  setTypeTab(s.t);
+                  setRouteTab("all");
+                }}
+                className={`flex-1 whitespace-nowrap rounded-xl px-2 py-2 text-xs font-semibold ring-1 transition-colors ${
+                  on ? "bg-indigo-600 text-white ring-indigo-600 shadow-sm" : "bg-white text-gray-700 ring-black/5 active:bg-indigo-50"
+                }`}
+              >
+                {s.t === "all" ? "전체" : `${typeEmoji(s.t)} ${s.t}`}
+                <span className={`ml-1 tabular-nums ${on ? "text-indigo-100" : s.done === s.total && s.total ? "text-green-600" : "text-gray-400"}`}>
+                  {s.done}/{s.total}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {/* 노선 탭 — 전체 + 노선별(완료/전체). 가로 스크롤 */}
       {groups.length > 1 && (
         <div className="-mx-4 flex gap-1.5 overflow-x-auto px-4 pb-0.5 [scrollbar-width:none]">
           {[["all", null] as const, ...groups.map(([route, g]) => [route, g] as const)].map(([key, g]) => {
             const on = routeTab === key;
-            const d = g ? g.all.filter((v) => v.done_at).length : done;
-            const t = g ? g.all.length : total;
+            const d = g ? g.all.filter((v) => v.done_at).length : scopedDone;
+            const t = g ? g.all.length : scoped.length;
             return (
               <button
                 key={key}
@@ -315,7 +390,7 @@ export default function HandoverChecklist({ worker }: { worker: Worker }) {
             <section key={route}>
               <div className="mb-1.5 flex items-baseline justify-between px-1">
                 <h2 className="text-sm font-bold text-gray-800">
-                  🚌 {shortRoute(route)}
+                  {typeEmoji(g.type)} {shortRoute(route)}
                   <span className="ml-1.5 text-xs font-normal text-gray-400">{g.all[0]?.operator}</span>
                 </h2>
                 <span className="text-xs tabular-nums text-gray-500">
