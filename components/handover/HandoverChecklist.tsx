@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import HandoverStatusSheet from "./HandoverStatusSheet";
 import HandoverVerifySheet from "./HandoverVerifySheet";
 import OsVerifySheet from "./OsVerifySheet";
+import { VERIFIER_CENTER } from "@/lib/import/osverify-types";
 
 interface Worker {
   center: string;
@@ -216,6 +217,39 @@ export default function HandoverChecklist({ worker, kind = "handover" }: { worke
       </span>
     );
   };
+
+  // 검증 전담 작업자(센터 "검증") — 체크리스트 대신 검증 화면이 본문. 자산등록·서버검증(3종)·웹 체크 3박자 대조 + 현황 엑셀 + 발송
+  if (osupdate && worker.center === VERIFIER_CENTER) {
+    return (
+      <div className="space-y-3">
+        <div className="flex items-center justify-between gap-2">
+          <span className="pill min-w-0 text-xs">
+            <span className="truncate">
+              👤 {worker.rank ? `${worker.rank} ` : ""}
+              {worker.name} · <b>검증 담당</b>
+            </span>
+          </span>
+          <div className="flex shrink-0 items-center gap-1.5">
+            <button type="button" onClick={() => setStatusOpen(true)} className="pill-muted px-2.5 text-xs" aria-label="전체 센터 현황표" title="현황표">
+              📊
+            </button>
+            <button
+              type="button"
+              onClick={async () => {
+                await fetch("/api/handover/login", { method: "DELETE" }).catch(() => {});
+                router.refresh();
+              }}
+              className="pill-muted text-xs"
+            >
+              변경
+            </button>
+          </div>
+        </div>
+        <OsVerifySheet inline myCenter="__all" />
+        {statusOpen && <HandoverStatusSheet byOperator onClose={() => setStatusOpen(false)} />}
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-3">

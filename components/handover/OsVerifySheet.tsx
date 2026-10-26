@@ -39,7 +39,8 @@ const LIST_MAX = 60;
 
 // 🔎 OS업데이트 적용 검증 — 파일 4종(장애목록·B710·B700·B800 OS버전 .xls) 버튼으로 각각 올리면 서버에 저장되고,
 // 차량마다 웹 체크·자산등록·기종별 OS버전을 대조한 결과(센터별 표 + 미완료 목록)를 보여 준다. 업로드 때마다 팀즈 카드(센터 방 + 관리자 호출방 취합).
-export default function OsVerifySheet({ myCenter, onClose }: { myCenter: string; onClose: () => void }) {
+//   inline=true 면 팝업이 아니라 페이지 본문으로(검증 전담 작업자 홈) — 닫기 없음, 현황(OS적용리스트) 엑셀 버튼 추가.
+export default function OsVerifySheet({ myCenter, onClose, inline = false }: { myCenter: string; onClose?: () => void; inline?: boolean }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const typeRef = useRef<OsFileType>("fault");
   const [busy, setBusy] = useState<OsFileType | null>(null);
@@ -65,6 +66,30 @@ export default function OsVerifySheet({ myCenter, onClose }: { myCenter: string;
     if (fileRef.current) {
       fileRef.current.value = "";
       fileRef.current.click();
+    }
+  }
+
+  const [sending, setSending] = useState(false);
+  const [sentAt, setSentAt] = useState<string>("");
+  // 파일을 다 올린 뒤 한 번에 취합 발송(건바이건 발송 없음)
+  async function sendCards() {
+    if (!res || sending) return;
+    const saved = res.files.filter((f) => f.saved).map((f) => f.label);
+    const missing = res.files.filter((f) => !f.saved).map((f) => f.label);
+    const msg = `저장된 파일(${saved.join(", ")})로 최종 취합해 팀즈에 보냅니다.${missing.length ? `\n아직 없는 파일: ${missing.join(", ")} — 그 기종 OS는 '파일 없음'으로 집계됩니다.` : ""}\n센터 카드는 각 센터 방으로, 전체 취합은 관리자 호출방으로 갑니다. 보낼까요?`;
+    if (!window.confirm(msg)) return;
+    setSending(true);
+    setError("");
+    try {
+      const r = await fetch("/api/handover/osverify?send=1", { method: "POST" });
+      const j = (await r.json().catch(() => ({}))) as Result & { error?: string };
+      if (!r.ok) throw new Error(j.error ?? "발송 실패");
+      setRes(j);
+      setSentAt(new Date().toLocaleTimeString("ko-KR", { timeZone: "Asia/Seoul", hour: "2-digit", minute: "2-digit", hour12: false }));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "발송 실패");
+    } finally {
+      setSending(false);
     }
   }
 
@@ -106,20 +131,25 @@ export default function OsVerifySheet({ myCenter, onClose }: { myCenter: string;
   );
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center" onClick={onClose}>
-      <div className="flex max-h-[88vh] w-full max-w-md flex-col rounded-t-3xl bg-white sm:rounded-3xl" onClick={(e) => e.stopPropagation()}>
+    <div className={inline ? "" : "fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center"} onClick={inline ? undefined : onClose}>
+      <div
+        className={inline ? "flex flex-col rounded-3xl bg-white shadow-sm ring-1 ring-black/5" : "flex max-h-[88vh] w-full max-w-md flex-col rounded-t-3xl bg-white sm:rounded-3xl"}
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="flex items-center justify-between px-4 pt-4">
           <p className="text-base font-bold text-gray-900">🔎 OS업데이트 적용 검증</p>
-          <button type="button" onClick={onClose} className="pill-muted text-xs" aria-label="닫기">
-            닫기
-          </button>
+          {!inline && (
+            <button type="button" onClick={onClose} className="pill-muted text-xs" aria-label="닫기">
+              닫기
+            </button>
+          )}
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
+        <div className={inline ? "px-4 py-3" : "min-h-0 flex-1 overflow-y-auto px-4 py-3"}>
           <input ref={fileRef} type="file" accept=".xls,.xlsx" className="hidden" onChange={(e) => e.target.files?.[0] && upload(e.target.files[0])} />
           <p className="text-xs leading-relaxed text-gray-500">
-            차량마다 <b>웹 체크 완료 · 자산등록(장애목록) · 기종별 OS버전</b> 셋을 차량번호로 대조합니다. 파일을 올리면 서버에 저장돼 다시 열 때 재업로드 없이 현재 상태로 다시
-            대조하고, 올릴 때마다 팀즈 카드(센터 방 + 관리자 호출방 취합)가 갑니다.
+            차량마다 <b>웹 체크 완료 · 자산등록(장애목록) · 기종별 OS버전</b> 셋을 차량번호로 대조합니다. 파일은 올리면 서버에 저장만 되고(다시 열 때 재업로드 불필요), 4종을 다 올린 뒤
+            아래 <b>검증 발송</b>을 누르면 최종 취합해 팀즈 카드(센터 방 + 관리자 호출방 취합)가 갑니다.
           </p>
 
           {/* 업로드 4종 */}
@@ -244,15 +274,44 @@ export default function OsVerifySheet({ myCenter, onClose }: { myCenter: string;
           )}
         </div>
 
-        <div className="flex gap-2 border-t border-gray-100 p-4">
-          <button
-            type="button"
-            disabled={!res}
-            onClick={() => downloadUrl("/api/handover/osverify?format=xlsx")}
-            className="flex-1 rounded-xl bg-emerald-600 py-3 text-sm font-semibold text-white active:bg-emerald-700 disabled:opacity-40"
-          >
-            📥 검증 결과 엑셀 다운로드
-          </button>
+        <div className="border-t border-gray-100 p-4">
+          <div className="flex gap-2">
+            <button
+              type="button"
+              disabled={!res || !res.files.some((f) => f.saved) || sending || !!busy}
+              onClick={sendCards}
+              className="flex-1 rounded-xl bg-blue-600 py-3 text-sm font-semibold text-white active:bg-blue-700 disabled:opacity-40"
+            >
+              {sending ? "발송 중…" : "🔔 검증 발송 (팀즈)"}
+            </button>
+            <button
+              type="button"
+              disabled={!res}
+              onClick={() => downloadUrl("/api/handover/osverify?format=xlsx")}
+              className="rounded-xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white active:bg-emerald-700 disabled:opacity-40"
+            >
+              📥 엑셀
+            </button>
+          </div>
+          {sentAt && <p className="mt-1.5 text-center text-[11px] text-green-700">✅ {sentAt} 발송했습니다</p>}
+          {inline && (
+            <div className="mt-2 flex gap-2">
+              <button
+                type="button"
+                onClick={() => downloadUrl("/api/handover/export")}
+                className="flex-1 rounded-xl bg-gray-100 py-2.5 text-xs font-semibold text-gray-700 active:bg-gray-200"
+              >
+                📥 현황(OS적용리스트) 엑셀
+              </button>
+              <button
+                type="button"
+                onClick={() => downloadUrl("/api/handover/export?done=1")}
+                className="flex-1 rounded-xl bg-gray-100 py-2.5 text-xs font-semibold text-gray-700 active:bg-gray-200"
+              >
+                📥 완료 차량만
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>

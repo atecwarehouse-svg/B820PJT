@@ -16,8 +16,8 @@ export const maxDuration = 60;
 
 // OS업데이트 적용 검증(osupdate 프로젝트) — 차량마다 5가지를 차량번호 기준으로 대조:
 //   ① 웹 체크리스트 완료(done_at) ② 자산등록(단말기장애목록 .xls) ③~⑤ 기종별 OS버전(B710·B700·B800 조회 .xls 중 그 차량 기종 파일)
-//   POST multipart { type: fault|b710|b700|b800, file } (작업자·관리자) → 파싱 결과를 app_settings.osverify_<type> 에 저장(최근 1건, 교체) → 전체 대조
-//     → 팀즈: 센터 카드(그 센터 수치만)는 그 센터 웹훅(없으면 기본→env), 전체 취합 카드는 관리자 호출방(env)에만.
+//   POST multipart { type: fault|b710|b700|b800, file } (작업자·관리자) → 파싱 결과를 app_settings.osverify_<type> 에 저장(최근 1건, 교체) → 전체 대조(발송 없음)
+//   POST ?send=1 → 저장된 파일 전부로 최종 취합 → 팀즈: 센터 카드(그 센터 수치만)는 그 센터 웹훅(없으면 기본→env), 전체 취합 카드는 관리자 호출방(env)에만.
 //   GET → 저장된 파일들로 현재 DB 와 대조 { files, overall, centers, items }. ?format=xlsx → 차량별 엑셀.
 export interface OsItem {
   plate: string;
@@ -68,9 +68,12 @@ export async function GET(req: NextRequest) {
   return NextResponse.json(r);
 }
 
+// POST ?send=1 (본문 없음) → 저장된 파일 전부로 최종 취합해 팀즈 발송. POST multipart {type,file} → 파일 저장만(발송 없음).
 export async function POST(req: NextRequest) {
   const who = await auth();
   if (!who) return bad("로그인이 필요합니다.", 401);
+  if (req.nextUrl.searchParams.get("send") === "1") return send(who);
+
   const form = await req.formData();
   const file = form.get("file") as File | null;
   const type = String(form.get("type") ?? "") as OsFileType;
@@ -90,6 +93,14 @@ export async function POST(req: NextRequest) {
   }
   const result = await compute();
   if ("error" in result) return bad(result.error, 500);
+  return NextResponse.json(result);
+}
+
+// 최종 취합 발송 — 건바이건이 아니라 파일을 다 올린 뒤 「검증 발송」 버튼으로 한 번에.
+async function send(who: string) {
+  const result = await compute();
+  if ("error" in result) return bad(result.error, 500);
+  if (!result.files.some((f) => f.saved)) return bad("올린 파일이 없습니다. 장애목록·OS버전 파일을 먼저 올려 주세요.");
 
   const slug = currentSlug();
   runAfterResponse(async () => {
@@ -97,8 +108,7 @@ export async function POST(req: NextRequest) {
     const common = {
       projectName: project?.name ?? slug,
       worker: who,
-      uploaded: `${OS_FILE_LABEL[type]} · ${file.name} (${rows.length}대, 충족 ${rows.filter((r) => r.ok).length}대)`,
-      files: result.files.map((f) => `${f.label} ${f.saved ? `✓ ${fmtAt(f.at!)}` : "✗ 없음"}`),
+      files: result.files.map((f) => `${f.label} ${f.saved ? `✓ ${fmtAt(f.at!)} (${f.vehicles}대 중 충족 ${f.ok})` : "✗ 없음"}`),
     };
     const mismatches = (center?: string) =>
       result.items.filter((i) => i.mismatch && (!center || i.center === center)).map((i) => ({ center: i.center, operator: i.operator, plate: i.plate }));
@@ -112,7 +122,7 @@ export async function POST(req: NextRequest) {
     // 전체 취합 → 관리자 호출방만
     await sendOsVerifySummaryCard({ ...common, overall: result.overall, centers: result.centers.filter((c) => c.label !== "미배정"), mismatches: mismatches() });
   });
-  return NextResponse.json(result);
+  return NextResponse.json({ ...result, sent: true });
 }
 
 const KST = "Asia/Seoul";

@@ -1,4 +1,7 @@
 // OS업데이트 검증 파일 종류·라벨·규칙 설명 — 클라이언트에서도 쓰는 순수 모듈(parse-osverify.ts 는 xlsx 를 끌고 오므로 분리)
+/** 검증 전담 작업자의 센터명 — 작업자 명단에 센터를 이 이름으로 등록하면 홈이 체크리스트 대신 검증 화면(업로드·현황 엑셀·발송)으로 열린다 */
+export const VERIFIER_CENTER = "검증";
+
 export const OS_FILE_TYPES = ["fault", "b710", "b700", "b800"] as const;
 export type OsFileType = (typeof OS_FILE_TYPES)[number];
 export const OS_FILE_LABEL: Record<OsFileType, string> = {

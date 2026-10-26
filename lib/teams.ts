@@ -1575,8 +1575,7 @@ export interface OsMismatch {
 interface OsVerifyBase {
   projectName: string;
   worker: string;
-  uploaded: string; // 이번에 올린 파일 "B800 OS버전 · 파일명"
-  files: string[]; // 저장된 파일 상태 "장애목록 ✓ 10/26 12:40" / "B710 ✗ 없음"
+  files: string[]; // 저장된 파일 상태 "장애목록 ✓ 10/26 12:40 (33대 중 충족 4)" / "B710 ✗ 없음"
 }
 const OS_VERIFY_RULE = "기준: 웹 체크리스트 완료 · 자산등록(장애목록 기타/F/W, OS 적용/개선OS 업데이트) · OS버전(B710 32/32, B700 40·39, B800 19·19). 차량별 목록은 앱 🔎 → 엑셀.";
 const osVerifyPct = (s: OsVerifyStat) => (s.total ? Math.round((s.all / s.total) * 100) : 0);
@@ -1609,8 +1608,8 @@ function osVerifyCard(d: OsVerifyBase, title: string, body: unknown[]) {
           version: "1.4",
           body: [
             { type: "TextBlock", size: "Large", weight: "Bolder", color: "Accent", text: title, wrap: true },
-            { type: "TextBlock", text: `${d.projectName} · ${d.worker} · ${kstStamp()} · 업로드: ${d.uploaded}`, isSubtle: true, spacing: "None", wrap: true },
-            { type: "TextBlock", text: d.files.join("  ·  "), isSubtle: true, size: "Small", spacing: "None", wrap: true },
+            { type: "TextBlock", text: `${d.projectName} · ${d.worker} 검증 발송 · ${kstStamp()}`, isSubtle: true, spacing: "None", wrap: true },
+            { type: "TextBlock", text: `파일: ${d.files.join("  ·  ")}`, isSubtle: true, size: "Small", spacing: "None", wrap: true },
             ...body,
             { type: "TextBlock", text: OS_VERIFY_RULE, isSubtle: true, size: "Small", wrap: true },
           ],

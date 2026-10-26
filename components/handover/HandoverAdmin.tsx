@@ -382,6 +382,7 @@ function WorkersTab({ s, setS, setMsg }: { s: Settings; setS: (s: Settings) => v
       <h2 className="text-sm font-semibold text-gray-800">👤 작업자 명단</h2>
       <p className="mt-1 text-xs leading-relaxed text-gray-500">
         소속 센터·직급·이름. 작업자는 홈에서 센터→이름을 고르고 <b>직원 비밀번호</b>(프로젝트 관리 → 연필에서 변경)를 입력해 들어옵니다. 명단에서 지우면 그 사람은 더 못 들어옵니다.
+        OS업데이트 프로젝트에서 <b>검증 담당자</b>는 센터를 「검증」으로 등록하면 홈이 체크리스트 대신 검증 화면(파일 4종 업로드·현황 엑셀·팀즈 발송)으로 열립니다.
       </p>
       {rows.length === 0 && <p className="mt-3 text-center text-xs text-gray-400">등록된 작업자가 없습니다. 추가해 주세요.</p>}
       <ul className="mt-3 space-y-2">
