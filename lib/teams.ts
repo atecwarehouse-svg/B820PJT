@@ -100,6 +100,13 @@ function inspectorUrls(names: string[] | undefined, except: string): string[] {
 // 웹훅이 응답을 안 줄 때 요청 전체가 함수 한도(60초)까지 매달렸다 504로 끝난다.
 const POST_TIMEOUT_MS = 10_000;
 
+/** 카드용 시각 "10/26 11:16"(KST). ko-KR 기본 서식 "10. 26. 오전 11:16" 은 FactSet 값 맨 앞 "10. " 이 팀즈 마크다운 번호목록으로 먹혀 "10. z" 처럼 깨진다. */
+export function kstStamp(d = new Date()): string {
+  const day = d.toLocaleDateString("sv-SE", { timeZone: "Asia/Seoul" }); // YYYY-MM-DD
+  const hm = d.toLocaleTimeString("ko-KR", { timeZone: "Asia/Seoul", hour: "2-digit", minute: "2-digit", hour12: false });
+  return `${Number(day.slice(5, 7))}/${Number(day.slice(8, 10))} ${hm}`;
+}
+
 async function post(url: string, card: unknown, what: string): Promise<void> {
   const res = await fetch(url, {
     method: "POST",
@@ -801,13 +808,7 @@ export async function sendAdminCallCard(d: {
     );
   }
 
-  const calledAt = new Date().toLocaleString("ko-KR", {
-    timeZone: "Asia/Seoul",
-    month: "numeric",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  const calledAt = kstStamp();
 
   const card = {
     type: "message",
@@ -1432,13 +1433,7 @@ export async function sendHandoverDoneCard(d: {
 }): Promise<void> {
   const url = d.webhook || process.env.TEAMS_ADMIN_CALL_WEBHOOK_URL;
   if (!url) return;
-  const doneAt = new Date().toLocaleString("ko-KR", {
-    timeZone: "Asia/Seoul",
-    month: "numeric",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  const doneAt = kstStamp();
   const pct = (p: HandoverProgress) => (p.total ? Math.round((p.done / p.total) * 100) : 0);
   const line = (p: HandoverProgress) => `완료 ${p.done} / ${p.total}대 · 잔여 ${p.total - p.done}대 · 진척율 ${pct(p)}%`;
   const card = {
@@ -1526,7 +1521,7 @@ function pendingGrid(pending: HandoverVerifyCardData["pending"]): unknown[] {
 export async function sendHandoverVerifyCard(d: HandoverVerifyCardData): Promise<void> {
   const url = d.webhook || process.env.TEAMS_ADMIN_CALL_WEBHOOK_URL;
   if (!url) return;
-  const at = new Date().toLocaleString("ko-KR", { timeZone: "Asia/Seoul", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" });
+  const at = kstStamp();
   const pct = (p: { total: number; ok: number }) => (p.total ? Math.round((p.ok / p.total) * 100) : 0);
   const line = (p: { total: number; ok: number }) => `등록 확인 ${p.ok} / ${p.total}대 · 미완료 ${p.total - p.ok}대 · 진척율 ${pct(p)}%`;
   const MAX = 40;
