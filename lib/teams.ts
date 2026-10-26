@@ -1513,6 +1513,49 @@ export async function sendWeeklyProgressCard(d: {
   await post(d.webhook, card, `${d.kindLabel} 주간 진척율 ${d.center.label}`);
 }
 
+// 주간 전체 취합 카드 — 관리자 호출방(TEAMS_ADMIN_CALL_WEBHOOK_URL)에만. 전체 → 시내/마을 → 센터마다(센터 줄 + 그 센터의 시내/마을 줄).
+export async function sendWeeklySummaryCard(d: {
+  projectName: string;
+  kindLabel: string;
+  overall: WeeklyProgress;
+  centers: (WeeklyProgress & { byType: WeeklyProgress[] })[];
+  byType: WeeklyProgress[];
+  until: string;
+  daysLeft: number;
+}): Promise<void> {
+  const url = process.env.TEAMS_ADMIN_CALL_WEBHOOK_URL;
+  if (!url) return;
+  const pct = (p: WeeklyProgress) => (p.total ? Math.round((p.done / p.total) * 100) : 0);
+  const line = (p: WeeklyProgress) => `완료 ${p.done} / ${p.total}대 · 잔여 ${p.total - p.done}대 · ${pct(p)}% (이번 주 +${p.week})`;
+  const typeLine = (xs: WeeklyProgress[]) => xs.map((p) => `${p.label} ${p.done}/${p.total} · ${pct(p)}%`).join("  |  ");
+  const card = {
+    type: "message",
+    attachments: [
+      {
+        contentType: "application/vnd.microsoft.card.adaptive",
+        content: {
+          $schema: "http://adaptivecards.io/schemas/adaptive-card.json",
+          type: "AdaptiveCard",
+          version: "1.4",
+          body: [
+            { type: "TextBlock", size: "Large", weight: "Bolder", color: "Accent", text: `📊 ${d.kindLabel} 주간 진척율 — 전체 취합`, wrap: true },
+            { type: "TextBlock", text: `${d.projectName} · ${kstStamp()} · 종료 ${d.until} (D-${d.daysLeft})`, isSubtle: true, spacing: "None", wrap: true },
+            { type: "TextBlock", size: "ExtraLarge", weight: "Bolder", color: pct(d.overall) === 100 ? "Good" : "Default", text: `${pct(d.overall)}%`, spacing: "Medium" },
+            { type: "TextBlock", weight: "Bolder", text: `전체: ${line(d.overall)}`, spacing: "None", wrap: true },
+            ...d.byType.map((p) => ({ type: "TextBlock", text: `${p.label}: ${line(p)}`, spacing: "None", wrap: true })),
+            { type: "TextBlock", weight: "Bolder", text: "📍 센터별", spacing: "Medium" },
+            ...d.centers.flatMap((c) => [
+              { type: "TextBlock", weight: "Bolder", text: `${c.label}: ${line(c)}`, spacing: "Small", wrap: true },
+              ...(c.byType.length ? [{ type: "TextBlock", text: typeLine(c.byType), isSubtle: true, size: "Small", spacing: "None", wrap: true }] : []),
+            ]),
+          ],
+        },
+      },
+    ],
+  };
+  await post(url, card, `${d.kindLabel} 주간 전체 취합`);
+}
+
 // 양도양수 서버 등록 검증 카드 — 차량단말기버전 파일 업로드(검증 버튼) 결과를 관리자 호출방으로.
 export interface HandoverVerifyCardData {
   projectName: string;

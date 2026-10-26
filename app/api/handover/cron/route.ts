@@ -3,7 +3,7 @@ import { isChecklist, listProjects, type Project } from "@/lib/project";
 import { createServiceClient } from "@/lib/supabase/server";
 import { fetchAll } from "@/lib/supabase/paginate";
 import { getCenters, getWebhook, getWebhooks, getWeeklyUntil, vehicleCenter } from "@/lib/handover";
-import { sendWeeklyProgressCard, type WeeklyProgress } from "@/lib/teams";
+import { sendWeeklyProgressCard, sendWeeklySummaryCard, type WeeklyProgress } from "@/lib/teams";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -11,7 +11,8 @@ export const maxDuration = 60;
 
 // GET /api/handover/cron — Vercel 크론(vercel.json: 매주 수요일 00:00 UTC = 09:00 KST).
 //   체크리스트형 프로젝트(osupdate·handover) 중 주간 공유 종료일(handover_weekly_until)이 오늘 이후인 것만,
-//   센터마다 그 센터 웹훅(없으면 기본 → env)으로 진척율 카드(센터·시내/마을·전체, 이번 주 완료 수, 종료 D-day).
+//   센터마다 그 센터 웹훅(없으면 기본 → env)으로 진척율 카드(그 센터·시내/마을, 이번 주 완료 수, 종료 D-day) +
+//   전체 취합 카드(전체·센터별·구분별) 1장은 관리자 호출방(TEAMS_ADMIN_CALL_WEBHOOK_URL)에만.
 //   크론은 요청 컨텍스트(x-project)가 없으므로 slug 를 명시해 집계한다.
 const KST = "Asia/Seoul";
 const todayKst = () => new Date().toLocaleDateString("sv-SE", { timeZone: KST });
@@ -61,6 +62,7 @@ async function runFor(p: Project, today: string): Promise<Record<string, unknown
     const c = vehicleCenter(r, centers);
     byCenter.set(c, [...(byCenter.get(c) ?? []), r]);
   }
+  const typeStats = (xs: Row[]) => ["시내버스", "마을버스"].map((t) => stat(t, xs.filter((r) => r.bus_type === t))).filter((s) => s.total > 0);
   const sent: string[] = [];
   const noHook: string[] = [];
   const failed: string[] = [];
@@ -71,14 +73,31 @@ async function runFor(p: Project, today: string): Promise<Record<string, unknown
       noHook.push(center);
       continue;
     }
-    const byType = ["시내버스", "마을버스"].map((t) => stat(t, xs.filter((r) => r.bus_type === t))).filter((s) => s.total > 0);
     try {
       // 센터 전용 방에는 그 센터 수치만(양도양수는 전체 줄 유지)
-      await sendWeeklyProgressCard({ webhook, projectName: p.name, kindLabel, center: stat(center, xs), byType, overall: p.kind === "osupdate" ? undefined : overall, until, daysLeft });
+      await sendWeeklyProgressCard({ webhook, projectName: p.name, kindLabel, center: stat(center, xs), byType: typeStats(xs), overall: p.kind === "osupdate" ? undefined : overall, until, daysLeft });
       sent.push(center);
     } catch (e) {
       failed.push(`${center}: ${e instanceof Error ? e.message : String(e)}`);
     }
   }
-  return { until, daysLeft, sent, noHook, failed, overall };
+  // 전체 취합 1장 → 관리자 호출방(env 미설정이면 조용히 생략)
+  let summary: "sent" | "skipped" | string = "skipped";
+  if (process.env.TEAMS_ADMIN_CALL_WEBHOOK_URL) {
+    try {
+      await sendWeeklySummaryCard({
+        projectName: p.name,
+        kindLabel,
+        overall,
+        centers: [...byCenter.entries()].filter(([c]) => c !== "미배정").map(([c, xs]) => ({ ...stat(c, xs), byType: typeStats(xs) })),
+        byType: typeStats(rows),
+        until,
+        daysLeft,
+      });
+      summary = "sent";
+    } catch (e) {
+      summary = `failed: ${e instanceof Error ? e.message : String(e)}`;
+    }
+  }
+  return { until, daysLeft, sent, noHook, failed, summary, overall };
 }
