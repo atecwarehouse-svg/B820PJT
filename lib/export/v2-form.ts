@@ -15,7 +15,7 @@ import {
   setRowHidden, setColsHidden, setValue, setFormula, getRow, styleOf, sheetPathsByName, setFullCalcOnLoad, colNum, colName,
   type Sheet,
 } from "@/lib/xlsx/sheet-xml";
-import { V2_COLS, V2_LAST_COL, VCOL, isTarget, ymdFromSerial, type VehicleRow } from "@/lib/import/vehicle-columns";
+import { EXTRA_PREFIX, V2_COLS, V2_LAST_COL, VCOL, isTarget, ymdFromSerial, type VehicleRow } from "@/lib/import/vehicle-columns";
 
 const MASTER_PATH = join(process.cwd(), "lib", "export", "templates", "v2-master.xlsx");
 let masterCache: Buffer | null = null;
@@ -30,6 +30,7 @@ export interface V2BuildOptions {
   asOfSerial?: number; // 기준일(Excel 직렬값). 없으면 =TODAY()
   operatorNotes?: Map<string, string>; // 운수사 → 설치 진행현황 비고(M열) — 저장 양식에 적어둔 비고 + 배차표 설치제외
   surveyNotes?: Map<string, string>; // 운수사 → 실사 진행현황 비고(M열) — 저장 양식에 적어둔 비고
+  extras?: string[]; // 저장 양식에 사용자가 추가한 열 제목 — 비고(AL) 뒤에 그대로 붙인다(값은 행의 EXTRA_PREFIX+제목 키)
 }
 
 // 시트 묶음: 설치(차량리스트 K/L/M) · 실사(G/H/I). 실사 시트는 마스터에서 숨김 상태.
@@ -95,6 +96,20 @@ export async function buildV2Workbook(o: V2BuildOptions): Promise<Buffer> {
   const style = new Map(tplRow.cells.map((c) => [c.col, styleOf(c)]));
   veh.rows = veh.rows.filter((r) => r.r === 1);
   const lastCol = colNum(V2_LAST_COL);
+  // 사용자가 양식에 추가한 열 — 비고(AL) 뒤에 제목·값을 그대로 붙인다(서식은 비고 열 것, 너비 14).
+  const extras = o.extras ?? [];
+  const extraCol = (j: number) => lastCol + 1 + j;
+  const endCol = lastCol + extras.length;
+  const endColName = colName(endCol);
+  if (extras.length) {
+    const head1 = getRow(veh, 1);
+    const hStyle = styleOf(head1.cells.find((c) => c.col === lastCol)!);
+    extras.forEach((name, j) => {
+      head1.cells.push({ col: extraCol(j), attrs: hStyle ? ` s="${hStyle}"` : "", inner: "" });
+      setValue(veh, extraCol(j), 1, name);
+    });
+    veh.head = veh.head.replace(/<col min="39" max="16384"/, `<col min="39" max="${endCol}" width="14" style="119" customWidth="1"/><col min="${endCol + 1}" max="16384"`);
+  }
   for (let i = 0; i < Math.max(n, 1); i++) {
     const r = i + 2;
     const row = getRow(veh, r);
@@ -105,15 +120,20 @@ export async function buildV2Workbook(o: V2BuildOptions): Promise<Buffer> {
       const val = v?.[colName(c)];
       if (val !== undefined && val !== null && val !== "") setValue(veh, c, r, val);
     }
+    extras.forEach((name, j) => {
+      row.cells.push({ col: extraCol(j), attrs: style.get(lastCol) ? ` s="${style.get(lastCol)}"` : "", inner: "" });
+      const val = v?.[EXTRA_PREFIX + name];
+      if (val !== undefined && val !== null && val !== "") setValue(veh, extraCol(j), r, val);
+    });
     if (v && !text(v[VCOL.target])) setValue(veh, colNum(VCOL.target), r, "대상"); // 비면 대상
   }
   veh.tail = veh.tail
-    .replace(/<autoFilter ref="[^"]*"/, `<autoFilter ref="A1:${V2_LAST_COL}${lastRow}"`)
+    .replace(/<autoFilter ref="[^"]*"/, `<autoFilter ref="A1:${endColName}${lastRow}"`)
     .replace(/ sqref="([A-Z]+)2:([A-Z]+)\d+"/g, ` sqref="$12:$2${lastRow}"`)
     .replace(/ sqref="L2:L\d+ H2:H\d+"/, ` sqref="L2:L${lastRow} H2:H${lastRow}"`)
     .replace(/<xm:sqref>([A-Z]+)2:([A-Z]+)\d+<\/xm:sqref>/g, `<xm:sqref>$12:$2${lastRow}</xm:sqref>`);
   save(veh);
-  wb = wb.replace(/(<definedName name="_xlnm\._FilterDatabase"[^>]*>차량리스트!\$A\$1:\$[A-Z]+\$)\d+/, `$1${lastRow}`);
+  wb = wb.replace(/(<definedName name="_xlnm\._FilterDatabase"[^>]*>차량리스트!\$A\$1:\$)[A-Z]+\$\d+/, `$1${endColName}$$${lastRow}`);
 
   // ── 집계 시트 ──
   const targets = vehicles.filter(isTarget);

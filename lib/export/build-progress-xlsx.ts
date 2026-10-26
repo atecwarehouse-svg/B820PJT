@@ -162,7 +162,8 @@ export async function buildV2Progress(
   await wb.xlsx.load(template as unknown as ArrayBuffer);
   const ws = wb.getWorksheet("차량리스트");
   if (!ws) throw new Error("저장된 양식에 「차량리스트」 시트가 없습니다. 일정 업로드로 다시 등록하세요.");
-  const rows = readVehicleTable(ws).rows.filter((r) => !isExample(r));
+  const table = readVehicleTable(ws);
+  const rows = table.rows.filter((r) => !isExample(r));
   const seen = new Set<string>();
   let filled = 0;
   let removed = 0;
@@ -219,6 +220,7 @@ export async function buildV2Progress(
     asOfSerial,
     operatorNotes,
     surveyNotes: savedNotes(wb, "실사 진행현황"),
+    extras: table.extras,
   });
   return { buffer, filled, added, removed };
 }

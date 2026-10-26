@@ -134,15 +134,24 @@ function cellVal(v: unknown, kind?: "date" | "number"): CellVal {
   return t || null;
 }
 
+/** 양식에 없는 제목의 열(사용자가 추가한 열) — 행에는 EXTRA_PREFIX+제목 키로 담기고, 다운로드 때 비고 뒤에 그대로 붙는다. */
+export const EXTRA_PREFIX = "x:";
+
 /** 차량리스트 시트 → 마스터 열로 정리한 행 목록(차량번호 없는 행 제외). 제목이 하나도 안 맞으면 B820 옛 자리 글자로 읽는다. */
-export function readVehicleTable(ws: ExcelJS.Worksheet): { map: Map<string, number>; rows: VehicleRow[]; rowNos: number[] } {
+export function readVehicleTable(ws: ExcelJS.Worksheet): { map: Map<string, number>; rows: VehicleRow[]; rowNos: number[]; extras: string[] } {
   const headers: string[] = [];
   const h = ws.getRow(1);
   for (let c = 1; c <= Math.max(ws.columnCount, colNum(V2_LAST_COL)); c++) headers.push(cellText(h.getCell(c).value));
   let map = mapHeaders(headers);
+  const extras: { name: string; idx: number }[] = [];
   if (!map.has(VCOL.plate)) {
     // 옛 B820 양식 고정 자리 (제목 없는 파일 대비)
     map = new Map(Object.entries({ A: 1, B: 2, C: 3, D: 4, E: 5, F: 6, L: 7, M: 8, K: 9, N: 10, P: 12, Z: 21 }));
+  } else {
+    const used = new Set(map.values());
+    headers.forEach((name, i) => {
+      if (name && !used.has(i + 1) && !extras.some((e) => normHeader(e.name) === normHeader(name))) extras.push({ name, idx: i + 1 });
+    });
   }
   const rows: VehicleRow[] = [];
   const rowNos: number[] = [];
@@ -155,11 +164,16 @@ export function readVehicleTable(ws: ExcelJS.Worksheet): { map: Map<string, numb
       const v = cellVal(row.getCell(idx).value, colKind.get(col));
       if (v !== null) out[col] = v;
     }
+    for (const e of extras) {
+      const raw = row.getCell(e.idx).value;
+      const v = raw instanceof Date ? cellText(raw) : cellVal(raw); // 추가 열은 서식이 없어 날짜는 글자로
+      if (v !== null) out[EXTRA_PREFIX + e.name] = v;
+    }
     out[VCOL.plate] = plate;
     rows.push(out);
     rowNos.push(r);
   }
-  return { map, rows, rowNos };
+  return { map, rows, rowNos, extras: extras.map((e) => e.name) };
 }
 
 export { colName };
