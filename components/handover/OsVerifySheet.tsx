@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState } from "react";
 import { downloadUrl } from "@/lib/download";
 import { OS_FILE_LABEL, OS_FILE_TYPES, OS_RULE_TEXT, type OsFileType } from "@/lib/import/osverify-types";
-import { shortRoute } from "./HandoverChecklist";
 
 interface Stat {
   label: string;
@@ -12,6 +11,7 @@ interface Stat {
   asset: number;
   os: number;
   all: number;
+  mismatch: number;
 }
 interface Item {
   plate: string;
@@ -24,6 +24,7 @@ interface Item {
   os: boolean;
   osInfo: string;
   all: boolean;
+  mismatch: boolean; // 웹 완료 · OS 정상 · 자산등록 안 됨
 }
 interface Result {
   files: { type: OsFileType; label: string; saved: boolean; fileName?: string; at?: string; by?: string; vehicles?: number; ok?: number }[];
@@ -88,9 +89,16 @@ export default function OsVerifySheet({ myCenter, onClose }: { myCenter: string;
 
   const centerNames = res?.centers.map((c) => c.label) ?? [];
   const cur = res?.centers.find((c) => c.label === center) ?? res?.overall;
-  const pendingAll = res?.items.filter((i) => i.center === center && !i.all) ?? [];
-  const pending = showAll ? pendingAll : pendingAll.slice(0, LIST_MAX);
-  const mark = (b: boolean) => (b ? "✅" : "▢");
+  // 상이 차량(웹 완료·OS 정상·자산등록 안 됨) — 선택한 센터(전체면 모두), 운수사별 묶음
+  const mismatchAll = res?.items.filter((i) => i.mismatch && (!centerNames.includes(center) || i.center === center)) ?? [];
+  const mismatchGroups = (() => {
+    const m = new Map<string, string[]>();
+    for (const i of showAll ? mismatchAll : mismatchAll.slice(0, LIST_MAX)) {
+      const k = centerNames.includes(center) ? i.operator : `${i.center} · ${i.operator}`;
+      m.set(k, [...(m.get(k) ?? []), i.plate]);
+    }
+    return [...m.entries()].sort(([a], [b]) => a.localeCompare(b, "ko"));
+  })();
   const bar = (a: number, t: number) => (
     <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-gray-100">
       <span className={`block h-full rounded-full ${pct(a, t) === 100 && t ? "bg-green-500" : "bg-blue-400"}`} style={{ width: `${pct(a, t)}%` }} />
@@ -203,31 +211,31 @@ export default function OsVerifySheet({ myCenter, onClose }: { myCenter: string;
                 </ul>
               )}
 
-              {/* 미완료 목록(센터 선택 시) */}
-              {centerNames.includes(center) && (
+              {/* 미완료는 대수만. 목록은 "웹 완료 · OS 정상인데 자산등록만 안 된" 상이 차량만(운수사별 차량번호) */}
+              <p className="mt-3 text-xs text-gray-500">
+                미완료 <b className="text-gray-800">{cur.total - cur.all}대</b>
+                <span className="text-gray-400"> (전부 완료가 아닌 차량 — 차량별 내역은 엑셀)</span>
+              </p>
+              <p className="mt-3 text-xs font-semibold text-amber-800">
+                ⚠️ 자산등록 누락 — 웹 완료 · OS 정상인데 장애목록에 없음: {mismatchAll.length}대
+              </p>
+              {mismatchAll.length === 0 ? (
+                <p className="mt-1.5 rounded-2xl bg-green-50 px-3 py-3 text-center text-xs text-green-700">✅ 해당 차량 없음</p>
+              ) : (
                 <>
-                  <p className="mt-3 text-xs font-semibold text-gray-500">
-                    {center} 미완료 {pendingAll.length}대 <span className="font-normal text-gray-400">(▢ = 안 됨, ✅ = 됨 · 순서: 웹·자산·OS)</span>
-                  </p>
                   <ul className="mt-1.5 divide-y divide-gray-100 rounded-2xl bg-white ring-1 ring-black/5">
-                    {pending.map((i) => (
-                      <li key={i.plate} className="px-3 py-1.5 text-xs">
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="font-bold text-gray-900">{i.plate}</span>
-                          <span className="shrink-0 tabular-nums">
-                            {mark(i.web)} {mark(i.asset)} {mark(i.os)}
-                          </span>
-                        </div>
-                        <p className="truncate text-[11px] text-gray-500">
-                          {i.operator} · {shortRoute(i.route)} · {i.model || "기종?"} · OS {i.osInfo}
+                    {mismatchGroups.map(([op, plates]) => (
+                      <li key={op} className="px-3 py-2 text-xs">
+                        <p className="font-semibold text-gray-800">
+                          🏢 {op} <span className="font-normal text-gray-400">{plates.length}대</span>
                         </p>
+                        <p className="mt-0.5 break-words text-[13px] font-bold tracking-tight text-gray-900">{plates.join(", ")}</p>
                       </li>
                     ))}
-                    {pendingAll.length === 0 && <li className="px-3 py-4 text-center text-xs text-green-700">✅ 이 센터 전 차량 완료</li>}
                   </ul>
-                  {pendingAll.length > LIST_MAX && !showAll && (
+                  {mismatchAll.length > LIST_MAX && !showAll && (
                     <button type="button" onClick={() => setShowAll(true)} className="mt-2 w-full rounded-xl bg-gray-100 py-2 text-xs font-medium text-gray-700">
-                      나머지 {pendingAll.length - LIST_MAX}대 더 보기
+                      나머지 {mismatchAll.length - LIST_MAX}대 더 보기
                     </button>
                   )}
                 </>

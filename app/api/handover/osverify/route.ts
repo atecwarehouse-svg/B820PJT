@@ -31,6 +31,7 @@ export interface OsItem {
   os: boolean;
   osInfo: string; // "AFC 17/17 · BMS 17/17" | "조회 없음" | "파일 없음" | "기종 불명"
   all: boolean;
+  mismatch: boolean; // 웹 완료 · OS 정상인데 자산등록만 안 됨(초기엔 미완료가 많아 이것만 목록으로 보여 준다)
   done_by: string | null;
 }
 interface SavedFile {
@@ -99,15 +100,17 @@ export async function POST(req: NextRequest) {
       uploaded: `${OS_FILE_LABEL[type]} · ${file.name} (${rows.length}대, 충족 ${rows.filter((r) => r.ok).length}대)`,
       files: result.files.map((f) => `${f.label} ${f.saved ? `✓ ${fmtAt(f.at!)}` : "✗ 없음"}`),
     };
+    const mismatches = (center?: string) =>
+      result.items.filter((i) => i.mismatch && (!center || i.center === center)).map((i) => ({ center: i.center, operator: i.operator, plate: i.plate }));
     // 센터 카드 → 그 센터 방(없으면 기본 → env). 미배정은 건너뜀
     for (const c of result.centers) {
       if (c.label === "미배정") continue;
       const webhook = hooks[c.label] ?? base ?? process.env.TEAMS_ADMIN_CALL_WEBHOOK_URL;
       if (!webhook) continue;
-      await sendOsVerifyCenterCard({ ...common, webhook, center: c }).catch((e) => console.error("[osverify] center card", c.label, e));
+      await sendOsVerifyCenterCard({ ...common, webhook, center: c, mismatches: mismatches(c.label) }).catch((e) => console.error("[osverify] center card", c.label, e));
     }
     // 전체 취합 → 관리자 호출방만
-    await sendOsVerifySummaryCard({ ...common, overall: result.overall, centers: result.centers.filter((c) => c.label !== "미배정") });
+    await sendOsVerifySummaryCard({ ...common, overall: result.overall, centers: result.centers.filter((c) => c.label !== "미배정"), mismatches: mismatches() });
   });
   return NextResponse.json(result);
 }
@@ -160,7 +163,7 @@ async function compute(): Promise<OsVerifyResult | { error: string }> {
         osInfo = r ? r.info : "조회 없음";
       }
     }
-    return { plate: v.plate, center: vehicleCenter(v, centers), operator: v.operator, route: v.route, model: v.model ?? "", osType, web, asset, os, osInfo, all: web && asset && os, done_by: v.done_by };
+    return { plate: v.plate, center: vehicleCenter(v, centers), operator: v.operator, route: v.route, model: v.model ?? "", osType, web, asset, os, osInfo, all: web && asset && os, mismatch: web && os && !asset, done_by: v.done_by };
   });
   const stat = (label: string, xs: OsItem[]): OsVerifyStat => ({
     label,
@@ -169,6 +172,7 @@ async function compute(): Promise<OsVerifyResult | { error: string }> {
     asset: xs.filter((i) => i.asset).length,
     os: xs.filter((i) => i.os).length,
     all: xs.filter((i) => i.all).length,
+    mismatch: xs.filter((i) => i.mismatch).length,
   });
   const byCenter = new Map<string, OsItem[]>();
   for (const i of items) byCenter.set(i.center, [...(byCenter.get(i.center) ?? []), i]);
@@ -195,14 +199,17 @@ async function excel(r: OsVerifyResult, projectName: string) {
     { header: "OS 적용", key: "os", width: 9 },
     { header: "OS 상세", key: "osInfo", width: 26 },
     { header: "전부 완료", key: "all", width: 9 },
+    { header: "자산등록 누락(웹·OS 완료)", key: "mismatch", width: 12 },
     { header: "완료자", key: "by", width: 14 },
   ];
   const o = (b: boolean) => (b ? "O" : "");
-  for (const i of r.items) ws.addRow({ center: i.center, operator: i.operator, route: i.route, plate: i.plate, model: i.model, web: o(i.web), asset: o(i.asset), os: o(i.os), osInfo: i.osInfo, all: o(i.all), by: i.done_by ?? "" });
+  for (const i of r.items) {
+    ws.addRow({ center: i.center, operator: i.operator, route: i.route, plate: i.plate, model: i.model, web: o(i.web), asset: o(i.asset), os: o(i.os), osInfo: i.osInfo, all: o(i.all), mismatch: o(i.mismatch), by: i.done_by ?? "" });
+  }
   ws.getRow(1).font = { bold: true };
   ws.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFDBEAFE" } };
   ws.views = [{ state: "frozen", ySplit: 1 }];
-  ws.autoFilter = { from: "A1", to: "K1" };
+  ws.autoFilter = { from: "A1", to: "L1" };
   const sum = wb.addWorksheet("요약");
   sum.columns = [
     { header: "구분", key: "label", width: 12 },
@@ -211,6 +218,7 @@ async function excel(r: OsVerifyResult, projectName: string) {
     { header: "자산등록", key: "asset", width: 9 },
     { header: "OS 적용", key: "os", width: 9 },
     { header: "전부 완료", key: "all", width: 9 },
+    { header: "자산 누락", key: "mismatch", width: 9 },
     { header: "진척율", key: "pct", width: 8 },
   ];
   for (const s of [r.overall, ...r.centers]) sum.addRow({ ...s, pct: s.total ? `${Math.round((s.all / s.total) * 100)}%` : "" });

@@ -1565,6 +1565,12 @@ export interface OsVerifyStat {
   asset: number; // 자산등록(장애목록)
   os: number; // OS 버전 충족
   all: number; // 셋 다
+  mismatch: number; // 웹 완료 · OS 정상 · 자산등록 안 됨
+}
+export interface OsMismatch {
+  center: string;
+  operator: string;
+  plate: string;
 }
 interface OsVerifyBase {
   projectName: string;
@@ -1574,7 +1580,23 @@ interface OsVerifyBase {
 }
 const OS_VERIFY_RULE = "기준: 웹 체크리스트 완료 · 자산등록(장애목록 기타/F/W, OS 적용/개선OS 업데이트) · OS버전(B710 32/32, B700 40·39, B800 19·19). 차량별 목록은 앱 🔎 → 엑셀.";
 const osVerifyPct = (s: OsVerifyStat) => (s.total ? Math.round((s.all / s.total) * 100) : 0);
-const osVerifyLine = (s: OsVerifyStat) => `전부완료 ${s.all} / ${s.total}대 (${osVerifyPct(s)}%) · 웹 ${s.web} · 자산 ${s.asset} · OS ${s.os}`;
+const osVerifyLine = (s: OsVerifyStat) => `전부완료 ${s.all} / ${s.total}대 (${osVerifyPct(s)}%) · 미완료 ${s.total - s.all}대 · 웹 ${s.web} · 자산 ${s.asset} · OS ${s.os}`;
+const MISMATCH_MAX = 60;
+/** 자산등록 누락(웹 완료·OS 정상) 목록 — 운수사별 "운수사: 차량, 차량" 줄. 많으면 잘라서 '외 n대' */
+function mismatchBlocks(xs: OsMismatch[], withCenter: boolean): unknown[] {
+  if (!xs.length) return [{ type: "TextBlock", color: "Good", text: "✅ 자산등록 누락(웹 완료·OS 정상) 차량 없음", spacing: "Medium", wrap: true }];
+  const shown = xs.slice(0, MISMATCH_MAX);
+  const groups = new Map<string, string[]>();
+  for (const m of shown) {
+    const k = withCenter ? `${m.center} · ${m.operator}` : m.operator;
+    groups.set(k, [...(groups.get(k) ?? []), m.plate]);
+  }
+  return [
+    { type: "TextBlock", weight: "Bolder", color: "Attention", text: `⚠️ 자산등록 누락(웹 완료·OS 정상) ${xs.length}대`, spacing: "Medium", wrap: true },
+    ...[...groups.entries()].map(([k, plates]) => ({ type: "TextBlock", text: `${k}: ${plates.join(", ")}`, spacing: "None", wrap: true })),
+    ...(xs.length > MISMATCH_MAX ? [{ type: "TextBlock", text: `외 ${xs.length - MISMATCH_MAX}대 — 앱 🔎 → 엑셀`, isSubtle: true, size: "Small", spacing: "None", wrap: true }] : []),
+  ];
+}
 function osVerifyCard(d: OsVerifyBase, title: string, body: unknown[]) {
   return {
     type: "message",
@@ -1598,20 +1620,22 @@ function osVerifyCard(d: OsVerifyBase, title: string, body: unknown[]) {
   };
 }
 /** 센터 카드 — 그 센터 수치만, 그 센터 채팅방(webhook)으로 */
-export async function sendOsVerifyCenterCard(d: OsVerifyBase & { webhook: string; center: OsVerifyStat }): Promise<void> {
+export async function sendOsVerifyCenterCard(d: OsVerifyBase & { webhook: string; center: OsVerifyStat; mismatches: OsMismatch[] }): Promise<void> {
   const card = osVerifyCard(d, `🔎 OS업데이트 적용 검증 — ${d.center.label}`, [
     { type: "TextBlock", size: "ExtraLarge", weight: "Bolder", color: osVerifyPct(d.center) === 100 ? "Good" : "Default", text: `${osVerifyPct(d.center)}%`, spacing: "Medium" },
     { type: "TextBlock", weight: "Bolder", text: `${d.center.label}: ${osVerifyLine(d.center)}`, spacing: "None", wrap: true },
+    ...mismatchBlocks(d.mismatches, false),
   ]);
   await post(d.webhook, card, `OS업데이트 검증 ${d.center.label}`);
 }
 /** 전체 취합 카드 — 관리자 호출방(TEAMS_ADMIN_CALL_WEBHOOK_URL)에만 */
-export async function sendOsVerifySummaryCard(d: OsVerifyBase & { overall: OsVerifyStat; centers: OsVerifyStat[] }): Promise<void> {
+export async function sendOsVerifySummaryCard(d: OsVerifyBase & { overall: OsVerifyStat; centers: OsVerifyStat[]; mismatches: OsMismatch[] }): Promise<void> {
   const url = process.env.TEAMS_ADMIN_CALL_WEBHOOK_URL;
   if (!url) return;
   const card = osVerifyCard(d, "🔎 OS업데이트 적용 검증 — 전체 취합", [
     { type: "TextBlock", weight: "Bolder", text: `📊 전체: ${osVerifyLine(d.overall)}`, spacing: "Medium", wrap: true },
-    { type: "FactSet", facts: d.centers.map((c) => ({ title: c.label, value: osVerifyLine(c) })) },
+    { type: "FactSet", facts: d.centers.map((c) => ({ title: c.label, value: `${osVerifyLine(c)} · 자산누락 ${c.mismatch}` })) },
+    ...mismatchBlocks(d.mismatches, true),
   ]);
   await post(url, card, "OS업데이트 검증 전체 취합");
 }
