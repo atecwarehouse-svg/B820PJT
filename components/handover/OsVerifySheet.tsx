@@ -31,6 +31,13 @@ interface Result {
   overall: Stat;
   centers: Stat[];
   items: Item[];
+  basis?: Basis;
+}
+/** 검증 기간·기준 시각 — 발송 때 입력, 카드·엑셀에 "10/20 ~ 10/28 14:00 기준 파일"로 표기 */
+interface Basis {
+  from: string;
+  to: string;
+  asOf: string;
 }
 
 const pct = (a: number, t: number) => (t ? Math.round((a / t) * 100) : 0);
@@ -49,6 +56,7 @@ export default function OsVerifySheet({ myCenter, onClose, inline = false }: { m
   const [res, setRes] = useState<Result | null>(null);
   const [center, setCenter] = useState<string>(myCenter);
   const [showAll, setShowAll] = useState(false);
+  const [basis, setBasis] = useState<Basis>({ from: "", to: "", asOf: "" });
 
   useEffect(() => {
     fetch("/api/handover/osverify", { cache: "no-store" })
@@ -56,6 +64,7 @@ export default function OsVerifySheet({ myCenter, onClose, inline = false }: { m
         const j = (await r.json()) as Result | { error?: string };
         if (!r.ok) throw new Error(("error" in j && j.error) || "불러오기 실패");
         setRes(j as Result);
+        if ((j as Result).basis) setBasis((j as Result).basis!);
       })
       .catch((e) => setError(e instanceof Error ? e.message : "불러오기 실패"))
       .finally(() => setLoading(false));
@@ -71,17 +80,19 @@ export default function OsVerifySheet({ myCenter, onClose, inline = false }: { m
 
   const [sending, setSending] = useState(false);
   const [sentAt, setSentAt] = useState<string>("");
+  const md = (ymd: string) => (ymd ? `${Number(ymd.slice(5, 7))}/${Number(ymd.slice(8, 10))}` : "");
+  const basisText = [[basis.from, basis.to].filter(Boolean).map(md).join(" ~ "), basis.asOf ? `${basis.asOf} 기준 파일` : ""].filter(Boolean).join(" ");
   // 파일을 다 올린 뒤 한 번에 취합 발송(건바이건 발송 없음)
   async function sendCards() {
     if (!res || sending) return;
     const saved = res.files.filter((f) => f.saved).map((f) => f.label);
     const missing = res.files.filter((f) => !f.saved).map((f) => f.label);
-    const msg = `저장된 파일(${saved.join(", ")})로 최종 취합해 팀즈에 보냅니다.${missing.length ? `\n아직 없는 파일: ${missing.join(", ")} — 그 기종 OS는 '파일 없음'으로 집계됩니다.` : ""}\n센터 카드는 각 센터 방으로, 전체 취합은 관리자 호출방으로 갑니다. 보낼까요?`;
+    const msg = `저장된 파일(${saved.join(", ")})로 최종 취합해 팀즈에 보냅니다.${missing.length ? `\n아직 없는 파일: ${missing.join(", ")} — 그 기종 OS는 '파일 없음'으로 집계됩니다.` : ""}\n검증 기준: ${basisText || "(입력 안 함 — 카드에 기준 줄이 빠집니다)"}\n센터 카드는 각 센터 방으로, 전체 취합은 관리자 호출방으로 갑니다. 보낼까요?`;
     if (!window.confirm(msg)) return;
     setSending(true);
     setError("");
     try {
-      const r = await fetch("/api/handover/osverify?send=1", { method: "POST" });
+      const r = await fetch("/api/handover/osverify?send=1", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(basis) });
       const j = (await r.json().catch(() => ({}))) as Result & { error?: string };
       if (!r.ok) throw new Error(j.error ?? "발송 실패");
       setRes(j);
@@ -133,6 +144,17 @@ export default function OsVerifySheet({ myCenter, onClose, inline = false }: { m
   // 발송·엑셀 버튼 묶음 — 본문 모드에선 맨 위(내려가지 않게), 팝업에선 하단 고정
   const actions = (
     <>
+      {/* 검증 기간·기준 시각 — 카드 맨 위와 엑셀 요약에 "10/20 ~ 10/28 14:00 기준 파일"로 표기 */}
+      <div className="mb-2 rounded-xl bg-gray-50 px-3 py-2 ring-1 ring-black/5">
+        <p className="text-[11px] font-semibold text-gray-600">📅 검증 기준 (언제부터 ~ 언제까지, 몇 시 기준 파일인지)</p>
+        <div className="mt-1 flex items-center gap-1 text-xs">
+          <input type="date" value={basis.from} onChange={(e) => setBasis({ ...basis, from: e.target.value })} className="min-w-0 flex-1 rounded-lg border border-gray-200 px-2 py-1.5" aria-label="시작일" />
+          <span className="text-gray-400">~</span>
+          <input type="date" value={basis.to} onChange={(e) => setBasis({ ...basis, to: e.target.value })} className="min-w-0 flex-1 rounded-lg border border-gray-200 px-2 py-1.5" aria-label="종료일" />
+          <input type="time" value={basis.asOf} onChange={(e) => setBasis({ ...basis, asOf: e.target.value })} className="w-[5.5rem] rounded-lg border border-gray-200 px-2 py-1.5" aria-label="기준 시각" />
+        </div>
+        {basisText && <p className="mt-1 text-[11px] text-blue-700">→ 카드 표기: {basisText}</p>}
+      </div>
       <div className="flex gap-2">
         <button
           type="button"

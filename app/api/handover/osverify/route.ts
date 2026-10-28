@@ -75,7 +75,13 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const who = await auth();
   if (!who) return bad("로그인이 필요합니다.", 401);
-  if (req.nextUrl.searchParams.get("send") === "1") return send(who);
+  if (req.nextUrl.searchParams.get("send") === "1") {
+    // 검증 기간·기준 시각(JSON {from,to,asOf}) — 저장해 두고 카드·엑셀에 "검증 기준: 10/20 ~ 10/28 14:00 기준 파일"로 표기
+    const b = (await req.json().catch(() => ({}))) as Partial<OsBasis>;
+    const basis: OsBasis = { from: String(b.from ?? ""), to: String(b.to ?? ""), asOf: String(b.asOf ?? "") };
+    await setSetting(BASIS_KEY, JSON.stringify(basis)).catch((e) => console.error("[osverify] basis save", e));
+    return send(who, basis);
+  }
 
   const form = await req.formData();
   const file = form.get("file") as File | null;
@@ -100,10 +106,11 @@ export async function POST(req: NextRequest) {
 }
 
 // 최종 취합 발송 — 건바이건이 아니라 파일을 다 올린 뒤 「검증 발송」 버튼으로 한 번에.
-async function send(who: string) {
+async function send(who: string, basis: OsBasis) {
   const result = await compute();
   if ("error" in result) return bad(result.error, 500);
   if (!result.files.some((f) => f.saved)) return bad("올린 파일이 없습니다. 장애목록·OS버전 파일을 먼저 올려 주세요.");
+  result.basis = basis;
 
   const slug = currentSlug();
   runAfterResponse(async () => {
@@ -111,6 +118,7 @@ async function send(who: string) {
     const common = {
       projectName: project?.name ?? slug,
       worker: who,
+      basis: fmtBasis(basis),
       files: result.files.map((f) => `${f.label} ${f.saved ? `✓ ${fmtAt(f.at!)} (${f.vehicles}대 중 충족 ${f.ok})` : "✗ 없음"}`),
     };
     const mismatches = (center?: string) =>
@@ -129,6 +137,20 @@ async function send(who: string) {
 }
 
 const KST = "Asia/Seoul";
+/** 검증 기간·기준 시각 — 발송 때 입력(app_settings.osverify_basis) */
+interface OsBasis {
+  from: string; // "2026-10-20"
+  to: string; // "2026-10-28"
+  asOf: string; // "14:00"
+}
+const BASIS_KEY = "osverify_basis";
+const md = (ymd: string) => (/^\d{4}-\d{2}-\d{2}$/.test(ymd) ? `${Number(ymd.slice(5, 7))}/${Number(ymd.slice(8, 10))}` : ymd);
+/** {from,to,asOf} → "10/20 ~ 10/28 14:00 기준 파일" (빈 칸은 생략, 전부 비면 "") */
+const fmtBasis = (b: OsBasis | undefined) => {
+  if (!b) return "";
+  const range = [b.from, b.to].filter(Boolean).map(md).join(" ~ ");
+  return [range, b.asOf ? `${b.asOf} 기준 파일` : ""].filter(Boolean).join(" ");
+};
 const fmtAt = (iso: string) => {
   const d = new Date(iso);
   const day = d.toLocaleDateString("sv-SE", { timeZone: KST });
@@ -141,6 +163,7 @@ export interface OsVerifyResult {
   centers: OsVerifyStat[];
   items: OsItem[];
   at: string;
+  basis?: OsBasis; // 마지막 발송 때 입력한 검증 기간·기준 시각(화면 프리필·엑셀 요약)
 }
 
 async function compute(): Promise<OsVerifyResult | { error: string }> {
@@ -151,7 +174,12 @@ async function compute(): Promise<OsVerifyResult | { error: string }> {
   } catch (e) {
     return { error: "차량 목록 조회 실패: " + (e instanceof Error ? e.message : String(e)) };
   }
-  const [centers, ...saved] = await Promise.all([getCenters(), ...OS_FILE_TYPES.map((t) => loadSaved(t))]);
+  const [centers, basisRaw, ...saved] = await Promise.all([getCenters(), getSetting(BASIS_KEY), ...OS_FILE_TYPES.map((t) => loadSaved(t))]);
+  let basis: OsBasis | undefined;
+  try {
+    const b = JSON.parse(basisRaw ?? "null");
+    if (b && typeof b === "object") basis = { from: String(b.from ?? ""), to: String(b.to ?? ""), asOf: String(b.asOf ?? "") };
+  } catch {}
   const files = OS_FILE_TYPES.map((t, i) => {
     const s = saved[i];
     return s
@@ -195,6 +223,7 @@ async function compute(): Promise<OsVerifyResult | { error: string }> {
     centers: [...byCenter.entries()].sort(([a], [b]) => a.localeCompare(b, "ko")).map(([c, xs]) => stat(c, xs)),
     items,
     at: new Date().toISOString(),
+    basis,
   };
 }
 
@@ -258,6 +287,7 @@ async function excel(r: OsVerifyResult, projectName: string, mismatchOnly = fals
   ];
   for (const s of [r.overall, ...r.centers]) sum.addRow({ ...s, pct: s.total ? `${Math.round((s.all / s.total) * 100)}%` : "" });
   sum.addRow({});
+  if (fmtBasis(r.basis)) sum.addRow({ label: "검증 기준", total: fmtBasis(r.basis) });
   for (const f of r.files) sum.addRow({ label: f.label, total: f.saved ? `${f.fileName} (${f.vehicles}대, 충족 ${f.ok}대, ${fmtAt(f.at!)} ${f.by})` : "파일 없음" });
   sum.getRow(1).font = { bold: true };
   const ymd = new Date().toLocaleDateString("sv-SE", { timeZone: KST }).replace(/-/g, "");
