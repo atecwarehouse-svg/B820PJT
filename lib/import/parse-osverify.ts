@@ -1,5 +1,5 @@
 // OS업데이트 적용 검증용 파일 4종(.xls) 파서 — 차량번호 기준으로 "완료 조건 충족 여부"만 뽑는다.
-//   fault : 단말기장애목록 — G차량번호, L접수오류유형=기타, AH현장처리유형="F/W, OS 적용", AL처리내용에 "OS 업데이트"(띄어쓰기 무시, "개선 OS 업데이트"·"단말기 OS 업데이트" 모두) → 자산등록 완료
+//   fault : 단말기장애목록 — G차량번호, L접수오류유형=기타, AH현장처리유형="F/W, OS 적용", AL처리내용에 "OS" 뒤 "적용"/"업데이트"(띄어쓰기·대소문자 무시 — 개선OS적용·개선 OS 적용·OS 업데이트·단말기 OS 업데이트 등 사람마다 다른 표기 전부) → 자산등록 완료
 //   b710  : 차세대마을버스단말기 OS버전 조회 — B차량번호(괄호 앞), C AFC보드=32/32, D BMS보드=32/32
 //   b700  : CITS시내버스단말기 OS버전 조회 — B차량번호, C AFC-램디스크=40, D AFC-커널=39, F BMS-램디스크=40, G BMS-커널=39
 //   b800  : B800버스 OS버전 조회 — B차량번호, C 램디스크=19, D 커널=19(AFC), F 램디스크=19, G 커널=19(BMS)
@@ -37,7 +37,7 @@ const COLS: Record<OsFileType, { plate: number; cols: number[]; keys: string[] }
 };
 
 const judge: Record<OsFileType, (v: string[]) => boolean> = {
-  fault: ([type, action, memo]) => type === "기타" && action === "F/W,OS적용" && /OS업데이트/i.test(memo),
+  fault: ([type, action, memo]) => type === "기타" && action === "F/W,OS적용" && /OS.{0,10}?(적용|업데이트|업뎃)/i.test(memo),
   b710: ([afc, bms]) => afc === "32/32" && bms === "32/32",
   b700: ([ar, ak, br, bk]) => ar === "40" && ak === "39" && br === "40" && bk === "39",
   b800: ([ar, ak, br, bk]) => ar === "19" && ak === "19" && br === "19" && bk === "19",
