@@ -1578,7 +1578,7 @@ interface OsVerifyBase {
   files: string[]; // 저장된 파일 상태 "장애목록 ✓ 10/26 12:40 (33대 중 충족 4)" / "B710 ✗ 없음"
   basis?: string; // 검증 기간·기준 시각 "10/20 ~ 10/28 14:00 기준 파일" (발송 때 입력, 없으면 줄 생략)
 }
-const OS_VERIFY_RULE = "기준: 웹 체크리스트 완료 · 자산등록(장애목록 기타/F/W, OS 적용/처리내용에 OS 적용·업데이트) · OS버전(B710 32/32, B700 40·39, B800 19·19). 차량별 목록은 앱 🔎 → 엑셀.";
+const OS_VERIFY_RULE = "기준: 웹 체크리스트 완료 · 자산등록(장애목록 처리내용에 OS 적용·업데이트, 접수·처리유형 무관) · OS버전(B710 32/32, B700 40·39, B800 19·19). 차량별 목록은 앱 🔎 → 엑셀.";
 const osVerifyPct = (s: OsVerifyStat) => (s.total ? Math.round((s.all / s.total) * 100) : 0);
 const osVerifyLine = (s: OsVerifyStat) => `전부완료 ${s.all} / ${s.total}대 (${osVerifyPct(s)}%) · 미완료 ${s.total - s.all}대 · 웹 ${s.web} · 자산 ${s.asset} · OS ${s.os}`;
 const MISMATCH_MAX = 60;

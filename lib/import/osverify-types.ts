@@ -12,7 +12,7 @@ export const OS_FILE_LABEL: Record<OsFileType, string> = {
 };
 /** 완료 조건(설명용) */
 export const OS_RULE_TEXT: Record<OsFileType, string> = {
-  fault: "접수오류유형 기타 · 현장처리유형 F/W, OS 적용 · 처리내용에 'OS 적용' 또는 'OS 업데이트'(표기 무관)",
+  fault: "처리내용에 'OS 적용' 또는 'OS 업데이트'(표기 무관, 접수·처리유형은 안 봄)",
   b710: "AFC보드 32/32 · BMS보드 32/32",
   b700: "AFC 램디스크 40 · 커널 39 · BMS 램디스크 40 · 커널 39",
   b800: "AFC 램디스크 19 · 커널 19 · BMS 램디스크 19 · 커널 19",
