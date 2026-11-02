@@ -14,6 +14,6 @@ export const OS_FILE_LABEL: Record<OsFileType, string> = {
 export const OS_RULE_TEXT: Record<OsFileType, string> = {
   fault: "처리내용에 'OS 적용' 또는 'OS 업데이트'(표기 무관, 접수·처리유형은 안 봄)",
   b710: "AFC보드 32/32 · BMS보드 32/32",
-  b700: "AFC 램디스크 40 · 커널 39 · BMS 램디스크 40 · 커널 39",
-  b800: "AFC 램디스크 19 · 커널 19 · BMS 램디스크 19 · 커널 19",
+  b700: "AFC 램디스크 40 · 커널 39 · BMS 램디스크 40 · 커널 39 · 승하차 램디스크 24 · 커널 24",
+  b800: "AFC 램디스크 19 · 커널 19 · BMS 램디스크 19 · 커널 19 · 승하차 램디스크 24 · 커널 24",
 };

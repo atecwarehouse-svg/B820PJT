@@ -1,8 +1,8 @@
 // OS업데이트 적용 검증용 파일 4종(.xls) 파서 — 차량번호 기준으로 "완료 조건 충족 여부"만 뽑는다.
 //   fault : 단말기장애목록 — G차량번호, AL처리내용에 "OS" 뒤 "적용"/"업데이트"(띄어쓰기·대소문자 무시 — 개선OS적용·개선 OS 적용·OS 업데이트·단말기 OS 업데이트 등 사람마다 다른 표기 전부) → 자산등록 완료. L접수오류유형·AH현장처리유형은 표시용(info)으로만 읽고 판정엔 안 쓴다
 //   b710  : 차세대마을버스단말기 OS버전 조회 — B차량번호(괄호 앞), C AFC보드=32/32, D BMS보드=32/32
-//   b700  : CITS시내버스단말기 OS버전 조회 — B차량번호, C AFC-램디스크=40, D AFC-커널=39, F BMS-램디스크=40, G BMS-커널=39
-//   b800  : B800버스 OS버전 조회 — B차량번호, C 램디스크=19, D 커널=19(AFC), F 램디스크=19, G 커널=19(BMS)
+//   b700  : CITS시내버스단말기 OS버전 조회 — B차량번호, C AFC-램디스크=40, D AFC-커널=39, F BMS-램디스크=40, G BMS-커널=39, O·P 승하차단말기 램디스크/커널=24
+//   b800  : B800버스 OS버전 조회 — B차량번호, C 램디스크=19, D 커널=19(AFC), F 램디스크=19, G 커널=19(BMS), L·M 승하차단말기 램디스크/커널=24
 //   열 위치는 머리글로 한 번 확인하고(없으면 기본 열), 같은 차량이 여러 행이면 하나라도 충족하면 완료.
 import * as XLSX from "xlsx";
 import { normPlate } from "./parse-terminal-xls";
@@ -32,16 +32,18 @@ export function osTypeOfModel(model: string | null | undefined): Exclude<OsFileT
 const COLS: Record<OsFileType, { plate: number; cols: number[]; keys: string[] }> = {
   fault: { plate: 6, cols: [11, 33, 37], keys: ["접수오류유형", "현장처리유형", "처리내용"] },
   b710: { plate: 1, cols: [2, 3], keys: ["AFC보드", "BMS보드"] },
-  b700: { plate: 1, cols: [2, 3, 5, 6], keys: ["AFC-램디스크버전", "AFC-커널버전", "BMS-램디스크버전", "BMS-커널버전"] },
-  b800: { plate: 1, cols: [2, 3, 5, 6], keys: [] }, // B800 은 머리글이 '램디스크버전'이 반복돼 열 고정(C·D=AFC, F·G=BMS)
+  // 11/2 양식에 승하차단말기 열 추가 — B700 은 O·P, B800 은 L·M(머리글 있으면 머리글 우선)
+  b700: { plate: 1, cols: [2, 3, 5, 6, 14, 15], keys: ["AFC-램디스크버전", "AFC-커널버전", "BMS-램디스크버전", "BMS-커널버전", "승하차단말기-램디스크버전", "승하차단말기-커널버전"] },
+  b800: { plate: 1, cols: [2, 3, 5, 6, 11, 12], keys: ["AFC-램디스크버전", "AFC-커널버전", "BMS-램디스크버전", "BMS-커널버전", "승하차단말기-램디스크버전", "승하차단말기-커널버전"] },
 };
 
 const judge: Record<OsFileType, (v: string[]) => boolean> = {
   // 접수오류유형·현장처리유형은 안 본다(사용자 10/28: "유형이 달라도 처리내용에 OS 적용이 있고 버전이 맞으면 인정" — 버전은 ③ OS버전 항목이 따로 확인)
   fault: ([, , memo]) => /OS.{0,10}?(적용|업데이트|업뎃)/i.test(memo),
   b710: ([afc, bms]) => afc === "32/32" && bms === "32/32",
-  b700: ([ar, ak, br, bk]) => ar === "40" && ak === "39" && br === "40" && bk === "39",
-  b800: ([ar, ak, br, bk]) => ar === "19" && ak === "19" && br === "19" && bk === "19",
+  // 승하차단말기(dr 램디스크·dk 커널)는 11/2 사용자 확인: kernel 4.19.232.v24R / rootfs_B800R_v24 → 24
+  b700: ([ar, ak, br, bk, dr, dk]) => ar === "40" && ak === "39" && br === "40" && bk === "39" && dr === "24" && dk === "24",
+  b800: ([ar, ak, br, bk, dr, dk]) => ar === "19" && ak === "19" && br === "19" && bk === "19" && dr === "24" && dk === "24",
 };
 
 export function parseOsFile(buf: Buffer, type: OsFileType): OsRow[] {
@@ -74,7 +76,7 @@ export function parseOsFile(buf: Buffer, type: OsFileType): OsRow[] {
     if (!plate) continue;
     const vals = cols.map((c) => norm(row[c]));
     const ok = judge[type](vals);
-    const info = type === "fault" ? vals.slice(0, 2).join("/") : type === "b710" ? `AFC ${vals[0] || "-"} · BMS ${vals[1] || "-"}` : `AFC ${vals[0] || "-"}/${vals[1] || "-"} · BMS ${vals[2] || "-"}/${vals[3] || "-"}`;
+    const info = type === "fault" ? vals.slice(0, 2).join("/") : type === "b710" ? `AFC ${vals[0] || "-"} · BMS ${vals[1] || "-"}` : `AFC ${vals[0] || "-"}/${vals[1] || "-"} · BMS ${vals[2] || "-"}/${vals[3] || "-"} · 승하차 ${vals[4] || "-"}/${vals[5] || "-"}`;
     const cur = byPlate.get(plate);
     if (!cur || (!cur.ok && ok)) byPlate.set(plate, { plate, ok, info });
   }
