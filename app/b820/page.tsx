@@ -115,8 +115,10 @@ export default async function HomePage() {
       {/* 새 프로젝트 튜토리얼 — 첫 진입 환영 팝업 + 설정 체크리스트 + 페이지 안내 (건너뛰기 가능) */}
       {steps && <ProjectTutorial slug={slug} projectName={project.name} steps={steps} />}
 
-      {/* 메뉴 타일 — 관리자 호출은 눈에 띄게 한 줄 전체, 나머지는 2열 */}
-      <div className="mt-4 grid grid-cols-2 gap-2.5 motion-safe:animate-rise" style={{ animationDelay: "160ms" }}>
+      {/* 메뉴 타일 — 관리자 호출은 눈에 띄게 한 줄 전체, 나머지는 2열.
+          배차표·VOC·호출 팝업(fixed)이 이 안에 있어 transform 애니메이션(animate-rise) 금지 —
+          iOS 사파리는 애니메이션이 끝난 뒤에도 조상 transform 기준으로 fixed 를 잡아 팝업 아래가 잘린다. 투명도만 */}
+      <div className="mt-4 grid grid-cols-2 gap-2.5 motion-safe:animate-fade-in" style={{ animationDelay: "160ms" }}>
         <AdminCallButton />
         <DispatchButton />
         <VocModal />
