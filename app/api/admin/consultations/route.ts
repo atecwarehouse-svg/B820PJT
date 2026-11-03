@@ -37,9 +37,10 @@ export async function GET() {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
   // 상세·수정 화면의 항목 표기 = 협의사항 양식 순서·카드 표기 (꺼진 항목도 옛 데이터가 있을 수 있어 포함)
-  const labels: [string, string][] = fields
-    .filter((f) => f.type !== "heading")
-    .map((f) => [f.key, consultTitle(f)]);
+  const labels: [string, string][] = [
+    ["routes", "설치 노선"], // 양식 항목이 아니라 자동 표기 값 — 조회·수정 화면에는 계속 보여야 한다
+    ...fields.filter((f) => f.type !== "heading").map((f): [string, string] => [f.key, consultTitle(f)]),
+  ];
   return NextResponse.json({ list: data ?? [], labels });
 }
 

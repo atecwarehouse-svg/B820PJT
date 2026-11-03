@@ -17,6 +17,9 @@ const TYPE_LABEL: Record<ConsultField["type"], string> = {
 
 export default function ConsultFormManager() {
   const [fields, setFields] = useState<ConsultField[] | null>(null); // null = 로딩 중
+  // 선택지 입력칸의 원문 — 입력 중 쉼표로 쪼개 저장하면 끝의 쉼표·공백이 매 글자마다 지워져
+  // 두 번째 선택지를 이어서 칠 수 없다. 원문은 그대로 보여주고 저장용 배열만 따로 만든다.
+  const [optText, setOptText] = useState<Record<string, string>>({});
   const [isDefault, setIsDefault] = useState(true);
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
@@ -65,6 +68,7 @@ export default function ConsultFormManager() {
       const j = await res.json();
       if (!res.ok) throw new Error(j.error ?? "저장 실패");
       setFields(j.fields);
+      setOptText({}); // 서버가 정리한 선택지(중복·공백 제거)로 다시 표시
       setIsDefault(!!j.isDefault);
       setDirty(false);
       setMsg({ ok: true, text: "저장했습니다. 협의사항 폼·팀즈 카드·설치계획 보고 카드에 바로 적용됩니다." });
@@ -83,6 +87,7 @@ export default function ConsultFormManager() {
       const j = await res.json();
       if (!res.ok) throw new Error(j.error ?? "초기화 실패");
       setFields(j.fields);
+      setOptText({});
       setIsDefault(true);
       setDirty(false);
       setMsg({ ok: true, text: "B820 기본 양식으로 되돌렸습니다." });
@@ -169,11 +174,12 @@ export default function ConsultFormManager() {
               </div>
               {f.type === "text" && (
                 <input
-                  value={(f.options ?? []).join(", ")}
+                  value={optText[f.key] ?? (f.options ?? []).join(", ")}
                   placeholder="선택지 (쉼표 구분 · 비우면 자유 입력)"
-                  onChange={(e) =>
-                    update(i, { options: e.target.value.split(",").map((s) => s.trim()).filter(Boolean) })
-                  }
+                  onChange={(e) => {
+                    setOptText((t) => ({ ...t, [f.key]: e.target.value }));
+                    update(i, { options: e.target.value.split(",").map((s) => s.trim()).filter(Boolean) });
+                  }}
                   className={`${input} basis-full`}
                 />
               )}

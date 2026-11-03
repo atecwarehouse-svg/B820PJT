@@ -109,7 +109,8 @@ async function inspectorUrls(names: string[] | undefined, except: string, slug?:
   return [
     ...new Set(
       names
-        .map((n) => map[n.trim()]?.trim())
+        // 교체 전 이름으로 저장된 배정(당일 보고분)도 새 이름의 방으로 간다
+        .map((n) => map[INSPECTOR_RENAMES[n.trim()] ?? n.trim()]?.trim())
         .filter((u): u is string => !!u && u !== shared),
     ),
   ];

@@ -23,7 +23,8 @@ export async function PUT(req: NextRequest) {
   if (!(await isAdmin())) return NextResponse.json({ error: "관리자 인증이 필요합니다." }, { status: 401 });
   const body = (await req.json().catch(() => null)) as { list?: unknown } | null;
   if (!body || !Array.isArray(body.list)) return NextResponse.json({ error: "list(배열)가 필요합니다." }, { status: 400 });
-  const map: Record<string, string> = {};
+  // 이름이 키라 프로토타입 없는 객체 — 일반 객체면 "constructor" 같은 이름이 '중복'으로 잘못 걸린다
+  const map: Record<string, string> = Object.create(null);
   for (const it of body.list.slice(0, 30) as { name?: unknown; url?: unknown }[]) {
     const name = String(it?.name ?? "").trim();
     const url = String(it?.url ?? "").trim();

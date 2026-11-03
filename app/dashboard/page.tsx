@@ -165,6 +165,13 @@ export default async function DashboardPage() {
   const initialUpload = !isDefault(slug) && s.totalVehicles === 0;
   // 프로젝트 기간(생성 시 지정) — 최초 업로드 팝업의 빈 양식 링크(전개일정 3행 날짜)에 전달
   const period = initialUpload ? parsePeriod(await getSetting(PROJECT_PERIOD_KEY, slug)) : null;
+  // 보고 팝업·협의사항 폼용 설정 — 순서 의존이 없으니 한 번에 읽는다
+  const [inspectorList, installTeams, consultFields] = await Promise.all([
+    inspectorNames(slug),
+    getInstallTeamsFull(slug),
+    getConsultConfig(slug),
+  ]);
+  const teamList = installTeams.map(teamLabel);
 
   // 진행현황 다운로드 기준일 기본값 = 현재 업무일. 팝업에서 날짜를 바꾸면
   // 그 날짜까지의 스냅샷(계획·기준일·완료)으로 받는다. 계획수량은 예정일(planned_date)에서 파생.
@@ -228,8 +235,8 @@ export default async function DashboardPage() {
             remain={remainCount}
             startComplete={startComplete}
             startRemain={startRemain}
-            inspectorList={await inspectorNames(slug)}
-            teamList={(await getInstallTeamsFull(slug)).map(teamLabel)}
+            inspectorList={inspectorList}
+            teamList={teamList}
             hideBisKakao={slug === "b800air"}
             brand={brand}
           />
@@ -331,7 +338,7 @@ export default async function DashboardPage() {
       <div className="mb-2 mt-6 flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-sm font-bold text-gray-800">🔎 상세 현황</h2>
         <div className="flex flex-wrap items-center gap-2">
-          <ConsultationModal operators={operatorSchedules} fields={await getConsultConfig(slug)} />
+          <ConsultationModal operators={operatorSchedules} fields={consultFields} />
           <ScheduleUploadModal initial={initialUpload} projectName={projectInfo.name} period={period} />
         </div>
       </div>

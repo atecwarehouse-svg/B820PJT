@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { OperatorSchedule } from "@/lib/stats";
+import { noteBullet } from "@/lib/report";
 import {
   CONSULT_META,
   childVisible,
@@ -283,7 +284,8 @@ export default function ConsultationModal({
     // 변동사항처럼 부모가 '해당'일 때 열리는 항목은 비우면 안 된다
     const lc = active.find((f) => f.key === "list_change");
     const lcParent = fields.find((f) => f.key === "list_check");
-    if (lc && lcParent?.options?.[1] && visible(lc) && !finals.list_change) {
+    // 부모가 꺼져 있으면 변동사항은 그냥 자유 입력란(항상 표시) — 필수 아님
+    if (lc && lcParent?.enabled && lcParent.options?.[1] && visible(lc) && !finals.list_change) {
       setError(`${consultTitle(lc)} 내용을 입력하세요.`);
       return;
     }
@@ -397,9 +399,7 @@ export default function ConsultationModal({
     if (!visible(f)) return null;
     const val = finals[f.key] ?? "";
     if (f.type === "textarea") {
-      const lines = val
-        ? val.split(/\r?\n/).map((l) => l.trim()).filter(Boolean).map((l) => (l.startsWith("-") ? l : `- ${l}`))
-        : ["- 없음"];
+      const lines = val ? val.split(/\r?\n/).map(noteBullet).filter(Boolean) : ["- 없음"];
       return (
         <div key={f.key} className="text-gray-800">
           {lines.map((l, i) => (

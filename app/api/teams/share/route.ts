@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { brandName, currentProject } from "@/lib/project";
 import { sendProgressCard, sendStartReportCard, inspectorNames } from "@/lib/teams";
 import {
+  getInstallTeamsFull,
   getStartReport,
   getStartReportForUpdate,
   getTeamInspectors,
@@ -9,6 +10,7 @@ import {
   setSetting,
   startReportKey,
   teamInspectorsKey,
+  teamLabel,
 } from "@/lib/settings";
 
 export const runtime = "nodejs";
@@ -66,6 +68,11 @@ export async function PATCH(req: NextRequest) {
   // 설치팀별 담당 검수자 — 보고와 무관하게 즉시 저장(라우팅 전용, 카드에는 안 나감). 빈 배열이면 배정 해제.
   const team = String(b.team ?? "").trim();
   if (team) {
+    // 등록된 설치팀 라벨만 — 관리자가 팀을 고친 뒤 열어 둔 옛 화면이 보내는 이름은 기록과 안 맞아 알림이 안 간다
+    const known = (await getInstallTeamsFull()).map(teamLabel);
+    if (!known.includes(team)) {
+      return NextResponse.json({ error: `등록된 설치팀이 아닙니다: ${team} — 새로고침 후 다시 선택하세요.` }, { status: 400 });
+    }
     try {
       const map = await getTeamInspectorsForUpdate(b.date);
       if (inspectors.length) map[team] = inspectors;
