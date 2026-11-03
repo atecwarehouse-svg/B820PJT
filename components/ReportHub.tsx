@@ -774,7 +774,7 @@ function StatRow({
 
 // 첫차 운행시작 전 점검 결과 → 팀즈(설치 진행중 공유방) 카드.
 // 금일완료 리포트의 운행시작 점검란과 항목은 같지만, 첫차 운행 직후 바로 공유하는 창구.
-function ServiceStartPanel({ onClose }: { onClose: () => void }) {
+function ServiceStartPanel({ onClose, hideBisKakao = false }: { onClose: () => void; hideBisKakao?: boolean }) {
   const INPUT =
     "mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-base focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500";
 
@@ -815,6 +815,7 @@ function ServiceStartPanel({ onClose }: { onClose: () => void }) {
           kakaoStatus,
           kakaoSymptom,
           notes,
+          hideBisKakao,
         }),
       });
       const json = await res.json();
@@ -872,23 +873,27 @@ function ServiceStartPanel({ onClose }: { onClose: () => void }) {
         </span>
       </label>
 
-      <StatRow
-        label="BIS(인천) 서비스"
-        desc="인천시 버스 도착정보 서비스 이상 유무"
-        status={bisStatus}
-        onStatus={setBisStatus}
-        symptom={bisSymptom}
-        onSymptom={setBisSymptom}
-      />
+      {!hideBisKakao && (
+        <>
+          <StatRow
+            label="BIS(인천) 서비스"
+            desc="인천시 버스 도착정보 서비스 이상 유무"
+            status={bisStatus}
+            onStatus={setBisStatus}
+            symptom={bisSymptom}
+            onSymptom={setBisSymptom}
+          />
 
-      <StatRow
-        label="카카오(초정밀) 버스"
-        desc="초정밀 버스 정상 유무"
-        status={kakaoStatus}
-        onStatus={setKakaoStatus}
-        symptom={kakaoSymptom}
-        onSymptom={setKakaoSymptom}
-      />
+          <StatRow
+            label="카카오(초정밀) 버스"
+            desc="초정밀 버스 정상 유무"
+            status={kakaoStatus}
+            onStatus={setKakaoStatus}
+            symptom={kakaoSymptom}
+            onSymptom={setKakaoSymptom}
+          />
+        </>
+      )}
 
       <label className="block">
         <span className="text-[11px] font-medium text-gray-500">특이사항</span>
@@ -939,6 +944,7 @@ export default function ReportHub(props: {
   startRemain: number;
   inspectorList: string[]; // 등록된 검수자 이름 (관리자 검수자 탭 / TEAMS_INSPECTOR_WEBHOOKS 키) — 설치시작 보고 담당 선택지
   teamList?: string[]; // 등록된 설치팀 라벨 — 설치시작 보고에서 팀별 담당 검수자 지정
+  hideBisKakao?: boolean; // 운행시작 보고 점검란에서 BIS(인천)·카카오(초정밀) 제외 (공항 B800)
   brand?: string; // 카드 제목의 프로젝트명 (기본 B820)
 }) {
   const [open, setOpen] = useState(false);
@@ -1023,7 +1029,7 @@ export default function ReportHub(props: {
                   onClose={close}
                 />
               )}
-              {tab === "service" && <ServiceStartPanel onClose={close} />}
+              {tab === "service" && <ServiceStartPanel onClose={close} hideBisKakao={props.hideBisKakao} />}
               {tab === "progress" && (
                 <ShareStatPanel
                   kind="progress"

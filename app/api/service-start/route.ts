@@ -42,6 +42,7 @@ export async function POST(req: NextRequest) {
         bisSymptom: short("bisSymptom"),
         kakaoStatus: status("kakaoStatus"),
         kakaoSymptom: short("kakaoSymptom"),
+        ...(body.hideBisKakao === true ? { hideBisKakao: true } : {}), // 공항 B800 — BIS·카카오 항목 자체를 뺀다
       },
       notes: notes || undefined,
     });

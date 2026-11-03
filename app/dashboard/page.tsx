@@ -230,6 +230,7 @@ export default async function DashboardPage() {
             startRemain={startRemain}
             inspectorList={await inspectorNames(slug)}
             teamList={(await getInstallTeamsFull(slug)).map(teamLabel)}
+            hideBisKakao={slug === "b800air"}
             brand={brand}
           />
           {ip && (
