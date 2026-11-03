@@ -6,6 +6,7 @@ import type { VocOperatorSummary } from "./voc";
 import { VOC_RATINGS, starBar } from "./voc";
 import { isNewModem } from "./modem";
 import { CONSULT_META, childVisible, consultTitle, type ConsultField } from "./consultation-form";
+import { INSPECTORS_KEY, getSetting } from "./settings";
 
 // 운수사 VOC 요약 → 팀즈 카드 블록. 항목별 평균 별점은 FactSet(라벨·별점 2열)로
 // 그려 별점 열이 세로로 정렬되게 한다. 개별 의견·특이사항은 자유 텍스트라 TextBlock.
@@ -54,16 +55,17 @@ function vocSummaryBlocks(
 }
 
 // ── 검수자별 채팅방 ─────────────────────────────────────────
-// TEAMS_INSPECTOR_WEBHOOKS = {"김준영":"https://…", …}  (환경변수 하나에 JSON)
+// 기본값: TEAMS_INSPECTOR_WEBHOOKS = {"김준영":"https://…", …}  (환경변수 하나에 JSON, 기존 4명)
+// 프로젝트별로 관리자 '검수자' 탭에서 바꾸면 app_settings.inspectors(같은 JSON 형식)가 환경변수를 통째로 대신한다.
 // 키(이름)가 곧 설치시작 보고 화면의 담당자 선택지. 미설정·형식 오류면 빈 값 —
 // 대시보드 렌더 중에 호출되므로 절대 throw하지 않는다.
 // 이름으로 조회하는 맵이라 프로토타입 없는 객체로 만든다 — 일반 객체면 "toString" 같은
 // 이름을 조회했을 때 URL 대신 함수가 나온다(settings.ts parseStartReport와 같은 이유).
-function inspectorWebhooks(): Record<string, string> {
+export function parseInspectorMap(raw: string | null | undefined): Record<string, string> {
   const out: Record<string, string> = Object.create(null);
   let v: unknown;
   try {
-    v = JSON.parse(process.env.TEAMS_INSPECTOR_WEBHOOKS ?? "{}");
+    v = JSON.parse(raw || "{}");
   } catch {
     return out;
   }
@@ -75,16 +77,27 @@ function inspectorWebhooks(): Record<string, string> {
   return out;
 }
 
+/** 환경변수 기본 검수자(기존 4명) */
+export function defaultInspectorMap(): Record<string, string> {
+  return parseInspectorMap(process.env.TEAMS_INSPECTOR_WEBHOOKS);
+}
+
+/** 현재 프로젝트의 검수자 이름 → 개인방 웹훅. 설정값이 있으면 그것만, 없으면 환경변수 기본 */
+export async function inspectorWebhooks(slug?: string): Promise<Record<string, string>> {
+  const raw = await getSetting(INSPECTORS_KEY, slug);
+  return raw === null ? defaultInspectorMap() : parseInspectorMap(raw);
+}
+
 /** 등록된 검수자 이름 목록 (설치시작 보고 담당자 선택지 · 서버에서만 호출). */
-export function inspectorNames(): string[] {
-  return Object.keys(inspectorWebhooks());
+export async function inspectorNames(slug?: string): Promise<string[]> {
+  return Object.keys(await inspectorWebhooks(slug));
 }
 
 /** 담당 검수자 이름 → 개인방 웹훅 URL. except(공용방)와 같은 주소는 제외.
  *  공백 차이로 같은 방에 두 번 보내지 않도록 양쪽 다 trim 후 비교한다. */
-function inspectorUrls(names: string[] | undefined, except: string): string[] {
+async function inspectorUrls(names: string[] | undefined, except: string, slug?: string): Promise<string[]> {
   if (!names?.length) return [];
-  const map = inspectorWebhooks();
+  const map = await inspectorWebhooks(slug);
   const shared = except.trim();
   return [
     ...new Set(
@@ -129,10 +142,11 @@ async function postToRooms(
   card: unknown,
   what: string,
   inspectors?: string[],
+  slug?: string, // 요청 밖(응답 후 백그라운드)에서 호출될 때 프로젝트 명시
 ): Promise<void> {
   await post(sharedUrl, card, what);
   await Promise.allSettled(
-    inspectorUrls(inspectors, sharedUrl).map((u) => post(u, card, what)),
+    (await inspectorUrls(inspectors, sharedUrl, slug)).map((u) => post(u, card, what)),
   );
 }
 
@@ -718,6 +732,7 @@ export async function sendStartCard(d: {
   startedAt?: string; // 설치 시작 시각(ISO) — 카드에 "시작시간 HH:MM" 표기
   inspectors?: string[]; // 담당 검수자 (개인 채팅방 라우팅)
   projectName?: string; // B820이 아닌 프로젝트면 카드 제목에 표기
+  slug?: string; // 프로젝트 — 검수자 설정(app_settings.inspectors) 조회용 (요청 밖 호출 대비)
 }): Promise<void> {
   const url = process.env.TEAMS_COMPLETE_WEBHOOK_URL;
   if (!url) return;
@@ -788,7 +803,7 @@ export async function sendStartCard(d: {
     ],
   };
 
-  await postToRooms(url, card, "시작카드", d.inspectors);
+  await postToRooms(url, card, "시작카드", d.inspectors, d.slug);
 }
 
 // 현장에서 "관리자 호출" 버튼을 눌렀을 때 보내는 카드.
@@ -882,6 +897,7 @@ export async function sendCompletionCard(d: {
   photos?: { url: string; label: string }[];
   inspectors?: string[]; // 담당 검수자 (개인 채팅방 라우팅)
   projectName?: string; // B820이 아닌 프로젝트면 카드 제목에 표기
+  slug?: string; // 프로젝트 — 검수자 설정(app_settings.inspectors) 조회용 (요청 밖 호출 대비)
 }): Promise<void> {
   const url = process.env.TEAMS_COMPLETE_WEBHOOK_URL;
   if (!url) return; // 웹후크 미설정 → 발송 생략
@@ -982,7 +998,7 @@ export async function sendCompletionCard(d: {
     ],
   };
 
-  await postToRooms(url, card, "완료카드", d.inspectors);
+  await postToRooms(url, card, "완료카드", d.inspectors, d.slug);
 }
 
 export interface ConsultationCardData {
@@ -1085,7 +1101,7 @@ export async function sendConsultationCard(
 
   // 협의사항은 건수가 적고 전원이 알아야 할 내용이라 검수자 4명 방 모두에 함께 보낸다
   // (설치시작·완료 카드처럼 담당자에게만 보내지 않음).
-  await postToRooms(url, card, "협의사항카드", inspectorNames());
+  await postToRooms(url, card, "협의사항카드", await inspectorNames());
 }
 
 

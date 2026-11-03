@@ -11,6 +11,7 @@ import SlotConfigManager from "@/components/SlotConfigManager";
 import PledgeTemplateManager from "@/components/PledgeTemplateManager";
 import ConsultationManager from "@/components/ConsultationManager";
 import ConsultFormManager from "@/components/ConsultFormManager";
+import InspectorManager from "@/components/InspectorManager";
 import VocManager from "@/components/VocManager";
 import ModemManager from "@/components/ModemManager";
 
@@ -27,6 +28,7 @@ interface AdminRecord {
 const TABS = [
   "설치팀",
   "소속",
+  "검수자",
   "검수항목",
   "사진 양식",
   "서약서 양식",
@@ -142,6 +144,7 @@ export default function AdminPanel() {
 
       {tab === "설치팀" && <TeamNamesManager />}
       {tab === "소속" && <TeamCompanyManager />}
+      {tab === "검수자" && <InspectorManager />}
       {tab === "검수항목" && <ChecklistManager />}
       {tab === "사진 양식" && <SlotConfigManager />}
       {tab === "서약서 양식" && <PledgeTemplateManager />}

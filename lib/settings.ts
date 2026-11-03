@@ -193,6 +193,8 @@ export async function getSlotConfig(slug?: string): Promise<SlotConfig> {
 
 // ── 운수사 협의사항 폼 양식(항목명·선택지·사용 여부) — 프로젝트별. 없으면 B820 기본(lib/consultation-form.ts) ──
 export const CONSULT_FORM_KEY = "consult_form";
+// 검수자(이름 → 팀즈 개인방 웹훅) JSON — 관리자 '검수자' 탭. 없으면 환경변수 TEAMS_INSPECTOR_WEBHOOKS(기존 4명). 파서는 lib/teams.ts
+export const INSPECTORS_KEY = "inspectors";
 export async function getConsultConfig(slug?: string): Promise<ConsultField[]> {
   return parseConsultConfig(await getSetting(CONSULT_FORM_KEY, slug));
 }

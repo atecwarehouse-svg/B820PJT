@@ -49,6 +49,7 @@ export interface ServiceCheck {
   bisSymptom?: string; // BIS 이상 증상
   kakaoStatus?: string; // 카카오(초정밀) — "ok" | "issue"
   kakaoSymptom?: string; // 카카오 이상 증상
+  hideBisKakao?: boolean; // BIS·카카오 항목 자체를 빼는 프로젝트(공항버스 — 인천 BIS·초정밀 대상 아님)
 }
 
 // 점검 입력이 하나라도 있는지 (없으면 리포트에서 섹션 생략)
@@ -85,8 +86,12 @@ export function serviceCheckRows(c?: ServiceCheck): { title: string; value: stri
   return [
     { title: "승무사원 교육", value: mark(c!.driverEdu, "교육완료") },
     { title: "요금세팅", value: fareVal },
-    { title: "BIS(인천)", value: stat(c!.bisStatus, c!.bisSymptom) },
-    { title: "카카오(초정밀)", value: stat(c!.kakaoStatus, c!.kakaoSymptom) },
+    ...(c!.hideBisKakao
+      ? []
+      : [
+          { title: "BIS(인천)", value: stat(c!.bisStatus, c!.bisSymptom) },
+          { title: "카카오(초정밀)", value: stat(c!.kakaoStatus, c!.kakaoSymptom) },
+        ]),
   ];
 }
 

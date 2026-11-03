@@ -228,7 +228,7 @@ export default async function DashboardPage() {
             remain={remainCount}
             startComplete={startComplete}
             startRemain={startRemain}
-            inspectorList={inspectorNames()}
+            inspectorList={await inspectorNames(slug)}
             brand={brand}
           />
           {ip && (
@@ -241,6 +241,8 @@ export default async function DashboardPage() {
               today={ip.today}
               inProgress={inProgressCount}
               projectLabel={projectLabel}
+              // 공항버스는 인천 BIS·카카오 초정밀버스 대상이 아니라 점검란에서 두 항목을 뺀다
+              hideBisKakao={slug === "b800air"}
             />
           )}
           <ProgressDownloadButton today={today} scheduleDays={scheduleDays} />

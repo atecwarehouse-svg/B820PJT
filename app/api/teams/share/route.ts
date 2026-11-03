@@ -30,8 +30,7 @@ interface ShareBody {
 const isDate = (v: unknown): v is string => typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v);
 
 // 담당 검수자 정리 — 등록된 이름(TEAMS_INSPECTOR_WEBHOOKS)만 허용해 오타·쓰레기 값 차단
-function cleanInspectors(v: unknown): string[] {
-  const known = new Set(inspectorNames());
+function cleanInspectors(v: unknown, known: Set<string>): string[] {
   return [
     ...new Set(
       (Array.isArray(v) ? v : []).map((x) => String(x).trim()).filter((x) => known.has(x)),
@@ -59,7 +58,7 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: "날짜를 확인하세요." }, { status: 400 });
   }
   const operator = String(b.operator ?? "").trim();
-  const inspectors = cleanInspectors(b.inspectors);
+  const inspectors = cleanInspectors(b.inspectors, new Set(await inspectorNames()));
 
   try {
     const map = await getStartReportForUpdate(b.date);
@@ -90,8 +89,9 @@ export async function POST(req: NextRequest) {
   const projectName = brandName(await currentProject()); // 카드 제목 (B820은 "B820")
   try {
     if (b.kind === "start") {
+      const known = new Set(await inspectorNames());
       const groups = (Array.isArray(b.groups) ? b.groups : []).slice(0, 50).map((g) => {
-        const inspectors = cleanInspectors(g?.inspectors);
+        const inspectors = cleanInspectors(g?.inspectors, known);
         return {
           operator: (g?.operator ?? "").toString().slice(0, 40),
           route: (g?.route ?? "").toString().slice(0, 40),

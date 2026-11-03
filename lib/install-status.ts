@@ -232,6 +232,7 @@ export async function notifyInstallProgress(opts: {
         photos,
         inspectors: await inspectorsFor(slug, operator, rec.start_notified_at),
         projectName,
+        slug,
       });
     } catch {
       return; // 발송 실패 시 지문 미기록 → 다음 저장 때 재시도
@@ -268,6 +269,7 @@ export async function notifyInstallProgress(opts: {
         startedAt,
         inspectors: await inspectorsFor(slug, operator, rec.start_notified_at),
         projectName,
+        slug,
       });
     } catch {
       return; // 발송 실패 시 지문 미기록 → 다음 저장 때 재시도

@@ -137,6 +137,7 @@ export default function DailyReportCard({
   stage = 2,
   onSent,
   projectLabel,
+  hideBisKakao = false,
 }: {
   completedList: CompletedVehicle[];
   scheduleDays: ScheduleDay[];
@@ -148,6 +149,7 @@ export default function DailyReportCard({
   stage?: 1 | 2; // 1차=팀즈 알림만, 2차=VOC 포함 + 메일 발송
   onSent?: (recipients: string[], teamsSent?: boolean) => void; // 발송 성공 시 부모가 완료 팝업 표시 (팀즈 카드 전송 여부 포함)
   projectLabel?: string; // 미리보기 머리말 "[…]" — 프로젝트명(기본 B820 문구)
+  hideBisKakao?: boolean; // 점검란에서 BIS(인천)·카카오(초정밀) 항목 제외 (공항 B800)
 }) {
   const [date, setDate] = useState(today);
   const [planned, setPlanned] = useState(""); // 금일 계획 수량 직접 입력
@@ -428,8 +430,9 @@ export default function DailyReportCard({
       bisSymptom,
       kakaoStatus,
       kakaoSymptom,
+      ...(hideBisKakao ? { hideBisKakao: true } : {}),
     }),
-    [driverEdu, fareSetting, baseFare, bisStatus, bisSymptom, kakaoStatus, kakaoSymptom],
+    [driverEdu, fareSetting, baseFare, bisStatus, bisSymptom, kakaoStatus, kakaoSymptom, hideBisKakao],
   );
 
   // 내용을 바꾸면 다시 발송 가능
@@ -558,22 +561,26 @@ export default function DailyReportCard({
             버스 문에 붙어있는 요금과 동일한지 확인
           </p>
         </div>
-        <StatRow
-          label="BIS(인천) 서비스"
-          desc="인천시 버스 도착정보 서비스 이상 유무"
-          status={bisStatus}
-          onStatus={setBisStatus}
-          symptom={bisSymptom}
-          onSymptom={setBisSymptom}
-        />
-        <StatRow
-          label="카카오(초정밀) 버스"
-          desc="카카오 초정밀버스 이상 유무"
-          status={kakaoStatus}
-          onStatus={setKakaoStatus}
-          symptom={kakaoSymptom}
-          onSymptom={setKakaoSymptom}
-        />
+        {!hideBisKakao && (
+          <>
+            <StatRow
+              label="BIS(인천) 서비스"
+              desc="인천시 버스 도착정보 서비스 이상 유무"
+              status={bisStatus}
+              onStatus={setBisStatus}
+              symptom={bisSymptom}
+              onSymptom={setBisSymptom}
+            />
+            <StatRow
+              label="카카오(초정밀) 버스"
+              desc="카카오 초정밀버스 이상 유무"
+              status={kakaoStatus}
+              onStatus={setKakaoStatus}
+              symptom={kakaoSymptom}
+              onSymptom={setKakaoSymptom}
+            />
+          </>
+        )}
       </div>
 
       {/* 설치제외 차량별 사유 — 리포트 특이사항에 번호 목록으로 자동 포함 */}
