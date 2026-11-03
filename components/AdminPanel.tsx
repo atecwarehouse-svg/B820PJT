@@ -10,6 +10,7 @@ import ChecklistManager from "@/components/ChecklistManager";
 import SlotConfigManager from "@/components/SlotConfigManager";
 import PledgeTemplateManager from "@/components/PledgeTemplateManager";
 import ConsultationManager from "@/components/ConsultationManager";
+import ConsultFormManager from "@/components/ConsultFormManager";
 import VocManager from "@/components/VocManager";
 import ModemManager from "@/components/ModemManager";
 
@@ -29,6 +30,7 @@ const TABS = [
   "검수항목",
   "사진 양식",
   "서약서 양식",
+  "협의사항 양식",
   "메일 수신자",
   "협의사항",
   "VOC",
@@ -143,6 +145,7 @@ export default function AdminPanel() {
       {tab === "검수항목" && <ChecklistManager />}
       {tab === "사진 양식" && <SlotConfigManager />}
       {tab === "서약서 양식" && <PledgeTemplateManager />}
+      {tab === "협의사항 양식" && <ConsultFormManager />}
       {tab === "메일 수신자" && <ReportRecipientsManager />}
       {tab === "협의사항" && <ConsultationManager />}
       {tab === "VOC" && <VocManager />}

@@ -2,6 +2,12 @@
 
 import { useState } from "react";
 import type { OperatorSchedule } from "@/lib/stats";
+import {
+  CONSULT_META,
+  childVisible,
+  consultTitle,
+  type ConsultField,
+} from "@/lib/consultation-form";
 
 const INPUT =
   "mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-base focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500";
@@ -12,13 +18,7 @@ const MINUTES = Array.from({ length: 12 }, (_, i) =>
   String(i * 5).padStart(2, "0"),
 ); // 5분 단위
 
-const KEY_OPTIONS = ["차량 내 보관", "배차실 수령", "직접입력"];
-const ENGINE_OPTIONS = ["가능", "불가능"];
-const FUEL_OPTIONS = ["가스 충분", "부족(에어컨 조절 필요)"];
-const MOUNT_MAIN_OPTIONS = ["운전석 위", "직접입력"];
-const MOUNT_BOARD_OPTIONS = ["격벽 ㄷ봉 사용", "표출기 뒤", "직접입력"];
-const MOUNT_ALIGHT_OPTIONS = ["마주보게", "45도", "승객방향", "기존위치", "직접입력"];
-const HANDLE_REMOVAL_OPTIONS = ["가능(탈거후 정비과 반납요청)", "불가능"];
+const CUSTOM = "직접입력"; // 선택지에 이 값이 있으면 고를 때 직접 입력란이 열린다
 
 // "2026-07-15" → "2026.07.15"
 function fmtDot(d: string): string {
@@ -39,8 +39,8 @@ function PreviewSub({ text }: { text: string }) {
   return <p className="mt-2 text-xs font-bold text-gray-800">{text}</p>;
 }
 
-// 시/분 드롭다운 — 작업 시간(4)·도착 예정(7)·익일 첫차(8)·차고지 출발(9) 공용.
-// 시를 고르면 분은 00으로 시작, 시를 '--'로 되돌리면 값 없음(null).
+// 시/분 드롭다운 — 작업 시간·도착 예정·익일 첫차·차고지 출발 공용.
+// 시를 고르면 분은 00으로 시작, 시를 '--'로 되돌리면 값 없음.
 function TimeField({
   label,
   value,
@@ -48,8 +48,8 @@ function TimeField({
   suffix,
 }: {
   label: string;
-  value: string | null; // "HH:MM" 또는 null
-  onChange: (v: string | null) => void;
+  value: string; // "HH:MM" 또는 ""
+  onChange: (v: string) => void;
   suffix?: string;
 }) {
   const [h, m] = value ? value.split(":") : ["", "00"];
@@ -61,7 +61,7 @@ function TimeField({
           value={h}
           onChange={(e) => {
             const nh = e.target.value;
-            onChange(nh ? `${nh}:${m || "00"}` : null);
+            onChange(nh ? `${nh}:${m || "00"}` : "");
           }}
           className="rounded-lg border border-gray-300 px-2 py-2 text-base focus:border-blue-500 focus:outline-none"
         >
@@ -93,52 +93,6 @@ function TimeField({
           <span className="text-xs font-semibold text-blue-600">{suffix}</span>
         )}
       </div>
-    </label>
-  );
-}
-
-// 옵션 드롭다운 + '직접입력' 선택 시 텍스트 입력 노출 — 차키(10)·통합단말기·승차(14) 공용.
-function OptionField({
-  label,
-  options,
-  value,
-  onChange,
-  custom,
-  onCustomChange,
-  placeholder,
-}: {
-  label: string;
-  options: string[];
-  value: string;
-  onChange: (v: string) => void;
-  custom: string;
-  onCustomChange: (v: string) => void;
-  placeholder?: string;
-}) {
-  return (
-    <label className="block">
-      <span className={LABEL}>{label}</span>
-      <select
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className={INPUT}
-      >
-        <option value="">선택</option>
-        {options.map((o) => (
-          <option key={o} value={o}>
-            {o}
-          </option>
-        ))}
-      </select>
-      {value === "직접입력" && (
-        <input
-          type="text"
-          value={custom}
-          onChange={(e) => onCustomChange(e.target.value)}
-          placeholder={placeholder ?? "직접 입력"}
-          className={INPUT}
-        />
-      )}
     </label>
   );
 }
@@ -213,12 +167,22 @@ function OperatorCombobox({
   );
 }
 
+// 항목 기본값 — 양식 메타의 preset (예: 표출기 "기존 위치")
+function initialValues(fields: ConsultField[]): Record<string, string> {
+  const v: Record<string, string> = {};
+  for (const f of fields) v[f.key] = CONSULT_META[f.key]?.preset ?? "";
+  return v;
+}
+
 // '운수사 협의사항' 버튼 → 팝업 폼 → 팀즈(사진 전송 채팅방) 카드 전송.
+// 항목·선택지·순서는 프로젝트 양식(fields, 관리자 '협의사항 양식' 탭)을 따른다.
 // 운수사·설치일만 필수, 나머지는 미입력 시 카드에 '-'로 표기(협의 진행 중 초안 공유 허용).
 export default function ConsultationModal({
   operators,
+  fields,
 }: {
   operators: OperatorSchedule[];
+  fields: ConsultField[];
 }) {
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState<"form" | "done">("form");
@@ -229,34 +193,8 @@ export default function ConsultationModal({
 
   const [selectedOp, setSelectedOp] = useState<OperatorSchedule | null>(null);
   const [date, setDate] = useState("");
-  const [place, setPlace] = useState("");
-  const [workStart, setWorkStart] = useState<string | null>(null);
-  const [dayOff, setDayOff] = useState("");
-  const [nextDayOff, setNextDayOff] = useState("");
-  const [arrival, setArrival] = useState<string | null>(null);
-  const [nextFirstBus, setNextFirstBus] = useState<string | null>(null);
-  const [depotOut, setDepotOut] = useState<string | null>(null);
-  const [simulStart, setSimulStart] = useState(""); // 9-1. 동시출발 여부
-  const [earlyPlates, setEarlyPlates] = useState(""); // 9-2. 사전출발 차량번호
-  const [keyOpt, setKeyOpt] = useState("");
-  const [keyCustom, setKeyCustom] = useState("");
-  const [engineOn, setEngineOn] = useState("");
-  const [fuel, setFuel] = useState("");
-  const [managerDay, setManagerDay] = useState("");
-  const [managerNight, setManagerNight] = useState("");
-  const [mountDisplay, setMountDisplay] = useState("기존 위치");
-  const [mountMainOpt, setMountMainOpt] = useState("");
-  const [mountMainCustom, setMountMainCustom] = useState("");
-  const [mountBoardOpt, setMountBoardOpt] = useState("");
-  const [mountBoardCustom, setMountBoardCustom] = useState("");
-  const [mountAlightOpt, setMountAlightOpt] = useState("");
-  const [mountAlightCustom, setMountAlightCustom] = useState("");
-  const [handleRemoval, setHandleRemoval] = useState("");
-  const [terminalStorage, setTerminalStorage] = useState(""); // 15. 단말기 보관 위치
-  const [listCheck, setListCheck] = useState(""); // 차량리스트·수량 확인 (이상 없음/변동 있음)
-  const [listChange, setListChange] = useState(""); // 변동 있음일 때 변동사항
-  const [notes, setNotes] = useState("");
-  const [consulter, setConsulter] = useState("");
+  const [values, setValues] = useState<Record<string, string>>(() => initialValues(fields));
+  const [custom, setCustom] = useState<Record<string, string>>({}); // '직접입력' 선택 시 입력한 내용
 
   // '차량리스트 보기' 팝업 — 버튼 클릭 시 운수사·날짜에 맞는 차량번호를 조회해 별도 팝업으로 표시
   const [vehOpen, setVehOpen] = useState(false);
@@ -271,40 +209,30 @@ export default function ConsultationModal({
   const routes = selectedOp?.dates.find((d) => d.date === date)?.routes ?? [];
   const routesText = routes.map((r) => `${r.route} ${r.count}대`).join(" · ");
 
+  const active = fields.filter((f) => f.enabled);
+  // 카드에 실리는 최종 값 — '직접입력'이면 입력한 내용
+  const finalValue = (f: ConsultField) =>
+    (values[f.key] === CUSTOM && f.options?.includes(CUSTOM) ? custom[f.key] ?? "" : values[f.key] ?? "").trim();
+  const finals: Record<string, string> = {};
+  for (const f of active) if (f.type !== "heading") finals[f.key] = finalValue(f);
+  const visible = (f: ConsultField) => childVisible(f.key, fields, values);
+
+  const setValue = (key: string, v: string) =>
+    setValues((prev) => {
+      const next = { ...prev, [key]: v };
+      // 종속 항목이 숨겨지면 적힌 값도 비운다 — 숨기기만 하면 그대로 전송된다
+      for (const f of fields) if (!childVisible(f.key, fields, next)) next[f.key] = "";
+      return next;
+    });
+
   function reset() {
     setStep("form");
     setBusy(false);
     setError(null);
     setSelectedOp(null);
     setDate("");
-    setPlace("");
-    setWorkStart(null);
-    setDayOff("");
-    setNextDayOff("");
-    setArrival(null);
-    setNextFirstBus(null);
-    setDepotOut(null);
-    setSimulStart("");
-    setEarlyPlates("");
-    setKeyOpt("");
-    setKeyCustom("");
-    setEngineOn("");
-    setFuel("");
-    setManagerDay("");
-    setManagerNight("");
-    setMountDisplay("기존 위치");
-    setMountMainOpt("");
-    setMountMainCustom("");
-    setMountBoardOpt("");
-    setMountBoardCustom("");
-    setMountAlightOpt("");
-    setMountAlightCustom("");
-    setHandleRemoval("");
-    setTerminalStorage("");
-    setListCheck("");
-    setListChange("");
-    setNotes("");
-    setConsulter("");
+    setValues(initialValues(fields));
+    setCustom({});
     setVehOpen(false);
     setVehLoading(false);
     setVehError(null);
@@ -345,24 +273,18 @@ export default function ConsultationModal({
   async function handleSend() {
     if (!selectedOp || !date) return;
     if (!operators.some((o) => o.operator === selectedOp.operator)) return;
-    if (keyOpt === "직접입력" && !keyCustom.trim()) {
-      setError("차키 협조의 직접입력 내용을 입력하세요.");
-      return;
+    for (const f of active) {
+      if (f.type === "heading" || !visible(f)) continue;
+      if (values[f.key] === CUSTOM && f.options?.includes(CUSTOM) && !finals[f.key]) {
+        setError(`${consultTitle(f)}의 직접입력 내용을 입력하세요.`);
+        return;
+      }
     }
-    if (mountMainOpt === "직접입력" && !mountMainCustom.trim()) {
-      setError("통합단말기 위치의 직접입력 내용을 입력하세요.");
-      return;
-    }
-    if (mountBoardOpt === "직접입력" && !mountBoardCustom.trim()) {
-      setError("승차 단말기 위치의 직접입력 내용을 입력하세요.");
-      return;
-    }
-    if (mountAlightOpt === "직접입력" && !mountAlightCustom.trim()) {
-      setError("하차 단말기 방향의 직접입력 내용을 입력하세요.");
-      return;
-    }
-    if (listCheck === "변동 있음" && !listChange.trim()) {
-      setError("차량리스트 변동사항 내용을 입력하세요.");
+    // 변동사항처럼 부모가 '해당'일 때 열리는 항목은 비우면 안 된다
+    const lc = active.find((f) => f.key === "list_change");
+    const lcParent = fields.find((f) => f.key === "list_check");
+    if (lc && lcParent?.options?.[1] && visible(lc) && !finals.list_change) {
+      setError(`${consultTitle(lc)} 내용을 입력하세요.`);
       return;
     }
 
@@ -377,33 +299,7 @@ export default function ConsultationModal({
           date,
           count,
           routes: routesText,
-          listCheck,
-          listChange: listCheck === "변동 있음" ? listChange : "",
-          place,
-          workStart: workStart ?? "",
-          dayOff,
-          nextDayOff,
-          arrival: arrival ?? "",
-          nextFirstBus: nextFirstBus ?? "",
-          depotOut: depotOut ?? "",
-          simulStart,
-          earlyPlates,
-          keyMethod: keyOpt === "직접입력" ? keyCustom : keyOpt,
-          engineOn,
-          fuel,
-          managerDay,
-          managerNight,
-          mountDisplay,
-          mountMain:
-            mountMainOpt === "직접입력" ? mountMainCustom : mountMainOpt,
-          mountBoard:
-            mountBoardOpt === "직접입력" ? mountBoardCustom : mountBoardOpt,
-          mountAlight:
-            mountAlightOpt === "직접입력" ? mountAlightCustom : mountAlightOpt,
-          handleRemoval,
-          terminalStorage,
-          notes,
-          consulter,
+          values: finals,
         }),
       });
       const json = await res.json();
@@ -415,6 +311,112 @@ export default function ConsultationModal({
     } finally {
       setBusy(false);
     }
+  }
+
+  // 양식 항목 하나의 입력 UI
+  function renderField(f: ConsultField) {
+    const meta = CONSULT_META[f.key];
+    if (f.type === "heading") {
+      return (
+        <p key={f.key} className="pt-1 text-xs font-bold text-gray-700">
+          ○ {f.label}
+        </p>
+      );
+    }
+    if (!visible(f)) return null;
+    if (f.type === "time") {
+      return (
+        <TimeField
+          key={f.key}
+          label={f.label}
+          value={values[f.key] ?? ""}
+          onChange={(v) => setValue(f.key, v)}
+          suffix={meta?.suffix}
+        />
+      );
+    }
+    if (f.type === "textarea") {
+      return (
+        <label key={f.key} className="block">
+          <span className={LABEL}>{f.label}</span>
+          <textarea
+            value={values[f.key] ?? ""}
+            onChange={(e) => setValue(f.key, e.target.value)}
+            rows={3}
+            placeholder={meta?.placeholder}
+            className={INPUT}
+          />
+        </label>
+      );
+    }
+    if (f.options && f.options.length > 0) {
+      return (
+        <label key={f.key} className="block">
+          <span className={LABEL}>{f.label}</span>
+          <select
+            value={values[f.key] ?? ""}
+            onChange={(e) => setValue(f.key, e.target.value)}
+            className={INPUT}
+          >
+            <option value="">선택</option>
+            {f.options.map((o) => (
+              <option key={o} value={o}>
+                {o}
+              </option>
+            ))}
+          </select>
+          {values[f.key] === CUSTOM && (
+            <input
+              type="text"
+              value={custom[f.key] ?? ""}
+              onChange={(e) => setCustom((c) => ({ ...c, [f.key]: e.target.value }))}
+              placeholder={meta?.placeholder ?? "직접 입력"}
+              className={INPUT}
+            />
+          )}
+        </label>
+      );
+    }
+    return (
+      <label key={f.key} className="block">
+        <span className={LABEL}>{f.label}</span>
+        <input
+          type="text"
+          value={values[f.key] ?? ""}
+          onChange={(e) => setValue(f.key, e.target.value)}
+          placeholder={meta?.placeholder}
+          className={INPUT}
+        />
+      </label>
+    );
+  }
+
+  // 카드 미리보기 한 줄 — 서버 카드(lib/teams.ts sendConsultationCard)와 같은 규칙
+  function renderPreview(f: ConsultField) {
+    if (f.type === "heading") return <PreviewSub key={f.key} text={`○ ${f.label}`} />;
+    if (!visible(f)) return null;
+    const val = finals[f.key] ?? "";
+    if (f.type === "textarea") {
+      const lines = val
+        ? val.split(/\r?\n/).map((l) => l.trim()).filter(Boolean).map((l) => (l.startsWith("-") ? l : `- ${l}`))
+        : ["- 없음"];
+      return (
+        <div key={f.key} className="text-gray-800">
+          {lines.map((l, i) => (
+            <p key={i}>{l}</p>
+          ))}
+        </div>
+      );
+    }
+    const meta = CONSULT_META[f.key];
+    if (meta?.hideEmpty && !val) return null;
+    return (
+      <PreviewRow
+        key={f.key}
+        title={consultTitle(f)}
+        value={val ? (meta?.suffix ? `${val} ${meta.suffix}` : val) : "-"}
+      />
+    );
   }
 
   return (
@@ -526,28 +528,6 @@ export default function ConsultationModal({
                       </button>
                     )}
 
-                    <label className="block">
-                      <span className={LABEL}>차량리스트·수량 확인</span>
-                      <select
-                        value={listCheck}
-                        onChange={(e) => setListCheck(e.target.value)}
-                        className={INPUT}
-                      >
-                        <option value="">선택</option>
-                        <option value="이상 없음">이상 없음</option>
-                        <option value="변동 있음">변동 있음</option>
-                      </select>
-                      {listCheck === "변동 있음" && (
-                        <input
-                          type="text"
-                          value={listChange}
-                          onChange={(e) => setListChange(e.target.value)}
-                          placeholder="변동사항 입력 (예: 차량 교체·추가·제외)"
-                          className={INPUT}
-                        />
-                      )}
-                    </label>
-
                     <div>
                       <span className={LABEL}>2. 설치 대수 (자동 표기)</span>
                       <p className="mt-1 rounded-lg bg-gray-50 px-3 py-2 text-sm font-semibold text-gray-700">
@@ -564,247 +544,7 @@ export default function ConsultationModal({
                       </div>
                     )}
 
-                    <label className="block">
-                      <span className={LABEL}>3. 설치 장소</span>
-                      <input
-                        type="text"
-                        value={place}
-                        onChange={(e) => setPlace(e.target.value)}
-                        placeholder="주소 입력"
-                        className={INPUT}
-                      />
-                    </label>
-
-                    <TimeField
-                      label="4. 작업 시간 (첫차 운행 종료 시간)"
-                      value={workStart}
-                      onChange={setWorkStart}
-                      suffix="이후부터 가능"
-                    />
-
-                    <label className="block">
-                      <span className={LABEL}>5. 당일 휴차</span>
-                      <input
-                        type="text"
-                        value={dayOff}
-                        onChange={(e) => setDayOff(e.target.value)}
-                        placeholder="차량번호 입력"
-                        className={INPUT}
-                      />
-                    </label>
-
-                    <label className="block">
-                      <span className={LABEL}>6. 익일 휴차</span>
-                      <input
-                        type="text"
-                        value={nextDayOff}
-                        onChange={(e) => setNextDayOff(e.target.value)}
-                        placeholder="차량번호 입력"
-                        className={INPUT}
-                      />
-                    </label>
-
-                    <TimeField
-                      label="7. 첫차 운행 종료 후 도착 예정 시간"
-                      value={arrival}
-                      onChange={setArrival}
-                    />
-
-                    <TimeField
-                      label="8. 익일 첫차 출발"
-                      value={nextFirstBus}
-                      onChange={setNextFirstBus}
-                    />
-
-                    <TimeField
-                      label="9. 차고지에서 나가는 시간 (첫차 기준)"
-                      value={depotOut}
-                      onChange={setDepotOut}
-                    />
-
-                    <label className="block">
-                      <span className={LABEL}>9-1. 동시출발 여부</span>
-                      <select
-                        value={simulStart}
-                        onChange={(e) => {
-                          setSimulStart(e.target.value);
-                          // 해당없음이면 사전출발 차량번호 자체가 의미 없다 —
-                          // 숨기기만 하면 이미 적힌 값이 그대로 전송되므로 비운다
-                          if (e.target.value === "해당없음") setEarlyPlates("");
-                        }}
-                        className={INPUT}
-                      >
-                        <option value="">선택</option>
-                        <option value="해당">해당</option>
-                        <option value="해당없음">해당없음</option>
-                      </select>
-                    </label>
-
-                    {simulStart !== "해당없음" && (
-                      <label className="block">
-                        <span className={LABEL}>9-2. 사전출발 차량번호</span>
-                        <input
-                          type="text"
-                          value={earlyPlates}
-                          onChange={(e) => setEarlyPlates(e.target.value)}
-                          placeholder="차량번호 입력"
-                          className={INPUT}
-                        />
-                      </label>
-                    )}
-
-                    <OptionField
-                      label="10. 차키 협조"
-                      options={KEY_OPTIONS}
-                      value={keyOpt}
-                      onChange={setKeyOpt}
-                      custom={keyCustom}
-                      onCustomChange={setKeyCustom}
-                    />
-
-                    <label className="block">
-                      <span className={LABEL}>
-                        11. 작업 중 차량 시동 가능 여부
-                      </span>
-                      <select
-                        value={engineOn}
-                        onChange={(e) => setEngineOn(e.target.value)}
-                        className={INPUT}
-                      >
-                        <option value="">선택</option>
-                        {ENGINE_OPTIONS.map((o) => (
-                          <option key={o} value={o}>
-                            {o}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-
-                    <label className="block">
-                      <span className={LABEL}>12. 확인사항 · 충전 여부</span>
-                      <select
-                        value={fuel}
-                        onChange={(e) => setFuel(e.target.value)}
-                        className={INPUT}
-                      >
-                        <option value="">선택</option>
-                        {FUEL_OPTIONS.map((o) => (
-                          <option key={o} value={o}>
-                            {o}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-
-                    <div>
-                      <span className={LABEL}>13. 운수사 담당자</span>
-                      <input
-                        type="text"
-                        value={managerDay}
-                        onChange={(e) => setManagerDay(e.target.value)}
-                        placeholder="주간 — 이름/연락처"
-                        className={INPUT}
-                      />
-                      <input
-                        type="text"
-                        value={managerNight}
-                        onChange={(e) => setManagerNight(e.target.value)}
-                        placeholder="야간 — 이름/연락처"
-                        className={INPUT}
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <span className={LABEL}>14. 단말기 설치 위치 (협의)</span>
-                      <label className="block">
-                        <span className="text-[11px] text-gray-400">
-                          표출기
-                        </span>
-                        <input
-                          type="text"
-                          value={mountDisplay}
-                          onChange={(e) => setMountDisplay(e.target.value)}
-                          className={INPUT}
-                        />
-                      </label>
-                      <OptionField
-                        label="통합단말기"
-                        options={MOUNT_MAIN_OPTIONS}
-                        value={mountMainOpt}
-                        onChange={setMountMainOpt}
-                        custom={mountMainCustom}
-                        onCustomChange={setMountMainCustom}
-                        placeholder="설치 위치 직접 입력"
-                      />
-                      <OptionField
-                        label="승차"
-                        options={MOUNT_BOARD_OPTIONS}
-                        value={mountBoardOpt}
-                        onChange={setMountBoardOpt}
-                        custom={mountBoardCustom}
-                        onCustomChange={setMountBoardCustom}
-                        placeholder="설치 위치 직접 입력"
-                      />
-                      <OptionField
-                        label="하차 (방향)"
-                        options={MOUNT_ALIGHT_OPTIONS}
-                        value={mountAlightOpt}
-                        onChange={setMountAlightOpt}
-                        custom={mountAlightCustom}
-                        onCustomChange={setMountAlightCustom}
-                        placeholder="방향 직접 입력"
-                      />
-                      <label className="block">
-                        <span className={LABEL}>
-                          격벽 손잡이(얇은봉) 탈거 유무
-                        </span>
-                        <select
-                          value={handleRemoval}
-                          onChange={(e) => setHandleRemoval(e.target.value)}
-                          className={INPUT}
-                        >
-                          <option value="">선택</option>
-                          {HANDLE_REMOVAL_OPTIONS.map((o) => (
-                            <option key={o} value={o}>
-                              {o}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                    </div>
-
-                    <label className="block">
-                      <span className={LABEL}>15. 단말기 보관 위치</span>
-                      <input
-                        type="text"
-                        value={terminalStorage}
-                        onChange={(e) => setTerminalStorage(e.target.value)}
-                        placeholder="예: 배차실, 차고지 창고"
-                        className={INPUT}
-                      />
-                    </label>
-
-                    <label className="block">
-                      <span className={LABEL}>16. 특이사항</span>
-                      <textarea
-                        value={notes}
-                        onChange={(e) => setNotes(e.target.value)}
-                        rows={3}
-                        placeholder="협의 중 나온 특이사항"
-                        className={INPUT}
-                      />
-                    </label>
-
-                    <label className="block">
-                      <span className={LABEL}>17. 협의자</span>
-                      <input
-                        type="text"
-                        value={consulter}
-                        onChange={(e) => setConsulter(e.target.value)}
-                        placeholder="이름/연락처"
-                        className={INPUT}
-                      />
-                    </label>
+                    {active.map(renderField)}
 
                     {error && (
                       <p className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600">
@@ -865,139 +605,7 @@ export default function ConsultationModal({
                           title="설치 노선"
                           value={routesText || "-"}
                         />
-                        <PreviewRow
-                          title="차량리스트 확인"
-                          value={listCheck.trim() || "-"}
-                        />
-                        {listCheck === "변동 있음" && listChange.trim() && (
-                          <PreviewRow
-                            title="변동사항"
-                            value={listChange.trim()}
-                          />
-                        )}
-                        <PreviewRow
-                          title="설치 장소"
-                          value={place.trim() || "-"}
-                        />
-                        <PreviewRow
-                          title="작업 시간"
-                          value={workStart ? `${workStart} 이후부터 가능` : "-"}
-                        />
-                        <PreviewRow
-                          title="당일 휴차"
-                          value={dayOff.trim() || "-"}
-                        />
-                        <PreviewRow
-                          title="익일 휴차"
-                          value={nextDayOff.trim() || "-"}
-                        />
-                      </div>
-                      <PreviewSub text="○ 차량 운행 시간" />
-                      <PreviewRow
-                        title="첫차 종료 후 도착"
-                        value={arrival ?? "-"}
-                      />
-                      <PreviewRow
-                        title="익일 첫차 출발"
-                        value={nextFirstBus ?? "-"}
-                      />
-                      <PreviewRow
-                        title="차고지 출발(첫차)"
-                        value={depotOut ?? "-"}
-                      />
-                      <PreviewRow
-                        title="동시출발 여부"
-                        value={simulStart || "-"}
-                      />
-                      {simulStart !== "해당없음" && (
-                        <PreviewRow
-                          title="사전출발 차량번호"
-                          value={earlyPlates.trim() || "-"}
-                        />
-                      )}
-                      <PreviewSub text="○ 협조·확인사항" />
-                      <PreviewRow
-                        title="차키 협조"
-                        value={
-                          (keyOpt === "직접입력" ? keyCustom : keyOpt).trim() ||
-                          "-"
-                        }
-                      />
-                      <PreviewRow
-                        title="작업 중 시동"
-                        value={engineOn.trim() || "-"}
-                      />
-                      <PreviewRow
-                        title="충전 여부"
-                        value={fuel.trim() || "-"}
-                      />
-                      <PreviewSub text="○ 담당자·단말기 설치 위치" />
-                      <PreviewRow
-                        title="담당자(주간)"
-                        value={managerDay.trim() || "-"}
-                      />
-                      <PreviewRow
-                        title="담당자(야간)"
-                        value={managerNight.trim() || "-"}
-                      />
-                      <PreviewRow
-                        title="표출기"
-                        value={mountDisplay.trim() || "-"}
-                      />
-                      <PreviewRow
-                        title="통합단말기"
-                        value={
-                          (mountMainOpt === "직접입력"
-                            ? mountMainCustom
-                            : mountMainOpt
-                          ).trim() || "-"
-                        }
-                      />
-                      <PreviewRow
-                        title="승차"
-                        value={
-                          (mountBoardOpt === "직접입력"
-                            ? mountBoardCustom
-                            : mountBoardOpt
-                          ).trim() || "-"
-                        }
-                      />
-                      <PreviewRow
-                        title="하차(방향)"
-                        value={
-                          (mountAlightOpt === "직접입력"
-                            ? mountAlightCustom
-                            : mountAlightOpt
-                          ).trim() || "-"
-                        }
-                      />
-                      <PreviewRow
-                        title="격벽 손잡이 탈거"
-                        value={handleRemoval.trim() || "-"}
-                      />
-                      <PreviewRow
-                        title="단말기 보관 위치"
-                        value={terminalStorage.trim() || "-"}
-                      />
-                      <PreviewSub text="○ 특이사항" />
-                      <div className="text-gray-800">
-                        {(notes.trim()
-                          ? notes
-                              .trim()
-                              .split(/\r?\n/)
-                              .map((l) => l.trim())
-                              .filter(Boolean)
-                              .map((l) => (l.startsWith("-") ? l : `- ${l}`))
-                          : ["- 없음"]
-                        ).map((l, i) => (
-                          <p key={i}>{l}</p>
-                        ))}
-                      </div>
-                      <div className="mt-1.5">
-                        <PreviewRow
-                          title="협의자"
-                          value={consulter.trim() || "-"}
-                        />
+                        {active.map(renderPreview)}
                       </div>
                     </div>
                   </div>

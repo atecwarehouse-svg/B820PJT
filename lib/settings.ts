@@ -5,6 +5,7 @@ import { parsePledgeTemplate, type PledgeTemplate } from "@/lib/pledge-template"
 import { createServiceClient } from "@/lib/supabase/server";
 import { currentSlug, isDefault } from "@/lib/project";
 import { parseSlotConfig, type SlotConfig } from "@/lib/slots";
+import { parseConsultConfig, type ConsultField } from "@/lib/consultation-form";
 
 export const REPORT_MAIL_KEY = "report_mail_to";
 export const INSTALL_TEAMS_KEY = "install_teams"; // 설치팀 목록 (JSON [{team,name,phone}], 구버전 문자열 배열 호환)
@@ -188,4 +189,10 @@ export async function getPledgeTemplate(slug?: string): Promise<PledgeTemplate> 
 }
 export async function getSlotConfig(slug?: string): Promise<SlotConfig> {
   return parseSlotConfig(await getSetting(PHOTO_SLOTS_KEY, slug));
+}
+
+// ── 운수사 협의사항 폼 양식(항목명·선택지·사용 여부) — 프로젝트별. 없으면 B820 기본(lib/consultation-form.ts) ──
+export const CONSULT_FORM_KEY = "consult_form";
+export async function getConsultConfig(slug?: string): Promise<ConsultField[]> {
+  return parseConsultConfig(await getSetting(CONSULT_FORM_KEY, slug));
 }

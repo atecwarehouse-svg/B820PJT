@@ -35,8 +35,9 @@ interface Consultation {
   updated_at: string;
 }
 
-// 상세 표시·수정용 항목 라벨 (표시 순서 = 폼 순서)
-const FIELDS: [keyof Consultation, string][] = [
+// 상세 표시·수정용 항목 라벨 — 서버가 협의사항 양식(관리자 '협의사항 양식' 탭)에서 내려주는 labels 로 대체되고,
+// 못 받았을 때만 이 B820 기본 순서·이름을 쓴다
+const DEFAULT_FIELDS: [keyof Consultation, string][] = [
   ["routes", "설치 노선"],
   ["list_check", "차량리스트 확인"],
   ["list_change", "변동사항"],
@@ -71,6 +72,7 @@ const INPUT =
 // 협의사항 폼에서 팀즈 전송 시 저장된 데이터(운수사+설치일당 최신 1건).
 export default function ConsultationManager() {
   const [list, setList] = useState<Consultation[]>([]);
+  const [FIELDS, setFields] = useState<[keyof Consultation, string][]>(DEFAULT_FIELDS);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [needMigration, setNeedMigration] = useState(false);
@@ -93,6 +95,7 @@ export default function ConsultationManager() {
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "불러오기 실패");
       setList(json.list as Consultation[]);
+      if (Array.isArray(json.labels) && json.labels.length > 0) setFields(json.labels);
       setNeedMigration(Boolean(json.needMigration));
     } catch (e) {
       setError(e instanceof Error ? e.message : "불러오기 실패");

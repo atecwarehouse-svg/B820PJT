@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
 import { isAdmin } from "@/lib/admin-auth";
+import { getConsultConfig } from "@/lib/settings";
+import { consultTitle } from "@/lib/consultation-form";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -14,12 +16,15 @@ export async function GET() {
     );
   }
   const supabase = createServiceClient();
-  const { data, error } = await supabase
-    .from("consultations")
-    .select("*")
-    .order("date", { ascending: false })
-    .order("operator")
-    .limit(300);
+  const [{ data, error }, fields] = await Promise.all([
+    supabase
+      .from("consultations")
+      .select("*")
+      .order("date", { ascending: false })
+      .order("operator")
+      .limit(300),
+    getConsultConfig(),
+  ]);
   if (error) {
     // 테이블 미생성(마이그레이션 전)
     if (/consultations/i.test(error.message)) {
@@ -31,7 +36,11 @@ export async function GET() {
     }
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
-  return NextResponse.json({ list: data ?? [] });
+  // 상세·수정 화면의 항목 표기 = 협의사항 양식 순서·카드 표기 (꺼진 항목도 옛 데이터가 있을 수 있어 포함)
+  const labels: [string, string][] = fields
+    .filter((f) => f.type !== "heading")
+    .map((f) => [f.key, consultTitle(f)]);
+  return NextResponse.json({ list: data ?? [], labels });
 }
 
 // 관리자 수정 가능한 컬럼 화이트리스트 (operator·date는 식별키라 수정 불가).

@@ -5,6 +5,7 @@ import { noteBullet, serviceCheckRows } from "./report";
 import type { VocOperatorSummary } from "./voc";
 import { VOC_RATINGS, starBar } from "./voc";
 import { isNewModem } from "./modem";
+import { CONSULT_META, childVisible, consultTitle, type ConsultField } from "./consultation-form";
 
 // 운수사 VOC 요약 → 팀즈 카드 블록. 항목별 평균 별점은 FactSet(라벨·별점 2열)로
 // 그려 별점 열이 세로로 정렬되게 한다. 개별 의견·특이사항은 자유 텍스트라 TextBlock.
@@ -989,37 +990,16 @@ export interface ConsultationCardData {
   date: string; // 설치 일정 (YYYY-MM-DD)
   count: number; // 2. 설치 대수
   routes?: string; // 그날 설치 노선별 대수 (예: "M6628 3대 · 9500 2대")
-  listCheck?: string; // 차량리스트·수량 확인 (이상 없음/변동 있음)
-  listChange?: string; // 변동사항
-  place?: string; // 3. 설치 장소
-  workStart?: string; // 4. 작업 시간 — 첫차 운행 종료 "HH:MM"
-  dayOff?: string; // 5. 당일 휴차
-  nextDayOff?: string; // 6. 익일 휴차
-  arrival?: string; // 7. 첫차 운행 종료 후 도착 예정 "HH:MM"
-  nextFirstBus?: string; // 8. 익일 첫차 출발 "HH:MM"
-  depotOut?: string; // 9. 차고지에서 나가는 시간(첫차 기준) "HH:MM"
-  simulStart?: string; // 9-1. 동시출발 여부 (해당/해당없음)
-  earlyPlates?: string; // 9-2. 사전출발 차량번호
-  keyMethod?: string; // 10. 차키 협조
-  engineOn?: string; // 11. 작업 중 차량 시동 가능 여부
-  fuel?: string; // 12. 충전 여부
-  managerDay?: string; // 13. 운수사 담당자(주간)
-  managerNight?: string; // 13. 운수사 담당자(야간)
-  mountDisplay?: string; // 14. 표출기
-  mountMain?: string; // 14. 통합단말기
-  mountBoard?: string; // 14. 승차
-  mountAlight?: string; // 14. 하차 방향
-  handleRemoval?: string; // 14. 격벽 손잡이(얇은봉) 탈거 유무
-  terminalStorage?: string; // 15. 단말기 보관 위치
-  notes?: string; // 16. 특이사항
-  consulter?: string; // 17. 협의자
+  values: Record<string, string | undefined>; // 양식 항목 키(컬럼명) → 값 (미입력은 undefined)
 }
 
 // 운수사 협의사항 카드 — 대시보드 '운수사 협의사항' 폼에서 전송.
+// 항목·순서·소제목·표기는 프로젝트 양식(lib/consultation-form.ts, app_settings.consult_form)을 따른다.
 // 웹후크: TEAMS_COMPLETE_WEBHOOK_URL (설치완료 사진과 같은 채팅방) + 검수자 4명 개인방 전체.
 // 사용자가 명시적으로 보내는 것이므로 미설정 시 throw해 실패를 알린다.
 export async function sendConsultationCard(
   d: ConsultationCardData,
+  fields: ConsultField[],
 ): Promise<void> {
   const url = process.env.TEAMS_COMPLETE_WEBHOOK_URL;
   if (!url) {
@@ -1031,23 +1011,62 @@ export async function sendConsultationCard(
   // 미입력 항목은 "-" 표기 — 아직 협의되지 않은 항목이 카드에서 바로 보이게.
   const v = (s?: string) => s?.trim() || "-";
   const dateDot = d.date.replace(/-/g, ".");
-  const sub = (text: string) => ({
-    type: "TextBlock",
-    weight: "Bolder",
-    text,
-    spacing: "Medium",
-    wrap: true,
-  });
 
-  const noteText = d.notes?.trim()
-    ? d.notes
-        .trim()
-        .split(/\r?\n/)
-        .map((l) => l.trim())
-        .filter(Boolean)
-        .map((l) => (/^[-·]/.test(l) ? l : `- ${l}`))
-        .join("\n")
-    : "- 없음";
+  const body: unknown[] = [
+    {
+      type: "TextBlock",
+      size: "Large",
+      weight: "Bolder",
+      text: `📋 [${dateDot} 설치 일정] 운수사 협의사항`,
+      wrap: true,
+    },
+    {
+      type: "TextBlock",
+      size: "Medium",
+      weight: "Bolder",
+      color: "Accent",
+      text: `${d.operator} · ${d.count}대`,
+      spacing: "None",
+      wrap: true,
+    },
+  ];
+  // 연속된 항목은 FactSet 하나로 묶고, 소제목·특이사항(여러 줄)에서 끊는다
+  let facts: { title: string; value: string }[] = [
+    { title: "운수사", value: d.operator },
+    { title: "설치 대수", value: `${d.count}대` },
+    { title: "설치 노선", value: v(d.routes) },
+  ];
+  let first = true;
+  const flush = () => {
+    if (facts.length === 0) return;
+    body.push({ type: "FactSet", ...(first ? {} : { spacing: "Small" }), facts });
+    facts = [];
+    first = false;
+  };
+  for (const f of fields) {
+    if (!f.enabled) continue;
+    const val = d.values[f.key];
+    if (f.type === "heading") {
+      flush();
+      body.push({ type: "TextBlock", weight: "Bolder", text: `○ ${f.label}`, spacing: "Medium", wrap: true });
+      continue;
+    }
+    if (!childVisible(f.key, fields, d.values)) continue; // 예: 동시출발 '해당없음'이면 사전출발 차량번호 줄 제외
+    if (f.type === "textarea") {
+      flush();
+      const lines = val?.trim() ? val.trim().split(/\r?\n/).map(noteBullet).filter(Boolean) : ["- 없음"];
+      body.push({ type: "TextBlock", text: lines.join("\n"), spacing: "None", wrap: true });
+      first = false;
+      continue;
+    }
+    const meta = CONSULT_META[f.key];
+    if (meta?.hideEmpty && !val?.trim()) continue; // 예: 변동사항은 적었을 때만
+    facts.push({
+      title: consultTitle(f),
+      value: val?.trim() && meta?.suffix ? `${val.trim()} ${meta.suffix}` : v(val),
+    });
+  }
+  flush();
 
   const card = {
     type: "message",
@@ -1058,94 +1077,7 @@ export async function sendConsultationCard(
           $schema: "http://adaptivecards.io/schemas/adaptive-card.json",
           type: "AdaptiveCard",
           version: "1.4",
-          body: [
-            {
-              type: "TextBlock",
-              size: "Large",
-              weight: "Bolder",
-              text: `📋 [${dateDot} 설치 일정] 운수사 협의사항`,
-              wrap: true,
-            },
-            {
-              type: "TextBlock",
-              size: "Medium",
-              weight: "Bolder",
-              color: "Accent",
-              text: `${d.operator} · ${d.count}대`,
-              spacing: "None",
-              wrap: true,
-            },
-            {
-              type: "FactSet",
-              facts: [
-                { title: "운수사", value: d.operator },
-                { title: "설치 대수", value: `${d.count}대` },
-                { title: "설치 노선", value: v(d.routes) },
-                { title: "차량리스트 확인", value: v(d.listCheck) },
-                ...(d.listChange?.trim()
-                  ? [{ title: "변동사항", value: d.listChange.trim() }]
-                  : []),
-                { title: "설치 장소", value: v(d.place) },
-                {
-                  title: "작업 시간",
-                  value: d.workStart ? `${d.workStart} 이후부터 가능` : "-",
-                },
-                { title: "당일 휴차", value: v(d.dayOff) },
-                { title: "익일 휴차", value: v(d.nextDayOff) },
-              ],
-            },
-            sub("○ 차량 운행 시간"),
-            {
-              type: "FactSet",
-              spacing: "Small",
-              facts: [
-                { title: "첫차 종료 후 도착", value: v(d.arrival) },
-                { title: "익일 첫차 출발", value: v(d.nextFirstBus) },
-                { title: "차고지 출발(첫차)", value: v(d.depotOut) },
-                { title: "동시출발 여부", value: v(d.simulStart) },
-                // 해당없음이면 사전출발 차량번호 줄 자체를 빼서 카드에 안 보이게
-                ...(d.simulStart === "해당없음"
-                  ? []
-                  : [{ title: "사전출발 차량번호", value: v(d.earlyPlates) }]),
-              ],
-            },
-            sub("○ 협조·확인사항"),
-            {
-              type: "FactSet",
-              spacing: "Small",
-              facts: [
-                { title: "차키 협조", value: v(d.keyMethod) },
-                { title: "작업 중 시동", value: v(d.engineOn) },
-                { title: "충전 여부", value: v(d.fuel) },
-              ],
-            },
-            sub("○ 담당자·단말기 설치 위치"),
-            {
-              type: "FactSet",
-              spacing: "Small",
-              facts: [
-                { title: "담당자(주간)", value: v(d.managerDay) },
-                { title: "담당자(야간)", value: v(d.managerNight) },
-                { title: "표출기", value: v(d.mountDisplay) },
-                { title: "통합단말기", value: v(d.mountMain) },
-                { title: "승차", value: v(d.mountBoard) },
-                { title: "하차(방향)", value: v(d.mountAlight) },
-                { title: "격벽 손잡이 탈거", value: v(d.handleRemoval) },
-                { title: "단말기 보관 위치", value: v(d.terminalStorage) },
-              ],
-            },
-            sub("○ 특이사항"),
-            {
-              type: "TextBlock",
-              text: noteText,
-              spacing: "None",
-              wrap: true,
-            },
-            {
-              type: "FactSet",
-              facts: [{ title: "협의자", value: v(d.consulter) }],
-            },
-          ],
+          body,
         },
       },
     ],
@@ -1155,6 +1087,7 @@ export async function sendConsultationCard(
   // (설치시작·완료 카드처럼 담당자에게만 보내지 않음).
   await postToRooms(url, card, "협의사항카드", inspectorNames());
 }
+
 
 export interface PlanReportGroup {
   operator: string;
@@ -1189,6 +1122,7 @@ export async function sendPlanReportCard(
     total: number; // 금일 설치계획 합계
     groups: PlanReportGroup[];
     projectName?: string;
+    titles?: Record<string, string>; // 협의사항 양식의 항목 표기(컬럼명 → 카드 표기). 없으면 B820 기본 표기
   },
   rooms: PlanReportRoom[] = ["start", "consult"],
 ): Promise<{ sent: PlanReportRoom[]; errors: string[] }> {
@@ -1196,6 +1130,7 @@ export async function sendPlanReportCard(
   const consultUrl = process.env.TEAMS_COMPLETE_WEBHOOK_URL;
 
   const v = (s?: string) => s?.trim() || "-";
+  const t = (key: string, fallback: string) => d.titles?.[key] ?? fallback;
   // 제목은 채팅방별로 다름 — 시작보고방은 '설치계획 보고', 협의사항방은 '집합시간 및 특이사항 공지'
   const header = (title: string) => [
     {
@@ -1292,18 +1227,18 @@ export async function sendPlanReportCard(
             value:
               g.routes.map((r) => `${r.route} ${r.count}대`).join(" · ") || "-",
           },
-          { title: "당일 휴차", value: v(g.dayOff) },
-          { title: "익일 휴차", value: v(g.nextDayOff) },
-          { title: "첫차 종료 후 도착", value: v(g.arrival) },
-          { title: "차키 협조", value: v(g.keyMethod) },
-          { title: "작업 중 시동", value: v(g.engineOn) },
-          { title: "충전 여부", value: v(g.fuel) },
-          { title: "표출기", value: v(g.mountDisplay) },
-          { title: "통합단말기", value: v(g.mountMain) },
-          { title: "승차", value: v(g.mountBoard) },
-          { title: "하차(방향)", value: v(g.mountAlight) },
-          { title: "격벽 손잡이 탈거", value: v(g.handleRemoval) },
-          { title: "특이사항", value: v(g.notes) },
+          { title: t("day_off", "당일 휴차"), value: v(g.dayOff) },
+          { title: t("next_day_off", "익일 휴차"), value: v(g.nextDayOff) },
+          { title: t("arrival", "첫차 종료 후 도착"), value: v(g.arrival) },
+          { title: t("key_method", "차키 협조"), value: v(g.keyMethod) },
+          { title: t("engine_on", "작업 중 시동"), value: v(g.engineOn) },
+          { title: t("fuel", "충전 여부"), value: v(g.fuel) },
+          { title: t("mount_display", "표출기"), value: v(g.mountDisplay) },
+          { title: t("mount_main", "통합단말기"), value: v(g.mountMain) },
+          { title: t("mount_board", "승차"), value: v(g.mountBoard) },
+          { title: t("mount_alight", "하차(방향)"), value: v(g.mountAlight) },
+          { title: t("handle_removal", "격벽 손잡이 탈거"), value: v(g.handleRemoval) },
+          { title: t("notes", "특이사항"), value: v(g.notes) },
         ],
       },
     ]),

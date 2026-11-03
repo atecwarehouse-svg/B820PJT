@@ -15,13 +15,13 @@ import { CARD_COLORS, PROJECT_ICONS, Svg } from "@/components/ProjectIcon";
 import { currentSlug, isDefault } from "@/lib/project";
 import { createServiceClient } from "@/lib/supabase/server";
 import {
-  INSPECT_CHECKLIST_KEY, INSTALL_TEAMS_KEY, PHOTO_SLOTS_KEY, PLEDGE_TEMPLATE_KEY, REPORT_MAIL_KEY, TEAM_COMPANIES_KEY, getSetting,
+  CONSULT_FORM_KEY, INSPECT_CHECKLIST_KEY, INSTALL_TEAMS_KEY, PHOTO_SLOTS_KEY, PLEDGE_TEMPLATE_KEY, REPORT_MAIL_KEY, TEAM_COMPANIES_KEY, getSetting,
 } from "@/lib/settings";
 
 // 새 프로젝트 첫 설정 체크리스트(튜토리얼) — 관리자 탭 딥링크(/admin?tab=…)와 완료 여부
 async function setupSteps(slug: string): Promise<SetupStep[]> {
   const sb = createServiceClient(slug);
-  const [{ count }, teams, companies, slots, pledge, mail, checklist] = await Promise.all([
+  const [{ count }, teams, companies, slots, pledge, mail, checklist, consult] = await Promise.all([
     sb.from("vehicles").select("*", { count: "exact", head: true }),
     getSetting(INSTALL_TEAMS_KEY, slug),
     getSetting(TEAM_COMPANIES_KEY, slug),
@@ -29,6 +29,7 @@ async function setupSteps(slug: string): Promise<SetupStep[]> {
     getSetting(PLEDGE_TEMPLATE_KEY, slug),
     getSetting(REPORT_MAIL_KEY, slug),
     getSetting(INSPECT_CHECKLIST_KEY, slug),
+    getSetting(CONSULT_FORM_KEY, slug),
   ]);
   const has = (v: string | null) => !!v && v !== "[]" && v !== "{}";
   const tab = (t: string) => `/admin?tab=${encodeURIComponent(t)}`;
@@ -40,6 +41,7 @@ async function setupSteps(slug: string): Promise<SetupStep[]> {
     { key: "slots", title: "사진 양식 확인", desc: "촬영 칸 구성과 팀즈 설치 시작 카드 발송 시점. 안 바꾸면 B820 기본 양식으로 동작합니다.", href: tab("사진 양식"), done: has(slots), required: false, doneNote: "전용 양식 적용 중" },
     { key: "pledge", title: "서약서 양식 확인", desc: "안전관리 서약서 제목·회사명·교육내용. 안 바꾸면 기준 양식(버스단말기설치)입니다.", href: tab("서약서 양식"), done: has(pledge), required: false, doneNote: "전용 양식 적용 중" },
     { key: "checklist", title: "검수항목 확인", desc: "배차표 「검수항목 보기」의 점검 항목. 안 바꾸면 기본 항목입니다.", href: tab("검수항목"), done: has(checklist), required: false },
+    { key: "consult", title: "협의사항 양식 확인", desc: "운수사 협의사항 폼의 항목명·선택지·사용 여부. 안 바꾸면 B820 기본 양식입니다.", href: tab("협의사항 양식"), done: has(consult), required: false, doneNote: "전용 양식 적용 중" },
   ];
 }
 

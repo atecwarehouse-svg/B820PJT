@@ -36,7 +36,7 @@ import RefreshButton from "@/components/RefreshButton";
 import DashboardDetailTabs from "@/components/DashboardDetailTabs";
 import { isProgressUnlocked } from "@/lib/admin-auth";
 import { brandName, currentProject, currentSlug, isDefault } from "@/lib/project";
-import { PROJECT_PERIOD_KEY, getSetting, parsePeriod } from "@/lib/settings";
+import { PROJECT_PERIOD_KEY, getConsultConfig, getSetting, parsePeriod } from "@/lib/settings";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -327,7 +327,7 @@ export default async function DashboardPage() {
       <div className="mb-2 mt-6 flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-sm font-bold text-gray-800">🔎 상세 현황</h2>
         <div className="flex flex-wrap items-center gap-2">
-          <ConsultationModal operators={operatorSchedules} />
+          <ConsultationModal operators={operatorSchedules} fields={await getConsultConfig(slug)} />
           <ScheduleUploadModal initial={initialUpload} projectName={projectInfo.name} period={period} />
         </div>
       </div>

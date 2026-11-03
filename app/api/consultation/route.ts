@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
 import { sendConsultationCard } from "@/lib/teams";
+import { getConsultConfig } from "@/lib/settings";
+import { CONSULT_META, childVisible } from "@/lib/consultation-form";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -28,6 +30,7 @@ export async function GET(req: NextRequest) {
 
 // POST /api/consultation — 대시보드 '운수사 협의사항' 폼 → 팀즈(사진 전송 채팅방) 카드 전송.
 // 관리자 호출과 같이 비밀번호 없이 전송(현장에서 바로 쓰는 용도).
+// 본문: { operator, date, count, routes, values: {항목키(컬럼명): 값} } — 항목은 프로젝트 양식(consult_form)으로 걸러 받는다.
 // 전송 성공 시 consultations 테이블에 운수사+설치일 기준 upsert(관리자 페이지에서 관리).
 export async function POST(req: NextRequest) {
   let body: Record<string, unknown>;
@@ -36,17 +39,6 @@ export async function POST(req: NextRequest) {
   } catch {
     return NextResponse.json({ error: "잘못된 요청입니다." }, { status: 400 });
   }
-
-  const text = (key: string, max = 100) => {
-    const s = String(body[key] ?? "")
-      .trim()
-      .slice(0, max);
-    return s || undefined;
-  };
-  const time = (key: string) => {
-    const s = String(body[key] ?? "").trim();
-    return /^\d{2}:\d{2}$/.test(s) ? s : undefined;
-  };
 
   const operator = String(body.operator ?? "")
     .trim()
@@ -69,39 +61,27 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const card = {
-    operator,
-    date,
-    count,
-    routes: text("routes", 300),
-    listCheck: text("listCheck", 20),
-    listChange: text("listChange", 300),
-    place: text("place"),
-    workStart: time("workStart"),
-    dayOff: text("dayOff"),
-    nextDayOff: text("nextDayOff"),
-    arrival: time("arrival"),
-    nextFirstBus: time("nextFirstBus"),
-    depotOut: time("depotOut"),
-    simulStart: text("simulStart", 20),
-    earlyPlates: text("earlyPlates", 300),
-    keyMethod: text("keyMethod"),
-    engineOn: text("engineOn", 20),
-    fuel: text("fuel", 30),
-    managerDay: text("managerDay"),
-    managerNight: text("managerNight"),
-    mountDisplay: text("mountDisplay"),
-    mountMain: text("mountMain"),
-    mountBoard: text("mountBoard"),
-    mountAlight: text("mountAlight"),
-    handleRemoval: text("handleRemoval", 50),
-    terminalStorage: text("terminalStorage"),
-    notes: text("notes", 500),
-    consulter: text("consulter"),
-  };
+  const fields = await getConsultConfig();
+  const raw = (body.values && typeof body.values === "object" ? body.values : {}) as Record<string, unknown>;
+  // 양식에 켜진 항목만 받는다 — 꺼진 항목·숨겨진 종속 항목(예: 동시출발 '해당없음'의 사전출발)은 비움
+  const values: Record<string, string | undefined> = {};
+  for (const f of fields) {
+    if (f.type === "heading" || !f.enabled) continue;
+    const s = String(raw[f.key] ?? "").trim();
+    if (f.type === "time") {
+      values[f.key] = /^\d{2}:\d{2}$/.test(s) ? s : undefined;
+    } else {
+      const cut = s.slice(0, CONSULT_META[f.key]?.max ?? 100);
+      values[f.key] = cut || undefined;
+    }
+  }
+  for (const f of fields) {
+    if (!childVisible(f.key, fields, values)) values[f.key] = undefined;
+  }
+  const routes = String(body.routes ?? "").trim().slice(0, 300) || undefined;
 
   try {
-    await sendConsultationCard(card);
+    await sendConsultationCard({ operator, date, count, routes, values }, fields);
   } catch (e) {
     const msg = e instanceof Error ? e.message : "알 수 없는 오류";
     return NextResponse.json(
@@ -116,36 +96,14 @@ export async function POST(req: NextRequest) {
   try {
     const supabase = createServiceClient();
     const row: Record<string, unknown> = {
-      operator: card.operator,
-      date: card.date,
-      count: card.count,
-      routes: card.routes ?? null,
-      list_check: card.listCheck ?? null,
-      list_change: card.listChange ?? null,
-      place: card.place ?? null,
-      work_start: card.workStart ?? null,
-      day_off: card.dayOff ?? null,
-      next_day_off: card.nextDayOff ?? null,
-      arrival: card.arrival ?? null,
-      next_first_bus: card.nextFirstBus ?? null,
-      depot_out: card.depotOut ?? null,
-      simul_start: card.simulStart ?? null,
-      early_plates: card.earlyPlates ?? null,
-      key_method: card.keyMethod ?? null,
-      engine_on: card.engineOn ?? null,
-      fuel: card.fuel ?? null,
-      manager_day: card.managerDay ?? null,
-      manager_night: card.managerNight ?? null,
-      mount_display: card.mountDisplay ?? null,
-      mount_main: card.mountMain ?? null,
-      mount_board: card.mountBoard ?? null,
-      mount_alight: card.mountAlight ?? null,
-      handle_removal: card.handleRemoval ?? null,
-      terminal_storage: card.terminalStorage ?? null,
-      notes: card.notes ?? null,
-      consulter: card.consulter ?? null,
+      operator,
+      date,
+      count,
+      routes: routes ?? null,
       updated_at: new Date().toISOString(),
     };
+    // 양식 항목 키 = 컬럼명. 꺼진 항목도 null 로 써서 이전 전송값이 남지 않게 한다
+    for (const f of fields) if (f.type !== "heading") row[f.key] = values[f.key] ?? null;
     let { error } = await supabase
       .from("consultations")
       .upsert(row, { onConflict: "operator,date" });
