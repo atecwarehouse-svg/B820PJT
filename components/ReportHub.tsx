@@ -342,6 +342,7 @@ function ShareStatPanel({
   remain,
   planGroups,
   inspectorList,
+  teamList = [],
   brand = "B820",
   onClose,
 }: {
@@ -353,7 +354,8 @@ function ShareStatPanel({
   inProgress: number;
   remain: number;
   planGroups: PlanGroup[];
-  inspectorList: string[]; // 등록된 검수자 이름 — 운수사별 담당 선택지
+  inspectorList: string[]; // 등록된 검수자 이름 — 설치팀별 담당 선택지
+  teamList?: string[]; // 등록된 설치팀 라벨("팀명 이름") — 팀별 담당 검수자 지정 대상
   brand?: string;
   onClose: () => void;
 }) {
@@ -363,11 +365,12 @@ function ShareStatPanel({
   const [sent, setSent] = useState(false); // 전송 성공 — 버튼을 잠가 중복 카드 방지
   const [note, setNote] = useState(""); // 설치시작 보고 특이사항 — 카드에 함께 표시
   const [startTime, setStartTime] = useState(() => new Date().toTimeString().slice(0, 5)); // 설치 시작시간 (기기 시각 기본)
-  // 운수사별 담당 검수자(복수 가능) — 카드 표기 + 설치시작·완료 알림을 담당자 개인방으로 보내는 기준
-  const [managers, setManagers] = useState<Record<string, string[]>>({});
-  // 담당 수정 저장 중인 운수사 — 한 칸짜리로 두면 A 저장 중에 B를 눌렀을 때 A가 다시 눌리고
-  // 되돌리기 값이 어긋난다. 운수사별로 잠근다.
-  const [savingOps, setSavingOps] = useState<Set<string>>(new Set());
+  // 설치팀별 담당 검수자(복수 가능) — 설치시작·완료 알림을 담당자 개인방으로 보내는 기준(라우팅 전용, 카드엔 안 나감).
+  // 누르면 즉시 저장되고 보고와는 무관하다(보고 전·후 언제든 변경 가능).
+  const [teamMgr, setTeamMgr] = useState<Record<string, string[]>>({});
+  // 저장 중인 팀 — 한 칸짜리로 두면 A 저장 중에 B를 눌렀을 때 A가 다시 눌리고
+  // 되돌리기 값이 어긋난다. 팀별로 잠근다.
+  const [savingTeams, setSavingTeams] = useState<Set<string>>(new Set());
   const operators = isStart ? [...new Set(planGroups.map((g) => g.operator))] : [];
   // 운수사별 개별 발송 — 당일 보고 완료 운수사는 DB(app_settings) 기준으로 잠금 (전 기기 공유)
   const [sentOps, setSentOps] = useState<string[]>([]);
@@ -379,9 +382,9 @@ function ShareStatPanel({
       const j = await (await fetch(`/api/teams/share?date=${today}`)).json();
       const ops: string[] = Array.isArray(j.sentOps) ? j.sentOps : [];
       setSentOps(ops);
-      // 이미 보고된 운수사는 저장된 담당자를 그대로 보여준다(아직 안 보낸 곳의 선택은 유지)
-      if (j.assignments && typeof j.assignments === "object") {
-        setManagers((m) => ({ ...m, ...(j.assignments as Record<string, string[]>) }));
+      // 설치팀별 담당(그날 저장분) — 다른 기기에서 바꾼 것도 그대로 보여준다
+      if (j.teamAssignments && typeof j.teamAssignments === "object") {
+        setTeamMgr(j.teamAssignments as Record<string, string[]>);
       }
       if (init) {
         setSelected(new Set(operators.filter((op) => !ops.includes(op))));
@@ -400,36 +403,33 @@ function ShareStatPanel({
   }, []);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
-  // 보고 완료된 운수사의 담당자 변경 — 저장만 하고 팀즈 보고 카드는 다시 보내지 않는다.
-  async function saveManagers(op: string, names: string[]) {
-    if (savingOps.has(op)) return;
-    const prev = managers[op] ?? [];
-    setManagers((m) => ({ ...m, [op]: names })); // 먼저 화면에 반영
-    setSavingOps((s) => new Set(s).add(op));
+  // 설치팀 담당 검수자 변경 — 즉시 저장. 팀즈 보고 카드와는 무관(다시 나가지 않는다).
+  async function saveTeam(team: string, names: string[]) {
+    if (savingTeams.has(team)) return;
+    const prev = teamMgr[team] ?? [];
+    setTeamMgr((m) => ({ ...m, [team]: names })); // 먼저 화면에 반영
+    setSavingTeams((s) => new Set(s).add(team));
     setMsg(null);
     try {
       const res = await fetch("/api/teams/share", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ date: today, operator: op, inspectors: names }),
+        body: JSON.stringify({ date: today, team, inspectors: names }),
       });
       const j = await res.json();
       if (!res.ok) throw new Error(j.error ?? "담당 저장 실패");
       // 서버가 실제로 저장한 값으로 맞춘다 — 등록에 없는 이름은 서버가 걸러내므로
       // 화면만 반영해 두면 "저장됐다"고 보이는데 알림은 안 가는 상태가 된다.
       const saved = Array.isArray(j.inspectors) ? (j.inspectors as string[]) : names;
-      setManagers((m) => ({ ...m, [op]: saved }));
-      setMsg({
-        ok: true,
-        text: `${op} 담당 ${saved.length ? saved.join(", ") : "없음"}으로 변경했습니다. (보고는 다시 나가지 않습니다)`,
-      });
+      setTeamMgr((m) => ({ ...m, [team]: saved }));
+      setMsg({ ok: true, text: `${team} 담당 ${saved.length ? saved.join(", ") : "없음"}으로 저장했습니다.` });
     } catch (e) {
-      setManagers((m) => ({ ...m, [op]: prev })); // 실패하면 되돌림
+      setTeamMgr((m) => ({ ...m, [team]: prev })); // 실패하면 되돌림
       setMsg({ ok: false, text: e instanceof Error ? e.message : "담당 저장 실패" });
     } finally {
-      setSavingOps((s) => {
+      setSavingTeams((s) => {
         const next = new Set(s);
-        next.delete(op);
+        next.delete(team);
         return next;
       });
     }
@@ -463,10 +463,7 @@ function ShareStatPanel({
           remain,
           ...(isStart
             ? {
-                groups: selGroups.map((g) => ({
-                  ...g,
-                  inspectors: managers[g.operator] ?? [],
-                })),
+                groups: selGroups,
                 note: note.trim(),
                 startTime,
                 date: today,
@@ -496,9 +493,7 @@ function ShareStatPanel({
         ["금일 설치계획", selPlanned, "text-gray-700"],
         ...selGroups.map(
           (g): [string, number, string] => [
-            `· ${g.operator}${g.route ? ` ${g.route}노선` : ""}${
-              (managers[g.operator] ?? []).length ? ` (담당 ${managers[g.operator].join(", ")})` : ""
-            }`,
+            `· ${g.operator}${g.route ? ` ${g.route}노선` : ""}`,
             g.planned,
             "text-gray-500",
           ],
@@ -553,14 +548,53 @@ function ShareStatPanel({
       )}
       {isStart && (
         <div className="mt-2 space-y-1.5">
+          {/* 설치팀별 담당 검수자 — 누르면 즉시 저장. 카드에는 안 나가고 그 팀 차량의 설치시작·완료 알림이 담당자 개인방으로 간다 */}
+          {inspectorList.length > 0 && (
+            <div className="mb-2 rounded-lg border border-orange-200 bg-orange-50/50 px-2.5 py-2">
+              <p className="text-[11px] font-medium text-gray-600">
+                설치팀별 담당 검수자{" "}
+                <span className="font-normal text-gray-400">
+                  (누르면 바로 저장 · 복수 선택 가능 · 그 팀이 작업한 차량의 설치 알림이 담당자 방으로 갑니다. 카드에는 표시되지 않습니다)
+                </span>
+              </p>
+              {teamList.length === 0 ? (
+                <p className="mt-1 text-[11px] text-amber-700">등록된 설치팀이 없습니다. 관리자 → 설치팀 탭에서 먼저 등록하세요.</p>
+              ) : (
+                teamList.map((team) => (
+                  <div key={team} className="mt-1.5 flex flex-wrap items-center gap-1">
+                    <span className="w-full text-xs font-medium text-gray-700 sm:w-auto sm:min-w-[7rem]">{team}</span>
+                    {inspectorList.map((name) => {
+                      const picked = (teamMgr[team] ?? []).includes(name);
+                      return (
+                        <button
+                          key={name}
+                          type="button"
+                          aria-pressed={picked}
+                          disabled={savingTeams.has(team)}
+                          onClick={() => {
+                            const cur = teamMgr[team] ?? [];
+                            saveTeam(team, picked ? cur.filter((n) => n !== name) : [...cur, name]);
+                          }}
+                          // 장갑 낀 손으로 새벽에 누르는 화면이라 터치 영역을 키운다.
+                          className={`min-h-[36px] rounded-full border px-3 py-2 text-xs font-medium transition-colors disabled:opacity-60 ${
+                            picked
+                              ? "border-orange-600 bg-orange-600 text-white"
+                              : "border-gray-300 bg-white text-gray-600"
+                          }`}
+                        >
+                          {picked ? `✓ ${name}` : name}
+                        </button>
+                      );
+                    })}
+                    {savingTeams.has(team) && <span className="text-[10px] text-gray-400">저장 중…</span>}
+                  </div>
+                ))
+              )}
+            </div>
+          )}
           <p className="text-[11px] font-medium text-gray-500">
             보고할 운수사 선택{" "}
-            <span className="font-normal text-gray-400">
-              (보고 완료된 곳은 다시 보고 불가
-              {inspectorList.length
-                ? " · 담당 검수자는 복수 선택 가능, 설치 알림이 담당자 방으로 갑니다. 보고 후에도 담당은 바꿀 수 있고 보고는 다시 나가지 않습니다"
-                : ""})
-            </span>
+            <span className="font-normal text-gray-400">(보고 완료된 곳은 다시 보고 불가)</span>
           </p>
           {operators.map((op) => {
             const done = sentOps.includes(op);
@@ -598,42 +632,6 @@ function ShareStatPanel({
                     <span className="shrink-0 text-[11px] font-medium text-green-600">보고 완료 ✓</span>
                   )}
                 </div>
-                {inspectorList.length > 0 && (
-                  <div className="mt-1.5 flex flex-wrap items-center gap-1 pl-6">
-                    {inspectorList.map((name) => {
-                      const picked = (managers[op] ?? []).includes(name);
-                      return (
-                        <button
-                          key={name}
-                          type="button"
-                          aria-pressed={picked}
-                          // 보고 전에는 체크한 운수사만, 보고 후에는 담당 수정을 위해 항상 누를 수 있다
-                          disabled={done ? savingOps.has(op) : !on}
-                          onClick={() => {
-                            const cur = managers[op] ?? [];
-                            const next = picked ? cur.filter((n) => n !== name) : [...cur, name];
-                            if (done) saveManagers(op, next);
-                            else setManagers((m) => ({ ...m, [op]: next }));
-                          }}
-                          // 장갑 낀 손으로 새벽에 누르는 화면이라 터치 영역을 키운다.
-                          // 비활성이어도 고른 이름은 읽혀야 하므로 흐리게만 하지 않고 색을 유지.
-                          className={`min-h-[36px] rounded-full border px-3 py-2 text-xs font-medium transition-colors disabled:opacity-60 ${
-                            picked
-                              ? "border-orange-600 bg-orange-600 text-white"
-                              : "border-gray-300 bg-white text-gray-600"
-                          }`}
-                        >
-                          {picked ? `✓ ${name}` : name}
-                        </button>
-                      );
-                    })}
-                    {done && (
-                      <span className="ml-1 text-[10px] text-gray-400">
-                        {savingOps.has(op) ? "저장 중…" : "담당 수정 가능"}
-                      </span>
-                    )}
-                  </div>
-                )}
               </div>
             );
           })}
@@ -939,7 +937,8 @@ export default function ReportHub(props: {
   // 시작보고 전에 작업자가 먼저 시작해도 시작 카드 숫자가 흔들리지 않게 따로 받는다.
   startComplete: number;
   startRemain: number;
-  inspectorList: string[]; // 등록된 검수자 이름 (TEAMS_INSPECTOR_WEBHOOKS 키) — 설치시작 보고 담당 선택지
+  inspectorList: string[]; // 등록된 검수자 이름 (관리자 검수자 탭 / TEAMS_INSPECTOR_WEBHOOKS 키) — 설치시작 보고 담당 선택지
+  teamList?: string[]; // 등록된 설치팀 라벨 — 설치시작 보고에서 팀별 담당 검수자 지정
   brand?: string; // 카드 제목의 프로젝트명 (기본 B820)
 }) {
   const [open, setOpen] = useState(false);
@@ -1019,6 +1018,7 @@ export default function ReportHub(props: {
                   remain={props.startRemain}
                   planGroups={props.planGroups}
                   inspectorList={props.inspectorList}
+                  teamList={props.teamList}
                   brand={props.brand}
                   onClose={close}
                 />

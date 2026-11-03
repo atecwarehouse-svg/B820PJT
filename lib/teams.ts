@@ -77,9 +77,16 @@ export function parseInspectorMap(raw: string | null | undefined): Record<string
   return out;
 }
 
-/** 환경변수 기본 검수자(기존 4명) */
+// 검수자 교체 — 개인방(웹훅)은 그대로 두고 이름만 바뀐 경우. 환경변수 JSON 키를 고치고 재배포하면 지워도 된다.
+// 11/3 황문환 → 손승호 (방에서 황문환 제거·손승호 초대, 웹훅 동일)
+const INSPECTOR_RENAMES: Record<string, string> = { 황문환: "손승호" };
+
+/** 환경변수 기본 검수자(기존 4명) — 교체된 이름은 바꿔서 돌려준다 */
 export function defaultInspectorMap(): Record<string, string> {
-  return parseInspectorMap(process.env.TEAMS_INSPECTOR_WEBHOOKS);
+  const raw = parseInspectorMap(process.env.TEAMS_INSPECTOR_WEBHOOKS);
+  const out: Record<string, string> = Object.create(null);
+  for (const [name, url] of Object.entries(raw)) out[INSPECTOR_RENAMES[name] ?? name] = url;
+  return out;
 }
 
 /** 현재 프로젝트의 검수자 이름 → 개인방 웹훅. 설정값이 있으면 그것만, 없으면 환경변수 기본 */

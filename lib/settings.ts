@@ -64,14 +64,25 @@ export async function getStartReport(date: string, slug?: string): Promise<Recor
  *  getSetting은 오류를 삼키고 null을 주기 때문에, 그대로 쓰면 일시적 DB 오류를
  *  '아직 아무도 보고 안 함'으로 오해해 그날 기록 전체를 덮어써 버린다. */
 export async function getStartReportForUpdate(date: string, slug?: string): Promise<Record<string, string[]>> {
+  return getAssignMapForUpdate(startReportKey(date), slug);
+}
+
+async function getAssignMapForUpdate(key: string, slug?: string): Promise<Record<string, string[]>> {
   const supabase = createServiceClient(slug);
-  const { data, error } = await supabase
-    .from("app_settings")
-    .select("value")
-    .eq("key", startReportKey(date))
-    .maybeSingle();
+  const { data, error } = await supabase.from("app_settings").select("value").eq("key", key).maybeSingle();
   if (error) throw new Error(`보고 기록을 읽지 못했습니다: ${error.message}`);
   return parseStartReport(typeof data?.value === "string" ? data.value : null);
+}
+
+// 업무일별 설치팀 → 담당 검수자 — JSON {"1팀 홍길동": ["김준영"], …}. 설치시작 보고 화면에서 팀별로 지정(즉시 저장).
+// 설치시작·완료 카드는 그 차량 기록의 설치팀(records.team, 정규화 라벨)으로 이 표를 찾아 검수자 개인방에 보낸다.
+// 카드에는 표시하지 않는다(라우팅 전용). 운수사별 배정(start_report_sent)은 팀 배정이 없을 때의 폴백.
+export const teamInspectorsKey = (date: string) => `team_inspectors:${date}`;
+export async function getTeamInspectors(date: string, slug?: string): Promise<Record<string, string[]>> {
+  return parseStartReport(await getSetting(teamInspectorsKey(date), slug));
+}
+export async function getTeamInspectorsForUpdate(date: string, slug?: string): Promise<Record<string, string[]>> {
+  return getAssignMapForUpdate(teamInspectorsKey(date), slug);
 }
 
 // 설치팀 소속사 선택지 — 관리자 '소속' 탭에서 추가·이름 변경·삭제(app_settings.team_companies, JSON string[]).

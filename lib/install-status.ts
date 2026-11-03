@@ -18,7 +18,7 @@ import { createHash } from "node:crypto";
 import { createServiceClient } from "@/lib/supabase/server";
 
 import { sendStartCard, sendCompletionCard } from "@/lib/teams";
-import { getStartReport, getSlotConfig } from "@/lib/settings";
+import { getInstallTeamsFull, getSlotConfig, getStartReport, getTeamInspectors, makeTeamNormalizer } from "@/lib/settings";
 import { getProject, isDefault } from "@/lib/project";
 import { workDateString } from "@/lib/work-day";
 
@@ -27,19 +27,27 @@ type SB = ReturnType<typeof createServiceClient>;
 const fingerprint = (v: unknown) =>
   createHash("sha256").update(JSON.stringify(v)).digest("hex");
 
-// 그날 이 운수사를 맡은 검수자 — 설치시작 보고에서 지정한 값. 없으면 공용방으로만 간다.
+// 이 차량을 맡은 검수자 — 설치시작 보고에서 설치팀별로 지정한 값(team_inspectors). 팀 배정이 없으면
+// 옛 방식의 운수사별 배정(start_report_sent)을 보고, 그것도 없으면 공용방으로만 간다.
 // 기준 업무일은 "설치를 시작한 시각"(start_notified_at). 완료 카드는 대개 값이 있으므로
 // 업무일 경계(12시)를 넘겨 마무리 저장해도 시작한 날의 담당자에게 그대로 간다.
-async function inspectorsFor(slug: string, operator: string, startedAt: string | null): Promise<string[]> {
+async function inspectorsFor(slug: string, operator: string, startedAt: string | null, team: string): Promise<string[]> {
   const op = operator.trim();
-  if (!op) return [];
   const now = new Date();
-  const found = (await getStartReport(workDateString(startedAt ?? now), slug))[op];
-  if (found || startedAt) return found ?? [];
+  const dates = [workDateString(startedAt ?? now)];
   // 시작 카드 없이 한 번에 저장해 완료된 차량(start_notified_at 없음)은 기준 시각이 '지금'이라,
   // 12시를 넘겨 마무리하면 다음 업무일 키를 보게 된다. 그 경우만 직전 업무일을 한 번 더 본다.
-  const prev = new Date(now.getTime() - 24 * 3600 * 1000);
-  return (await getStartReport(workDateString(prev), slug))[op] ?? [];
+  if (!startedAt) dates.push(workDateString(new Date(now.getTime() - 24 * 3600 * 1000)));
+  // 기록의 팀 표기(구 "부천1"·신 "1팀 홍길동")를 배정표 키(현재 등록된 팀 라벨)로 정규화
+  const label = makeTeamNormalizer(await getInstallTeamsFull(slug))(team);
+  for (const d of dates) {
+    const byTeam = (await getTeamInspectors(d, slug))[label];
+    if (byTeam?.length) return byTeam;
+    const byOp = op ? (await getStartReport(d, slug))[op] : undefined;
+    if (byOp?.length) return byOp;
+    if (byTeam || byOp) return []; // 그날 기록은 있는데 배정이 비어 있음 → 전날까지 보지 않음
+  }
+  return [];
 }
 
 export async function notifyInstallProgress(opts: {
@@ -230,7 +238,7 @@ export async function notifyInstallProgress(opts: {
         startedAt: rec.start_notified_at,
         completedAt,
         photos,
-        inspectors: await inspectorsFor(slug, operator, rec.start_notified_at),
+        inspectors: await inspectorsFor(slug, operator, rec.start_notified_at, team),
         projectName,
         slug,
       });
@@ -267,7 +275,7 @@ export async function notifyInstallProgress(opts: {
         checkNote,
         extraNote,
         startedAt,
-        inspectors: await inspectorsFor(slug, operator, rec.start_notified_at),
+        inspectors: await inspectorsFor(slug, operator, rec.start_notified_at, team),
         projectName,
         slug,
       });

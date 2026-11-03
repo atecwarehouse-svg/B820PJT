@@ -4,8 +4,11 @@ import { sendProgressCard, sendStartReportCard, inspectorNames } from "@/lib/tea
 import {
   getStartReport,
   getStartReportForUpdate,
+  getTeamInspectors,
+  getTeamInspectorsForUpdate,
   setSetting,
   startReportKey,
+  teamInspectorsKey,
 } from "@/lib/settings";
 
 export const runtime = "nodejs";
@@ -41,14 +44,14 @@ function cleanInspectors(v: unknown, known: Set<string>): string[] {
 // GET /api/teams/share?date=YYYY-MM-DD → 시작 보고를 마친 운수사 목록 + 운수사별 담당 검수자
 export async function GET(req: NextRequest) {
   const date = req.nextUrl.searchParams.get("date");
-  const map = isDate(date) ? await getStartReport(date) : {};
-  return NextResponse.json({ sentOps: Object.keys(map), assignments: map });
+  const [map, teams] = isDate(date) ? await Promise.all([getStartReport(date), getTeamInspectors(date)]) : [{}, {}];
+  return NextResponse.json({ sentOps: Object.keys(map), assignments: map, teamAssignments: teams });
 }
 
 // PATCH /api/teams/share — 이미 보고한 운수사의 담당 검수자만 수정.
 // 팀즈 카드는 보내지 않는다(보고 중복 발송 방지). 보고 잠금도 그대로 유지된다.
 export async function PATCH(req: NextRequest) {
-  let b: { date?: string; operator?: string; inspectors?: unknown };
+  let b: { date?: string; operator?: string; team?: string; inspectors?: unknown };
   try {
     b = await req.json();
   } catch {
@@ -59,6 +62,23 @@ export async function PATCH(req: NextRequest) {
   }
   const operator = String(b.operator ?? "").trim();
   const inspectors = cleanInspectors(b.inspectors, new Set(await inspectorNames()));
+
+  // 설치팀별 담당 검수자 — 보고와 무관하게 즉시 저장(라우팅 전용, 카드에는 안 나감). 빈 배열이면 배정 해제.
+  const team = String(b.team ?? "").trim();
+  if (team) {
+    try {
+      const map = await getTeamInspectorsForUpdate(b.date);
+      if (inspectors.length) map[team] = inspectors;
+      else delete map[team];
+      await setSetting(teamInspectorsKey(b.date), JSON.stringify(map));
+      return NextResponse.json({ ok: true, inspectors });
+    } catch (e) {
+      return NextResponse.json(
+        { error: "담당 저장 실패: " + (e instanceof Error ? e.message : "알 수 없는 오류") },
+        { status: 500 },
+      );
+    }
+  }
 
   try {
     const map = await getStartReportForUpdate(b.date);

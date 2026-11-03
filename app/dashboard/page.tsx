@@ -36,7 +36,7 @@ import RefreshButton from "@/components/RefreshButton";
 import DashboardDetailTabs from "@/components/DashboardDetailTabs";
 import { isProgressUnlocked } from "@/lib/admin-auth";
 import { brandName, currentProject, currentSlug, isDefault } from "@/lib/project";
-import { PROJECT_PERIOD_KEY, getConsultConfig, getSetting, parsePeriod } from "@/lib/settings";
+import { PROJECT_PERIOD_KEY, getConsultConfig, getInstallTeamsFull, getSetting, parsePeriod, teamLabel } from "@/lib/settings";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -229,6 +229,7 @@ export default async function DashboardPage() {
             startComplete={startComplete}
             startRemain={startRemain}
             inspectorList={await inspectorNames(slug)}
+            teamList={(await getInstallTeamsFull(slug)).map(teamLabel)}
             brand={brand}
           />
           {ip && (
