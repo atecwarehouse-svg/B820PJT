@@ -7,12 +7,13 @@ import { compressImage } from "@/lib/image-compress";
 
 interface Props {
   initialUrls: Record<string, string>;
+  check: SlotDef[]; // 프로젝트 사진 양식(설치전 특이사항)
   before: SlotDef[]; // 프로젝트 사진 양식(설치 전)
   after: SlotDef[]; // 프로젝트 사진 양식(설치 후)
 }
 
-// 기준(양식) 사진 관리 — 슬롯별 올바른 예시 사진 1장 업로드/교체/삭제.
-export default function ReferenceManager({ initialUrls, before, after }: Props) {
+// 기준(예시) 사진 관리 — 슬롯별 올바른 예시 사진 1장 업로드/교체/삭제. 촬영 화면 칸의 '예시' 버튼에 보인다.
+export default function ReferenceManager({ initialUrls, check, before, after }: Props) {
   const [urls, setUrls] = useState<Record<string, string>>(initialUrls);
 
   return (
@@ -26,9 +27,16 @@ export default function ReferenceManager({ initialUrls, before, after }: Props) 
       </div>
 
       <p className="mb-4 rounded-lg bg-blue-50 px-3 py-2.5 text-xs leading-relaxed text-gray-600">
-        칸마다 <b>올바른 예시 사진</b>을 올려두면, 사용자가 사진을 올릴 때 Gemini가 이 기준과
-        비교해 <b>다른 대상·잘못된 칸</b>이면 저장을 막습니다. (기준사진이 없는 칸은 비교하지 않음)
+        칸마다 <b>올바른 예시 사진</b>을 올려두면 촬영 화면의 그 칸에 <b>「예시」 버튼</b>이 생겨
+        작업자가 눌러 크게 볼 수 있습니다. (예시가 없는 칸은 버튼이 보이지 않음)
       </p>
+
+      <SectionHeader title="설치전 특이사항" />
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+        {check.map((slot) => (
+          <ReferenceSlot key={slot.slotKey} slot={slot} url={urls[slot.slotKey]} setUrls={setUrls} />
+        ))}
+      </div>
 
       <SectionHeader title="설치 전" />
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">

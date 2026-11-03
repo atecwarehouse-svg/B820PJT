@@ -19,6 +19,7 @@ interface Props {
   onToggleNoTerminal?: (slotKey: string, value: boolean) => void;
   naLabel?: string; // 없음 체크 라벨 (기본 "단말기 없음", 이상유무 칸은 "없음")
   required?: boolean; // 사진 필수 칸 — 라벨에 * 표시
+  exampleUrl?: string | null; // 기준(예시) 사진 — 있으면 '예시' 버튼으로 크게 보여준다
 }
 
 export default function PhotoSlot({
@@ -35,8 +36,10 @@ export default function PhotoSlot({
   onToggleNoTerminal,
   naLabel = "단말기 없음",
   required,
+  exampleUrl,
 }: Props) {
   const [url, setUrl] = useState<string | null>(initialUrl ?? null);
+  const [exampleOpen, setExampleOpen] = useState(false); // 예시 사진 크게 보기
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // 이번에 촬영한 원본 파일·서버 URL — '휴대폰에 저장' 버튼용
@@ -153,6 +156,15 @@ export default function PhotoSlot({
           {slot.label}
           {required && <span className="ml-0.5 text-red-500">*</span>}
         </span>
+        {exampleUrl && (
+          <button
+            type="button"
+            onClick={() => setExampleOpen(true)}
+            className="shrink-0 rounded border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[11px] font-semibold text-amber-700 active:bg-amber-100"
+          >
+            예시
+          </button>
+        )}
         {slot.isCustom && onRemoveSlot && (
           <button
             onClick={() => onRemoveSlot(slot.slotKey)}
@@ -239,6 +251,19 @@ export default function PhotoSlot({
             </button>
           )}
         </>
+      )}
+
+      {/* 예시 사진 크게 보기 — 아무 데나 누르면 닫힘 */}
+      {exampleOpen && exampleUrl && (
+        <div
+          className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/80 p-4"
+          onClick={() => setExampleOpen(false)}
+        >
+          <p className="mb-2 text-sm font-semibold text-white">예시 — {slot.label}</p>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={exampleUrl} alt={`${slot.label} 예시`} className="max-h-[80vh] max-w-full rounded-lg object-contain" />
+          <p className="mt-2 text-xs text-gray-300">화면을 누르면 닫힙니다</p>
+        </div>
       )}
 
       {/* 촬영(후면 카메라) */}

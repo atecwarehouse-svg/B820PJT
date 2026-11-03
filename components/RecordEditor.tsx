@@ -26,6 +26,7 @@ interface Props {
   plate: string;
   initial: RecordBundle;
   teamOptions?: string[]; // 설치팀 선택지 (관리자 페이지에서 관리, 비면 직접 입력)
+  exampleUrls?: Record<string, string>; // 칸별 기준(예시) 사진 URL — 관리자 기준사진 페이지에서 등록, 있으면 '예시' 버튼
 }
 
 function todayStr(): string {
@@ -41,7 +42,7 @@ const STEPS = ["설치전 특이사항", "설치 전", "설치 후"] as const;
 // 타코케이블 Y자 사진 촬영 시 특이사항에 자동으로 넣는 문구
 const TACHO_Y_NOTE = "타코케이블 Y자 있음";
 
-export default function RecordEditor({ plate, initial, teamOptions = [], brand = "B820", slotConfig = DEFAULT_SLOT_CONFIG }: Props) {
+export default function RecordEditor({ plate, initial, teamOptions = [], brand = "B820", slotConfig = DEFAULT_SLOT_CONFIG, exampleUrls = {} }: Props) {
   const cfg = slotConfig; // 프로젝트별 사진 양식(칸 구성)
   const vehicle = initial.vehicle!;
   const installDate = initial.record?.install_date ?? todayStr();
@@ -844,7 +845,7 @@ export default function RecordEditor({ plate, initial, teamOptions = [], brand =
                   plate={plate}
                   slot={slot}
                   sortOrder={i}
-                  initialUrl={urls[slot.slotKey] ?? null}
+                  initialUrl={urls[slot.slotKey] ?? null} exampleUrl={exampleUrls[slot.slotKey] ?? null}
                   onUploaded={handleUploaded}
                   onDeleted={handleDeleted}
                   onError={handleSlotError}
@@ -926,7 +927,7 @@ export default function RecordEditor({ plate, initial, teamOptions = [], brand =
                 plate={plate}
                 slot={slot}
                 sortOrder={i}
-                initialUrl={urls[slot.slotKey] ?? null}
+                initialUrl={urls[slot.slotKey] ?? null} exampleUrl={exampleUrls[slot.slotKey] ?? null}
                 onUploaded={handleUploaded}
                 onDeleted={handleDeleted}
                 onError={handleSlotError}
@@ -965,7 +966,7 @@ export default function RecordEditor({ plate, initial, teamOptions = [], brand =
                   plate={plate}
                   slot={slot}
                   sortOrder={i}
-                  initialUrl={urls[slot.slotKey] ?? null}
+                  initialUrl={urls[slot.slotKey] ?? null} exampleUrl={exampleUrls[slot.slotKey] ?? null}
                   onUploaded={handleUploaded}
                   onDeleted={handleDeleted}
                   onError={handleSlotError}
