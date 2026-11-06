@@ -119,6 +119,13 @@ export default async function HomePage() {
           배차표·VOC·호출 팝업(fixed)이 이 안에 있어 transform 애니메이션(animate-rise) 금지 —
           iOS 사파리는 애니메이션이 끝난 뒤에도 조상 transform 기준으로 fixed 를 잡아 팝업 아래가 잘린다. 투명도만 */}
       <div className="mt-4 grid grid-cols-2 gap-2.5 motion-safe:animate-fade-in" style={{ animationDelay: "160ms" }}>
+        {/* 공항 B800 전용 — 안내방송 결선 작업지도서(public/manuals, 이미지 내장 단일 HTML). 정적 파일이라 /p/ 접두사 없이 새 탭 */}
+        {slug === "b800air" && (
+          <a href="/manuals/b800air-pa-wiring.html" target="_blank" rel="noopener" className="home-tile col-span-2 !flex-row gap-2 !py-3 text-blue-700">
+            <span className="emoji !h-9 !w-9 bg-blue-50 text-xl">🔌</span>
+            안내방송 결선도
+          </a>
+        )}
         <AdminCallButton />
         <DispatchButton />
         <VocModal />
