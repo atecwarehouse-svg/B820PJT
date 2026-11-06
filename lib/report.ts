@@ -50,13 +50,20 @@ export interface ServiceCheck {
   kakaoStatus?: string; // 카카오(초정밀) — "ok" | "issue"
   kakaoSymptom?: string; // 카카오 이상 증상
   hideBisKakao?: boolean; // BIS·카카오 항목 자체를 빼는 프로젝트(공항버스 — 인천 BIS·초정밀 대상 아님)
+  driverEduNote?: string; // 승무사원 교육을 체크 대신 고정 문구로 표기(공항 B800 — 교육자 출근 시각 기준 예정 안내)
 }
+
+// 프로젝트별 승무사원 교육 고정 문구 — 있으면 금일완료 리포트 점검란의 체크박스 대신 이 문구가 항상 들어간다
+export const DRIVER_EDU_FIXED: Record<string, string> = {
+  b800air: "3:30(교육자 출근) 첫차 운행기사부터 교육 예정",
+};
 
 // 점검 입력이 하나라도 있는지 (없으면 리포트에서 섹션 생략)
 export function hasServiceCheck(c?: ServiceCheck): boolean {
   if (!c) return false;
   return Boolean(
     c.driverEdu ||
+      (c.driverEduNote ?? "").trim() ||
       c.fareSetting ||
       (c.baseFare ?? "").trim() ||
       c.bisStatus ||
@@ -84,7 +91,7 @@ export function serviceCheckRows(c?: ServiceCheck): { title: string; value: stri
           : "⚠️ 이상"
         : "⬜ 미확인";
   return [
-    { title: "승무사원 교육", value: mark(c!.driverEdu, "교육완료") },
+    { title: "승무사원 교육", value: c!.driverEduNote?.trim() ? `🕒 ${c!.driverEduNote.trim()}` : mark(c!.driverEdu, "교육완료") },
     { title: "요금세팅", value: fareVal },
     ...(c!.hideBisKakao
       ? []

@@ -29,6 +29,7 @@ import ProgressRateChart from "@/components/ProgressRateChart";
 import ScheduleMoveModal from "@/components/ScheduleMoveModal";
 import InstallDateSearch from "@/components/InstallDateSearch";
 import DailyReportModal from "@/components/DailyReportModal";
+import { DRIVER_EDU_FIXED } from "@/lib/report";
 import KpiCards from "@/components/KpiCards";
 import CompletedListModal from "@/components/CompletedListModal";
 import DriveOpenButton from "@/components/DriveOpenButton";
@@ -252,6 +253,8 @@ export default async function DashboardPage() {
               projectLabel={projectLabel}
               // 공항버스는 인천 BIS·카카오 초정밀버스 대상이 아니라 점검란에서 두 항목을 뺀다
               hideBisKakao={slug === "b800air"}
+              // 승무사원 교육은 체크 대신 고정 문구(3:30 교육자 출근 기준) — lib/report DRIVER_EDU_FIXED
+              driverEduNote={DRIVER_EDU_FIXED[slug]}
             />
           )}
           <ProgressDownloadButton today={today} scheduleDays={scheduleDays} />

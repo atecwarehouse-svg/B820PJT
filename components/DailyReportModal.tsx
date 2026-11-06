@@ -15,6 +15,7 @@ export default function DailyReportModal(props: {
   inProgress?: number;
   projectLabel?: string; // 리포트 미리보기 머리말(프로젝트명)
   hideBisKakao?: boolean; // 점검란 BIS·카카오 항목 제외 (공항 B800)
+  driverEduNote?: string; // 승무사원 교육 고정 문구 (공항 B800)
 }) {
   const [open, setOpen] = useState(false);
   const [stage, setStage] = useState<1 | 2>(1);

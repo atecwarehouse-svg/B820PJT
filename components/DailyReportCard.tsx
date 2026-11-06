@@ -138,6 +138,7 @@ export default function DailyReportCard({
   onSent,
   projectLabel,
   hideBisKakao = false,
+  driverEduNote,
 }: {
   completedList: CompletedVehicle[];
   scheduleDays: ScheduleDay[];
@@ -150,6 +151,7 @@ export default function DailyReportCard({
   onSent?: (recipients: string[], teamsSent?: boolean) => void; // 발송 성공 시 부모가 완료 팝업 표시 (팀즈 카드 전송 여부 포함)
   projectLabel?: string; // 미리보기 머리말 "[…]" — 프로젝트명(기본 B820 문구)
   hideBisKakao?: boolean; // 점검란에서 BIS(인천)·카카오(초정밀) 항목 제외 (공항 B800)
+  driverEduNote?: string; // 승무사원 교육 고정 문구 — 있으면 체크박스 대신 이 문구가 리포트에 항상 들어간다 (공항 B800)
 }) {
   const [date, setDate] = useState(today);
   const [planned, setPlanned] = useState(""); // 금일 계획 수량 직접 입력
@@ -431,8 +433,9 @@ export default function DailyReportCard({
       kakaoStatus,
       kakaoSymptom,
       ...(hideBisKakao ? { hideBisKakao: true } : {}),
+      ...(driverEduNote ? { driverEduNote } : {}),
     }),
-    [driverEdu, fareSetting, baseFare, bisStatus, bisSymptom, kakaoStatus, kakaoSymptom, hideBisKakao],
+    [driverEdu, fareSetting, baseFare, bisStatus, bisSymptom, kakaoStatus, kakaoSymptom, hideBisKakao, driverEduNote],
   );
 
   // 내용을 바꾸면 다시 발송 가능
@@ -536,11 +539,18 @@ export default function DailyReportCard({
       {/* 운행시작 점검 (특이사항 위) */}
       <div className="mt-3 space-y-2 rounded-xl border border-gray-200 bg-gray-50/60 p-3">
         <p className="text-xs font-semibold text-gray-700">운행시작 점검</p>
-        <ChkRow
-          checked={driverEdu}
-          onChange={setDriverEdu}
-          label="첫차 운행시작 · 승무사원 교육 완료"
-        />
+        {driverEduNote ? (
+          <div className="rounded-lg border border-gray-200 bg-white px-2.5 py-2">
+            <span className="block text-xs font-medium text-gray-800">승무사원 교육</span>
+            <span className="mt-0.5 block text-[11px] text-gray-500">🕒 {driverEduNote} (고정 문구)</span>
+          </div>
+        ) : (
+          <ChkRow
+            checked={driverEdu}
+            onChange={setDriverEdu}
+            label="첫차 운행시작 · 승무사원 교육 완료"
+          />
+        )}
         <ChkRow
           checked={fareSetting}
           onChange={setFareSetting}
