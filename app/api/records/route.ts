@@ -7,10 +7,9 @@ import { autoEndPledgeSessions } from "@/lib/pledge-end";
 import { currentSlug } from "@/lib/project";
 import { runAfterResponse } from "@/lib/background";
 import { checkAdminPassword, isAdmin } from "@/lib/admin-auth";
-import { kstDateString, workDateString } from "@/lib/work-day";
+import { kstDateString } from "@/lib/work-day";
 import { revalidateTag } from "next/cache";
-import { isQuotaMode } from "@/lib/settings";
-import { settleQuota } from "@/lib/quota";
+import { settleIfQuota } from "@/lib/quota";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -222,14 +221,7 @@ export async function POST(req: NextRequest) {
   // 수량 차감 방식(quota_mode) — 작업 시작(기록 최초 생성)·완료 시 이 차량의 예정일을 오늘(업무일)로
   // 끌어온다(오늘 예정·미착수 차량과 자리 교환, 없으면 미래 수량 차감). 실패해도 저장은 유지.
   const completing = !!body.saved && !body.mid && !existing?.saved_at;
-  if ((!existing || completing) && (await isQuotaMode())) {
-    try {
-      const moves = await settleQuota(supabase, plate, workDateString(new Date()));
-      if (moves.length) revalidateTag("dashboard");
-    } catch (e) {
-      console.error("[quota] 예정일 재배정 실패", plate, e instanceof Error ? e.message : e);
-    }
-  }
+  if ((!existing || completing) && (await settleIfQuota(supabase, plate))) revalidateTag("dashboard");
 
   // 팀즈 시작/완료 알림은 '저장' 버튼(saved=true)에서만 발송 —
   // 칸 충족 + 내용 지문 비교(수정사항 있으면 재발송)는 공용 헬퍼가 판정.

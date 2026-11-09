@@ -6,8 +6,10 @@
 //             자리를 바꿔 일자별 수량 유지, 없으면 원래 날짜(미래) 수량에서 1대 차감.
 //   carry   — 지난 날짜에 남은 미완료 차량은 그 운수사의 오늘 이후 가장 가까운 예정일로 이월.
 // vehicles 부분 갱신은 반드시 update().in()/eq() — upsert는 operator not-null에 걸린다.
-import type { createServiceClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/server";
 import { chunk, fetchAll } from "@/lib/supabase/paginate";
+import { isQuotaMode } from "@/lib/settings";
+import { workDateString } from "@/lib/work-day";
 
 type SB = ReturnType<typeof createServiceClient>;
 export type Move = { plate: string; from: string | null; to: string };
@@ -86,20 +88,24 @@ export async function carryOverQuota(sb: SB, today: string, operator?: string, o
 
 /** 차량 작업 시작·완료 — 예정일을 오늘로 끌어온다(자리 교환 또는 수량 차감). 이월도 함께 처리. */
 export async function settleQuota(sb: SB, plate: string, today: string, opts: Opts = {}): Promise<Move[]> {
-  const { data: v, error } = await sb
-    .from("vehicles")
-    .select("plate, operator, planned_date")
-    .eq("plate", plate)
-    .maybeSingle();
+  const sel = (cols: string) => sb.from("vehicles").select(cols).eq("plate", plate).maybeSingle();
+  let { data: v, error } = await sel("plate, operator, planned_date, is_added");
+  if (error && /is_added/i.test(error.message)) ({ data: v, error } = await sel("plate, operator, planned_date")); // 옛 DB 폴백
   if (error) throw new Error(error.message);
   if (!v) return [];
-  const op = (v.operator as string | null) ?? "";
+  const veh = v as unknown as { operator: string | null; planned_date: string | null; is_added?: boolean | null };
+  if (veh.is_added) return []; // 증차 차량은 합의 수량 밖 — 다른 집계와 같이 예정일 없이 둔다
+  const op = veh.operator ?? "";
   const moves = await carryOverQuota(sb, today, op, opts);
-  const cur = ymd(v.planned_date);
+  // 이월이 이 차량도 옮겼으면(지난 날짜 예정) 옮긴 뒤 날짜가 현재값 — 옛 날짜로 남을 자리를 교환하면 안 됨
+  let cur = ymd(veh.planned_date);
+  const mine = moves.find((m) => m.plate === plate);
+  if (mine) cur = mine.to;
   if (cur === today) return moves;
 
+  // 자리 교환은 내 예정일이 미래일 때만 — 과거 날짜(남은 예정일이 없어 이월 못 한 경우)로 다른 차량을 보내지 않는다
   let swap: string | null = null;
-  if (cur) {
+  if (cur && cur > today) {
     const { data: todays, error: tErr } = await sb
       .from("vehicles")
       .select("plate")
@@ -115,10 +121,39 @@ export async function settleQuota(sb: SB, plate: string, today: string, opts: Op
     }
   }
   if (!opts.dryRun) {
+    // 내 예정일부터 조건부 갱신(CAS) — 첫 사진 업로드와 팀명 자동저장이 동시에 기록을 만들면 두 요청이
+    // 모두 여기 오는데, 한쪽만 성공해야 교환 상대가 두 대 옮겨지는 일이 없다.
+    let q = sb.from("vehicles").update({ planned_date: today }).eq("plate", plate);
+    q = cur ? q.eq("planned_date", cur) : q.is("planned_date", null);
+    const { data: hit, error: uErr } = await q.select("plate");
+    if (uErr) throw new Error(uErr.message);
+    if (!hit?.length) return moves; // 다른 요청이 먼저 처리함
     if (swap && cur) await setDates(sb, [swap], cur);
-    await setDates(sb, [plate], today);
   }
   if (swap && cur) moves.push({ plate: swap, from: today, to: cur });
   moves.push({ plate, from: cur, to: today });
   return moves;
+}
+
+// ── 호출부 공용 — 설정이 꺼져 있으면 아무것도 안 하고, 실패해도 저장·조회 흐름을 막지 않는다 ──
+
+/** 작업 시작·완료 시점용. 예정일이 바뀌었으면 true(호출부가 대시보드 캐시 갱신). */
+export async function settleIfQuota(sb: SB, plate: string, slug?: string): Promise<boolean> {
+  if (!(await isQuotaMode(slug))) return false;
+  try {
+    return (await settleQuota(sb, plate, workDateString(new Date()))).length > 0;
+  } catch (e) {
+    console.error("[quota] 예정일 재배정 실패", plate, e instanceof Error ? e.message : e);
+    return false;
+  }
+}
+
+/** 금일 목록을 읽기 전 이월 정리용(배차표 옵션·설치시작 보고·대시보드). */
+export async function carryOverIfQuota(slug: string): Promise<void> {
+  if (!(await isQuotaMode(slug))) return;
+  try {
+    await carryOverQuota(createServiceClient(slug), workDateString(new Date()));
+  } catch (e) {
+    console.error("[quota] 이월 실패", slug, e instanceof Error ? e.message : e);
+  }
 }

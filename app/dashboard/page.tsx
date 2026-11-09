@@ -38,8 +38,7 @@ import DashboardDetailTabs from "@/components/DashboardDetailTabs";
 import { isProgressUnlocked } from "@/lib/admin-auth";
 import { brandName, currentProject, currentSlug, isDefault } from "@/lib/project";
 import { PROJECT_PERIOD_KEY, getConsultConfig, getInstallTeamsFull, getSetting, isQuotaMode, parsePeriod, teamLabel } from "@/lib/settings";
-import { createServiceClient } from "@/lib/supabase/server";
-import { carryOverQuota } from "@/lib/quota";
+import { carryOverIfQuota } from "@/lib/quota";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -151,7 +150,7 @@ export default async function DashboardPage() {
   // 수량 차감 방식(공항버스형) — 아침에 열어도 지난 미완료 차량이 오늘(다음 예정일)로 이월돼 있게 먼저 정리.
   // (렌더 중이라 revalidateTag는 못 부르고, 60초 캐시 뒤 반영 — 날짜 바뀐 날 첫 조회는 캐시가 없어 즉시 반영)
   const quota = await isQuotaMode(slug);
-  if (quota) await carryOverQuota(createServiceClient(slug), todayWork).catch(() => undefined);
+  if (quota) await carryOverIfQuota(slug);
   const [todayPlanGroups, excludedPlates] = await Promise.all([
     getTodayPlan(slug, todayKey, quota),
     getTodayExcluded(slug, todayKey),

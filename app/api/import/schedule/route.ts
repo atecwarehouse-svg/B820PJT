@@ -140,7 +140,8 @@ export async function POST(req: NextRequest) {
       )).map((r) => r.plate),
     );
     for (const r of parsed.rows) {
-      if (started.has(r.plate) && before.has(r.plate)) r.planned_date = before.get(r.plate)!.planned;
+      const kept = started.has(r.plate) ? before.get(r.plate)?.planned : null;
+      if (kept) r.planned_date = kept; // 기존 예정일이 없던 차량(증차·설정 전 착수)은 파일 날짜를 받는다
     }
   }
 

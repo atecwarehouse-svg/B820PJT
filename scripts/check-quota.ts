@@ -23,4 +23,7 @@ assert.equal(
 assert.equal(pickSwap([{ plate: "서울70사8201", started: false }], "서울70사8201"), null);
 assert.equal(pickSwap([{ plate: "서울70사8201", started: true }], "서울71사1955"), null);
 
+// 교환은 내 예정일이 미래일 때만 — 과거 날짜 비교 규칙(settleQuota의 cur > today 가드와 동일 문자열 비교)
+assert.ok("2026-11-16" > "2026-11-13" && !("2026-11-08" > "2026-11-09"));
+
 console.log("OK — check-quota");

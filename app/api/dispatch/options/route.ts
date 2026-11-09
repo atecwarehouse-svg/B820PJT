@@ -1,10 +1,7 @@
 import { NextResponse } from "next/server";
 import { currentSlug } from "@/lib/project";
 import { loadOperatorSchedules } from "@/lib/stats";
-import { createServiceClient } from "@/lib/supabase/server";
-import { isQuotaMode } from "@/lib/settings";
-import { carryOverQuota } from "@/lib/quota";
-import { workDateString } from "@/lib/work-day";
+import { carryOverIfQuota } from "@/lib/quota";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -14,10 +11,7 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   try {
     const slug = currentSlug();
-    // 수량 차감 방식 — 지난 날짜에 남은 미완료 차량을 다음 예정일로 이월한 뒤 목록을 만든다(멱등)
-    if (await isQuotaMode(slug)) {
-      await carryOverQuota(createServiceClient(slug), workDateString(new Date())).catch(() => undefined);
-    }
+    await carryOverIfQuota(slug); // 수량 차감 방식 — 지난 미완료 차량을 다음 예정일로 이월한 뒤 목록(멱등)
     const operators = await loadOperatorSchedules(slug);
     return NextResponse.json({ operators });
   } catch {
