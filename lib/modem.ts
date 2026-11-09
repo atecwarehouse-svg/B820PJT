@@ -51,8 +51,9 @@ export interface ModemEntry {
   hasPhoto: boolean; // 엑셀 G열 '사진 유무'
 }
 
-// Drive 최상위 폴더명 — 루트(GDRIVE_FOLDER_ID)/LTE모뎀불량/운수사명/차량번호
-export const MODEM_FOLDER = "LTE모뎀불량";
+// Drive 최상위 폴더명 — 루트(GDRIVE_FOLDER_ID)/예비품불량/운수사명/차량번호
+// (2026-11-09 'LTE모뎀불량'에서 변경 — 기존 Drive 폴더는 같은 이름으로 rename해 그대로 이어 씀)
+export const MODEM_FOLDER = "예비품불량";
 
 // DB 차량번호(인천70바4652) → AI텔레콤 양식 표기(70-4652).
 // 형식이 다르면 원본 그대로 둔다.
