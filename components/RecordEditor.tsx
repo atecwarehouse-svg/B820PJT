@@ -16,6 +16,7 @@ import {
   type CustomSlot,
 } from "@/lib/slots";
 import { publicPhotoUrl } from "@/lib/photo-url";
+import { choicesMissing, readChoices, writeChoice, type Answer, type ChoiceDef } from "@/lib/check-choices";
 import PhotoSlot from "@/components/PhotoSlot";
 import { clientProjectPath } from "@/components/PLink";
 import { navLoading } from "@/components/NavLoading";
@@ -27,13 +28,8 @@ interface Props {
   initial: RecordBundle;
   teamOptions?: string[]; // 설치팀 선택지 (관리자 페이지에서 관리, 비면 직접 입력)
   exampleUrls?: Record<string, string>; // 칸별 기준(예시) 사진 URL — 관리자 기준사진 페이지에서 등록, 있으면 '예시' 버튼
-  tvCheck?: boolean; // 공항 B800: 1단계에 'AUX(TV) 설정 후 TV소리' 확인(Y/N/TV없음) 필수 — Y/N은 비고에 자동 기재
+  choices?: ChoiceDef[]; // 1단계 선택 확인 항목(공항 B800: TV소리·라디오·차량파손, lib/check-choices) — 필수, 답은 비고에 자동 기재
 }
-
-// TV소리 확인 — 비고(check_note)에 넣는 문구. 'TV없음'은 문구 없이 check_na_slots에 TV_NA_KEY로만 기록
-const TV_NOTE = { Y: "TV소리 나옴", N: "TV소리 안나옴" } as const;
-const TV_NA_KEY = "check_tv";
-type TvAnswer = keyof typeof TV_NOTE | "none";
 
 function todayStr(): string {
   const d = new Date();
@@ -48,7 +44,7 @@ const STEPS = ["설치전 특이사항", "설치 전", "설치 후"] as const;
 // 타코케이블 Y자 사진 촬영 시 특이사항에 자동으로 넣는 문구
 const TACHO_Y_NOTE = "타코케이블 Y자 있음";
 
-export default function RecordEditor({ plate, initial, teamOptions = [], brand = "B820", slotConfig = DEFAULT_SLOT_CONFIG, exampleUrls = {}, tvCheck = false }: Props) {
+export default function RecordEditor({ plate, initial, teamOptions = [], brand = "B820", slotConfig = DEFAULT_SLOT_CONFIG, exampleUrls = {}, choices = [] }: Props) {
   const cfg = slotConfig; // 프로젝트별 사진 양식(칸 구성)
   const vehicle = initial.vehicle!;
   const installDate = initial.record?.install_date ?? todayStr();
@@ -96,16 +92,12 @@ export default function RecordEditor({ plate, initial, teamOptions = [], brand =
     const na = new Set(rec?.na_slots ?? []);
     const checkNa = new Set(rec?.check_na_slots ?? []);
     const customs = rec?.custom_slots ?? [];
-    const noteLines = (rec?.check_note ?? "").split("\n").map((l) => l.trim());
-    const tvDone =
-      !tvCheck ||
-      noteLines.includes(TV_NOTE.Y) ||
-      noteLines.includes(TV_NOTE.N) ||
-      checkNa.has(TV_NA_KEY);
+    const choicesDone =
+      !choicesMissing(choices, readChoices(choices, rec?.check_note ?? "", rec?.check_na_slots ?? []));
     const checkDone =
       !!(rec?.team ?? "").trim() &&
       !!(rec?.check_note ?? "").trim() &&
-      tvDone &&
+      choicesDone &&
       buildCheckSlots(customs, cfg.check).every(
         (s) =>
           photoKeys.has(s.slotKey) ||
@@ -324,28 +316,17 @@ export default function RecordEditor({ plate, initial, teamOptions = [], brand =
     saveRecord({ check_na_slots: next });
   }
 
-  // TV소리 확인 답 — 비고 문구(Y/N)·없음 체크(TV없음)에서 역산(저장값이 곧 상태라 재진입해도 유지)
-  const noteLines = checkNote.split("\n").map((l) => l.trim());
-  const tvAnswer: TvAnswer | null = noteLines.includes(TV_NOTE.Y)
-    ? "Y"
-    : noteLines.includes(TV_NOTE.N)
-      ? "N"
-      : checkNaSlots.includes(TV_NA_KEY)
-        ? "none"
-        : null;
-  const tvMissing = tvCheck && !tvAnswer;
-  const TV_MSG = "라디오모드 AUX(TV) 설정 후 TV소리 확인(Y/N/TV없음)을 선택해주세요";
-  function setTvAnswer(v: TvAnswer) {
-    const rest = noteLines.filter((l) => l && l !== TV_NOTE.Y && l !== TV_NOTE.N);
-    // Y/N 문구를 넣을 때만 '없음'을 걷어낸다(TV없음은 비고를 그대로 둠)
-    const nextNote = (v === "none" ? rest : [TV_NOTE[v], ...rest.filter((l) => l !== "없음")]).join("\n");
-    const nextNa =
-      v === "none"
-        ? Array.from(new Set([...checkNaSlots, TV_NA_KEY]))
-        : checkNaSlots.filter((k) => k !== TV_NA_KEY);
-    setCheckNote(nextNote);
-    setCheckNaSlots(nextNa);
-    saveRecord({ check_note: nextNote, check_na_slots: nextNa });
+  // 1단계 선택 확인 항목(공항 B800) — 답은 비고 문구·없음 체크에서 역산(저장값이 곧 상태라 재진입해도 유지)
+  const answers = readChoices(choices, checkNote, checkNaSlots);
+  const choiceMsg = choicesMissing(choices, answers); // null이면 전부 답함
+  // 추가 입력칸 타이핑 중 원문 — 비고 줄은 trim돼 저장되므로 끝 공백("앞범퍼 ")이 다음 글자 전에 사라지는 것 방지
+  const [detailDraft, setDetailDraft] = useState<Record<string, string>>({});
+  // save=false는 추가 입력칸 타이핑(blur 때 저장)
+  function setChoice(key: string, ans: Answer, save = true) {
+    const r = writeChoice(choices, checkNote, checkNaSlots, key, ans);
+    setCheckNote(r.note);
+    setCheckNaSlots(r.na);
+    if (save) saveRecord({ check_note: r.note, check_na_slots: r.na });
   }
 
   function toggleEditInfo() {
@@ -417,8 +398,8 @@ export default function RecordEditor({ plate, initial, teamOptions = [], brand =
       );
       return;
     }
-    if (tvMissing) {
-      showToast(TV_MSG, "error");
+    if (choiceMsg) {
+      showToast(choiceMsg, "error");
       return;
     }
     if (!checkNote.trim()) {
@@ -449,9 +430,9 @@ export default function RecordEditor({ plate, initial, teamOptions = [], brand =
       );
       return;
     }
-    if (tvMissing) {
+    if (choiceMsg) {
       setStep(0);
-      showToast(TV_MSG, "error");
+      showToast(choiceMsg, "error");
       return;
     }
     if (!checkNote.trim()) {
@@ -486,14 +467,14 @@ export default function RecordEditor({ plate, initial, teamOptions = [], brand =
   async function handleSave(naOverride?: string[]) {
     const missingReq = missingRequiredCheck();
     const unmarked = unmarkedCheck();
-    if (!team.trim() || tvMissing || !checkNote.trim() || missingReq || unmarked) {
+    if (!team.trim() || choiceMsg || !checkNote.trim() || missingReq || unmarked) {
       // 앞 단계 입력이 비어 있으면(다른 탭 수정 등) 해당 단계로 되돌린다
       setStep(0);
       showToast(
         !team.trim()
           ? "팀명을 입력해야 저장할 수 있습니다"
-          : tvMissing
-            ? TV_MSG
+          : choiceMsg
+            ? choiceMsg
             : !checkNote.trim()
               ? "비고(설치전 특이사항)를 입력해주세요. 없으면 '없음'"
               : missingReq
@@ -914,38 +895,57 @@ export default function RecordEditor({ plate, initial, teamOptions = [], brand =
               <span className="text-xs">항목 추가</span>
             </button>
           </div>
-          {tvCheck && (
-            <div className={`mt-3 rounded-lg border px-3 py-2.5 ${tvAnswer ? "border-gray-300 bg-white" : "border-red-300 bg-red-50"}`}>
-              <span className="text-xs text-gray-500">
-                라디오모드 AUX(TV) 설정 후 TV소리가 나오는지 <span className="text-red-500">*</span>
-              </span>
-              <div className="mt-1.5 grid grid-cols-3 gap-2">
-                {(
-                  [
-                    ["Y", "Y (소리 나옴)"],
-                    ["N", "N (소리 안나옴)"],
-                    ["none", "TV없음"],
-                  ] as const
-                ).map(([v, label]) => (
-                  <button
-                    key={v}
-                    type="button"
-                    onClick={() => setTvAnswer(v)}
-                    className={`rounded-lg border py-2 text-sm font-semibold ${
-                      tvAnswer === v
-                        ? "border-blue-600 bg-blue-600 text-white"
-                        : "border-gray-300 bg-white text-gray-700 active:bg-gray-100"
-                    }`}
-                  >
-                    {label}
-                  </button>
-                ))}
+          {/* 선택 확인 항목(공항 B800) — 답은 비고에 자동 기재, 전부 필수 */}
+          {choices.map((d) => {
+            const a = answers[d.key];
+            const opt = a && d.opts.find((o) => o.v === a.v);
+            const needDetail = !!opt?.detail;
+            const ok = !!a && (!needDetail || !!a.detail);
+            return (
+              <div key={d.key} className={`mt-3 rounded-lg border px-3 py-2.5 ${ok ? "border-gray-300 bg-white" : "border-red-300 bg-red-50"}`}>
+                <span className="text-xs text-gray-500">
+                  {d.label} <span className="text-red-500">*</span>
+                </span>
+                <div className={`mt-1.5 grid gap-2 ${d.opts.length === 3 ? "grid-cols-3" : "grid-cols-2"}`}>
+                  {d.opts.map((o) => (
+                    <button
+                      key={o.v}
+                      type="button"
+                      onClick={() => setChoice(d.key, { v: o.v, detail: a?.v === o.v ? a.detail : "" })}
+                      className={`rounded-lg border py-2 text-sm font-semibold ${
+                        a?.v === o.v
+                          ? "border-blue-600 bg-blue-600 text-white"
+                          : "border-gray-300 bg-white text-gray-700 active:bg-gray-100"
+                      }`}
+                    >
+                      {o.label}
+                    </button>
+                  ))}
+                </div>
+                {needDetail && (
+                  <input
+                    type="text"
+                    value={detailDraft[d.key] ?? a?.detail ?? ""}
+                    placeholder={`${d.detailLabel ?? d.label}를 적어주세요 (예: 앞범퍼 긁힘)`}
+                    onChange={(e) => {
+                      setDetailDraft((m) => ({ ...m, [d.key]: e.target.value }));
+                      setChoice(d.key, { v: a!.v, detail: e.target.value }, false);
+                    }}
+                    onBlur={() => {
+                      setDetailDraft((m) => { const n = { ...m }; delete n[d.key]; return n; });
+                      saveRecord({ check_note: checkNote, check_na_slots: checkNaSlots });
+                    }}
+                    className="mt-2 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:border-blue-500"
+                  />
+                )}
+                {!ok && (
+                  <span className="mt-1 block text-[11px] text-red-500">
+                    {a && needDetail ? `필수 입력 — ${d.detailLabel ?? d.label}가 비고에 자동 기재됩니다.` : "필수 선택 — 답이 비고에 자동 기재됩니다."}
+                  </span>
+                )}
               </div>
-              {!tvAnswer && (
-                <span className="mt-1 block text-[11px] text-red-500">필수 선택 — Y/N은 비고에 자동 기재됩니다.</span>
-              )}
-            </div>
-          )}
+            );
+          })}
           <label className="mt-2 flex flex-col">
             <span className="text-xs text-gray-500">
               비고 (설치전 특이사항) <span className="text-red-500">*</span>

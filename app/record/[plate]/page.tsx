@@ -7,6 +7,7 @@ import { getReferenceUrls } from "@/lib/reference";
 import { workDateString } from "@/lib/work-day";
 import type { RecordBundle } from "@/lib/types";
 import RecordEditor from "@/components/RecordEditor";
+import { B800_CHOICES } from "@/lib/check-choices";
 import PlanDateGuard from "@/components/PlanDateGuard";
 
 export const runtime = "nodejs";
@@ -102,7 +103,7 @@ export default async function RecordPage({
       {notToday && (
         <PlanDateGuard plate={plate} plannedDate={vehicle.planned_date ?? null} />
       )}
-      <RecordEditor plate={plate} initial={bundle} teamOptions={teamOptions} brand={brandName(await currentProject())} slotConfig={await getSlotConfig()} exampleUrls={await getReferenceUrls()} tvCheck={(await currentProject()).slug === "b800air"} />
+      <RecordEditor plate={plate} initial={bundle} teamOptions={teamOptions} brand={brandName(await currentProject())} slotConfig={await getSlotConfig()} exampleUrls={await getReferenceUrls()} choices={(await currentProject()).slug === "b800air" ? B800_CHOICES : []} />
     </>
   );
 }
