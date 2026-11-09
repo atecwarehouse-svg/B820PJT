@@ -102,7 +102,7 @@ export default async function RecordPage({
       {notToday && (
         <PlanDateGuard plate={plate} plannedDate={vehicle.planned_date ?? null} />
       )}
-      <RecordEditor plate={plate} initial={bundle} teamOptions={teamOptions} brand={brandName(await currentProject())} slotConfig={await getSlotConfig()} exampleUrls={await getReferenceUrls()} />
+      <RecordEditor plate={plate} initial={bundle} teamOptions={teamOptions} brand={brandName(await currentProject())} slotConfig={await getSlotConfig()} exampleUrls={await getReferenceUrls()} tvCheck={(await currentProject()).slug === "b800air"} />
     </>
   );
 }
