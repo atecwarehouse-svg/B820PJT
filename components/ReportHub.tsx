@@ -77,7 +77,7 @@ function PlanReportPanel({
     const m = new Map<string, { routes: { route: string; count: number }[]; count: number }>();
     for (const g of planGroups) {
       const o = m.get(g.operator) ?? { routes: [], count: 0 };
-      o.routes.push({ route: g.route, count: g.planned });
+      if (g.route) o.routes.push({ route: g.route, count: g.planned }); // 수량 차감 방식은 노선 없이 운수사 대수만
       o.count += g.planned;
       m.set(g.operator, o);
     }
@@ -233,9 +233,11 @@ function PlanReportPanel({
             <p className="text-sm font-bold text-gray-800">
               {o.operator} <span className="font-normal text-gray-400">{o.count}대</span>
             </p>
-            <p className="text-xs text-gray-500">
-              {o.routes.map((r) => `${r.route} ${r.count}대`).join(" · ")}
-            </p>
+            {o.routes.length > 0 && (
+              <p className="text-xs text-gray-500">
+                {o.routes.map((r) => `${r.route} ${r.count}대`).join(" · ")}
+              </p>
+            )}
 
             <div>
               <span className={LABEL}>집합시간 (24시간)</span>

@@ -37,7 +37,9 @@ import RefreshButton from "@/components/RefreshButton";
 import DashboardDetailTabs from "@/components/DashboardDetailTabs";
 import { isProgressUnlocked } from "@/lib/admin-auth";
 import { brandName, currentProject, currentSlug, isDefault } from "@/lib/project";
-import { PROJECT_PERIOD_KEY, getConsultConfig, getInstallTeamsFull, getSetting, parsePeriod, teamLabel } from "@/lib/settings";
+import { PROJECT_PERIOD_KEY, getConsultConfig, getInstallTeamsFull, getSetting, isQuotaMode, parsePeriod, teamLabel } from "@/lib/settings";
+import { createServiceClient } from "@/lib/supabase/server";
+import { carryOverQuota } from "@/lib/quota";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -90,9 +92,9 @@ const getInProgress = unstable_cache(
 
 // 금일 설치계획 운수사·노선별 집계 — 설치시작 보고 카드용. 날짜가 캐시 키에 포함됨.
 const getTodayPlan = unstable_cache(
-  async (slug: string, date: string): Promise<TodayPlanGroup[]> => {
+  async (slug: string, date: string, byOperator: boolean): Promise<TodayPlanGroup[]> => {
     try {
-      return await loadTodayPlanGroups(slug, date);
+      return await loadTodayPlanGroups(slug, date, byOperator);
     } catch {
       return [];
     }
@@ -146,8 +148,12 @@ export default async function DashboardPage() {
   // '금일'은 진행현황 캐시(ip.today)와 같은 날짜로 통일 — 업무일 경계(정오) 직후
   // 60초 캐시가 남아 있는 동안 대상·완료·제외가 서로 다른 날짜로 집계되는 것을 방지.
   const todayKey = ip?.today ?? todayWork;
+  // 수량 차감 방식(공항버스형) — 아침에 열어도 지난 미완료 차량이 오늘(다음 예정일)로 이월돼 있게 먼저 정리.
+  // (렌더 중이라 revalidateTag는 못 부르고, 60초 캐시 뒤 반영 — 날짜 바뀐 날 첫 조회는 캐시가 없어 즉시 반영)
+  const quota = await isQuotaMode(slug);
+  if (quota) await carryOverQuota(createServiceClient(slug), todayWork).catch(() => undefined);
   const [todayPlanGroups, excludedPlates] = await Promise.all([
-    getTodayPlan(slug, todayKey),
+    getTodayPlan(slug, todayKey, quota),
     getTodayExcluded(slug, todayKey),
   ]);
   // 렌더 시각(KST) — 새로고침할 때마다 갱신되어 데이터 최신 여부를 바로 알 수 있다.

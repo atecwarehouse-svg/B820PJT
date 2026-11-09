@@ -2,7 +2,7 @@ import Link from "@/components/PLink";
 import { notFound } from "next/navigation";
 import { brandName, currentProject, isChecklist } from "@/lib/project";
 import { createServiceClient } from "@/lib/supabase/server";
-import { getInstallTeams, getSlotConfig } from "@/lib/settings";
+import { getInstallTeams, getSlotConfig, isQuotaMode } from "@/lib/settings";
 import { getReferenceUrls } from "@/lib/reference";
 import { workDateString } from "@/lib/work-day";
 import type { RecordBundle } from "@/lib/types";
@@ -92,16 +92,29 @@ export default async function RecordPage({
     checkPhotos: (checkRes.data as RecordBundle["checkPhotos"]) ?? [],
   };
 
-  // 금일(업무일) 설치 대상이 아니면 경고 팝업 — 증차 차량(예정일 없이 현장 추가)은 제외
-  const notToday =
-    "planned_date" in vehicle &&
-    vehicle.planned_date !== workDateString(new Date()) &&
-    !vehicle.is_added;
+  // 금일(업무일) 설치 대상이 아니면 경고 팝업 — 증차 차량(예정일 없이 현장 추가)은 제외.
+  // 수량 차감 방식(공항버스형)은 차량이 아니라 운수사 단위로 판정 — 그 운수사가 오늘 예정이 없을 때만 경고
+  // (작업을 시작하면 예정일이 오늘로 자동 재배정되므로 차량별 예정일 비교는 의미 없음)
+  const today = workDateString(new Date());
+  const quota = await isQuotaMode();
+  let notToday = "planned_date" in vehicle && vehicle.planned_date !== today && !vehicle.is_added;
+  if (quota && notToday) {
+    const { count } = await supabase
+      .from("vehicles")
+      .select("plate", { count: "exact", head: true })
+      .eq("operator", vehicle.operator)
+      .eq("planned_date", today);
+    notToday = !(count && count > 0);
+  }
 
   return (
     <>
       {notToday && (
-        <PlanDateGuard plate={plate} plannedDate={vehicle.planned_date ?? null} />
+        <PlanDateGuard
+          plate={plate}
+          plannedDate={vehicle.planned_date ?? null}
+          operator={quota ? vehicle.operator : undefined}
+        />
       )}
       <RecordEditor plate={plate} initial={bundle} teamOptions={teamOptions} brand={brandName(await currentProject())} slotConfig={await getSlotConfig()} exampleUrls={await getReferenceUrls()} choices={(await currentProject()).slug === "b800air" ? B800_CHOICES : []} />
     </>

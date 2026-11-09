@@ -12,6 +12,11 @@ export const INSTALL_TEAMS_KEY = "install_teams"; // 설치팀 목록 (JSON [{te
 export const INSPECT_CHECKLIST_KEY = "inspect_checklist"; // 배차표 검수항목 (JSON {vehicle,device})
 export const SHARED_PASSWORD_KEY = "shared_password"; // 협력업체 공용 비밀번호(진행현황 엑셀 다운로드·대시보드 상세 잠금) — 비면 env/기본값
 export const PROJECT_PERIOD_KEY = "project_period"; // 프로젝트 시작일~종료일 "YYYY-MM-DD~YYYY-MM-DD" — 빈 양식 전개일정 3행 날짜용
+// 수량 차감 방식(공항버스형) — "1"이면 차량 예정일을 작업 시작·완료에 맞춰 자동 재배정(lib/quota.ts)
+export const QUOTA_MODE_KEY = "quota_mode";
+export async function isQuotaMode(slug?: string): Promise<boolean> {
+  return (await getSetting(QUOTA_MODE_KEY, slug)) === "1";
+}
 
 const YMD = /^\d{4}-\d{2}-\d{2}$/;
 /** "YYYY-MM-DD~YYYY-MM-DD" 또는 {start,end} → 검증된 {start,end}, 아니면 null */

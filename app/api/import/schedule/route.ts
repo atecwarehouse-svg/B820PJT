@@ -6,6 +6,7 @@ import { parseScheduleBuffer } from "@/lib/import/parse-schedule";
 import { prepareTemplateBuffer } from "@/lib/import/prepare-template";
 import { checkAdminPassword, isAdmin } from "@/lib/admin-auth";
 import { currentSlug, isDefault } from "@/lib/project";
+import { isQuotaMode } from "@/lib/settings";
 import { TEMPLATE_BUCKET, templateObject, templateBackup } from "@/lib/template-path";
 
 export const runtime = "nodejs";
@@ -128,6 +129,19 @@ export async function POST(req: NextRequest) {
       });
     }
     if (data.length < PAGE) break;
+  }
+
+  // 1-1) 수량 차감 방식(quota_mode): 착수·완료한 차량(records 있음)의 예정일은 앱이 실제에 맞춰
+  //      재배정한 값이므로 파일의 명목 날짜로 덮어쓰지 않는다(미리보기 집계·반영 모두 기존 값 유지).
+  if (await isQuotaMode()) {
+    const started = new Set(
+      (await fetchAll<{ plate: string }>((from, to) =>
+        supabase.from("records").select("plate").order("plate").range(from, to),
+      )).map((r) => r.plate),
+    );
+    for (const r of parsed.rows) {
+      if (started.has(r.plate) && before.has(r.plate)) r.planned_date = before.get(r.plate)!.planned;
+    }
   }
 
   // 2) 변경 내역 집계: 예정일이 바뀐 차량을 운수사·(기존→변경) 날짜로 묶는다.

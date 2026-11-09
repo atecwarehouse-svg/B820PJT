@@ -15,7 +15,9 @@
     "upload:template": "tsx scripts/upload-template.ts",
     "gdrive:setup": "tsx scripts/gdrive-setup.ts",
     "check:modem": "tsx scripts/check-modem-xlsx.ts",
-    "check:choices": "tsx scripts/check-choices.ts"
+    "check:choices": "tsx scripts/check-choices.ts",
+    "check:quota": "tsx scripts/check-quota.ts",
+    "quota:backfill": "tsx scripts/quota-backfill.ts"
   },
   "dependencies": {
     "@sparticuz/chromium": "^149.0.0",

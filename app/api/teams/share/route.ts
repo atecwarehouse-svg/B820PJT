@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { brandName, currentProject } from "@/lib/project";
+import { brandName, currentProject, currentSlug } from "@/lib/project";
 import { sendProgressCard, sendStartReportCard, inspectorNames } from "@/lib/teams";
+import { createServiceClient } from "@/lib/supabase/server";
+import { carryOverQuota } from "@/lib/quota";
+import { workDateString } from "@/lib/work-day";
 import {
+  isQuotaMode,
   getInstallTeamsFull,
   getStartReport,
   getStartReportForUpdate,
@@ -46,6 +50,11 @@ function cleanInspectors(v: unknown, known: Set<string>): string[] {
 // GET /api/teams/share?date=YYYY-MM-DD → 시작 보고를 마친 운수사 목록 + 운수사별 담당 검수자
 export async function GET(req: NextRequest) {
   const date = req.nextUrl.searchParams.get("date");
+  // 수량 차감 방식 — 설치시작 보고 화면을 열 때 지난 미완료 차량을 다음 예정일로 이월(멱등, 서버 업무일 기준)
+  if (await isQuotaMode()) {
+    const slug = currentSlug();
+    await carryOverQuota(createServiceClient(slug), workDateString(new Date())).catch(() => undefined);
+  }
   const [map, teams] = isDate(date) ? await Promise.all([getStartReport(date), getTeamInspectors(date)]) : [{}, {}];
   return NextResponse.json({ sentOps: Object.keys(map), assignments: map, teamAssignments: teams });
 }

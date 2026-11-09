@@ -4,7 +4,10 @@ import { uploadPhoto, deletePhoto } from "@/lib/gdrive";
 import { publicPhotoUrl } from "@/lib/photo-url";
 import { checkPhotoRotation } from "@/lib/gemini";
 import { runAfterResponse } from "@/lib/background";
-import { kstDateString } from "@/lib/work-day";
+import { kstDateString, workDateString } from "@/lib/work-day";
+import { revalidateTag } from "next/cache";
+import { isQuotaMode } from "@/lib/settings";
+import { settleQuota } from "@/lib/quota";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -13,7 +16,7 @@ export const dynamic = "force-dynamic";
 async function ensureRecord(
   supabase: ReturnType<typeof createServiceClient>,
   plate: string,
-): Promise<{ ok: boolean; operator: string; error?: string }> {
+): Promise<{ ok: boolean; operator: string; error?: string; created?: boolean }> {
   const { data: rec, error: recErr } = await supabase
     .from("records")
     .select("plate, operator")
@@ -42,7 +45,7 @@ async function ensureRecord(
     },
     { onConflict: "plate" },
   );
-  return { ok: true, operator: (vehicle.operator as string) ?? "" };
+  return { ok: true, operator: (vehicle.operator as string) ?? "", created: true };
 }
 
 // POST /api/photos  (multipart/form-data)
@@ -91,6 +94,15 @@ export async function POST(req: NextRequest) {
   }
   const operator = recResult.operator;
   const existing = existingRes.data;
+  // 수량 차감 방식 — 첫 사진으로 기록이 막 생긴 차량(작업 시작)은 예정일을 오늘로 끌어온다(차량당 1회)
+  if (recResult.created && (await isQuotaMode())) {
+    try {
+      const moves = await settleQuota(supabase, plate, workDateString(new Date()));
+      if (moves.length) revalidateTag("dashboard");
+    } catch (e) {
+      console.error("[quota] 예정일 재배정 실패", plate, e instanceof Error ? e.message : e);
+    }
+  }
 
   // 파일명: 설치전/후/차량이상유무_차량번호_칸라벨.jpg (라벨 없으면 슬롯키)
   const sectionKo = isCheck ? "차량이상유무" : section === "before" ? "설치전" : "설치후";

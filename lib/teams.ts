@@ -1187,10 +1187,10 @@ export async function sendPlanReportCard(
     wrap: true,
   });
   const baseFacts = (g: PlanReportGroup) => [
-    {
-      title: "노선",
-      value: g.routes.map((r) => `${r.route} ${r.count}대`).join(" · ") || "-",
-    },
+    // 노선별 대수가 없으면(수량 차감 방식 — 운수사 대수만) 노선 줄 생략
+    ...(g.routes.length
+      ? [{ title: "노선", value: g.routes.map((r) => `${r.route} ${r.count}대`).join(" · ") }]
+      : []),
     { title: "집합시간", value: v(g.time) },
     { title: "설치 장소", value: v(g.place) },
     // 특이사항은 입력된 운수사만 (시작보고방 카드는 간결 유지)
@@ -1246,11 +1246,9 @@ export async function sendPlanReportCard(
         type: "FactSet",
         spacing: "Small",
         facts: [
-          {
-            title: "노선",
-            value:
-              g.routes.map((r) => `${r.route} ${r.count}대`).join(" · ") || "-",
-          },
+          ...(g.routes.length
+            ? [{ title: "노선", value: g.routes.map((r) => `${r.route} ${r.count}대`).join(" · ") }]
+            : []),
           { title: t("day_off", "당일 휴차"), value: v(g.dayOff) },
           { title: t("next_day_off", "익일 휴차"), value: v(g.nextDayOff) },
           { title: t("arrival", "첫차 종료 후 도착"), value: v(g.arrival) },

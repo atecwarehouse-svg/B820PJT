@@ -14,7 +14,7 @@ import {
 import { colorKey, iconKey } from "@/components/ProjectIcon";
 import { createProjectFolder, deleteFolder, folderLink, renameFile, setLinkSharing, trashFile } from "@/lib/gdrive";
 import { TEMPLATE_BUCKET } from "@/lib/template-path";
-import { PHOTO_SLOTS_KEY, PLEDGE_TEMPLATE_KEY, PROJECT_PERIOD_KEY, REPORT_MAIL_KEY, SHARED_PASSWORD_KEY, parsePeriod, setSetting } from "@/lib/settings";
+import { PHOTO_SLOTS_KEY, PLEDGE_TEMPLATE_KEY, PROJECT_PERIOD_KEY, QUOTA_MODE_KEY, REPORT_MAIL_KEY, SHARED_PASSWORD_KEY, parsePeriod, setSetting } from "@/lib/settings";
 import { toSlotConfigJson, validateSlotConfig } from "@/lib/slots";
 import { validatePledgeTemplate } from "@/lib/pledge-template";
 
@@ -391,7 +391,9 @@ export async function PUT(req: NextRequest) {
     if (sp && (sp.length < 4 || sp.length > 40)) return bad((isChecklist(row.kind) ? "직원" : "협력업체 공용") + " 비밀번호는 4~40자로 정하세요.");
     sharedPw = sp;
   }
-  if (!Object.keys(patch).length && shareLink === undefined && period === undefined && sharedPw === undefined) return bad("바꿀 내용이 없습니다.");
+  // 수량 차감 방식(공항버스형) — 앨범 프로젝트(B820 제외)만, true/false
+  const quotaMode = row.kind === "album" && !isDefault(slug) && typeof body.quota_mode === "boolean" ? body.quota_mode : undefined;
+  if (!Object.keys(patch).length && shareLink === undefined && period === undefined && sharedPw === undefined && quotaMode === undefined) return bad("바꿀 내용이 없습니다.");
 
   if (Object.keys(patch).length) {
     const { error } = await sb.from("projects").update(patch).eq("slug", slug);
@@ -407,6 +409,11 @@ export async function PUT(req: NextRequest) {
   if (sharedPw !== undefined) {
     await setSetting(SHARED_PASSWORD_KEY, sharedPw, slug).catch(() => {
       warning = (warning ? warning + " " : "") + "협력업체 공용 비밀번호 저장에 실패했습니다. 잠시 뒤 다시 저장해 주세요.";
+    });
+  }
+  if (quotaMode !== undefined) {
+    await setSetting(QUOTA_MODE_KEY, quotaMode ? "1" : "", slug).catch(() => {
+      warning = (warning ? warning + " " : "") + "수량 차감 방식 설정 저장에 실패했습니다. 잠시 뒤 다시 저장해 주세요.";
     });
   }
   // 드라이브 폴더 링크 공유 켜기/끄기 (실패해도 나머지 수정은 유지)

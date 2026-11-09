@@ -341,7 +341,8 @@ export interface TodayPlanGroup {
   planned: number;
 }
 
-export async function loadTodayPlanGroups(slug: string, date: string): Promise<TodayPlanGroup[]> {
+// byOperator: 수량 차감 방식 프로젝트 — 노선별 대수는 임의 배정된 명목값이라 운수사 단위로만(route "")
+export async function loadTodayPlanGroups(slug: string, date: string, byOperator = false): Promise<TodayPlanGroup[]> {
   const supabase = createServiceClient(slug);
   const vehicles = await fetchAll<{
     planned_date: string | null;
@@ -355,7 +356,7 @@ export async function loadTodayPlanGroups(slug: string, date: string): Promise<T
   for (const v of vehicles) {
     if (!v.planned_date || v.planned_date.slice(0, 10) !== date) continue;
     const op = v.operator?.trim() || "미지정";
-    const rt = v.route?.trim() || "";
+    const rt = byOperator ? "" : v.route?.trim() || "";
     const key = `${op}|||${rt}`;
     const g = byGroup.get(key) ?? { operator: op, route: rt, planned: 0 };
     g.planned++;

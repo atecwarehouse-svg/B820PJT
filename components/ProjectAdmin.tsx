@@ -86,11 +86,13 @@ export default function ProjectAdmin({
   driveShared = {},
   periods = {},
   sharedPasswords = {},
+  quotaModes = {},
 }: {
   projects: Project[];
   driveShared?: Record<string, boolean>; // 앨범 프로젝트 드라이브 폴더 링크 공유 여부
   periods?: Record<string, { start: string; end: string }>; // 앨범 프로젝트 기간 (수정 폼 프리필)
   sharedPasswords?: Record<string, string>; // 협력업체 공용 비밀번호 (수정 폼 프리필, ""=기본값)
+  quotaModes?: Record<string, boolean>; // 수량 차감 방식(공항버스형) 켜짐 여부 (수정 폼 프리필)
 }) {
   const router = useRouter();
   const formRef = useRef<HTMLElement>(null);
@@ -112,6 +114,7 @@ export default function ProjectAdmin({
   const [photoSlots, setPhotoSlots] = useState<SlotConfigJson>(DEFAULT_SLOTS); // 새 프로젝트 사진 양식
   const [reportMail, setReportMail] = useState(""); // 완료리포트 메일 수신자 (쉼표·줄바꿈 구분)
   const [period, setPeriod] = useState({ start: "", end: "" }); // 프로젝트 기간 — 빈 양식 전개일정 3행 날짜
+  const [quotaMode, setQuotaMode] = useState(false); // 수량 차감 방식(공항버스형) — 수정 폼에서만
   const [slotsOpen, setSlotsOpen] = useState(false); // 사진 양식 팝업
   const [slotsError, setSlotsError] = useState("");
   const [pledge, setPledge] = useState<PledgeTemplate>(DEFAULT_PLEDGE_TEMPLATE); // 새 프로젝트 서약서 양식
@@ -219,6 +222,7 @@ export default function ProjectAdmin({
           if (period.start && period.end) body.period = period;
           else if (!period.start && !period.end) body.period = "";
         }
+        if (editing.kind === "album" && quotaMode !== (quotaModes[editing.slug] ?? false)) body.quota_mode = quotaMode;
       }
       setPhase("save");
       const j = await call("PUT", body);
@@ -329,6 +333,7 @@ export default function ProjectAdmin({
     setShowSharedPw(false);
     setShareLink(driveShared[p.slug] ?? false);
     setPeriod(periods[p.slug] ?? { start: "", end: "" });
+    setQuotaMode(quotaModes[p.slug] ?? false);
     setConfirmSlug("");
     setError("");
     formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -762,6 +767,22 @@ export default function ProjectAdmin({
                     ? "종료일이 시작일보다 빠릅니다."
                     : "프로젝트 기간(시작일~종료일, 선택) — 빈 양식의 전개일정 3행 날짜가 이 기간으로 자동 기입되고, 61일이 넘으면 날짜 열이 그만큼 늘어납니다(최대 366일). 업로드 때는 설치 예정일이 함께 들어갑니다."}
               </p>
+              {editing && (
+                <label className="mt-2 flex cursor-pointer items-start gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
+                  <input
+                    type="checkbox"
+                    checked={quotaMode}
+                    onChange={(e) => setQuotaMode(e.target.checked)}
+                    className="mt-0.5 h-4 w-4"
+                  />
+                  <span className="text-xs text-gray-700">
+                    <b>설치 대상 차량 지정 없음 — 수량 차감 방식(공항버스형)</b>
+                    <span className="mt-0.5 block text-[11px] text-gray-500">
+                      운수사와 날짜별 수량만 정하고 들어오는 차량부터 설치하는 프로젝트. 차량 작업을 시작·완료하면 그 차량의 예정일이 오늘로 자동 재배정되고(오늘 예정이던 미착수 차량과 자리 교환, 없으면 미래 수량 차감), 그날 못 채운 대수는 다음 설치일로 이월됩니다. 계획·시작 보고는 운수사별 대수만 표시합니다.
+                    </span>
+                  </span>
+                </label>
+              )}
             </div>
           )}
           {kind !== "link" && (

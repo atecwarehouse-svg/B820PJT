@@ -6,12 +6,15 @@ import { weekdayLabel } from "@/lib/work-day";
 
 // 금일(업무일) 설치 대상이 아닌 차량의 촬영 페이지 진입 시 경고 팝업.
 // 차량번호 오입력 방지용 — 뒤로가기(기본) 또는 그래도 진행(어제 미완료 이어하기 등) 선택.
+// operator가 오면 수량 차감 방식(운수사 단위 판정) 문구 — "이 운수사는 오늘 설치 예정이 없음"
 export default function PlanDateGuard({
   plate,
   plannedDate,
+  operator,
 }: {
   plate: string;
   plannedDate: string | null;
+  operator?: string;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(true);
@@ -22,12 +25,18 @@ export default function PlanDateGuard({
       <div className="w-full max-w-sm rounded-2xl bg-white p-5 text-center shadow-xl">
         <p className="text-3xl">⚠️</p>
         <p className="mt-2 text-lg font-bold text-red-600">
-          금일 설치 대상 차량이 아닙니다
+          {operator ? "금일 설치 운수사가 아닙니다" : "금일 설치 대상 차량이 아닙니다"}
         </p>
         <p className="mt-3 rounded-lg bg-gray-50 py-2 text-base font-semibold">{plate}</p>
         <p className="mt-2 text-sm text-gray-600">
-          설치 예정일:{" "}
-          {plannedDate ? `${plannedDate} ${weekdayLabel(plannedDate)}` : "없음"}
+          {operator ? (
+            <>운수사: {operator} — 오늘 설치 예정이 없습니다</>
+          ) : (
+            <>
+              설치 예정일:{" "}
+              {plannedDate ? `${plannedDate} ${weekdayLabel(plannedDate)}` : "없음"}
+            </>
+          )}
         </p>
         <p className="mt-1 text-xs text-gray-400">
           차량번호를 잘못 입력하지 않았는지 확인해주세요.
