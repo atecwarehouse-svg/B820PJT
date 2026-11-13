@@ -36,6 +36,9 @@ interface Entry {
   plate: string;
   route: string;
   outTime: string | null; // "HH:MM" 또는 "OFF"(휴차)
+  sheetTime?: string; // 운수사 배차표 엑셀의 첫 출발 시간
+  sheetFrom?: string; // 그 출발지(정류장)
+  edit?: { time: string; from: string } | null; // 설치완료 리스트에서 손으로 고친 시간·출발지(엑셀보다 우선)
   autoTime?: boolean; // 운수사 배차표 엑셀에서 자동으로 채운 시간(손으로 바꾸면 해제)
   checklist: boolean; // 체크리스트 작성 완료
   completed: boolean; // 설치완료(서버 판정 — 저장+설치전후 사진 충족)
@@ -146,6 +149,12 @@ function routeKey(route: string): string {
 // holdKeys: 방금 화면에서 휴차로 바꾼 차량 → 원래 자리(체크 직전 정렬키)를 그대로 쓴다.
 // 체크하자마자 행이 맨 아래로 튀면 손가락 밑에서 목록이 밀려 다음 차량을 잘못 누른다.
 // 목록을 다시 불러오면(다른 날짜·새로고침) 이 기억은 비워져 휴차는 원래대로 맨 뒤로 간다.
+// 설치완료 차량 리스트에 보일 시간·출발지 — 손으로 고친 값 > 운수사 배차표 엑셀 > 배차표에 넣은 시간
+function doneView(e: Entry): { time: string | null; from: string } {
+  if (e.edit) return { time: e.edit.time || e.sheetTime || e.outTime, from: e.edit.from };
+  return e.sheetTime ? { time: e.sheetTime, from: e.sheetFrom ?? "" } : { time: e.outTime, from: "" };
+}
+
 function sortEntries(list: Entry[], holdKeys?: Map<string, string>): Entry[] {
   const key = (e: Entry) =>
     e.outTime === OFF
@@ -340,6 +349,29 @@ export default function DispatchButton({ routeView = false }: { routeView?: bool
     null,
   );
   const [tableView, setTableView] = useState(false); // 캡쳐용 표 보기
+  const [tableDone, setTableDone] = useState(false); // 캡쳐용 표에 설치완료 차량만
+  // 설치완료 리스트에서 시간·출발지 손 수정 팝업
+  const [doneEdit, setDoneEdit] = useState<{ plate: string; time: string; from: string } | null>(null);
+  const [doneErr, setDoneErr] = useState("");
+
+  // 저장 즉시 반영. time·from 둘 다 비우면 수정값을 지워 엑셀 값으로 되돌린다.
+  async function saveDoneEdit(plate: string, time: string, from: string) {
+    try {
+      const res = await fetch("/api/dispatch/done-edit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ date, plate, time, from }),
+      });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) return setDoneErr(j.error ?? "저장 실패");
+      setEntries((list) =>
+        list.map((e) => (e.plate === plate ? { ...e, edit: time || from ? { time, from } : null } : e)),
+      );
+      setDoneEdit(null);
+    } catch {
+      setDoneErr("저장 실패 — 네트워크를 확인하세요.");
+    }
+  }
 
   // 자동 입력 — 첫차 출발시간 + 분 간격 + 차량별 순번으로 시간 일괄 계산
   const [autoView, setAutoView] = useState(false);
@@ -929,6 +961,20 @@ export default function DispatchButton({ routeView = false }: { routeView?: bool
                 </button>
               )}
 
+              {/* 설치완료 차량 리스트 — 캡쳐용 표를 설치완료 차량만으로 연다 */}
+              {routeView && date && !listLoading && entries.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTableDone(true);
+                    setTableView(true);
+                  }}
+                  className="w-full rounded-lg border border-green-300 bg-green-50 px-4 py-2.5 text-sm font-semibold text-green-700 active:bg-green-100"
+                >
+                  📸 설치완료 차량 리스트 (캡쳐용) · {entries.filter((e) => e.completed).length}대
+                </button>
+              )}
+
               {/* 모뎀 예비품불량 등록 — 차량과 무관한 재고 불량이라 저장 버튼 위에 따로 둔다 */}
               {date && !listLoading && entries.length > 0 && (
                 <button
@@ -1102,7 +1148,10 @@ export default function DispatchButton({ routeView = false }: { routeView?: bool
                   </button>
                   <button
                     type="button"
-                    onClick={() => setTableView(true)}
+                    onClick={() => {
+                      setTableDone(false);
+                      setTableView(true);
+                    }}
                     className="rounded-lg border border-blue-300 bg-white px-4 py-2.5 text-sm font-semibold text-blue-700 active:bg-blue-50"
                   >
                     📋 표로 보기 (캡쳐용)
@@ -1435,6 +1484,69 @@ export default function DispatchButton({ routeView = false }: { routeView?: bool
                     className="flex-1 rounded-lg bg-amber-600 px-3 py-2.5 text-sm font-semibold text-white active:bg-amber-700 disabled:opacity-40"
                   >
                     미연결 저장
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {doneEdit && (
+            <div
+              className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 p-4"
+              onClick={(e) => {
+                e.stopPropagation();
+                setDoneEdit(null);
+              }}
+            >
+              <div className="w-full max-w-xs rounded-2xl bg-white p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
+                <p className="text-center text-sm font-bold text-gray-800">시간 · 출발지 수정</p>
+                <p className="mt-0.5 text-center text-xs text-gray-500">{doneEdit.plate}</p>
+                <label className="mt-3 block text-xs font-medium text-gray-600">
+                  나가는 시간
+                  <input
+                    type="time"
+                    value={doneEdit.time}
+                    onChange={(e) => setDoneEdit({ ...doneEdit, time: e.target.value })}
+                    className="mt-1 w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm"
+                  />
+                </label>
+                <label className="mt-2 block text-xs font-medium text-gray-600">
+                  출발지
+                  <input
+                    type="text"
+                    value={doneEdit.from}
+                    maxLength={50}
+                    onChange={(e) => setDoneEdit({ ...doneEdit, from: e.target.value })}
+                    placeholder="예) 인천공항 T2"
+                    className="mt-1 w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm"
+                  />
+                </label>
+                {doneErr && <p className="mt-1 text-xs text-red-500">{doneErr}</p>}
+                <div className="mt-3 flex gap-2">
+                  {entries.find((e) => e.plate === doneEdit.plate)?.edit ? (
+                    <button
+                      type="button"
+                      onClick={() => saveDoneEdit(doneEdit.plate, "", "")}
+                      className="flex-1 rounded-xl bg-white px-3 py-2.5 text-sm font-medium text-gray-600 shadow-sm ring-1 ring-black/5 active:bg-gray-100"
+                    >
+                      원래대로
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setDoneEdit(null)}
+                      className="flex-1 rounded-xl bg-white px-3 py-2.5 text-sm font-medium text-gray-600 shadow-sm ring-1 ring-black/5 active:bg-gray-100"
+                    >
+                      취소
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    disabled={!doneEdit.time && !doneEdit.from.trim()}
+                    onClick={() => saveDoneEdit(doneEdit.plate, doneEdit.time, doneEdit.from.trim())}
+                    className="flex-1 rounded-lg bg-green-600 px-3 py-2.5 text-sm font-semibold text-white active:bg-green-700 disabled:opacity-40"
+                  >
+                    저장
                   </button>
                 </div>
               </div>
@@ -1997,7 +2109,7 @@ export default function DispatchButton({ routeView = false }: { routeView?: bool
             >
               <div className="sticky top-0 flex items-center justify-between border-b border-gray-200 bg-white px-4 py-2.5">
                 <p className="text-sm font-bold text-gray-800">
-                  📋 배차표 (캡쳐용)
+                  {tableDone ? "📸 설치완료 차량 (캡쳐용)" : "📋 배차표 (캡쳐용)"}
                 </p>
                 <button
                   type="button"
@@ -2009,14 +2121,17 @@ export default function DispatchButton({ routeView = false }: { routeView?: bool
               </div>
               <div className="px-4 py-4">
                 <p className="text-base font-bold text-gray-900">
-                  {operator} 배차표
+                  {operator} {tableDone ? "설치완료 차량" : "배차표"}
                   {routeFilter && ` · ${routeFilter}`}
                 </p>
                 <p className="mt-0.5 text-xs text-gray-500">
-                  {fmtDot(date)} · {visible.length}대
-                  {timedCount > 0 && ` · 시간입력 ${timedCount}대`}
-                  {exclCount > 0 && ` · 설치제외 ${exclCount}대`}
-                  {offCount > 0 && ` · 휴차 ${offCount}대`}
+                  {fmtDot(date)} ·{" "}
+                  {tableDone
+                    ? `설치완료 ${visible.filter((e) => e.completed).length}대 / 전체 ${visible.length}대`
+                    : `${visible.length}대`}
+                  {!tableDone && timedCount > 0 && ` · 시간입력 ${timedCount}대`}
+                  {!tableDone && exclCount > 0 && ` · 설치제외 ${exclCount}대`}
+                  {!tableDone && offCount > 0 && ` · 휴차 ${offCount}대`}
                 </p>
                 <table className="mt-3 w-full border-collapse text-sm">
                   <thead>
@@ -2033,15 +2148,39 @@ export default function DispatchButton({ routeView = false }: { routeView?: bool
                       <th className="border border-blue-700 px-2 py-1.5 text-center text-xs font-semibold">
                         나가는 시간
                       </th>
+                      {tableDone && (
+                        <th className="border border-blue-700 px-2 py-1.5 text-center text-xs font-semibold">
+                          출발지
+                        </th>
+                      )}
                     </tr>
                   </thead>
                   <tbody>
                     {/* 캡쳐용 표는 붙잡아 둔 자리를 무시하고 항상 정식 시간순(휴차는 맨 뒤) */}
-                    {sortEntries(visible).map((e, i) => {
+                    {sortEntries(
+                      tableDone
+                        ? visible
+                            .filter((e) => e.completed)
+                            // 설치완료 리스트는 손으로 고친 값 > 엑셀 > 배차표 시간(휴차는 그대로)
+                            .map((e) => (e.outTime !== OFF ? { ...e, outTime: doneView(e).time } : e))
+                        : visible,
+                    ).map((e, i) => {
                       const isOff = e.outTime === OFF;
                       return (
                         <tr
                           key={e.plate}
+                          onClick={
+                            tableDone
+                              ? () => {
+                                  setDoneErr("");
+                                  setDoneEdit({
+                                    plate: e.plate,
+                                    time: isOff ? "" : (e.outTime ?? ""),
+                                    from: doneView(e).from,
+                                  });
+                                }
+                              : undefined
+                          }
                           className={
                             isOff
                               ? "bg-red-50"
@@ -2082,12 +2221,19 @@ export default function DispatchButton({ routeView = false }: { routeView?: bool
                                 ? "설치제외"
                                 : (e.outTime ?? "-")}
                           </td>
+                          {/* 출발지 — 운수사 배차표의 첫 출발 정류장(엑셀에 없는 차량·휴차는 -) */}
+                          {tableDone && (
+                            <td className="border border-gray-300 px-2 py-1.5 text-center text-xs text-gray-700">
+                              {(!isOff && doneView(e).from) || "-"}
+                            </td>
+                          )}
                         </tr>
                       );
                     })}
                   </tbody>
                 </table>
                 <p className="mt-3 text-center text-[11px] text-gray-400">
+                  {tableDone && "차량을 누르면 시간·출발지를 고칠 수 있습니다 · "}
                   이 화면을 캡쳐해 공유하세요 · ✕ 닫기를 누르면 입력 화면으로
                   돌아갑니다
                 </p>

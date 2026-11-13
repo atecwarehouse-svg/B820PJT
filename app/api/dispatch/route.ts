@@ -97,7 +97,7 @@ export async function GET(req: NextRequest) {
   // 나가는 시간 자동 입력 — 운수사 배차표 엑셀(노선별 배차표)이 올라와 있으면, 시간이 아직 저장되지
   // 않은 차량에 그 차량의 첫 출발 시간을 채워 보여준다(손으로 넣은 시간·휴차가 항상 우선, DB에는 쓰지 않음).
   // 업무일 D의 작업은 D 20시 ~ D+1 12시이므로 '나가는 시간'은 다음 날(D+1) 배차표에서 가져온다.
-  let autoTimes = new Map<string, string>();
+  let autoTimes: ReturnType<typeof firstTimes> = new Map();
   try {
     const next = new Date(Date.parse(`${date}T00:00:00Z`) + 86400000).toISOString().slice(0, 10);
     const raw = await getSetting(routeDispatchKey(companyOf(operator), next));
@@ -106,8 +106,15 @@ export async function GET(req: NextRequest) {
   } catch {
     // 자동 입력은 부가 기능 — 실패해도 무시
   }
+  // 설치완료 차량 리스트에서 손으로 고친 시간·출발지(엑셀보다 우선) — /api/dispatch/done-edit
+  let doneEdits: Record<string, { time?: string; from?: string }> = {};
+  try {
+    doneEdits = JSON.parse((await getSetting(`done_edit:${date}`)) ?? "{}") ?? {};
+  } catch {
+    doneEdits = {};
+  }
   const autoOf = (plate: string) =>
-    !times.get(plate) && !excludes.has(plate) ? (autoTimes.get(plate) ?? null) : null;
+    !times.get(plate) && !excludes.has(plate) ? (autoTimes.get(plate)?.time ?? null) : null;
 
   // 모뎀불량(LTE 모뎀 교체 내역) — 배차표 버튼 상태·팝업 프리필용.
   // 테이블이 아직 없거나 조회가 실패해도 배차표 자체는 동작해야 하므로 표시만 생략한다.
@@ -192,6 +199,11 @@ export async function GET(req: NextRequest) {
       plate: v.plate,
       route: v.route ?? "",
       outTime: times.get(v.plate) ?? autoOf(v.plate),
+      sheetTime: autoTimes.get(v.plate)?.time ?? "", // 운수사 배차표 엑셀의 첫 출발 시간·출발지(없으면 빈값)
+      sheetFrom: autoTimes.get(v.plate)?.from ?? "",
+      edit: doneEdits[v.plate]
+        ? { time: String(doneEdits[v.plate].time ?? ""), from: String(doneEdits[v.plate].from ?? "") }
+        : null,
       autoTime: autoOf(v.plate) !== null, // 운수사 배차표 엑셀에서 자동으로 채운 시간(저장 전)
       checklist: checks.has(v.plate),
       completed: completedSet.has(v.plate),

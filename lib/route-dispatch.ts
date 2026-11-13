@@ -43,11 +43,11 @@ export function blocksFor(table: RouteDispatchTable): RouteDispatchBlock[] {
 }
 
 // 차량번호 → 첫 출발 시간(같은 차량이 여러 노선에 나오면 가장 이른 시간) — 배차표 '나가는 시간' 자동 입력용
-export function firstTimes(table: RouteDispatchTable): Map<string, string> {
-  const m = new Map<string, string>();
+export function firstTimes(table: RouteDispatchTable): Map<string, { time: string; from: string }> {
+  const m = new Map<string, { time: string; from: string }>();
   for (const b of blocksFor(table)) {
     for (const r of b.rows) {
-      if (r.plate && (!m.has(r.plate) || r.time < m.get(r.plate)!)) m.set(r.plate, r.time);
+      if (r.plate && (!m.has(r.plate) || r.time < m.get(r.plate)!.time)) m.set(r.plate, { time: r.time, from: r.from });
     }
   }
   return m;
