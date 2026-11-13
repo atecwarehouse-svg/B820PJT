@@ -125,7 +125,7 @@ export default function TeamCompanyManager() {
                 onChange={(e) => renameCompany(i, e.target.value)}
                 maxLength={30}
                 placeholder="소속사 이름"
-                className="min-w-0 flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-500"
+                className="min-w-0 flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-brand-500"
               />
               <span className="w-12 shrink-0 text-right text-[11px] text-gray-400">{usedCount(c) ? `${usedCount(c)}팀` : ""}</span>
               <button
@@ -151,7 +151,7 @@ export default function TeamCompanyManager() {
             }}
             maxLength={30}
             placeholder="새 소속사 이름"
-            className="min-w-0 flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-500"
+            className="min-w-0 flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-brand-500"
           />
           <button
             type="button"
@@ -183,7 +183,7 @@ export default function TeamCompanyManager() {
                 <select
                   value={row.company}
                   onChange={(e) => setCompany(i, e.target.value)}
-                  className="w-36 shrink-0 rounded-lg border border-gray-300 px-2 py-2 text-sm outline-none focus:border-blue-500"
+                  className="w-36 shrink-0 rounded-lg border border-gray-300 px-2 py-2 text-sm outline-none focus:border-brand-500"
                 >
                   <option value="">미지정</option>
                   {companies.filter(Boolean).map((c) => (
@@ -201,7 +201,7 @@ export default function TeamCompanyManager() {
       <button
         onClick={save}
         disabled={saving || !dirty || rows === null}
-        className="mt-3 w-full rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white active:bg-blue-700 disabled:opacity-50"
+        className="mt-3 w-full rounded-lg bg-brand-600 px-3 py-2 text-sm font-semibold text-white active:bg-brand-700 disabled:opacity-50"
       >
         {saving ? "저장 중…" : dirty ? "저장" : "저장됨 ✓"}
       </button>

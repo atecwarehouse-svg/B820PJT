@@ -1,0 +1,11 @@
+/* 바탕 규칙 — globals.css 가 base 레이어로 불러온다(Tailwind 유틸리티가 항상 이긴다).
+   기존 화면 배치를 그대로 두는 재단장이라, 제목 크기·폭을 강제하는 규칙은 넣지 않았다. */
+*, *::before, *::after { box-sizing: border-box; }
+html, body { overflow-x: clip; }
+body { background: var(--color-paper); color: var(--color-ink); font-family: var(--font-body); -webkit-font-smoothing: antialiased; caret-color: var(--color-accent); }
+::selection { background: color-mix(in oklab, var(--color-accent) 22%, transparent); color: var(--color-ink); }
+:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; }
+h1, h2, h3 { font-family: var(--font-display); font-synthesis: none; overflow-wrap: break-word; min-width: 0; }
+button, input, select, textarea { font: inherit; }
+.num, .figure, td.num { font-variant-numeric: tabular-nums; }
+@media (prefers-reduced-motion: reduce) { *:not(.keep-motion), *:not(.keep-motion)::before, *:not(.keep-motion)::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; } }

@@ -47,7 +47,7 @@ interface ImportResult {
 const ALL_TABS = ["차량 업로드", "센터 배정", "작업자", "팀즈 알림", "현황"] as const;
 type Tab = (typeof ALL_TABS)[number];
 
-const input = "rounded-lg border border-gray-300 bg-gray-50 px-2 py-2 text-sm outline-none focus:border-blue-500 focus:bg-white";
+const input = "rounded-lg border border-gray-300 bg-gray-50 px-2 py-2 text-sm outline-none focus:border-brand-500 focus:bg-white";
 
 // 체크리스트형(양도양수·OS업데이트) 관리자 — 로우데이터 업로드 · 영업소→센터 배정 · 작업자 명단 · 팀즈 알림(웹훅) · 현황(엑셀)
 export default function HandoverAdmin({ projectName, kind = "handover" }: { projectName: string; kind?: ProjectKind }) {
@@ -189,7 +189,7 @@ function UploadTab({ kind, centers, onApplied, setMsg }: { kind: ProjectKind; ce
           const m = f?.name.match(/^([가-힣A-Za-z0-9]+센터)[_\-\s]/);
           if (m && !center) setCenter(m[1]);
         }}
-        className="mt-3 block w-full text-xs text-gray-600 file:mr-2 file:rounded-lg file:border-0 file:bg-blue-600 file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-white"
+        className="mt-3 block w-full text-xs text-gray-600 file:mr-2 file:rounded-lg file:border-0 file:bg-brand-600 file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-white"
       />
       <div className="mt-3">
         <label className="text-xs font-semibold text-gray-600">🏢 센터 (선택)</label>
@@ -225,7 +225,7 @@ function UploadTab({ kind, centers, onApplied, setMsg }: { kind: ProjectKind; ce
           type="button"
           onClick={() => send(true)}
           disabled={!file || busy}
-          className="flex-1 rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white active:bg-blue-700 disabled:opacity-40"
+          className="flex-1 rounded-lg bg-brand-600 px-3 py-2 text-sm font-semibold text-white active:bg-brand-700 disabled:opacity-40"
         >
           {busy ? "처리 중…" : "반영"}
         </button>
@@ -339,7 +339,7 @@ function CentersTab({ s, setS, setMsg }: { s: Settings; setS: (s: Settings) => v
         type="button"
         onClick={save}
         disabled={saving || !dirty}
-        className="mt-3 w-full rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white active:bg-blue-700 disabled:opacity-50"
+        className="mt-3 w-full rounded-lg bg-brand-600 px-3 py-2 text-sm font-semibold text-white active:bg-brand-700 disabled:opacity-50"
       >
         {saving ? "저장 중…" : dirty ? "저장" : "저장됨 ✓"}
       </button>
@@ -418,7 +418,7 @@ function WorkersTab({ s, setS, setMsg }: { s: Settings; setS: (s: Settings) => v
           type="button"
           onClick={save}
           disabled={saving || !dirty}
-          className="flex-1 rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white active:bg-blue-700 disabled:opacity-50"
+          className="flex-1 rounded-lg bg-brand-600 px-3 py-2 text-sm font-semibold text-white active:bg-brand-700 disabled:opacity-50"
         >
           {saving ? "저장 중…" : dirty ? "저장" : "저장됨 ✓"}
         </button>
@@ -517,7 +517,7 @@ function WebhookTab({ s, setS, setMsg }: { s: Settings; setS: (s: Settings) => v
         type="button"
         onClick={save}
         disabled={saving || !dirty || !valid}
-        className="mt-3 w-full rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white active:bg-blue-700 disabled:opacity-50"
+        className="mt-3 w-full rounded-lg bg-brand-600 px-3 py-2 text-sm font-semibold text-white active:bg-brand-700 disabled:opacity-50"
       >
         {saving ? "저장 중…" : dirty ? "저장" : "저장됨 ✓"}
       </button>

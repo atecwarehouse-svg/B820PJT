@@ -309,7 +309,7 @@ export default function HandoverChecklist({
             enterKeyHint="search"
             placeholder="차량번호 검색 (예: 6704)"
             aria-label="차량번호 검색"
-            className="w-full rounded-2xl border border-gray-200 bg-white py-3.5 pl-12 pr-12 text-lg font-semibold shadow-sm outline-none placeholder:font-normal placeholder:text-gray-400 focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+            className="w-full rounded-2xl border border-gray-200 bg-white py-3.5 pl-12 pr-12 text-lg font-semibold shadow-sm outline-none placeholder:font-normal placeholder:text-gray-400 focus:border-brand-500 focus:ring-4 focus:ring-brand-100"
           />
           {q && (
             <button type="button" onClick={() => setQ("")} className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full bg-gray-100 px-2.5 py-1 text-xs font-semibold text-gray-600" aria-label="검색 지우기">
@@ -439,7 +439,7 @@ export default function HandoverChecklist({
                 type="button"
                 onClick={() => setGroupTab(key)}
                 className={`shrink-0 whitespace-nowrap rounded-xl px-3 py-2 text-xs font-semibold ring-1 transition-colors ${
-                  on ? "bg-blue-600 text-white ring-blue-600 shadow-sm" : "bg-white text-gray-700 ring-black/5 active:bg-blue-50"
+                  on ? "bg-brand-600 text-white ring-brand-600 shadow-sm" : "bg-white text-gray-700 ring-black/5 active:bg-brand-50"
                 }`}
               >
                 {g ? groupLabel(key) : "전체"}
@@ -525,13 +525,13 @@ export default function HandoverChecklist({
               rows={3}
               autoFocus
               placeholder="특이사항 (예: 단말기 고장, 재방문 필요) — 200자"
-              className="mt-3 w-full resize-none rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-base outline-none focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-100"
+              className="mt-3 w-full resize-none rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-base outline-none focus:border-brand-500 focus:bg-white focus:ring-2 focus:ring-brand-100"
             />
             <div className="mt-3 flex gap-2">
               <button type="button" onClick={() => setNoteFor(null)} className="rounded-xl bg-gray-100 px-4 py-3 text-sm font-medium text-gray-600">
                 취소
               </button>
-              <button type="button" onClick={saveNote} className="flex-1 rounded-xl bg-blue-600 py-3 text-sm font-semibold text-white active:bg-blue-700">
+              <button type="button" onClick={saveNote} className="flex-1 rounded-xl bg-brand-600 py-3 text-sm font-semibold text-white active:bg-brand-700">
                 저장
               </button>
             </div>

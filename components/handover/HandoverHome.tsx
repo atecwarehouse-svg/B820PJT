@@ -30,7 +30,7 @@ export default function HandoverHome({
       <ShareInstallBar projectName={project.name} kindLabel={label} />
 
       <header className="mb-4 flex flex-col items-center text-center motion-safe:animate-rise">
-        <span className={`mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br text-white shadow-lg ${CARD_COLORS[project.color].card}`}>
+        <span className={`mb-3 flex h-14 w-14 items-center justify-center rounded-2xl text-white shadow-sm ${CARD_COLORS[project.color].card}`}>
           <Svg d={icon.d} className="h-7 w-7" />
         </span>
         <h1 className="text-2xl font-bold tracking-tight text-gray-900">{project.name}</h1>

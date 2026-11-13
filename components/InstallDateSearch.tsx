@@ -38,7 +38,7 @@ export default function InstallDateSearch({
           type="date"
           value={date}
           onChange={(e) => setDate(e.target.value)}
-          className="rounded-xl border border-gray-200 bg-gray-50 px-2 py-1.5 text-sm transition-colors focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-100"
+          className="rounded-xl border border-gray-200 bg-gray-50 px-2 py-1.5 text-sm transition-colors focus:border-brand-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-100"
         />
         <button
           type="button"

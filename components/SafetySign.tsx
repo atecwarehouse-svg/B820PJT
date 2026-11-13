@@ -171,7 +171,7 @@ export default function SafetySign({
         {!DEVICE_LOCK && (
           <button
             onClick={() => setCompleted(null)}
-            className="w-full rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white active:bg-blue-700"
+            className="w-full rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white active:bg-brand-700"
           >
             다른 사람 이어서 서명하기
           </button>
@@ -201,7 +201,7 @@ export default function SafetySign({
       </section>
 
       {/* 서명 단계 — 링크에 따라 고정 */}
-      <div className="rounded-xl bg-blue-600 px-4 py-2.5 text-center text-sm font-semibold text-white">
+      <div className="rounded-xl bg-brand-600 px-4 py-2.5 text-center text-sm font-semibold text-white">
         {phase === "before" ? "설치 전 서명" : "설치 후 서명"}
       </div>
 
@@ -220,7 +220,7 @@ export default function SafetySign({
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="본인 이름"
-                  className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-base focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-base focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
                 />
               </label>
             ) : (
@@ -272,7 +272,7 @@ export default function SafetySign({
                     onClick={() => setSelectedId(s.id)}
                     className={`rounded-full px-3 py-1.5 text-sm font-medium ${
                       selectedId === s.id
-                        ? "bg-blue-600 text-white"
+                        ? "bg-brand-600 text-white"
                         : "border border-gray-300 bg-white text-gray-700"
                     }`}
                   >
@@ -320,7 +320,7 @@ export default function SafetySign({
         <button
           onClick={submit}
           disabled={submitting || (phase === "after" && (DEVICE_LOCK ? pending.length === 0 : signers.length === 0))}
-          className="mt-3 w-full rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white active:bg-blue-700 disabled:opacity-50"
+          className="mt-3 w-full rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white active:bg-brand-700 disabled:opacity-50"
         >
           {submitting ? "제출 중…" : "서명 제출"}
         </button>

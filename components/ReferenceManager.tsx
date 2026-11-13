@@ -133,7 +133,7 @@ function ReferenceSlot({
         <button
           onClick={() => fileRef.current?.click()}
           disabled={busy}
-          className="flex-1 rounded bg-blue-600 px-2 py-1.5 text-xs font-medium text-white active:bg-blue-700 disabled:opacity-50"
+          className="flex-1 rounded bg-brand-600 px-2 py-1.5 text-xs font-medium text-white active:bg-brand-700 disabled:opacity-50"
         >
           {url ? "교체" : "업로드"}
         </button>

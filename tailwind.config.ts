@@ -1,4 +1,9 @@
 import type { Config } from "tailwindcss";
+import colors from "tailwindcss/colors";
+
+// tokens.css 의 "R G B" 변수 → Tailwind 색 단계(투명도 표기 지원)
+const scale = (name: string) =>
+  Object.fromEntries([50, 100, 200, 300, 400, 500, 600, 700, 800, 900].map((n) => [n, `rgb(var(--${name}-${n}) / <alpha-value>)`]));
 
 const config: Config = {
   content: [
@@ -7,6 +12,20 @@ const config: Config = {
   ],
   theme: {
     extend: {
+      // 에이텍모빌리티 테마 — 값은 app/tokens.css 한 곳에서 정한다.
+      //   brand = 에이텍 레드(주요 버튼·선택) / blue = 청록(안내·진행 상태·링크, 기존 blue 클래스가 그대로 이 색이 된다) / gray = 무채색
+      colors: {
+        brand: scale("brand"),
+        blue: scale("info"),
+        gray: scale("ink"),
+        // 흰 글자를 올리는 버튼 색(600)이 옅어 글자가 안 읽히던 것 — 한 단계 진하게
+        green: { ...colors.green, 600: colors.green[700] },
+        emerald: { ...colors.emerald, 600: colors.emerald[700] },
+        sky: { ...colors.sky, 600: colors.sky[700] },
+      },
+      fontFamily: { sans: ["var(--font-body)"] },
+      // 모서리를 한 단계씩 낮춰 단정하게 — 카드 10px, 큰 시트 14px
+      borderRadius: { xl: "8px", "2xl": "10px", "3xl": "14px" },
       // 프로젝트 선택 화면 애니메이션 — 카드 떠오르기·시트 올라오기·배경 페이드
       keyframes: {
         rise: {

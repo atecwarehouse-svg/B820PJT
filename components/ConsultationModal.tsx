@@ -11,7 +11,7 @@ import {
 } from "@/lib/consultation-form";
 
 const INPUT =
-  "mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-base focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500";
+  "mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-base focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500";
 const LABEL = "text-[11px] font-medium text-gray-500";
 
 const HOURS = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, "0"));
@@ -64,7 +64,7 @@ function TimeField({
             const nh = e.target.value;
             onChange(nh ? `${nh}:${m || "00"}` : "");
           }}
-          className="rounded-lg border border-gray-300 px-2 py-2 text-base focus:border-blue-500 focus:outline-none"
+          className="rounded-lg border border-gray-300 px-2 py-2 text-base focus:border-brand-500 focus:outline-none"
         >
           <option value="">--</option>
           {HOURS.map((x) => (
@@ -80,7 +80,7 @@ function TimeField({
           onChange={(e) => {
             if (h) onChange(`${h}:${e.target.value}`);
           }}
-          className="rounded-lg border border-gray-300 px-2 py-2 text-base focus:border-blue-500 focus:outline-none disabled:bg-gray-50 disabled:text-gray-400"
+          className="rounded-lg border border-gray-300 px-2 py-2 text-base focus:border-brand-500 focus:outline-none disabled:bg-gray-50 disabled:text-gray-400"
         >
           {!h && <option value="">--</option>}
           {MINUTES.map((x) => (
@@ -470,7 +470,7 @@ export default function ConsultationModal({
                   <button
                     type="button"
                     onClick={close}
-                    className="mt-4 w-full rounded-xl bg-blue-600 py-3 text-sm font-bold text-white active:bg-blue-700"
+                    className="mt-4 w-full rounded-xl bg-brand-600 py-3 text-sm font-bold text-white active:bg-brand-700"
                   >
                     확인
                   </button>
@@ -561,7 +561,7 @@ export default function ConsultationModal({
                       type="button"
                       onClick={handleSend}
                       disabled={!selectedOp || !date || busy}
-                      className="w-full rounded-xl bg-blue-600 py-3 text-sm font-bold text-white active:bg-blue-700 disabled:opacity-50"
+                      className="w-full rounded-xl bg-brand-600 py-3 text-sm font-bold text-white active:bg-brand-700 disabled:opacity-50"
                     >
                       {busy ? "전송 중..." : "팀즈로 보내기"}
                     </button>

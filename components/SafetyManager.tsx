@@ -141,7 +141,7 @@ export default function SafetyManager({ sessions }: { sessions: PledgeSessionRow
   }
 
   const inputCls =
-    "mt-1 w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-base transition-colors focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-100 focus:ring-1 focus:ring-blue-500";
+    "mt-1 w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-base transition-colors focus:border-brand-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-100 focus:ring-1 focus:ring-brand-500";
 
   return (
     <div className="space-y-6">
@@ -196,7 +196,7 @@ export default function SafetyManager({ sessions }: { sessions: PledgeSessionRow
         <button
           onClick={create}
           disabled={creating}
-          className="mt-4 w-full rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm active:bg-blue-700 disabled:opacity-50"
+          className="mt-4 w-full rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm active:bg-brand-700 disabled:opacity-50"
         >
           {creating ? "생성 중…" : "링크 생성"}
         </button>
@@ -215,7 +215,7 @@ export default function SafetyManager({ sessions }: { sessions: PledgeSessionRow
                   <div className="mt-2 flex gap-2">
                     <button
                       onClick={() => copyLink(link, key)}
-                      className="flex-1 rounded-xl bg-blue-600 px-3 py-2 text-xs font-semibold text-white shadow-sm active:bg-blue-700"
+                      className="flex-1 rounded-xl bg-brand-600 px-3 py-2 text-xs font-semibold text-white shadow-sm active:bg-brand-700"
                     >
                       {copied === key ? "복사됨 ✓" : "링크 복사"}
                     </button>

@@ -13,7 +13,7 @@ import {
 //   PledgeTemplateManager(기본): 불러오기/저장/기준양식 되돌리기 (app_settings.safety_pledge)
 
 const input =
-  "w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-base transition-colors focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-100";
+  "w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-base transition-colors focus:border-brand-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-100";
 
 export function PledgeTemplateEditor({
   value,
@@ -173,7 +173,7 @@ export default function PledgeTemplateManager() {
           type="button"
           onClick={save}
           disabled={saving || !dirty}
-          className="flex-1 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm active:bg-blue-700 disabled:opacity-40"
+          className="flex-1 rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm active:bg-brand-700 disabled:opacity-40"
         >
           {saving ? "저장 중…" : "저장"}
         </button>

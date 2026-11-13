@@ -409,7 +409,7 @@ export default function ProjectAdmin({
   const halfPeriod = !!period.start !== !!period.end; // 한쪽만 고름
   const badPeriod = halfPeriod || (!!period.start && !!period.end && period.end < period.start);
   const input =
-    "w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-base transition-colors focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-100";
+    "w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-base transition-colors focus:border-brand-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-100";
   const canSubmit =
     !busy &&
     (editing
@@ -653,7 +653,7 @@ export default function ProjectAdmin({
         <div className="mb-4 flex items-start gap-4">
           {/* 첫 화면에 보일 모습 미리보기 */}
           <div
-            className={`flex h-28 w-28 shrink-0 flex-col items-center justify-center gap-1.5 rounded-2xl bg-gradient-to-br p-2 text-center text-white shadow-lg ${CARD_COLORS[color].card}`}
+            className={`flex h-28 w-28 shrink-0 flex-col items-center justify-center gap-1.5 rounded-2xl p-2 text-center text-white shadow-lg ${CARD_COLORS[color].card}`}
           >
             <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/15">
               <Svg d={PROJECT_ICONS[icon].d} className="h-6 w-6" />
@@ -1109,7 +1109,7 @@ export default function ProjectAdmin({
               type="button"
               onClick={submit}
               disabled={!canSubmit}
-              className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-blue-600 to-blue-700 py-3 text-sm font-semibold text-white shadow-md shadow-blue-200 transition-transform active:scale-[.98] disabled:opacity-40 disabled:shadow-none"
+              className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-brand-600 py-3 text-sm font-semibold text-white shadow-sm transition-transform active:scale-[.98] disabled:opacity-40"
             >
               <Svg d={editing ? UI.pencil : UI.plus} className="h-4 w-4" />
               {busy
@@ -1182,7 +1182,7 @@ export default function ProjectAdmin({
                 disabled={busy}
                 aria-label={`${p.name} 수정`}
                 className={`shrink-0 rounded-lg p-2 transition-colors ${
-                  isEditing ? "bg-blue-600 text-white" : "text-gray-400 active:bg-blue-50 active:text-blue-600"
+                  isEditing ? "bg-brand-600 text-white" : "text-gray-400 active:bg-brand-50 active:text-brand-600"
                 }`}
               >
                 <Svg d={UI.pencil} className="h-4 w-4" />
@@ -1283,7 +1283,7 @@ export default function ProjectAdmin({
                   setPhotoSlots(toSlotConfigJson(v)); // 공백 정리된 값으로
                   setSlotsOpen(false);
                 }}
-                className="flex-1 rounded-xl bg-blue-600 py-2.5 text-sm font-semibold text-white active:bg-blue-700"
+                className="flex-1 rounded-xl bg-brand-600 py-2.5 text-sm font-semibold text-white active:bg-brand-700"
               >
                 적용
               </button>
@@ -1331,7 +1331,7 @@ export default function ProjectAdmin({
                   setPledge(v);
                   setPledgeOpen(false);
                 }}
-                className="flex-1 rounded-xl bg-blue-600 py-2.5 text-sm font-semibold text-white active:bg-blue-700"
+                className="flex-1 rounded-xl bg-brand-600 py-2.5 text-sm font-semibold text-white active:bg-brand-700"
               >
                 적용
               </button>

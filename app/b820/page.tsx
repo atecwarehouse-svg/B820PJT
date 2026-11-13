@@ -101,7 +101,7 @@ export default async function HomePage() {
       {/* 머리 — 런처 카드와 같은 색의 아이콘 타일 + 프로젝트명 */}
       <header className="mb-5 flex flex-col items-center text-center motion-safe:animate-rise">
         <span
-          className={`mb-3 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br text-white shadow-lg ${CARD_COLORS[project.color].card}`}
+          className={`mb-3 flex h-16 w-16 items-center justify-center rounded-2xl text-white shadow-sm ${CARD_COLORS[project.color].card}`}
         >
           <Svg d={icon.d} className="h-8 w-8" />
         </span>
@@ -143,7 +143,7 @@ export default async function HomePage() {
       </div>
 
       {/* 배포 버전 — 빌드 시점에 고정. 새로고침해서 이 값이 바뀌면 최신판을 받은 것 */}
-      <p className="mt-6 text-center text-[10px] text-gray-400">
+      <p className="mt-6 text-center text-[11px] text-gray-500">
         v{BUILD_TIME}
         {COMMIT && ` · ${COMMIT}`}
       </p>

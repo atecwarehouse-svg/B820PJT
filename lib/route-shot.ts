@@ -211,13 +211,13 @@ export async function captureRouteShot(opts: {
       `<!doctype html><meta charset="utf-8"><style>
         *{margin:0;padding:0;box-sizing:border-box}
         body{width:960px;font-family:'Malgun Gothic',sans-serif;background:#fff}
-        h1{font-size:15px;padding:8px 10px;background:#1d4ed8;color:#fff}
+        h1{font-size:15px;padding:8px 10px;background:#c70a51;color:#fff}
         .row{display:flex}
         .col{display:flex;flex-direction:column;width:480px}
         .full{width:480px;height:1040px;object-fit:cover;object-position:top;display:block;
               border-right:1px solid #ddd}
         .half{width:480px;height:520px;object-fit:cover;object-position:top;display:block}
-        .half+.half{border-top:2px solid #1d4ed8}
+        .half+.half{border-top:2px solid #c70a51}
         .err{display:flex;align-items:center;justify-content:center;text-align:center;
              background:#f8fafc;color:#b91c1c;font-size:13px;line-height:1.6;padding:20px}
       </style>

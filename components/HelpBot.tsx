@@ -16,6 +16,12 @@ export default function HelpBot() {
   const [busy, setBusy] = useState(false);
   const [edit, setEdit] = useState<Faq[] | null>(null); // 사전 편집 중인 사본(null = 대화 화면)
   const [editMsg, setEditMsg] = useState("");
+  // 대화 기록 보기(null = 닫힘) — 서버에 쌓인 모든 질문·답, 최근 것부터
+  const [log, setLog] = useState<{ at: string; slug: string; q: string; a: string; source: string }[] | null>(null);
+  const openLog = () =>
+    fetch("/api/help-bot?log=1")
+      .then(async (r) => (r.status === 401 ? setLocked(true) : setLog((await r.json()).log ?? [])))
+      .catch(() => {});
   const [missed, setMissed] = useState<string[]>([]); // AI도 답하지 못한 질문(자동으로 쌓임)
   const endRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -114,9 +120,9 @@ export default function HelpBot() {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="fixed bottom-4 right-4 z-40 rounded-full bg-blue-600 px-4 py-3 text-sm font-semibold text-white shadow-lg active:bg-blue-700"
+        className="chatbot-fab fixed bottom-4 right-4 z-40 rounded-full bg-brand-600 px-4 py-3 text-sm font-semibold text-white shadow-md active:bg-brand-700"
       >
-        💬 도우미
+        💬 챗봇
       </button>
     );
   }
@@ -139,15 +145,20 @@ export default function HelpBot() {
   return (
     <div className="fixed inset-x-0 bottom-0 z-50 mx-auto flex h-[80vh] max-w-md flex-col rounded-t-2xl bg-white shadow-2xl ring-1 ring-black/10">
       <div className="flex items-center justify-between gap-2 border-b border-gray-200 px-4 py-2.5">
-        <p className="text-sm font-bold text-gray-800">{edit ? "✏️ 질문·답변 사전 편집" : "💬 사용법 도우미"}</p>
+        <p className="text-sm font-bold text-gray-800">{edit ? "✏️ 질문·답변 사전 편집" : log ? "🗂 대화 기록" : "💬 챗봇"}</p>
         <div className="flex gap-2">
-          {!edit && !locked && (
+          {!edit && !log && !locked && (
+            <button type="button" onClick={openLog} className={btn}>
+              🗂 기록
+            </button>
+          )}
+          {!edit && !log && !locked && (
             <button type="button" onClick={() => { setEditMsg(""); setEdit(faq.map((f) => ({ ...f }))); }} className={btn}>
               ✏️ 사전 편집
             </button>
           )}
-          <button type="button" onClick={() => (edit ? setEdit(null) : setOpen(false))} className={btn}>
-            {edit ? "취소" : "✕ 닫기"}
+          <button type="button" onClick={() => (edit ? setEdit(null) : log ? setLog(null) : setOpen(false))} className={btn}>
+            {edit ? "취소" : log ? "← 대화로" : "✕ 닫기"}
           </button>
         </div>
       </div>
@@ -167,11 +178,26 @@ export default function HelpBot() {
           <button
             type="submit"
             disabled={busy || !pw}
-            className="rounded-xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white active:bg-blue-700 disabled:opacity-40"
+            className="rounded-xl bg-brand-600 px-4 py-3 text-sm font-semibold text-white active:bg-brand-700 disabled:opacity-40"
           >
             {busy ? "확인 중…" : "확인"}
           </button>
         </form>
+      ) : log ? (
+        <div className="flex-1 space-y-2 overflow-y-auto px-4 py-3">
+          <p className="text-xs text-gray-500">챗봇에 묻고 답한 내용이 자동으로 남습니다. 최근 500건, 최근 것부터 보입니다.</p>
+          {log.length === 0 && <p className="text-sm text-gray-400">아직 기록이 없습니다.</p>}
+          {log.map((r, i) => (
+            <div key={i} className="space-y-1 rounded-xl border border-gray-200 p-2 text-xs">
+              <p className="text-[10px] text-gray-400">
+                {new Date(r.at).toLocaleString("ko-KR", { timeZone: "Asia/Seoul", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })} · {r.slug} ·{" "}
+                <span className={r.source === "실패" ? "text-red-500" : r.source === "사전" ? "text-green-600" : "text-purple-600"}>{r.source}</span>
+              </p>
+              <p className="font-semibold text-gray-800">Q. {r.q}</p>
+              <p className="whitespace-pre-wrap text-gray-600">{r.a}</p>
+            </div>
+          ))}
+        </div>
       ) : edit ? (
         <>
           <div className="flex-1 space-y-2 overflow-y-auto px-4 py-3">
@@ -246,7 +272,7 @@ export default function HelpBot() {
                 type="button"
                 disabled={busy}
                 onClick={saveFaq}
-                className="flex-1 rounded-xl bg-blue-600 px-3 py-2 text-sm font-semibold text-white active:bg-blue-700 disabled:opacity-40"
+                className="flex-1 rounded-xl bg-brand-600 px-3 py-2 text-sm font-semibold text-white active:bg-brand-700 disabled:opacity-40"
               >
                 {busy ? "저장 중…" : "💾 사전 저장"}
               </button>
@@ -265,7 +291,7 @@ export default function HelpBot() {
               <div key={i} className={m.role === "user" ? "text-right" : ""}>
                 <p
                   className={`inline-block max-w-[88%] whitespace-pre-wrap rounded-2xl px-3 py-2 text-left text-sm ${
-                    m.role === "user" ? "bg-blue-600 text-white" : "bg-gray-100 text-gray-800"
+                    m.role === "user" ? "bg-brand-600 text-white" : "bg-gray-100 text-gray-800"
                   }`}
                 >
                   {m.text}
@@ -315,7 +341,7 @@ export default function HelpBot() {
             <button
               type="submit"
               disabled={busy || !input.trim()}
-              className="shrink-0 rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white active:bg-blue-700 disabled:opacity-40"
+              className="shrink-0 rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white active:bg-brand-700 disabled:opacity-40"
             >
               보내기
             </button>

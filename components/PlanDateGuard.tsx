@@ -44,7 +44,7 @@ export default function PlanDateGuard({
         <div className="mt-4 flex flex-col gap-2">
           <button
             onClick={() => router.back()}
-            className="w-full rounded-xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white active:bg-blue-700"
+            className="w-full rounded-xl bg-brand-600 px-4 py-3 text-sm font-semibold text-white active:bg-brand-700"
           >
             ← 뒤로가기 (차량번호 다시 입력)
           </button>

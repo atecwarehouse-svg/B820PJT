@@ -30,7 +30,7 @@ export async function GET() {
     scope,
     display: "standalone",
     background_color: "#ffffff",
-    theme_color: "#1d4ed8",
+    theme_color: "#c70a51",
     orientation: "portrait",
     lang: "ko",
     icons: [

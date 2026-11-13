@@ -196,7 +196,7 @@ function RowTime({
           const nh = e.target.value;
           onChange(nh ? `${nh}:${m || "00"}` : null);
         }}
-        className="rounded-xl border border-gray-200 bg-gray-50 px-1.5 py-1.5 text-base transition-colors focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-100 disabled:bg-gray-50 disabled:text-gray-400"
+        className="rounded-xl border border-gray-200 bg-gray-50 px-1.5 py-1.5 text-base transition-colors focus:border-brand-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-100 disabled:bg-gray-50 disabled:text-gray-400"
       >
         <option value="">--</option>
         {HOURS.map((x) => (
@@ -212,7 +212,7 @@ function RowTime({
         onChange={(e) => {
           if (h) onChange(`${h}:${e.target.value}`);
         }}
-        className="rounded-xl border border-gray-200 bg-gray-50 px-1.5 py-1.5 text-base transition-colors focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-100 disabled:bg-gray-50 disabled:text-gray-400"
+        className="rounded-xl border border-gray-200 bg-gray-50 px-1.5 py-1.5 text-base transition-colors focus:border-brand-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-100 disabled:bg-gray-50 disabled:text-gray-400"
       >
         {!h && <option value="">--</option>}
         {minuteOptions.map((x) => (
@@ -407,9 +407,9 @@ export default function DispatchButton({ routeView = false }: { routeView?: bool
         const y = TOP + ri * ROW;
         let x = PAD;
         r.cells.forEach((c, i) => {
-          ctx.fillStyle = c.head ? "#2563eb" : r.bg === "rgba(0, 0, 0, 0)" ? "#ffffff" : r.bg;
+          ctx.fillStyle = c.head ? "#c70a51" : r.bg === "rgba(0, 0, 0, 0)" ? "#ffffff" : r.bg;
           ctx.fillRect(x, y, widths[i], ROW);
-          ctx.strokeStyle = c.head ? "#1d4ed8" : "#d1d5db";
+          ctx.strokeStyle = c.head ? "#96083d" : "#d1d5db";
           ctx.strokeRect(x + 0.5, y + 0.5, widths[i], ROW);
           ctx.fillStyle = c.head ? "#ffffff" : c.color;
           ctx.font = fontOf(c.head);
@@ -1027,7 +1027,7 @@ export default function DispatchButton({ routeView = false }: { routeView?: bool
             className="mb-12 mt-8 w-full max-w-md rounded-3xl bg-white shadow-xl motion-safe:animate-rise"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-start justify-between rounded-t-3xl bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-3 text-white">
+            <div className="flex items-start justify-between rounded-t-3xl bg-brand-600 px-4 py-3 text-white">
               <div>
                 <p className="text-sm font-bold">🚌 배차표</p>
                 <p className="text-xs text-blue-200">
@@ -1049,14 +1049,14 @@ export default function DispatchButton({ routeView = false }: { routeView?: bool
                     loadList(operator, date);
                   }}
                   disabled={!operator || !date || listLoading}
-                  className="rounded-md px-2 py-0.5 text-lg leading-none text-blue-100 active:bg-blue-700 disabled:opacity-40"
+                  className="rounded-md px-2 py-0.5 text-lg leading-none text-brand-100 active:bg-brand-700 disabled:opacity-40"
                   aria-label="새로고침"
                 >
                   🔄
                 </button>
                 <button
                   onClick={() => setOpen(false)}
-                  className="rounded-md px-2 py-0.5 text-lg leading-none text-blue-100 active:bg-blue-700"
+                  className="rounded-md px-2 py-0.5 text-lg leading-none text-brand-100 active:bg-brand-700"
                   aria-label="닫기"
                 >
                   ✕
@@ -1159,7 +1159,7 @@ export default function DispatchButton({ routeView = false }: { routeView?: bool
                   <button
                     onClick={() => handleSave()}
                     disabled={saving || !dbReady}
-                    className="w-full rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm active:bg-blue-700 disabled:opacity-50"
+                    className="w-full rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm active:bg-brand-700 disabled:opacity-50"
                   >
                     {saving ? "저장 중…" : "💾 저장"}
                   </button>
@@ -1242,7 +1242,7 @@ export default function DispatchButton({ routeView = false }: { routeView?: bool
                   <select
                     value={operator}
                     onChange={(e) => selectOperator(e.target.value)}
-                    className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-base transition-colors focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-100"
+                    className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-base transition-colors focus:border-brand-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-100"
                   >
                     <option value="">운수사 선택</option>
                     {operators.map((o) => (
@@ -1263,7 +1263,7 @@ export default function DispatchButton({ routeView = false }: { routeView?: bool
                   <select
                     value={date}
                     onChange={(e) => selectDate(e.target.value)}
-                    className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-base transition-colors focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-100"
+                    className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-base transition-colors focus:border-brand-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-100"
                   >
                     <option value="">날짜 선택</option>
                     {selectedOp.dates.map((d) => (
@@ -1284,7 +1284,7 @@ export default function DispatchButton({ routeView = false }: { routeView?: bool
                   <select
                     value={routeFilter}
                     onChange={(e) => setRouteFilter(e.target.value)}
-                    className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-base transition-colors focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-100"
+                    className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-base transition-colors focus:border-brand-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-100"
                   >
                     <option value="">전체 ({selectedDate.count}대)</option>
                     {selectedDate.routes.map((r) => (
@@ -2019,7 +2019,7 @@ export default function DispatchButton({ routeView = false }: { routeView?: bool
 
                 {/* 2. 단말기 설치 상태 */}
                 <section className="rounded-xl border border-blue-200 bg-white shadow-sm">
-                  <h3 className="rounded-t-xl bg-blue-600 px-3 py-2 text-sm font-bold text-white">
+                  <h3 className="rounded-t-xl bg-brand-600 px-3 py-2 text-sm font-bold text-white">
                     2. 단말기 설치 상태
                   </h3>
                   <ol className="divide-y divide-gray-100 px-3 text-sm text-gray-800">
@@ -2280,7 +2280,7 @@ export default function DispatchButton({ routeView = false }: { routeView?: bool
                     type="button"
                     disabled={capSaving}
                     onClick={saveCapImage}
-                    className="rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white active:bg-blue-700 disabled:opacity-50"
+                    className="rounded-lg bg-brand-600 px-3 py-1.5 text-sm font-semibold text-white active:bg-brand-700 disabled:opacity-50"
                   >
                     💾 이미지 저장
                   </button>
@@ -2316,7 +2316,7 @@ export default function DispatchButton({ routeView = false }: { routeView?: bool
                 <div className="mt-3 overflow-x-auto">
                 <table className="w-full border-collapse whitespace-nowrap text-sm">
                   <thead>
-                    <tr className="bg-blue-600 text-white">
+                    <tr className="bg-brand-600 text-white">
                       <th className="w-9 border border-blue-700 px-1 py-1.5 text-center text-xs font-semibold">
                         번호
                       </th>

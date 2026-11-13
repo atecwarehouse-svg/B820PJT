@@ -1,0 +1,35 @@
+/* 에이텍모빌리티 테마 토큰 — 색·글꼴은 전부 여기서 정한다(.hallmark/brand-spec.md: 홈페이지 CSS에서 읽은 값).
+   tailwind.config.ts가 이 값을 Tailwind 색 이름(brand·blue·gray)과 글꼴(sans)에 연결하므로, 화면 코드는 색 글자를 직접 쓰지 않는다.
+   숫자 3개(R G B)로 적은 값은 Tailwind의 투명도 표기(bg-brand-600/90)가 되도록 rgb() 안에 넣어 쓴다. */
+:root {
+  --space-3xs: 2px; --space-2xs: 4px; --space-xs: 8px; --space-sm: 12px; --space-md: 16px; --space-lg: 24px; --space-xl: 40px; --space-2xl: 64px; --space-3xl: 96px; --space-4xl: 144px;
+  --text-xs: 0.75rem; --text-sm: 0.875rem; --text-md: 1rem; --text-lg: 1.2rem; --text-xl: 1.44rem; --text-2xl: 1.728rem; --text-3xl: 2.074rem;
+  --text-display-s: 1.44rem; --text-display: 1.728rem; --text-section: 1.2rem; --text-title: 1rem; --text-lead: 1rem;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1); --ease-in: cubic-bezier(0.7, 0, 0.84, 0); --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --dur-micro: 120ms; --dur-short: 220ms; --dur-long: 420ms;
+  --color-error: oklch(52% 0.19 27); --color-success: oklch(50% 0.12 150);
+  --container: 1440px; --gutter: 64px; --gap-columns: 32px; --section-gap-s: 120px; --section-gap: 144px; --section-gap-l: 176px;
+  --z-base: 1; --z-raised: 10; --z-dropdown: 100; --z-sticky: 200; --z-sticky-nav: 300; --z-modal: 400; --z-toast: 500; --z-tooltip: 600;
+
+  /* 에이텍 레드(주 색) — 주요 버튼·현재 선택·브랜드 표시. 600이 홈페이지 버튼 색, 700이 누름 색 */
+  --brand-50: 252 238 243; --brand-100: 248 215 226; --brand-200: 240 174 197; --brand-300: 228 122 160; --brand-400: 214 64 118;
+  --brand-500: 199 10 81; --brand-600: 199 10 81; --brand-700: 150 8 61; --brand-800: 116 6 47; --brand-900: 82 4 33;
+  /* 청록(보조 색) — 안내·진행 상태·링크. 빨강 계열 경고와 헷갈리지 않게 주 색과 따로 둔다. Tailwind의 blue 자리에 들어간다 */
+  --info-50: 235 247 249; --info-100: 212 238 243; --info-200: 166 220 229; --info-300: 110 198 212; --info-400: 60 178 196;
+  --info-500: 23 162 184; --info-600: 17 122 139; --info-700: 13 97 112; --info-800: 10 77 89; --info-900: 8 60 69;
+  /* 400·500은 보조 글자로 쓰이므로 흰 바탕·회색 바탕 모두에서 읽히는 진하기(대비 4.5:1 이상)로 잡았다 */
+  /* 무채색 — 홈페이지의 #333 · #666 · #ddd · #f6f6f6 결. Tailwind의 gray 자리에 들어간다 */
+  --ink-50: 250 250 250; --ink-100: 246 246 246; --ink-200: 232 232 232; --ink-300: 221 221 221; --ink-400: 110 110 110;
+  --ink-500: 98 98 98; --ink-600: 85 85 85; --ink-700: 68 68 68; --ink-800: 51 51 51; --ink-900: 34 34 34;
+
+  --color-paper: rgb(var(--ink-100)); --color-paper-2: rgb(255 255 255); --color-paper-3: rgb(var(--ink-200));
+  --color-ink: rgb(var(--ink-900)); --color-ink-2: rgb(var(--ink-800)); --color-muted: rgb(var(--ink-600));
+  --color-rule: rgb(var(--ink-300));
+  --color-accent: rgb(var(--brand-600)); --color-accent-ink: rgb(255 255 255); --color-focus: rgb(var(--brand-600));
+  --color-accent-2: rgb(var(--info-600));
+  /* --font-suit 는 app/layout.tsx 의 next/font/local(SUIT, 홈페이지 본문 글꼴)이 넣어 준다 */
+  --font-body: var(--font-suit), "Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-body); --font-outlier: var(--font-body);
+  --radius-card: 10px; --radius-pill: 999px; --rule-hair: 1px; --shadow-card: 0 1px 2px rgb(0 0 0 / 0.06);
+  --tracking-display: -0.02em;
+}

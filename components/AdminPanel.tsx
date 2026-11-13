@@ -134,7 +134,7 @@ export default function AdminPanel() {
             key={t}
             onClick={() => setTab(t)}
             className={`shrink-0 flex-1 whitespace-nowrap rounded-lg px-3 py-2 text-xs font-semibold transition-colors ${
-              tab === t ? "bg-blue-600 text-white shadow-sm" : "text-gray-500 active:bg-gray-100"
+              tab === t ? "bg-brand-600 text-white shadow-sm" : "text-gray-500 active:bg-gray-100"
             }`}
           >
             {t}
@@ -169,11 +169,11 @@ export default function AdminPanel() {
               onChange={(e) => setQ(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && load(q, isDb)}
               placeholder="차량번호 검색 (예: 인천70바)"
-              className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-500"
+              className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-brand-500"
             />
             <button
               onClick={() => load(q, isDb)}
-              className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white active:bg-blue-700"
+              className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white active:bg-brand-700"
             >
               검색
             </button>

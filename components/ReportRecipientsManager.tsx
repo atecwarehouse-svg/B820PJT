@@ -91,7 +91,7 @@ export default function ReportRecipientsManager() {
                     value={email}
                     onChange={(e) => update(i, e.target.value)}
                     placeholder="name@example.com"
-                    className="min-w-0 flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-500"
+                    className="min-w-0 flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-brand-500"
                   />
                   <button
                     onClick={() => remove(i)}
@@ -112,7 +112,7 @@ export default function ReportRecipientsManager() {
               <button
                 onClick={save}
                 disabled={saving || !dirty}
-                className="flex-1 rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white active:bg-blue-700 disabled:opacity-50"
+                className="flex-1 rounded-lg bg-brand-600 px-3 py-2 text-sm font-semibold text-white active:bg-brand-700 disabled:opacity-50"
               >
                 {saving ? "저장 중…" : dirty ? "저장" : "저장됨 ✓"}
               </button>

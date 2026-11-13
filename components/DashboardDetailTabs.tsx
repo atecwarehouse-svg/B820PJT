@@ -86,14 +86,14 @@ export default function DashboardDetailTabs({
               onChange={(e) => setPw(e.target.value)}
               placeholder="비밀번호"
               autoFocus
-              className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm outline-none transition-colors focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-100"
+              className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm outline-none transition-colors focus:border-brand-500 focus:bg-white focus:ring-2 focus:ring-brand-100"
             />
             {error && <p className="text-xs text-red-500">{error}</p>}
             <div className="flex gap-2">
               <button
                 type="submit"
                 disabled={busy || !pw}
-                className="flex-1 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white active:bg-blue-700 disabled:opacity-50"
+                className="flex-1 rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-bold text-white active:bg-brand-700 disabled:opacity-50"
               >
                 {busy ? "확인 중…" : "확인"}
               </button>
@@ -114,7 +114,7 @@ export default function DashboardDetailTabs({
           <button
             type="button"
             onClick={() => setAsking(true)}
-            className="mt-4 rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-bold text-white shadow-sm active:bg-blue-700"
+            className="mt-4 rounded-xl bg-brand-600 px-5 py-2.5 text-sm font-bold text-white shadow-sm active:bg-brand-700"
           >
             🔓 잠금 해제
           </button>
@@ -137,7 +137,7 @@ export default function DashboardDetailTabs({
               onClick={() => setTab(t.key)}
               className={`shrink-0 rounded-lg px-3 py-1.5 text-xs font-bold transition-colors ${
                 tab === t.key
-                  ? "bg-blue-600 text-white shadow-sm"
+                  ? "bg-brand-600 text-white shadow-sm"
                   : "bg-gray-100 text-gray-600 active:bg-gray-200"
               }`}
             >

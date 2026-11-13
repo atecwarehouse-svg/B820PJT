@@ -8,7 +8,7 @@ import { PROJECT_ICONS, colorKey, iconKey, type ColorKey } from "@/components/Pr
 export const runtime = "edge";
 
 const GRADIENT: Record<ColorKey, [string, string]> = {
-  blue: ["#2563eb", "#1d4ed8"],
+  blue: ["#c70a51", "#c70a51"],
   teal: ["#14b8a6", "#0f766e"],
   emerald: ["#10b981", "#047857"],
   amber: ["#f59e0b", "#ea580c"],

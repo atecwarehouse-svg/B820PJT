@@ -646,7 +646,7 @@ export default function RecordEditor({ plate, initial, teamOptions = [], brand =
               </button>
               <button
                 onClick={() => setAlightConfirm(null)}
-                className="flex-1 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white active:bg-blue-700"
+                className="flex-1 rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white active:bg-brand-700"
               >
                 있음 (촬영하기)
               </button>
@@ -678,7 +678,7 @@ export default function RecordEditor({ plate, initial, teamOptions = [], brand =
                   navLoading();
                   router.push(clientProjectPath("/b820"));
                 }}
-                className="flex-1 rounded-lg bg-blue-600 px-3 py-2.5 text-sm font-semibold text-white active:bg-blue-700"
+                className="flex-1 rounded-lg bg-brand-600 px-3 py-2.5 text-sm font-semibold text-white active:bg-brand-700"
               >
                 처음으로
               </button>
@@ -702,7 +702,7 @@ export default function RecordEditor({ plate, initial, teamOptions = [], brand =
             {/* '목록으로'는 제거 — 목록(/list)은 비밀번호가 걸려 있어 현장에서 번거롭다 */}
             <button
               onClick={() => setMidSavedPopup(false)}
-              className="mt-4 w-full rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white active:bg-blue-700"
+              className="mt-4 w-full rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white active:bg-brand-700"
             >
               계속 촬영
             </button>
@@ -730,7 +730,7 @@ export default function RecordEditor({ plate, initial, teamOptions = [], brand =
             <span
               className={`rounded-full px-2.5 py-1 font-medium ${
                 i === step
-                  ? "bg-blue-600 text-white"
+                  ? "bg-brand-600 text-white"
                   : "bg-gray-100 text-gray-500"
               }`}
             >
@@ -750,7 +750,7 @@ export default function RecordEditor({ plate, initial, teamOptions = [], brand =
                 onClick={toggleEditInfo}
                 className={`rounded-md px-3 py-1 text-xs font-medium ${
                   editInfo
-                    ? "bg-blue-600 text-white active:bg-blue-700"
+                    ? "bg-brand-600 text-white active:bg-brand-700"
                     : "border border-gray-300 text-gray-600 active:bg-gray-100"
                 }`}
               >
@@ -812,7 +812,7 @@ export default function RecordEditor({ plate, initial, teamOptions = [], brand =
                       value={team}
                       disabled={teamLocked}
                       onChange={(e) => changeTeam(e.target.value)}
-                      className={`min-w-0 flex-1 rounded border px-2 py-1.5 outline-none focus:border-blue-500 disabled:bg-gray-100 disabled:text-gray-500 ${
+                      className={`min-w-0 flex-1 rounded border px-2 py-1.5 outline-none focus:border-brand-500 disabled:bg-gray-100 disabled:text-gray-500 ${
                         team.trim() ? "border-gray-300 bg-white" : "border-red-300 bg-red-50"
                       }`}
                     >
@@ -833,7 +833,7 @@ export default function RecordEditor({ plate, initial, teamOptions = [], brand =
                       placeholder="설치 팀명 (필수)"
                       onChange={(e) => setTeam(e.target.value)}
                       onBlur={() => changeTeam(team)}
-                      className={`min-w-0 flex-1 rounded border px-2 py-1 outline-none focus:border-blue-500 disabled:bg-gray-100 disabled:text-gray-500 ${
+                      className={`min-w-0 flex-1 rounded border px-2 py-1 outline-none focus:border-brand-500 disabled:bg-gray-100 disabled:text-gray-500 ${
                         team.trim() ? "border-gray-300" : "border-red-300 bg-red-50"
                       }`}
                     />
@@ -914,7 +914,7 @@ export default function RecordEditor({ plate, initial, teamOptions = [], brand =
                       onClick={() => setChoice(d.key, { v: o.v, detail: a?.v === o.v ? a.detail : "" })}
                       className={`rounded-lg border py-2 text-sm font-semibold ${
                         a?.v === o.v
-                          ? "border-blue-600 bg-blue-600 text-white"
+                          ? "border-brand-600 bg-brand-600 text-white"
                           : "border-gray-300 bg-white text-gray-700 active:bg-gray-100"
                       }`}
                     >
@@ -935,7 +935,7 @@ export default function RecordEditor({ plate, initial, teamOptions = [], brand =
                       setDetailDraft((m) => { const n = { ...m }; delete n[d.key]; return n; });
                       saveRecord({ check_note: checkNote, check_na_slots: checkNaSlots });
                     }}
-                    className="mt-2 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:border-blue-500"
+                    className="mt-2 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:border-brand-500"
                   />
                 )}
                 {!ok && (
@@ -956,7 +956,7 @@ export default function RecordEditor({ plate, initial, teamOptions = [], brand =
               onChange={(e) => setCheckNote(e.target.value)}
               onBlur={() => saveRecord({ check_note: checkNote })}
               rows={2}
-              className={`mt-1 rounded-lg border px-3 py-2 text-sm outline-none focus:border-blue-500 ${
+              className={`mt-1 rounded-lg border px-3 py-2 text-sm outline-none focus:border-brand-500 ${
                 checkNote.trim() ? "border-gray-300 bg-white" : "border-red-300 bg-red-50"
               }`}
             />
@@ -1066,7 +1066,7 @@ export default function RecordEditor({ plate, initial, teamOptions = [], brand =
             onChange={(e) => setExtraNote(e.target.value)}
             onBlur={() => saveRecord({ extra_note: extraNote })}
             rows={3}
-            className={`w-full rounded-lg border px-3 py-2 text-sm outline-none focus:border-blue-500 ${
+            className={`w-full rounded-lg border px-3 py-2 text-sm outline-none focus:border-brand-500 ${
               extraNote.trim() ? "border-gray-300 bg-white" : "border-red-300 bg-red-50"
             }`}
           />
@@ -1112,7 +1112,7 @@ export default function RecordEditor({ plate, initial, teamOptions = [], brand =
           {step === 0 && (
             <button
               onClick={goNextFromCheck}
-              className="flex-1 rounded-lg bg-blue-600 px-4 py-3 text-sm font-semibold text-white active:bg-blue-700"
+              className="flex-1 rounded-lg bg-brand-600 px-4 py-3 text-sm font-semibold text-white active:bg-brand-700"
             >
               다음 (설치 전) →
             </button>
@@ -1125,7 +1125,7 @@ export default function RecordEditor({ plate, initial, teamOptions = [], brand =
                   setStep(2);
                 })
               }
-              className="flex-1 rounded-lg bg-blue-600 px-4 py-3 text-sm font-semibold text-white active:bg-blue-700"
+              className="flex-1 rounded-lg bg-brand-600 px-4 py-3 text-sm font-semibold text-white active:bg-brand-700"
             >
               다음 (설치 후) →
             </button>
@@ -1136,7 +1136,7 @@ export default function RecordEditor({ plate, initial, teamOptions = [], brand =
                 confirmAlightThen(cfg.after, (na) => handleSave(na))
               }
               disabled={submitting}
-              className="flex-1 rounded-lg bg-blue-600 px-4 py-3 text-sm font-semibold text-white active:bg-blue-700 disabled:opacity-50"
+              className="flex-1 rounded-lg bg-brand-600 px-4 py-3 text-sm font-semibold text-white active:bg-brand-700 disabled:opacity-50"
             >
               {submitting ? "저장 중…" : "저장"}
             </button>
@@ -1177,7 +1177,7 @@ function EditField({
         placeholder={placeholder}
         onChange={(e) => onChange(e.target.value)}
         onBlur={onBlur}
-        className="rounded border border-gray-300 px-2 py-1 outline-none focus:border-blue-500"
+        className="rounded border border-gray-300 px-2 py-1 outline-none focus:border-brand-500"
       />
     </label>
   );

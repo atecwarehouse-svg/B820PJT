@@ -109,7 +109,7 @@ export default function ShareInstallBar({ projectName, kindLabel = "설치 사�
                 <li className="text-xs text-gray-400">카카오톡 등 앱 안 브라우저라면 「다른 브라우저로 열기」(Chrome) 후 진행하세요.</li>
               </ol>
             )}
-            <button type="button" onClick={() => setGuide(null)} className="mt-4 w-full rounded-xl bg-blue-600 py-2.5 text-sm font-semibold text-white active:bg-blue-700">
+            <button type="button" onClick={() => setGuide(null)} className="mt-4 w-full rounded-xl bg-brand-600 py-2.5 text-sm font-semibold text-white active:bg-brand-700">
               확인
             </button>
           </div>

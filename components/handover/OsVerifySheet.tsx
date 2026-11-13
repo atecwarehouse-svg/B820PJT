@@ -160,7 +160,7 @@ export default function OsVerifySheet({ myCenter, onClose, inline = false }: { m
           type="button"
           disabled={!res || !res.files.some((f) => f.saved) || sending || !!busy}
           onClick={sendCards}
-          className="flex-1 rounded-xl bg-blue-600 py-3 text-sm font-semibold text-white active:bg-blue-700 disabled:opacity-40"
+          className="flex-1 rounded-xl bg-brand-600 py-3 text-sm font-semibold text-white active:bg-brand-700 disabled:opacity-40"
         >
           {sending ? "발송 중…" : "🔔 검증 발송 (팀즈)"}
         </button>
@@ -230,7 +230,7 @@ export default function OsVerifySheet({ myCenter, onClose, inline = false }: { m
                   onClick={() => pick(t)}
                   title={OS_RULE_TEXT[t]}
                   className={`rounded-xl px-3 py-2.5 text-left ring-1 transition-colors disabled:opacity-50 ${
-                    f?.saved ? "bg-emerald-50 ring-emerald-200 active:bg-emerald-100" : "bg-blue-600 text-white ring-blue-600 active:bg-blue-700"
+                    f?.saved ? "bg-emerald-50 ring-emerald-200 active:bg-emerald-100" : "bg-brand-600 text-white ring-brand-600 active:bg-brand-700"
                   }`}
                 >
                   <span className="block text-sm font-semibold">
@@ -257,7 +257,7 @@ export default function OsVerifySheet({ myCenter, onClose, inline = false }: { m
                       key={c}
                       type="button"
                       onClick={() => setCenter(c === "전체" ? "__all" : c)}
-                      className={`shrink-0 whitespace-nowrap rounded-xl px-3 py-1.5 text-xs font-semibold ring-1 ${on ? "bg-blue-600 text-white ring-blue-600" : "bg-white text-gray-700 ring-black/5"}`}
+                      className={`shrink-0 whitespace-nowrap rounded-xl px-3 py-1.5 text-xs font-semibold ring-1 ${on ? "bg-brand-600 text-white ring-brand-600" : "bg-white text-gray-700 ring-black/5"}`}
                     >
                       {c}
                     </button>

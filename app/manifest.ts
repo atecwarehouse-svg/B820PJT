@@ -13,7 +13,7 @@ export default function manifest(): MetadataRoute.Manifest {
     start_url: "/",
     display: "standalone", // 주소창 없이 앱처럼 전체화면
     background_color: "#ffffff",
-    theme_color: "#1d4ed8",
+    theme_color: "#c70a51",
     orientation: "portrait",
     lang: "ko",
     icons: [

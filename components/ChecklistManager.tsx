@@ -10,7 +10,7 @@ type SectionKey = keyof Checklist;
 
 const SECTIONS: { key: SectionKey; label: string; color: string }[] = [
   { key: "vehicle", label: "1. 차량 이상유무", color: "bg-emerald-600" },
-  { key: "device", label: "2. 단말기 설치 상태", color: "bg-blue-600" },
+  { key: "device", label: "2. 단말기 설치 상태", color: "bg-brand-600" },
 ];
 
 export default function ChecklistManager() {
@@ -110,14 +110,14 @@ export default function ChecklistManager() {
                         onChange={(e) => update(key, i, "t", e.target.value)}
                         placeholder="항목명"
                         maxLength={60}
-                        className="min-w-0 flex-[2] rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-500"
+                        className="min-w-0 flex-[2] rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-brand-500"
                       />
                       <input
                         value={item.s}
                         onChange={(e) => update(key, i, "s", e.target.value)}
                         placeholder="부연 설명(선택)"
                         maxLength={80}
-                        className="min-w-0 flex-[2] rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-600 outline-none focus:border-blue-500"
+                        className="min-w-0 flex-[2] rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-600 outline-none focus:border-brand-500"
                       />
                       <button
                         onClick={() => remove(key, i)}
@@ -141,7 +141,7 @@ export default function ChecklistManager() {
           <button
             onClick={save}
             disabled={saving || !dirty}
-            className="w-full rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white active:bg-blue-700 disabled:opacity-50"
+            className="w-full rounded-lg bg-brand-600 px-3 py-2 text-sm font-semibold text-white active:bg-brand-700 disabled:opacity-50"
           >
             {saving ? "저장 중…" : dirty ? "저장" : "저장됨 ✓"}
           </button>

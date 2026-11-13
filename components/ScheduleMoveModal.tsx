@@ -151,7 +151,7 @@ export default function ScheduleMoveModal() {
                   </p>
                   <button
                     onClick={close}
-                    className="mt-4 w-full rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700"
+                    className="mt-4 w-full rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-700"
                   >
                     확인
                   </button>
@@ -178,7 +178,7 @@ export default function ScheduleMoveModal() {
                           setVehicles(null);
                           setPicked(new Set());
                         }}
-                        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-base focus:border-blue-500 focus:outline-none"
+                        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-base focus:border-brand-500 focus:outline-none"
                       >
                         <option value="">운수사 선택</option>
                         {operators.map((o) => (
@@ -201,7 +201,7 @@ export default function ScheduleMoveModal() {
                           setDate(e.target.value);
                           if (e.target.value) loadVehicles(operator, e.target.value);
                         }}
-                        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-base focus:border-blue-500 focus:outline-none"
+                        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-base focus:border-brand-500 focus:outline-none"
                       >
                         <option value="">날짜 선택</option>
                         {selectedOp.dates.map((d) => (
@@ -274,7 +274,7 @@ export default function ScheduleMoveModal() {
                           type="date"
                           value={newDate}
                           onChange={(e) => setNewDate(e.target.value)}
-                          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-base focus:border-blue-500 focus:outline-none"
+                          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-base focus:border-brand-500 focus:outline-none"
                         />
                       </div>
                       <div>
@@ -287,7 +287,7 @@ export default function ScheduleMoveModal() {
                           onChange={(e) => setPw(e.target.value)}
                           autoComplete="off"
                           placeholder="비밀번호 입력"
-                          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-base focus:border-blue-500 focus:outline-none"
+                          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-base focus:border-brand-500 focus:outline-none"
                         />
                       </div>
                     </>
@@ -299,7 +299,7 @@ export default function ScheduleMoveModal() {
                     type="button"
                     onClick={submit}
                     disabled={busy || picked.size === 0 || !newDate || !pw || newDate === date}
-                    className="w-full rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+                    className="w-full rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
                   >
                     {busy
                       ? "변경 중…"

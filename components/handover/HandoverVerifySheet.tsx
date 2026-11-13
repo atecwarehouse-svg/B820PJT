@@ -104,7 +104,7 @@ export default function HandoverVerifySheet({ onClose }: { onClose: () => void }
             type="button"
             disabled={busy || loading}
             onClick={() => fileRef.current?.click()}
-            className="mt-3 w-full rounded-xl bg-blue-600 py-3 text-sm font-semibold text-white active:bg-blue-700 disabled:opacity-50"
+            className="mt-3 w-full rounded-xl bg-brand-600 py-3 text-sm font-semibold text-white active:bg-brand-700 disabled:opacity-50"
           >
             {busy ? "검증 중…" : loading ? "최근 파일 불러오는 중…" : res ? "📂 새 파일 올려 교체" : "📂 차량단말기버전 파일 선택"}
           </button>

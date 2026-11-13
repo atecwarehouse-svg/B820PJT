@@ -87,7 +87,7 @@ export default function RouteDispatchView({
     .filter((b) => b.rows.length > 0);
   const chip = (on: boolean) =>
     `shrink-0 rounded-full border px-3 py-1.5 text-xs font-semibold ${
-      on ? "border-blue-600 bg-blue-600 text-white" : "border-gray-300 bg-white text-gray-600"
+      on ? "border-brand-600 bg-brand-600 text-white" : "border-gray-300 bg-white text-gray-600"
     }`;
 
   return (
@@ -203,7 +203,7 @@ export default function RouteDispatchView({
             )}
             {shown.map((b) => (
               <section key={b.route}>
-                <h3 className="rounded-t-lg bg-blue-600 px-3 py-1.5 text-sm font-bold text-white">
+                <h3 className="rounded-t-lg bg-brand-600 px-3 py-1.5 text-sm font-bold text-white">
                   {b.route}
                   <span className="ml-2 text-xs font-medium text-blue-100">
                     {b.day && `${b.day} · `}

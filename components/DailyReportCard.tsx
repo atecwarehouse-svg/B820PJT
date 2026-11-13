@@ -27,7 +27,7 @@ function ChkRow({
         type="checkbox"
         checked={checked}
         onChange={(e) => onChange(e.target.checked)}
-        className="mt-0.5 h-4 w-4 shrink-0 accent-blue-600"
+        className="mt-0.5 h-4 w-4 shrink-0 accent-brand-600"
       />
       <span className="min-w-0">
         <span className="block text-xs font-medium text-gray-800">{label}</span>
@@ -501,7 +501,7 @@ export default function DailyReportCard({
           type="date"
           value={date}
           onChange={(e) => setDate(e.target.value)}
-          className="rounded-lg border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
+          className="rounded-lg border border-gray-300 px-2 py-1.5 text-sm focus:border-brand-500 focus:outline-none"
         />
         <button
           type="button"
@@ -519,7 +519,7 @@ export default function DailyReportCard({
             value={planned}
             onChange={(e) => setPlanned(e.target.value)}
             placeholder="수량"
-            className="w-20 rounded-lg border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
+            className="w-20 rounded-lg border border-gray-300 px-2 py-1.5 text-sm focus:border-brand-500 focus:outline-none"
           />
           <span className="text-xs text-gray-500">대</span>
         </div>
@@ -565,7 +565,7 @@ export default function DailyReportCard({
             value={baseFare}
             onChange={(e) => setBaseFare(e.target.value)}
             placeholder="예: 1500"
-            className="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
+            className="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm focus:border-brand-500 focus:outline-none"
           />
           <p className="mt-1 text-[11px] text-gray-400">
             버스 문에 붙어있는 요금과 동일한지 확인
@@ -682,7 +682,7 @@ export default function DailyReportCard({
         onChange={(e) => setNotes(e.target.value)}
         rows={3}
         placeholder={"예) 영신여객 5대 배차시간 부족으로 미설치, 금일 설치예정"}
-        className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+        className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none"
       />
 
       {/* 받는사람 — 메일을 보내는 2차에서만 */}
@@ -696,7 +696,7 @@ export default function DailyReportCard({
             value={to}
             onChange={(e) => setTo(e.target.value)}
             placeholder="name@example.com, name2@example.com"
-            className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+            className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none"
           />
         </>
       )}
@@ -709,7 +709,7 @@ export default function DailyReportCard({
         onChange={(e) => setPw(e.target.value)}
         placeholder="비밀번호 입력"
         autoComplete="off"
-        className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+        className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none"
       />
 
       {inProgress > 0 && (
@@ -728,7 +728,7 @@ export default function DailyReportCard({
         <button
           onClick={send}
           disabled={sending || sent || !pw}
-          className="flex-1 rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+          className="flex-1 rounded-lg bg-brand-600 px-3 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
         >
           {sending
             ? "발송 중…"

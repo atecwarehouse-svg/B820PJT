@@ -28,7 +28,7 @@ export default function DailyReportModal(props: {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-blue-700"
+        className="rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-brand-700"
       >
         금일 완료 리포트
       </button>
@@ -63,7 +63,7 @@ export default function DailyReportModal(props: {
                     onClick={() => setStage(n)}
                     className={`flex-1 rounded-lg px-3 py-2 text-xs font-bold transition-colors ${
                       stage === n
-                        ? "bg-blue-600 text-white shadow-sm"
+                        ? "bg-brand-600 text-white shadow-sm"
                         : "bg-gray-100 text-gray-600 active:bg-gray-200"
                     }`}
                   >
@@ -113,7 +113,7 @@ export default function DailyReportModal(props: {
                 setSentTo(null);
                 setOpen(false); // 폼 닫아 재발송 방지
               }}
-              className="mt-4 w-full rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700"
+              className="mt-4 w-full rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-700"
             >
               확인
             </button>

@@ -14,7 +14,7 @@ type Item = { key: string; label: string; extra?: boolean; required?: boolean };
 
 const SECTIONS: { key: Section; title: string; hint: string; color: string }[] = [
   { key: "check", title: "설치전 특이사항", hint: "작업 시작 전 촬영 · 설치시작 알림 조건", color: "bg-emerald-600" },
-  { key: "before", title: "설치 전", hint: "완료 판정·PDF/엑셀에 포함", color: "bg-blue-600" },
+  { key: "before", title: "설치 전", hint: "완료 판정·PDF/엑셀에 포함", color: "bg-brand-600" },
   { key: "after", title: "설치 후", hint: "완료 판정·PDF/엑셀에 포함 ('추가 촬영'은 제외)", color: "bg-indigo-600" },
 ];
 
@@ -62,7 +62,7 @@ export function SlotEditor({
                     }
                     maxLength={30}
                     placeholder="칸 이름"
-                    className="min-w-0 flex-1 rounded-lg border border-gray-300 px-3 py-2 text-base focus:border-blue-500 focus:outline-none"
+                    className="min-w-0 flex-1 rounded-lg border border-gray-300 px-3 py-2 text-base focus:border-brand-500 focus:outline-none"
                   />
                   {sec.key === "check" && (
                     <label className="flex items-center gap-1 text-[11px] text-gray-600">
@@ -277,7 +277,7 @@ export default function SlotConfigManager() {
           type="button"
           onClick={save}
           disabled={saving || !dirty}
-          className="flex-1 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white active:bg-blue-700 disabled:opacity-40"
+          className="flex-1 rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white active:bg-brand-700 disabled:opacity-40"
         >
           {saving ? "저장 중…" : "저장"}
         </button>

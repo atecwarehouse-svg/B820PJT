@@ -11,7 +11,7 @@ export const metadata = {
 
 type Tone = "blue" | "emerald" | "violet" | "amber" | "rose" | "slate" | "teal" | "indigo";
 const TONES: Record<Tone, { ring: string; badge: string; chip: string; dot: string }> = {
-  blue: { ring: "border-blue-200", badge: "bg-blue-600", chip: "bg-blue-50 text-blue-700", dot: "bg-blue-600" },
+  blue: { ring: "border-brand-200", badge: "bg-brand-600", chip: "bg-brand-50 text-brand-700", dot: "bg-brand-600" },
   emerald: { ring: "border-emerald-200", badge: "bg-emerald-600", chip: "bg-emerald-50 text-emerald-700", dot: "bg-emerald-600" },
   violet: { ring: "border-violet-200", badge: "bg-violet-600", chip: "bg-violet-50 text-violet-700", dot: "bg-violet-600" },
   amber: { ring: "border-amber-200", badge: "bg-amber-500", chip: "bg-amber-50 text-amber-700", dot: "bg-amber-500" },
@@ -37,7 +37,7 @@ const NAV: { id: string; label: string; emoji: string }[] = [
 
 export default function HelpPage() {
   return (
-    <main className="min-h-screen bg-gradient-to-b from-blue-50 via-gray-50 to-gray-100">
+    <main className="min-h-screen ">
       <div className="mx-auto max-w-2xl px-4 pb-20 pt-5">
         <div className="mb-4 flex items-center justify-between">
           <Link
@@ -56,7 +56,7 @@ export default function HelpPage() {
         </div>
 
         {/* 머리 */}
-        <section className="overflow-hidden rounded-3xl bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-800 p-6 text-white shadow-xl shadow-blue-200 motion-safe:animate-rise">
+        <section className="overflow-hidden rounded-3xl bg-brand-600 p-6 text-white shadow-sm motion-safe:animate-rise">
           <div className="flex items-center gap-3">
             <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/15">
               <Svg d={UI.help} className="h-7 w-7" />

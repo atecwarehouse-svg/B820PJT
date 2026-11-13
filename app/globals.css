@@ -1,3 +1,12 @@
+/* Hallmark · shape: app screen · genre: modern-minimal (inferred) · theme: brand · redesign: restyle
+ * paper: rgb(246 246 246) · accent: rgb(199 10 81) · display: SUIT · body: SUIT
+ * nav: kept · signature: kept · states: the ones the screens have
+ * axes: light/grotesk-sans/chromatic-crimson · posture: kept · contrast: pass · brand: 에이텍모빌리티 (spec 2026-11-13) · v2.0.0 */
+/* Hallmark · pre-emit critique: P4 H3 E3 S4 R4 V3 · weakest: E, emoji icons remain inside task screens; first screens cleaned, the rest listed for stage 2 */
+/* Hallmark · waive 26b · pressed states live in the components as Tailwind active: utilities, not in this file */
+/* Hallmark · waive 39b, 71 · layout kept at restyle depth: 28px pills and head spacing are the existing screens */
+@import "./tokens.css";
+@import "./base.css" layer(base);
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -9,8 +18,9 @@
 html,
 body {
   -webkit-text-size-adjust: 100%;
-  /* 런처(첫 화면)와 같은 결의 부드러운 배경 — 프로젝트 안 모든 페이지가 같이 쓴다 */
-  background: #f3f4f6 linear-gradient(180deg, #eff6ff 0, #f3f4f6 360px) no-repeat;
+  scrollbar-color: var(--color-muted) var(--color-paper);
+  /* 모든 페이지 공통 바탕 — 에이텍 홈페이지의 옅은 회색 면 */
+  background: var(--color-paper);
 }
 
 /* iOS 입력 확대 방지: 입력 폰트 16px 이상 유지 */
@@ -27,9 +37,10 @@ textarea {
   }
   .page-head h1 {
     @apply text-lg font-bold tracking-tight text-gray-900;
+    text-wrap: balance;
   }
   .pill {
-    @apply inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-white px-3 py-1.5 text-sm text-blue-600 shadow-sm ring-1 ring-black/5 active:bg-blue-50;
+    @apply inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-white px-3 py-1.5 text-sm font-medium text-gray-800 shadow-sm ring-1 ring-black/5 active:bg-gray-100;
   }
   .pill-muted {
     @apply inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-white px-3 py-1.5 text-sm text-gray-500 shadow-sm ring-1 ring-black/5 active:bg-gray-50;
@@ -41,6 +52,11 @@ textarea {
   .home-tile > .emoji {
     @apply flex h-11 w-11 items-center justify-center rounded-xl text-2xl;
   }
+}
+
+/* 화면을 덮는 창(배차표·팝업)이 떠 있는 동안에는 챗봇 버튼을 숨긴다 — 창 안의 버튼을 가리지 않게 */
+body:has(.fixed.inset-0) .chatbot-fab {
+  display: none;
 }
 
 /* 인쇄(PDF) 시 화면 전용 요소 숨김 */

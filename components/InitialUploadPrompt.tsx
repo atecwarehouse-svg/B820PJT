@@ -49,7 +49,7 @@ export default function InitialUploadPrompt({ show }: { show: boolean }) {
               setOpen(false);
               window.dispatchEvent(new CustomEvent(OPEN_UPLOAD_EVENT));
             }}
-            className="flex-1 rounded-xl bg-blue-600 py-2.5 text-sm font-semibold text-white shadow-sm active:bg-blue-700"
+            className="flex-1 rounded-xl bg-brand-600 py-2.5 text-sm font-semibold text-white shadow-sm active:bg-brand-700"
           >
             지금 업로드
           </button>

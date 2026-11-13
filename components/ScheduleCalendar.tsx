@@ -179,7 +179,7 @@ export default function ScheduleCalendar({ days }: { days: ScheduleDay[] }) {
                   {Number(popup.date.slice(5, 7))}/{Number(popup.date.slice(8, 10))} (
                   {DOW[dowOf(popup.date)]})
                   {popup.date === today && (
-                    <span className="ml-1.5 rounded-full bg-blue-600 px-2 py-0.5 text-[10px] font-bold text-white">
+                    <span className="ml-1.5 rounded-full bg-brand-600 px-2 py-0.5 text-[10px] font-bold text-white">
                       오늘
                     </span>
                   )}

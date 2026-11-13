@@ -73,7 +73,7 @@ export default function HandoverLogin() {
 
   const names = workers.filter((w) => w.center === center);
   const btn = (on: boolean) =>
-    `rounded-xl px-3 py-3 text-sm font-semibold ring-1 transition-colors ${on ? "bg-blue-600 text-white ring-blue-600" : "bg-white text-gray-700 ring-black/5 active:bg-blue-50"}`;
+    `rounded-xl px-3 py-3 text-sm font-semibold ring-1 transition-colors ${on ? "bg-brand-600 text-white ring-brand-600" : "bg-white text-gray-700 ring-black/5 active:bg-brand-50"}`;
 
   return (
     <section className="rounded-3xl bg-white p-4 shadow-sm ring-1 ring-black/5 motion-safe:animate-rise">
@@ -124,7 +124,7 @@ export default function HandoverLogin() {
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="직원 비밀번호"
                 autoFocus
-                className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-base outline-none transition-colors focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-100"
+                className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-base outline-none transition-colors focus:border-brand-500 focus:bg-white focus:ring-2 focus:ring-brand-100"
               />
             </div>
           )}
@@ -132,7 +132,7 @@ export default function HandoverLogin() {
           <button
             type="submit"
             disabled={busy || !center || !name || !password}
-            className="w-full rounded-xl bg-gradient-to-r from-blue-600 to-blue-700 py-3.5 text-sm font-semibold text-white shadow-md shadow-blue-200 active:scale-[.98] disabled:opacity-40 disabled:shadow-none"
+            className="w-full rounded-xl bg-brand-600 py-3.5 text-sm font-semibold text-white shadow-sm active:scale-[.98] disabled:opacity-40"
           >
             {busy ? "확인 중…" : "체크리스트 열기"}
           </button>

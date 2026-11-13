@@ -11,7 +11,7 @@ export const metadata = {
 
 // 정사각형 색 카드 — 색은 CARD_COLORS 키(등록 시 선택), 글씨·아이콘은 흰색
 const card = (color: ColorKey) =>
-  `group flex aspect-square flex-col items-center justify-center gap-2.5 rounded-2xl bg-gradient-to-br p-3 text-center text-white shadow-lg transition-transform duration-150 active:scale-[.97] ${CARD_COLORS[color].card}`;
+  `group flex aspect-square flex-col items-center justify-center gap-2.5 rounded-2xl p-3 text-center text-white shadow-sm transition-transform duration-150 active:scale-[.97] ${CARD_COLORS[color].card}`;
 const tile =
   "flex h-16 w-16 items-center justify-center rounded-2xl bg-white/15 transition-transform duration-200 group-active:scale-110";
 
@@ -23,13 +23,7 @@ export default async function ProjectSelectPage() {
   const rise = (i: number) => ({ animationDelay: `${100 + i * 70}ms` });
 
   return (
-    <main className="relative min-h-screen overflow-hidden bg-gradient-to-b from-blue-50 via-gray-100 to-gray-100">
-      {/* 배경 장식 — 은은하게 숨쉬는 빛 */}
-      <div
-        aria-hidden
-        className="pointer-events-none absolute -top-24 left-1/2 h-80 w-80 -translate-x-1/2 rounded-full bg-blue-300/30 blur-3xl motion-safe:animate-pulse"
-      />
-
+    <main className="relative min-h-screen">
       <div className="relative mx-auto max-w-md px-4 pb-16 pt-14">
         {/* 우측 상단: 물음표 → 사용방법(/help), 톱니바퀴 → 프로젝트 관리(추가·수정·삭제, 관리자 비밀번호). 첫 화면에 별도 추가 버튼은 두지 않는다 */}
         <div className="absolute right-4 top-4 flex gap-2 motion-safe:animate-fade-in">
@@ -50,7 +44,7 @@ export default async function ProjectSelectPage() {
         </div>
 
         <header className="mb-8 flex flex-col items-center text-center motion-safe:animate-rise">
-          <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500 to-blue-700 text-white shadow-lg shadow-blue-200">
+          <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-600 text-white shadow-sm">
             <Svg d={UI.grid} className="h-7 w-7" />
           </div>
           <h1 className="text-2xl font-bold tracking-tight text-gray-900">프로젝트 산출물 관리</h1>

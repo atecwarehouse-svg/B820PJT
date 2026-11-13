@@ -94,7 +94,7 @@ export default function PlateSearch() {
         value={q}
         onChange={(e) => setQ(e.target.value)}
         placeholder="차량번호 입력"
-        className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 outline-none transition-colors focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-100"
+        className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 outline-none transition-colors focus:border-brand-500 focus:bg-white focus:ring-2 focus:ring-brand-100"
       />
 
       {loading && <p className="mt-3 text-sm text-gray-400">검색 중…</p>}
@@ -140,19 +140,19 @@ export default function PlateSearch() {
               value={newPlate}
               onChange={(e) => setNewPlate(e.target.value)}
               placeholder="차량번호 (예: 인천70바9999)"
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none"
             />
             <input
               value={newOp}
               onChange={(e) => setNewOp(e.target.value)}
               placeholder="운수사"
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none"
             />
             <input
               value={newRoute}
               onChange={(e) => setNewRoute(e.target.value)}
               placeholder="노선"
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none"
             />
           </div>
           {addErr && <p className="mt-2 text-xs text-red-500">{addErr}</p>}
@@ -167,7 +167,7 @@ export default function PlateSearch() {
             <button
               onClick={submitAdd}
               disabled={adding}
-              className="flex-1 rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white active:bg-blue-700 disabled:opacity-50"
+              className="flex-1 rounded-lg bg-brand-600 px-3 py-2 text-sm font-semibold text-white active:bg-brand-700 disabled:opacity-50"
             >
               {adding ? "추가 중…" : "추가하고 시작"}
             </button>

@@ -16,7 +16,7 @@ export function renderAppIcon(size: number) {
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          background: "linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)",
+          background: "#c70a51",
         }}
       >
         <div

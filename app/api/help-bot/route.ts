@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isAdmin } from "@/lib/admin-auth";
-import { DEFAULT_SLUG } from "@/lib/project";
+import { DEFAULT_SLUG, currentSlug } from "@/lib/project";
 import { FEATURES } from "@/lib/features";
 import { getSetting, setSetting } from "@/lib/settings";
 import { FAQ_MATCH, HELP_FAQ_KEY, HELP_MISSED_KEY, bestFaq, cleanFaq, cleanMissed, parseFaq } from "@/lib/help-faq";
@@ -13,6 +13,7 @@ export const maxDuration = 60;
 // 사전 우선: 질문·답변 사전(lib/help-faq, 관리자가 편집)에서 비슷한 질문을 찾으면 그 답을 그대로 주고,
 // 없을 때만 AI(Gemini)가 사전 + 사용 방법 페이지(/help) + 아래 보충 설명을 근거로 답한다.
 // 자동 학습: AI가 답한 질문은 사전에 { auto: true }로 쌓이고, 답 못한 질문은 help_missed에 쌓인다.
+// 대화 기록: 모든 질문·답(실패 포함)을 help_log에 남긴다 — GET ?log → { log }.
 // GET → { faq, missed } · PUT { faq, missed? } → 사전 저장 · POST { messages: [{ role: "user"|"bot", text }] } → { text, source: "사전"|"학습"|"AI" }
 
 const MODEL = "gemini-2.5-flash";
@@ -81,8 +82,30 @@ async function noteMissed(q: string) {
   }
 }
 
-export async function GET() {
+// 대화 기록 — 묻고 답한 것을 전부 남긴다(최근 500건, 기본 프로젝트 app_settings help_log). 실패해도 답변은 그대로 준다.
+// ponytail: 설정값 하나에 통째로 읽고-고쳐-쓰기 — 500건을 넘겨 보관하거나 동시 사용이 많아지면 전용 테이블로.
+const HELP_LOG_KEY = "help_log";
+type LogRow = { at: string; slug: string; q: string; a: string; source: string };
+const loadLog = async (): Promise<LogRow[]> => {
+  try {
+    const v = JSON.parse((await getSetting(HELP_LOG_KEY, DEFAULT_SLUG)) ?? "[]");
+    return Array.isArray(v) ? v : [];
+  } catch {
+    return [];
+  }
+};
+async function logChat(q: string, a: string, source: string) {
+  try {
+    const row: LogRow = { at: new Date().toISOString(), slug: currentSlug(), q, a: a.slice(0, 2000), source };
+    await setSetting(HELP_LOG_KEY, JSON.stringify([...(await loadLog()), row].slice(-500)), DEFAULT_SLUG);
+  } catch (e) {
+    console.error("help-bot log", e);
+  }
+}
+
+export async function GET(req: NextRequest) {
   if (!(await allowed())) return bad("관리자 로그인이 필요합니다.", 401);
+  if (req.nextUrl.searchParams.has("log")) return NextResponse.json({ log: (await loadLog()).reverse() }); // 최근 것부터
   return NextResponse.json({ faq: await loadFaq(), missed: await loadMissed() });
 }
 
@@ -115,13 +138,19 @@ export async function POST(req: NextRequest) {
   // 1) 사전 — 비슷한 질문이 있으면 그 답을 그대로(AI 호출 없음)
   const faq = await loadFaq();
   const question = messages[messages.length - 1].parts[0].text.trim();
+  const fail = async (error: string, status: number) => {
+    await logChat(question, error, "실패");
+    return bad(error, status);
+  };
   const hit = bestFaq(faq, question);
-  if (hit && hit.score >= FAQ_MATCH)
+  if (hit && hit.score >= FAQ_MATCH) {
+    await logChat(question, hit.faq.a, hit.faq.auto ? "학습" : "사전");
     return NextResponse.json({ text: hit.faq.a, source: hit.faq.auto ? "학습" : "사전", matched: hit.faq.q });
+  }
 
   // 2) AI 보조 — 사전에 없는 질문만
   const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) return bad("사전에 없는 질문입니다. (AI 보조를 쓸 수 없음 — GEMINI_API_KEY 미설정)", 503);
+  if (!apiKey) return fail("사전에 없는 질문입니다. (AI 보조를 쓸 수 없음 — GEMINI_API_KEY 미설정)", 503);
   // 대화는 user로 시작해야 한다(잘린 앞부분이 답변이면 버린다)
   while (messages[0].role !== "user") messages.shift();
 
@@ -151,23 +180,24 @@ export async function POST(req: NextRequest) {
         generationConfig: { temperature: 0.2, maxOutputTokens: 1024, thinkingConfig: { thinkingBudget: 0 } },
       }),
     });
-    if (res.status === 429) return bad("사전에 없는 질문이고, 지금은 AI 사용 한도에 걸렸습니다. 아래 사전 질문에서 골라 보거나 잠시 뒤 다시 물어봐 주세요.", 429);
+    if (res.status === 429) return fail("사전에 없는 질문이고, 지금은 AI 사용 한도에 걸렸습니다. 아래 사전 질문에서 골라 보거나 잠시 뒤 다시 물어봐 주세요.", 429);
     if (!res.ok) {
       console.error("help-bot gemini", res.status, (await res.text()).slice(0, 300));
-      return bad("사전에 없는 질문이고, AI 응답도 받지 못했습니다. 잠시 뒤 다시 시도해 주세요.", 502);
+      return fail("사전에 없는 질문이고, AI 응답도 받지 못했습니다. 잠시 뒤 다시 시도해 주세요.", 502);
     }
     const json = await res.json();
     const text = (json?.candidates?.[0]?.content?.parts ?? [])
       .map((p: { text?: string }) => p.text ?? "")
       .join("")
       .trim();
-    if (!text) return bad("답변을 만들지 못했습니다. 질문을 바꿔 다시 물어봐 주세요.", 502);
+    if (!text) return fail("답변을 만들지 못했습니다. 질문을 바꿔 다시 물어봐 주세요.", 502);
     // 자동 학습 — 답을 한 질문은 사전에 쌓고, 답하지 못한 질문은 따로 쌓아 관리자가 답을 적게 한다.
     // 이어 묻는 말("그럼 그건?")은 앞 대화 없이는 뜻이 없어 첫 질문만 쌓는다.
     if (/설명서에 없는/.test(text)) await noteMissed(question);
     else if (messages.length === 1) await learn(question, text);
+    await logChat(question, text, "AI");
     return NextResponse.json({ text, source: "AI" });
   } catch {
-    return bad("AI 응답이 늦어 중단했습니다. 다시 시도해 주세요.", 504);
+    return fail("AI 응답이 늦어 중단했습니다. 다시 시도해 주세요.", 504);
   }
 }

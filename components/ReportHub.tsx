@@ -964,7 +964,7 @@ export default function ReportHub(props: {
           setTab("plan");
           setOpen(true);
         }}
-        className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-blue-700"
+        className="rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-brand-700"
       >
         📢 보고
       </button>
@@ -998,7 +998,7 @@ export default function ReportHub(props: {
                   onClick={() => setTab(t.key)}
                   className={`shrink-0 whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
                     tab === t.key
-                      ? "bg-blue-600 text-white"
+                      ? "bg-brand-600 text-white"
                       : "bg-gray-100 text-gray-600 hover:bg-gray-200"
                   }`}
                 >

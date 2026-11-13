@@ -194,7 +194,7 @@ export default function ListClient({
               value={operator}
               onChange={(e) => setOperator(e.target.value)}
               disabled={busy !== null}
-              className="min-w-0 flex-1 rounded-xl border border-gray-200 bg-gray-50 px-2 py-2 text-sm transition-colors focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-100 disabled:opacity-50"
+              className="min-w-0 flex-1 rounded-xl border border-gray-200 bg-gray-50 px-2 py-2 text-sm transition-colors focus:border-brand-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-100 disabled:opacity-50"
             >
               <option value="">운수사 선택…</option>
               {operators.map((op) => (
@@ -239,7 +239,7 @@ export default function ListClient({
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="차량번호 · 운수사 · 노선 · 완료일 검색"
-              className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm transition-colors focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-100"
+              className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm transition-colors focus:border-brand-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-100"
             />
             {/* 완료일(업무일) 검색 */}
             <div className="flex items-center gap-2">
@@ -248,7 +248,7 @@ export default function ListClient({
                 type="date"
                 value={dateFilter}
                 onChange={(e) => setDateFilter(e.target.value)}
-                className="min-w-0 flex-1 rounded-xl border border-gray-200 bg-gray-50 px-2 py-2 text-sm transition-colors focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-100"
+                className="min-w-0 flex-1 rounded-xl border border-gray-200 bg-gray-50 px-2 py-2 text-sm transition-colors focus:border-brand-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-100"
               />
               {dateFilter && (
                 <button
@@ -344,7 +344,7 @@ export default function ListClient({
                   target="_blank"
                   rel="noopener noreferrer"
                   onClick={() => setResult(null)}
-                  className="rounded-lg bg-blue-600 px-4 py-3 text-center text-sm font-semibold text-white active:bg-blue-700"
+                  className="rounded-lg bg-brand-600 px-4 py-3 text-center text-sm font-semibold text-white active:bg-brand-700"
                 >
                   드라이브에서 열기
                 </a>

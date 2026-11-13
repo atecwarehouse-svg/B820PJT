@@ -97,7 +97,7 @@ export default function InspectorManager() {
 
   if (!rows) return <p className="py-6 text-center text-sm text-gray-400">{msg?.text ?? "불러오는 중…"}</p>;
 
-  const input = "w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none";
+  const input = "w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none";
 
   return (
     <div className="space-y-4">
@@ -172,7 +172,7 @@ export default function InspectorManager() {
           type="button"
           onClick={save}
           disabled={saving || !dirty}
-          className="flex-1 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white active:bg-blue-700 disabled:opacity-40"
+          className="flex-1 rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white active:bg-brand-700 disabled:opacity-40"
         >
           {saving ? "저장 중…" : "저장"}
         </button>

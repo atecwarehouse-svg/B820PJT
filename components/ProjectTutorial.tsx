@@ -143,7 +143,7 @@ export default function ProjectTutorial({ slug, projectName, steps }: { slug: st
                   하는지도 한 줄씩 볼 수 있습니다.
                 </p>
                 <div className="mt-4 grid gap-2">
-                  <a href="/help" className={`${btn} bg-blue-600 text-white active:bg-blue-700`}>
+                  <a href="/help" className={`${btn} bg-brand-600 text-white active:bg-brand-700`}>
                     📖 사용방법 보기
                   </a>
                   <button type="button" onClick={() => setView("checklist")} className={`${btn} bg-amber-500 text-white active:bg-amber-600`}>
@@ -164,7 +164,7 @@ export default function ProjectTutorial({ slug, projectName, steps }: { slug: st
                 <h2 className="text-base font-bold text-gray-900">건너뛰기</h2>
                 <p className="mt-2 text-sm text-gray-500">홈의 「처음 설정 안내」 띠와 아래 「사용방법 보기」 링크로 언제든 다시 볼 수 있습니다.</p>
                 <div className="mt-4 grid gap-2">
-                  <button type="button" onClick={skipOnce} className={`${btn} bg-blue-600 text-white active:bg-blue-700`}>
+                  <button type="button" onClick={skipOnce} className={`${btn} bg-brand-600 text-white active:bg-brand-700`}>
                     이번만 닫기
                   </button>
                   <button type="button" onClick={skipForever} className={`${btn} bg-white text-gray-700 ring-1 ring-black/5 active:bg-gray-100`}>
@@ -185,7 +185,7 @@ export default function ProjectTutorial({ slug, projectName, steps }: { slug: st
                       key={v}
                       type="button"
                       onClick={() => setView(v)}
-                      className={`flex-1 rounded-xl px-3 py-2 text-sm font-semibold ${view === v ? "bg-blue-600 text-white" : "text-gray-500 active:bg-gray-100"}`}
+                      className={`flex-1 rounded-xl px-3 py-2 text-sm font-semibold ${view === v ? "bg-brand-600 text-white" : "text-gray-500 active:bg-gray-100"}`}
                     >
                       {v === "checklist" ? `✅ 설정 체크리스트 ${done}/${steps.length}` : "🗺️ 페이지별 기능"}
                     </button>
@@ -213,7 +213,7 @@ export default function ProjectTutorial({ slug, projectName, steps }: { slug: st
                               <p className="mt-0.5 text-xs leading-relaxed text-gray-500">{s.desc}</p>
                               {s.done && s.doneNote && <p className="mt-0.5 text-[11px] text-emerald-700">{s.doneNote}</p>}
                             </div>
-                            <Link href={s.href} className="shrink-0 rounded-lg bg-blue-600 px-2.5 py-1.5 text-xs font-semibold text-white active:bg-blue-700">
+                            <Link href={s.href} className="shrink-0 rounded-lg bg-brand-600 px-2.5 py-1.5 text-xs font-semibold text-white active:bg-brand-700">
                               {s.done ? "열기" : "하기 →"}
                             </Link>
                           </div>

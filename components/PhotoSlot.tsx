@@ -218,7 +218,7 @@ export default function PhotoSlot({
             <button
               onClick={() => cameraRef.current?.click()}
               disabled={busy}
-              className="rounded bg-blue-600 px-2 py-1.5 text-xs font-medium text-white active:bg-blue-700 disabled:opacity-50"
+              className="rounded bg-brand-600 px-2 py-1.5 text-xs font-medium text-white active:bg-brand-700 disabled:opacity-50"
             >
               촬영
             </button>

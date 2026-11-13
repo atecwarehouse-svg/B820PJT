@@ -304,7 +304,7 @@ export default function ScheduleUploadModal({
         onClick={() => setOpen(true)}
         className={
           initial
-            ? "rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-blue-700"
+            ? "rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-brand-700"
             : "rounded-lg border border-blue-300 bg-white px-3 py-1.5 text-xs font-semibold text-blue-600 shadow-sm transition-colors hover:bg-blue-50"
         }
       >
@@ -395,7 +395,7 @@ export default function ScheduleUploadModal({
                       onChange={(e) => setPw(e.target.value)}
                       placeholder="비밀번호 입력"
                       autoComplete="off"
-                      className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-base focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-base focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
                     />
                   </label>
 
@@ -474,7 +474,7 @@ export default function ScheduleUploadModal({
                     <button
                       onClick={handleApply}
                       disabled={busy}
-                      className="flex-1 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+                      className="flex-1 rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
                     >
                       {busy ? "반영 중…" : initial ? "등록" : "변경 반영"}
                     </button>
@@ -511,7 +511,7 @@ export default function ScheduleUploadModal({
 
                   <button
                     onClick={close}
-                    className="mt-4 w-full rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700"
+                    className="mt-4 w-full rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-700"
                   >
                     확인
                   </button>

@@ -105,14 +105,15 @@ export function iconKey(v: unknown): IconKey {
 
 // 카드 배경색 — card: 카드 전체(흰 글씨·아이콘), dot: 선택판의 색 점
 export const CARD_COLORS = {
-  blue: { label: "파랑", card: "from-blue-600 to-blue-700 shadow-blue-200", dot: "bg-blue-600" },
-  teal: { label: "청록", card: "from-teal-500 to-teal-700 shadow-teal-200", dot: "bg-teal-600" },
-  emerald: { label: "초록", card: "from-emerald-500 to-emerald-700 shadow-emerald-200", dot: "bg-emerald-600" },
-  amber: { label: "주황", card: "from-amber-500 to-orange-600 shadow-amber-200", dot: "bg-amber-500" },
-  rose: { label: "분홍", card: "from-rose-500 to-rose-700 shadow-rose-200", dot: "bg-rose-500" },
-  violet: { label: "보라", card: "from-violet-500 to-violet-700 shadow-violet-200", dot: "bg-violet-600" },
-  indigo: { label: "남색", card: "from-indigo-500 to-indigo-700 shadow-indigo-200", dot: "bg-indigo-600" },
-  slate: { label: "회색", card: "from-slate-600 to-slate-800 shadow-slate-300", dot: "bg-slate-700" },
+  // 카드 색 — 단색(그라데이션 없음). 저장 키는 그대로 두고 기본값 blue 만 에이텍 레드로 바꿨다.
+  blue: { label: "에이텍 레드", card: "bg-brand-600", dot: "bg-brand-600" },
+  teal: { label: "청록", card: "bg-brand-600", dot: "bg-brand-600" },
+  emerald: { label: "초록", card: "bg-emerald-700", dot: "bg-emerald-700" },
+  amber: { label: "주황", card: "bg-amber-700", dot: "bg-amber-700" },
+  rose: { label: "분홍", card: "bg-rose-600", dot: "bg-rose-600" },
+  violet: { label: "보라", card: "bg-violet-700", dot: "bg-violet-700" },
+  indigo: { label: "남색", card: "bg-indigo-800", dot: "bg-indigo-800" },
+  slate: { label: "회색", card: "bg-gray-700", dot: "bg-gray-700" },
 } as const;
 
 export type ColorKey = keyof typeof CARD_COLORS;

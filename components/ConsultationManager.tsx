@@ -66,7 +66,7 @@ const DEFAULT_FIELDS: [keyof Consultation, string][] = [
 ];
 
 const INPUT =
-  "mt-0.5 w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-xs focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500";
+  "mt-0.5 w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-xs focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500";
 
 // 관리자 페이지 — 운수사 협의사항 조회·수정·삭제.
 // 협의사항 폼에서 팀즈 전송 시 저장된 데이터(운수사+설치일당 최신 1건).
@@ -324,7 +324,7 @@ export default function ConsultationManager() {
                       type="button"
                       onClick={() => saveEdit(c.id)}
                       disabled={saving}
-                      className="flex-1 rounded-lg bg-blue-600 py-2 text-xs font-bold text-white active:bg-blue-700 disabled:opacity-50"
+                      className="flex-1 rounded-lg bg-brand-600 py-2 text-xs font-bold text-white active:bg-brand-700 disabled:opacity-50"
                     >
                       {saving ? "저장 중…" : "저장"}
                     </button>
