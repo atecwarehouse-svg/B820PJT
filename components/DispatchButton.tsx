@@ -356,6 +356,93 @@ export default function DispatchButton({ routeView = false }: { routeView?: bool
   const [doneEdit, setDoneEdit] = useState<{ plate: string; time: string; from: string } | null>(null);
   const [doneErr, setDoneErr] = useState("");
 
+  // 캡쳐용 표를 이미지(PNG)로 저장 — 화면에 그려진 표(제목 2줄 + 칸 글자·색)를 그대로 캔버스에 옮겨 그린다.
+  // 저장은 설치팀별 확인 화면과 같은 정책: 공유시트(폰 갤러리 저장) 우선, 안 되면 파일 다운로드.
+  const capRef = useRef<HTMLDivElement>(null);
+  const [capSaving, setCapSaving] = useState(false);
+  async function saveCapImage() {
+    const box = capRef.current;
+    const table = box?.querySelector("table");
+    if (!box || !table || capSaving) return;
+    setCapSaving(true);
+    try {
+      const started = Date.now();
+      const FONT = "'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif";
+      const titles = [...box.querySelectorAll(":scope > p")].map((el) => (el.textContent ?? "").trim());
+      const rows = [...table.rows].map((tr) => ({
+        bg: getComputedStyle(tr).backgroundColor,
+        cells: [...tr.cells].map((td) => ({
+          text: (td.textContent ?? "").trim(),
+          color: getComputedStyle(td).color,
+          head: td.tagName === "TH",
+        })),
+      }));
+      const scale = 2; // 흐리지 않게
+      const canvas = document.createElement("canvas");
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+      const PAD = 16, ROW = 30, TOP = 62;
+      const fontOf = (head: boolean) => `${head ? "bold 12px" : "13px"} ${FONT}`;
+      const widths: number[] = [];
+      for (const r of rows)
+        r.cells.forEach((c, i) => {
+          ctx.font = fontOf(c.head);
+          widths[i] = Math.max(widths[i] ?? 0, Math.ceil(ctx.measureText(c.text).width) + 16);
+        });
+      const W = Math.max(widths.reduce((a, b) => a + b, 0), 300) + PAD * 2;
+      const H = TOP + rows.length * ROW + PAD;
+      canvas.width = W * scale;
+      canvas.height = H * scale;
+      ctx.scale(scale, scale);
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, W, H);
+      ctx.textBaseline = "middle";
+      ctx.fillStyle = "#111827";
+      ctx.font = `bold 16px ${FONT}`;
+      ctx.fillText(titles[0] ?? "", PAD, 24);
+      ctx.fillStyle = "#6b7280";
+      ctx.font = `12px ${FONT}`;
+      ctx.fillText(titles[1] ?? "", PAD, 46);
+      rows.forEach((r, ri) => {
+        const y = TOP + ri * ROW;
+        let x = PAD;
+        r.cells.forEach((c, i) => {
+          ctx.fillStyle = c.head ? "#2563eb" : r.bg === "rgba(0, 0, 0, 0)" ? "#ffffff" : r.bg;
+          ctx.fillRect(x, y, widths[i], ROW);
+          ctx.strokeStyle = c.head ? "#1d4ed8" : "#d1d5db";
+          ctx.strokeRect(x + 0.5, y + 0.5, widths[i], ROW);
+          ctx.fillStyle = c.head ? "#ffffff" : c.color;
+          ctx.font = fontOf(c.head);
+          ctx.fillText(c.text, x + (widths[i] - ctx.measureText(c.text).width) / 2, y + ROW / 2 + 1);
+          x += widths[i];
+        });
+      });
+      const blob = await new Promise<Blob | null>((r) => canvas.toBlob(r, "image/png"));
+      if (!blob) return;
+      const file = new File([blob], `${operator}_${tableDone ? "설치완료" : "배차표"}_${date}.png`, {
+        type: "image/png",
+      });
+      // 저장 중 표시가 번쩍 사라지지 않게 최소 0.6초는 보여준다
+      await new Promise((r) => setTimeout(r, Math.max(0, 600 - (Date.now() - started))));
+      if (typeof navigator.share === "function" && navigator.canShare?.({ files: [file] })) {
+        try {
+          await navigator.share({ files: [file] });
+        } catch {
+          // 공유시트를 닫은 경우 — 아무것도 안 함
+        }
+      } else {
+        const url = URL.createObjectURL(file);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = file.name;
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(url), 10000);
+      }
+    } finally {
+      setCapSaving(false);
+    }
+  }
+
   // 당일 배차표 업로드 — 운행종료 시간만 뽑아 저장(캡쳐용 표에만 반영). 입력 중인 시간이
   // 날아가지 않도록 목록을 통째로 다시 부르지 않고 운행종료 시간만 받아 끼워 넣는다.
   const dayFileRef = useRef<HTMLInputElement>(null);
@@ -902,6 +989,10 @@ export default function DispatchButton({ routeView = false }: { routeView?: bool
   // 캡쳐용 표의 출발지 칸 — 설치완료 리스트는 항상, 일반 표는 운수사 배차표 엑셀이 올라와 있을 때만
   const showFrom = tableDone || visible.some((e) => e.sheetFrom);
   const showDepot = routeView && visible.some((e) => e.depot); // 차고지 칸(공항 B830 캡쳐용 표)
+  // 입차순번 — 캡쳐용 표에 나온 차량 중 운행종료가 빠른 순(같은 시간은 같은 순번). 자정 넘긴 종료(01:04)는 가장 늦다.
+  const capRows = tableDone ? visible.filter((e) => e.completed) : visible;
+  const endKey = (t: string) => (t < "12:00" ? `3${t}` : t);
+  const endRank = (t: string) => 1 + capRows.filter((x) => x.endTime && endKey(x.endTime) < endKey(t)).length;
   const showEnd = visible.some((e) => e.endTime); // 당일 배차표가 올라와 있을 때만 운행종료 칸
   const exclCount = visible.filter((e) => e.excluded).length;
   // 메인 리스트 전용 — 타일 필터 적용 후 고정 차량을 맨 위로(캡쳐용 표는 항상 전체·시간순)
@@ -1575,7 +1666,7 @@ export default function DispatchButton({ routeView = false }: { routeView?: bool
                 <p className="text-center text-sm font-bold text-gray-800">시간 · 출발지 수정</p>
                 <p className="mt-0.5 text-center text-xs text-gray-500">{doneEdit.plate}</p>
                 <label className="mt-3 block text-xs font-medium text-gray-600">
-                  나가는 시간
+                  운행시작
                   <input
                     type="time"
                     value={doneEdit.time}
@@ -2184,15 +2275,31 @@ export default function DispatchButton({ routeView = false }: { routeView?: bool
                 <p className="text-sm font-bold text-gray-800">
                   {tableDone ? "📸 설치완료 차량 (캡쳐용)" : "📋 배차표 (캡쳐용)"}
                 </p>
-                <button
-                  type="button"
-                  onClick={() => setTableView(false)}
-                  className="rounded-lg bg-gray-100 px-3 py-1.5 text-sm font-semibold text-gray-600 active:bg-gray-200"
-                >
-                  ✕ 닫기
-                </button>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    disabled={capSaving}
+                    onClick={saveCapImage}
+                    className="rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white active:bg-blue-700 disabled:opacity-50"
+                  >
+                    💾 이미지 저장
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setTableView(false)}
+                    className="rounded-lg bg-gray-100 px-3 py-1.5 text-sm font-semibold text-gray-600 active:bg-gray-200"
+                  >
+                    ✕ 닫기
+                  </button>
+                </div>
               </div>
-              <div className="px-4 py-4">
+              {capSaving && (
+                <div className="fixed inset-0 z-[80] flex flex-col items-center justify-center gap-3 bg-black/40">
+                  <div className="h-10 w-10 animate-spin rounded-full border-4 border-white/40 border-t-white" />
+                  <p className="animate-pulse text-sm font-semibold text-white">저장중입니다…</p>
+                </div>
+              )}
+              <div ref={capRef} className="px-4 py-4">
                 <p className="text-base font-bold text-gray-900">
                   {operator} {tableDone ? "설치완료 차량" : "배차표"}
                   {routeFilter && ` · ${routeFilter}`}
@@ -2206,7 +2313,8 @@ export default function DispatchButton({ routeView = false }: { routeView?: bool
                   {!tableDone && exclCount > 0 && ` · 설치제외 ${exclCount}대`}
                   {!tableDone && offCount > 0 && ` · 휴차 ${offCount}대`}
                 </p>
-                <table className="mt-3 w-full border-collapse text-sm">
+                <div className="mt-3 overflow-x-auto">
+                <table className="w-full border-collapse whitespace-nowrap text-sm">
                   <thead>
                     <tr className="bg-blue-600 text-white">
                       <th className="w-9 border border-blue-700 px-1 py-1.5 text-center text-xs font-semibold">
@@ -2224,7 +2332,7 @@ export default function DispatchButton({ routeView = false }: { routeView?: bool
                         차량번호
                       </th>
                       <th className="border border-blue-700 px-2 py-1.5 text-center text-xs font-semibold">
-                        나가는 시간
+                        {routeView ? "운행시작" : "나가는 시간"}
                       </th>
                       {showFrom && (
                         <th className="border border-blue-700 px-2 py-1.5 text-center text-xs font-semibold">
@@ -2236,14 +2344,18 @@ export default function DispatchButton({ routeView = false }: { routeView?: bool
                           운행종료
                         </th>
                       )}
+                      {showEnd && (
+                        <th className="border border-blue-700 px-1 py-1.5 text-center text-xs font-semibold">
+                          입차순번
+                        </th>
+                      )}
                     </tr>
                   </thead>
                   <tbody>
                     {/* 캡쳐용 표는 붙잡아 둔 자리를 무시하고 항상 정식 시간순(휴차는 맨 뒤) */}
                     {sortEntries(
                       tableDone
-                        ? visible
-                            .filter((e) => e.completed)
+                        ? capRows
                             // 설치완료 리스트는 손으로 고친 값 > 엑셀 > 배차표 시간(휴차는 그대로)
                             .map((e) => (e.outTime !== OFF ? { ...e, outTime: doneView(e).time } : e))
                         : visible,
@@ -2325,16 +2437,17 @@ export default function DispatchButton({ routeView = false }: { routeView?: bool
                               {e.endTime || "-"}
                             </td>
                           )}
+                          {showEnd && (
+                            <td className="border border-gray-300 px-1 py-1.5 text-center font-bold text-orange-600">
+                              {e.endTime ? endRank(e.endTime) : "-"}
+                            </td>
+                          )}
                         </tr>
                       );
                     })}
                   </tbody>
                 </table>
-                <p className="mt-3 text-center text-[11px] text-gray-400">
-                  {tableDone && "차량을 누르면 시간·출발지를 고칠 수 있습니다 · "}
-                  이 화면을 캡쳐해 공유하세요 · ✕ 닫기를 누르면 입력 화면으로
-                  돌아갑니다
-                </p>
+                </div>
               </div>
             </div>
           )}
