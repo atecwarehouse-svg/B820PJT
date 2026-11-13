@@ -860,6 +860,8 @@ export default function DispatchButton({ routeView = false }: { routeView?: bool
     (e) => e.outTime && e.outTime !== OFF,
   ).length;
   const offCount = visible.filter((e) => e.outTime === OFF).length;
+  // 캡쳐용 표의 출발지 칸 — 설치완료 리스트는 항상, 일반 표는 운수사 배차표 엑셀이 올라와 있을 때만
+  const showFrom = tableDone || visible.some((e) => e.sheetFrom);
   const exclCount = visible.filter((e) => e.excluded).length;
   // 메인 리스트 전용 — 타일 필터 적용 후 고정 차량을 맨 위로(캡쳐용 표는 항상 전체·시간순)
   const shown = tileFilter
@@ -2148,7 +2150,7 @@ export default function DispatchButton({ routeView = false }: { routeView?: bool
                       <th className="border border-blue-700 px-2 py-1.5 text-center text-xs font-semibold">
                         나가는 시간
                       </th>
-                      {tableDone && (
+                      {showFrom && (
                         <th className="border border-blue-700 px-2 py-1.5 text-center text-xs font-semibold">
                           출발지
                         </th>
@@ -2221,10 +2223,15 @@ export default function DispatchButton({ routeView = false }: { routeView?: bool
                                 ? "설치제외"
                                 : (e.outTime ?? "-")}
                           </td>
-                          {/* 출발지 — 운수사 배차표의 첫 출발 정류장(엑셀에 없는 차량·휴차는 -) */}
-                          {tableDone && (
+                          {/* 출발지 — 운수사 배차표의 첫 출발 정류장(엑셀에 없는 차량·휴차는 -).
+                              일반 캡쳐용 표는 표시된 시간이 엑셀 첫 출발과 같을 때만(손으로 바꾼 시간은 출발지를 모름) */}
+                          {showFrom && (
                             <td className="border border-gray-300 px-2 py-1.5 text-center text-xs text-gray-700">
-                              {(!isOff && doneView(e).from) || "-"}
+                              {(!isOff &&
+                                (tableDone
+                                  ? doneView(e).from
+                                  : e.sheetTime && e.outTime === e.sheetTime && e.sheetFrom)) ||
+                                "-"}
                             </td>
                           )}
                         </tr>
