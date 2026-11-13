@@ -3,7 +3,7 @@
 // 앱의 금일 대상·리포트·달력·엑셀은 전부 vehicles.planned_date(차량별 예정일)를 읽으므로,
 // 읽는 쪽은 그대로 두고 예정일이 현장 실제를 따라가게 맞춘다.
 //   settle  — 차량 작업 시작·완료 시 그 차량의 예정일을 오늘로. 오늘 예정·미착수 차량이 있으면
-//             (같은 운수사 먼저, 없으면 다른 운수사) 자리를 바꿔 일자별 수량 유지,
+//             (같은 운수사 먼저, 없으면 같은 회사의 다른 영업소) 자리를 바꿔 일자별 수량 유지,
 //             오늘 예정이 전부 착수됐으면 원래 날짜(미래) 수량에서 1대 차감.
 //   carry   — 지난 날짜에 남은 미완료 차량은 그 운수사의 오늘 이후 가장 가까운 예정일로 이월.
 // vehicles 부분 갱신은 반드시 update().in()/eq() — upsert는 operator not-null에 걸린다.
@@ -11,6 +11,7 @@ import { createServiceClient } from "@/lib/supabase/server";
 import { chunk, fetchAll } from "@/lib/supabase/paginate";
 import { isQuotaMode } from "@/lib/settings";
 import { workDateString } from "@/lib/work-day";
+import { companyOf } from "@/lib/route-dispatch";
 
 type SB = ReturnType<typeof createServiceClient>;
 export type Move = { plate: string; from: string | null; to: string };
@@ -24,17 +25,25 @@ export function nextDateFor(dates: Iterable<string>, today: string): string | nu
 }
 
 /**
- * 자리를 바꿀 후보 — 오늘 예정·미착수(records 없음) 차량 중 차량번호 순 첫 대.
- * 같은 운수사(sameOp, 생략 시 같은 운수사로 봄)가 먼저, 없으면 다른 운수사 차량 —
- * 오늘 예정에 없던 운수사(영업소) 차량이 들어와도 금일 대상 수량이 늘지 않게 한다.
+ * 자리를 바꿀 후보 순서 — 오늘 예정·미착수(records 없음) 차량을 차량번호 순으로.
+ * 같은 운수사(sameOp, 생략 시 같은 운수사로 봄)가 먼저, 그다음 같은 회사의 다른 영업소 —
+ * 오늘 예정에 없던 영업소 차량이 들어와도 금일 계획수량이 늘지 않게 한다.
  */
+export function swapOrder(
+  candidates: { plate: string; started: boolean; sameOp?: boolean }[],
+  self: string,
+): string[] {
+  const free = candidates.filter((c) => c.plate !== self && !c.started);
+  const of = (same: boolean) => free.filter((c) => (c.sameOp !== false) === same).map((c) => c.plate).sort();
+  return [...of(true), ...of(false)];
+}
+
+/** 자리를 바꿀 후보 첫 대(없으면 null) */
 export function pickSwap(
   candidates: { plate: string; started: boolean; sameOp?: boolean }[],
   self: string,
 ): string | null {
-  const free = candidates.filter((c) => c.plate !== self && !c.started);
-  const pool = free.some((c) => c.sameOp !== false) ? free.filter((c) => c.sameOp !== false) : free;
-  return pool.map((c) => c.plate).sort()[0] ?? null;
+  return swapOrder(candidates, self)[0] ?? null;
 }
 
 const ymd = (v: unknown) => (v ? String(v).slice(0, 10) : null);
@@ -106,26 +115,36 @@ export async function settleQuota(sb: SB, plate: string, today: string, opts: Op
   if (cur === today) return moves;
 
   // 자리 교환은 내 예정일이 미래일 때만 — 과거 날짜(남은 예정일이 없어 이월 못 한 경우)로 다른 차량을 보내지 않는다
-  let swap: string | null = null;
+  let order: string[] = [];
   if (cur && cur > today) {
+    // 같은 회사(운수사 이름 첫 단어)의 오늘 예정 차량에서 고른다 — 같은 운수사만 보면 오늘 예정에 없던
+    // 영업소 차량이 들어올 때마다 금일 계획수량이 1대씩 늘어난다(11/13 20대→25대).
+    // 다른 회사 차량은 건드리지 않는다(그 회사와 합의하지 않은 날짜로 보내게 된다).
+    const company = companyOf(op);
     const { data: todays, error: tErr } = await sb
       .from("vehicles")
       .select("plate, operator")
       .eq("planned_date", today)
+      .like("operator", `${company}%`)
       .neq("plate", plate)
       .order("plate");
     if (tErr) throw new Error(tErr.message);
-    // 운수사 구분 없이 오늘 예정 전체에서 고른다(같은 운수사 우선) — 같은 운수사만 보면
-    // 오늘 예정에 없던 영업소 차량이 들어올 때마다 금일 대상이 1대씩 늘어난다(11/13 20대→25대)
-    const rows = (todays ?? []) as { plate: string; operator: string | null }[];
+    let rows = ((todays ?? []) as { plate: string; operator: string | null }[]).filter(
+      (x) => companyOf(x.operator ?? "") === company,
+    );
     if (rows.length) {
+      // 배차표 설치제외 차량은 후보에서 뺀다 — 옮기면 금일 설치제외 수·사유가 리포트에서 빠진다(조회 실패는 무시)
+      const { data: ex } = await sb.from("dispatch_times").select("plate").eq("date", today).eq("excluded", true).range(0, 999);
+      const excluded = new Set(((ex ?? []) as { plate: string }[]).map((x) => x.plate));
+      rows = rows.filter((x) => !excluded.has(x.plate));
       const started = await platesWithRecords(sb, rows.map((x) => x.plate), false);
-      swap = pickSwap(
+      order = swapOrder(
         rows.map((x) => ({ plate: x.plate, started: started.has(x.plate), sameOp: (x.operator ?? "") === op })),
         plate,
       );
     }
   }
+  let swap: string | null = order[0] ?? null;
   if (!opts.dryRun) {
     // 내 예정일부터 조건부 갱신(CAS) — 첫 사진 업로드와 팀명 자동저장이 동시에 기록을 만들면 두 요청이
     // 모두 여기 오는데, 한쪽만 성공해야 교환 상대가 두 대 옮겨지는 일이 없다.
@@ -134,7 +153,22 @@ export async function settleQuota(sb: SB, plate: string, today: string, opts: Op
     const { data: hit, error: uErr } = await q.select("plate");
     if (uErr) throw new Error(uErr.message);
     if (!hit?.length) return moves; // 다른 요청이 먼저 처리함
-    if (swap && cur) await setDates(sb, [swap], cur);
+    // 교환 상대도 조건부 갱신 — 두 차량이 동시에 들어와 같은 상대를 고르면 한쪽만 성공하고,
+    // 놓친 쪽은 다음 후보로 넘어간다(같은 상대를 두 번 옮기면 오늘 수량이 1대 늘어난다).
+    swap = null;
+    for (const cand of cur ? order : []) {
+      const { data: got, error: sErr } = await sb
+        .from("vehicles")
+        .update({ planned_date: cur })
+        .eq("plate", cand)
+        .eq("planned_date", today)
+        .select("plate");
+      if (sErr) throw new Error(sErr.message);
+      if (got?.length) {
+        swap = cand;
+        break;
+      }
+    }
   }
   if (swap && cur) moves.push({ plate: swap, from: today, to: cur });
   moves.push({ plate, from: cur, to: today });

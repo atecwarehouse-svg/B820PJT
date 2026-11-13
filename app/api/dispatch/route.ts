@@ -29,7 +29,8 @@ export async function GET(req: NextRequest) {
   // 운수사 단위(공항버스) — operator는 회사 이름이고, 그 회사의 모든 영업소 차량을 한 목록으로 보여준다
   const byCompany = (await getCustom(currentSlug())).flags.dispatchByCompany;
   let q = supabase.from("vehicles").select("plate, route, operator").eq("planned_date", date);
-  if (!byCompany) q = q.eq("operator", operator);
+  // 회사 이름으로 시작하는 운수사만 DB에서 걸러 받는다(전체를 받아 자르면 1000행 상한에 걸릴 수 있다)
+  q = byCompany ? q.like("operator", `${operator}%`) : q.eq("operator", operator);
   const { data, error } = await q.order("route").order("plate").range(0, 999);
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });

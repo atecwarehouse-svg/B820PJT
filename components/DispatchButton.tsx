@@ -538,7 +538,7 @@ export default function DispatchButton({ routeView = false }: { routeView?: bool
     }
     (async () => {
       try {
-        const res = await fetch("/api/dispatch/options");
+        const res = await fetch("/api/dispatch/options?by=company");
         const j = await res.json();
         const ops: OperatorSchedule[] = (j.operators ?? []).filter(
           (o: OperatorSchedule) => o.dates.length > 0,

@@ -367,7 +367,8 @@ export default function RecordEditor({ plate, initial, teamOptions = [], brand =
     !!checkNote.trim() &&
     !missingRequiredCheck() &&
     checkSlots.every((s) => !!urls[s.slotKey] || checkNaSlots.includes(s.slotKey));
-  const [checkSaved, setCheckSaved] = useState(false); // 1단계에서 저장을 눌렀는지(이번 방문 기준)
+  // 1단계 저장 여부 — 들어올 때 1단계가 이미 끝나 있었으면(다음 단계에서 시작) 저장된 것으로 본다
+  const [checkSaved, setCheckSaved] = useState(step > 0);
   const [guidePopup, setGuidePopup] = useState<string | null>(null); // 안내 팝업 문구
   // 테두리는 outline — 퍼지는 고리(animate-attn)가 box-shadow를 쓰므로 ring 유틸과 겹치면 안 된다
   const ATTN = " animate-attn outline outline-2 outline-offset-2 outline-red-600";
@@ -375,9 +376,11 @@ export default function RecordEditor({ plate, initial, teamOptions = [], brand =
   const beforeReady = beforeSlots.every((s) => !!urls[s.slotKey] || naSlots.includes(s.slotKey));
   const beforeReadyPrev = useRef(beforeReady);
   useEffect(() => {
-    if (step === 1 && beforeReady && !beforeReadyPrev.current) setGuidePopup("작업을 시작하세요");
+    // 저장 중(하차단말기 '없음' 확인 뒤 저장)에는 저장 완료 팝업과 겹치므로 생략, 이미 완료된 차량의 재촬영도 생략
+    if (step === 1 && beforeReady && !beforeReadyPrev.current && !submitting && !initial.record?.saved_at)
+      setGuidePopup("작업을 시작하세요");
     beforeReadyPrev.current = beforeReady;
-  }, [beforeReady, step]);
+  }, [beforeReady, step, submitting, initial.record?.saved_at]);
 
   // 하차단말기 재확인 팝업 — 사진도 '없음' 체크도 없는 하차 칸이 있으면 진행 전 확인.
   // proceed는 확정된 na_slots를 받아 이어서 실행(닫힌 상태값이 낡아 override로 전달).

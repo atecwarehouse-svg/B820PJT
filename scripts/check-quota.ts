@@ -1,6 +1,6 @@
 // 수량 차감 방식 순수 로직(lib/quota.ts) 자체 점검 — DB 없이 실행: npm run check:quota
 import assert from "node:assert/strict";
-import { nextDateFor, pickSwap } from "../lib/quota";
+import { nextDateFor, pickSwap, swapOrder } from "../lib/quota";
 
 // 이월 날짜: 오늘 이후 가장 가까운 예정일(오늘 포함), 없으면 null
 assert.equal(nextDateFor(["2026-11-04", "2026-11-05", "2026-11-26"], "2026-11-05"), "2026-11-05");
@@ -44,6 +44,20 @@ assert.equal(
     "서울71사2410",
   ),
   "서울70사8233",
+);
+
+// 후보 순서 — 같은 운수사 전부, 그다음 다른 영업소(첫 후보를 다른 요청이 가져가면 다음 후보로 넘어간다)
+assert.deepEqual(
+  swapOrder(
+    [
+      { plate: "서울70사8234", started: false, sameOp: false },
+      { plate: "서울71사2384", started: false, sameOp: true },
+      { plate: "서울70사8233", started: false, sameOp: false },
+      { plate: "서울71사2341", started: true, sameOp: true },
+    ],
+    "서울71사2410",
+  ),
+  ["서울71사2384", "서울70사8233", "서울70사8234"],
 );
 
 // 교환은 내 예정일이 미래일 때만 — 과거 날짜 비교 규칙(settleQuota의 cur > today 가드와 동일 문자열 비교)
