@@ -3,7 +3,8 @@
 // 앱의 금일 대상·리포트·달력·엑셀은 전부 vehicles.planned_date(차량별 예정일)를 읽으므로,
 // 읽는 쪽은 그대로 두고 예정일이 현장 실제를 따라가게 맞춘다.
 //   settle  — 차량 작업 시작·완료 시 그 차량의 예정일을 오늘로. 오늘 예정·미착수 차량이 있으면
-//             자리를 바꿔 일자별 수량 유지, 없으면 원래 날짜(미래) 수량에서 1대 차감.
+//             (같은 운수사 먼저, 없으면 다른 운수사) 자리를 바꿔 일자별 수량 유지,
+//             오늘 예정이 전부 착수됐으면 원래 날짜(미래) 수량에서 1대 차감.
 //   carry   — 지난 날짜에 남은 미완료 차량은 그 운수사의 오늘 이후 가장 가까운 예정일로 이월.
 // vehicles 부분 갱신은 반드시 update().in()/eq() — upsert는 operator not-null에 걸린다.
 import { createServiceClient } from "@/lib/supabase/server";
@@ -22,17 +23,18 @@ export function nextDateFor(dates: Iterable<string>, today: string): string | nu
   return best;
 }
 
-/** 자리를 바꿀 후보 — 오늘 예정·미착수(records 없음) 차량 중 차량번호 순 첫 대 */
+/**
+ * 자리를 바꿀 후보 — 오늘 예정·미착수(records 없음) 차량 중 차량번호 순 첫 대.
+ * 같은 운수사(sameOp, 생략 시 같은 운수사로 봄)가 먼저, 없으면 다른 운수사 차량 —
+ * 오늘 예정에 없던 운수사(영업소) 차량이 들어와도 금일 대상 수량이 늘지 않게 한다.
+ */
 export function pickSwap(
-  candidates: { plate: string; started: boolean }[],
+  candidates: { plate: string; started: boolean; sameOp?: boolean }[],
   self: string,
 ): string | null {
-  return (
-    candidates
-      .filter((c) => c.plate !== self && !c.started)
-      .map((c) => c.plate)
-      .sort()[0] ?? null
-  );
+  const free = candidates.filter((c) => c.plate !== self && !c.started);
+  const pool = free.some((c) => c.sameOp !== false) ? free.filter((c) => c.sameOp !== false) : free;
+  return pool.map((c) => c.plate).sort()[0] ?? null;
 }
 
 const ymd = (v: unknown) => (v ? String(v).slice(0, 10) : null);
@@ -108,16 +110,20 @@ export async function settleQuota(sb: SB, plate: string, today: string, opts: Op
   if (cur && cur > today) {
     const { data: todays, error: tErr } = await sb
       .from("vehicles")
-      .select("plate")
-      .eq("operator", op)
+      .select("plate, operator")
       .eq("planned_date", today)
       .neq("plate", plate)
       .order("plate");
     if (tErr) throw new Error(tErr.message);
-    const plates = ((todays ?? []) as { plate: string }[]).map((x) => x.plate);
-    if (plates.length) {
-      const started = await platesWithRecords(sb, plates, false);
-      swap = pickSwap(plates.map((p) => ({ plate: p, started: started.has(p) })), plate);
+    // 운수사 구분 없이 오늘 예정 전체에서 고른다(같은 운수사 우선) — 같은 운수사만 보면
+    // 오늘 예정에 없던 영업소 차량이 들어올 때마다 금일 대상이 1대씩 늘어난다(11/13 20대→25대)
+    const rows = (todays ?? []) as { plate: string; operator: string | null }[];
+    if (rows.length) {
+      const started = await platesWithRecords(sb, rows.map((x) => x.plate), false);
+      swap = pickSwap(
+        rows.map((x) => ({ plate: x.plate, started: started.has(x.plate), sameOp: (x.operator ?? "") === op })),
+        plate,
+      );
     }
   }
   if (!opts.dryRun) {

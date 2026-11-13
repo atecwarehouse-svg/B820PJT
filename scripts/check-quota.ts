@@ -23,6 +23,29 @@ assert.equal(
 assert.equal(pickSwap([{ plate: "서울70사8201", started: false }], "서울70사8201"), null);
 assert.equal(pickSwap([{ plate: "서울70사8201", started: true }], "서울71사1955"), null);
 
+// 같은 운수사 미착수 차량이 먼저, 없으면 다른 운수사 미착수 차량과 교환(금일 대상 수량 유지 — 11/13 20대→25대 재발 방지)
+assert.equal(
+  pickSwap(
+    [
+      { plate: "서울70사8233", started: false, sameOp: false },
+      { plate: "서울71사2382", started: false, sameOp: true },
+    ],
+    "서울71사2410",
+  ),
+  "서울71사2382",
+);
+assert.equal(
+  pickSwap(
+    [
+      { plate: "서울71사2341", started: true, sameOp: true },
+      { plate: "서울70사8234", started: false, sameOp: false },
+      { plate: "서울70사8233", started: false, sameOp: false },
+    ],
+    "서울71사2410",
+  ),
+  "서울70사8233",
+);
+
 // 교환은 내 예정일이 미래일 때만 — 과거 날짜 비교 규칙(settleQuota의 cur > today 가드와 동일 문자열 비교)
 assert.ok("2026-11-16" > "2026-11-13" && !("2026-11-08" > "2026-11-09"));
 

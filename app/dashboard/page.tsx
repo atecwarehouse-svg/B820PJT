@@ -194,6 +194,8 @@ export default async function DashboardPage() {
   );
   const todayExcluded = excludedPlates.filter((p) => !completedTodaySet.has(p)).length;
   const todayTarget = Math.max(0, todayPlanned - todayExcluded);
+  // 수량 차감 방식은 차량을 지정하지 않고 수량만 합의하므로 '대상'이 아니라 '계획수량'으로 부른다
+  const targetLabel = quota ? "금일 설치계획수량" : "금일 설치대상";
 
   // 설치시작 보고에 넣을 누적완료·잔여 — '금일 작업 시작 전(= 전일까지)' 기준.
   // 시작보고를 보내기 전에 작업자가 먼저 설치를 시작·완료해 버리면 금일 완료분이
@@ -316,7 +318,7 @@ export default async function DashboardPage() {
           <p className="text-3xl font-bold tabular-nums text-blue-700">
             {todayTarget.toLocaleString()}
           </p>
-          <p className="mt-1 text-xs font-medium text-blue-700">금일 설치대상</p>
+          <p className="mt-1 text-xs font-medium text-blue-700">{targetLabel}</p>
         </div>
         <CompletedListModal
           list={(ip?.completedList ?? []).filter((c) => c.workDate === today)}
@@ -340,7 +342,7 @@ export default async function DashboardPage() {
       </div>
       <p className="mt-1 text-right text-[11px] text-gray-400">
         {todayTarget > 0 && `금일 달성률 ${((todayDone / todayTarget) * 100).toFixed(1)}% · `}
-        설치대상 = 예정 − 배차표 설치제외
+        {quota ? "설치계획수량 = 계획 − 배차표 설치제외" : "설치대상 = 예정 − 배차표 설치제외"}
       </p>
 
       {/* ===== 운수사 협의사항 · 설치일정 변경 업로드 (잠금과 무관하게 항상 노출) ===== */}
