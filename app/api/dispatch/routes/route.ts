@@ -6,7 +6,14 @@ import { getSetting, getSlotConfig, setSetting } from "@/lib/settings";
 import { fetchCompletedMap } from "@/lib/stats";
 import { kstDateString } from "@/lib/work-day";
 import { parseRouteDispatch } from "@/lib/import/parse-route-dispatch";
-import { routeDispatchKey, routeDispatchPrefix, type RouteDispatchTable } from "@/lib/route-dispatch";
+import {
+  companyOf,
+  dayTypeOf,
+  routeChanges,
+  routeDispatchKey,
+  routeDispatchPrefix,
+  type RouteDispatchTable,
+} from "@/lib/route-dispatch";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -54,6 +61,29 @@ async function datesOf(company: string): Promise<string[]> {
     .filter((d) => DATE_RE.test(d))
     .sort()
     .reverse();
+}
+
+// 배차표 엑셀 기준으로 진행현황 노선명(vehicles.route) 갱신 — 이 회사 차량 중 엑셀에 나온 차량만, 표기는 기존 것 유지.
+// 바뀐 대수를 돌려준다. 실패하면 던진다(배차표 저장은 이미 끝난 뒤).
+async function applyRoutes(company: string, plateRoutes: Record<string, string>): Promise<number> {
+  const supabase = createServiceClient();
+  const { data, error } = await supabase
+    .from("vehicles")
+    .select("plate, route, operator")
+    .like("operator", `${company}%`)
+    .range(0, 4999);
+  if (error) throw new Error(error.message);
+  const mine = (data ?? []).filter((v) => companyOf(v.operator ?? "") === company);
+  const changes = routeChanges(mine, plateRoutes);
+  const byRoute = new Map<string, string[]>();
+  for (const c of changes) byRoute.set(c.route, [...(byRoute.get(c.route) ?? []), c.plate]);
+  for (const [route, plates] of byRoute) {
+    for (const part of chunk(plates)) {
+      const res = await supabase.from("vehicles").update({ route }).in("plate", part);
+      if (res.error) throw new Error(res.error.message);
+    }
+  }
+  return changes.length;
 }
 
 export async function GET(req: NextRequest) {
@@ -106,5 +136,13 @@ export async function POST(req: NextRequest) {
   } catch (e) {
     return bad(`저장 실패: ${e instanceof Error ? e.message : ""}`, 500);
   }
-  return NextResponse.json({ table, dates: await datesOf(company), status: await statusOf(table) });
+  // 진행현황 노선명 — 배차 날짜에 맞는 표(평일 / 토·휴일) 기준, 그 표가 없으면 있는 표
+  let routeChanged: number | null = null;
+  try {
+    const pr = parsed.plateRoutes[dayTypeOf(table.date)] ?? Object.values(parsed.plateRoutes)[0] ?? {};
+    routeChanged = await applyRoutes(company, pr);
+  } catch {
+    routeChanged = null; // 화면에 '노선명 반영 실패'로 알린다
+  }
+  return NextResponse.json({ table, dates: await datesOf(company), status: await statusOf(table), routeChanged });
 }

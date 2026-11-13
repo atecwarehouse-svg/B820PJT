@@ -65,7 +65,11 @@ export default function RouteDispatchView({
       if (!res.ok || j.error) setMsg({ ok: false, text: j.error ?? "업로드 실패" });
       else {
         apply(j.table, j.status ?? {}, j.dates ?? []);
-        setMsg({ ok: true, text: `${j.table.date} 배차표로 저장했습니다.` });
+        setMsg(
+          j.routeChanged == null
+            ? { ok: false, text: `${j.table.date} 배차표는 저장했지만 진행현황 노선명 반영에 실패했습니다. 다시 올려주세요.` }
+            : { ok: true, text: `${j.table.date} 배차표로 저장했습니다. 진행현황 노선 변경 ${j.routeChanged}대.` },
+        );
       }
     } catch {
       if (my === seq.current) setMsg({ ok: false, text: "업로드 실패 — 네트워크를 확인하세요." });

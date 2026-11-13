@@ -17,7 +17,12 @@ function timeOf(v: unknown): string | null {
   return m && +m[1] < 24 && +m[2] < 60 ? `${m[1].padStart(2, "0")}:${m[2]}` : null;
 }
 
-export function parseRouteDispatch(buf: Buffer, company: string): { date: string; blocks: RouteDispatchBlock[] } {
+// plateRoutes — 시간대와 무관하게 파일에 나온 모든 차량의 노선(요일 구분별, 여러 노선에 나오면 첫 출발이 가장 이른 노선).
+//   진행현황 노선명 갱신용이라 04~09시 필터를 타지 않는다.
+export function parseRouteDispatch(
+  buf: Buffer,
+  company: string,
+): { date: string; blocks: RouteDispatchBlock[]; plateRoutes: Record<string, Record<string, string>> } {
   const wb = XLSX.read(buf, { type: "buffer" });
   const ws = wb.Sheets[wb.SheetNames[0]];
   if (!ws || !ws["!ref"]) throw new Error("시트가 없습니다.");
@@ -56,6 +61,7 @@ export function parseRouteDispatch(buf: Buffer, company: string): { date: string
   if (heads.length === 0) throw new Error("'차번' 머리글을 찾지 못했습니다. 배차표 파일인지 확인하세요.");
 
   const blocks: RouteDispatchBlock[] = [];
+  const earliest: Record<string, Record<string, { route: string; time: string }>> = {};
   for (const [hr, c0] of heads) {
     // 제목 — 머리글 위 1~3행, 차번 칸과 같은 열
     let title = "";
@@ -94,6 +100,9 @@ export function parseRouteDispatch(buf: Buffer, company: string): { date: string
       }
       if (first < 0) continue;
       const time = timeOf(get(r, first))!;
+      const p = plateOf(company, raw(r, c0) as number);
+      const seen = (earliest[day] ??= {});
+      if (p && (!seen[p] || time < seen[p].time)) seen[p] = { route, time };
       if (time < WINDOW_FROM || time >= WINDOW_TO) continue;
       const after = first < cEnd ? get(r, first + 1) : "";
       if (isText(after) && !timeOf(after)) notes.push(squash(String(after)));
@@ -111,5 +120,9 @@ export function parseRouteDispatch(buf: Buffer, company: string): { date: string
     blocks.push({ route, day, rows });
   }
   if (blocks.length === 0) throw new Error("04시~09시 사이에 출발하는 차량을 찾지 못했습니다.");
-  return { date, blocks };
+  const plateRoutes: Record<string, Record<string, string>> = {};
+  for (const [d, m] of Object.entries(earliest)) {
+    plateRoutes[d] = Object.fromEntries(Object.entries(m).map(([p, v]) => [p, v.route]));
+  }
+  return { date, blocks, plateRoutes };
 }

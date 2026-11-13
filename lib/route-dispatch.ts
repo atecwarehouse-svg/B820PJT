@@ -71,3 +71,29 @@ export function plateOf(company: string, no: number): string {
   const r = PLATE_RULES[company]?.find(([a, b]) => no >= a && no <= b);
   return r ? r[2] + String(no).padStart(r[3], "0") : "";
 }
+
+// 진행현황 노선명 갱신 — 배차표 엑셀에서 차량이 속한 노선으로 vehicles.route를 바꿀 목록.
+// 표기는 기존 진행현황 것을 유지: 노선 번호(6015, N6000)로 맞춰 그 번호에 이미 쓰이는 이름(가장 흔한 것)을 쓴다.
+// 그 번호의 기존 이름이 없으면 건드리지 않는다.
+const routeNo = (s: string | null) => /^N?\d{3,4}/.exec((s ?? "").trim())?.[0] ?? "";
+export function routeChanges(
+  vehicles: { plate: string; route: string | null }[],
+  plateRoutes: Record<string, string>, // 차량번호 → 엑셀 노선
+): { plate: string; route: string }[] {
+  const count = new Map<string, Map<string, number>>();
+  for (const v of vehicles) {
+    const no = routeNo(v.route);
+    if (!no) continue;
+    const m = count.get(no) ?? new Map<string, number>();
+    m.set(v.route!, (m.get(v.route!) ?? 0) + 1);
+    count.set(no, m);
+  }
+  const out: { plate: string; route: string }[] = [];
+  for (const v of vehicles) {
+    const names = count.get(routeNo(plateRoutes[v.plate] ?? ""));
+    if (!names) continue;
+    const route = [...names].sort((a, b) => b[1] - a[1])[0][0];
+    if (route !== v.route) out.push({ plate: v.plate, route });
+  }
+  return out;
+}
