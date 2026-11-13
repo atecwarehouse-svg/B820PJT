@@ -360,6 +360,25 @@ export default function RecordEditor({ plate, initial, teamOptions = [], brand =
   const [savedPopup, setSavedPopup] = useState(false); // 저장 완료 팝업
   const [midSavedPopup, setMidSavedPopup] = useState(false); // 중간 저장 완료 팝업
 
+  // ── 다음 할 일 안내 — 1단계를 다 채우면 저장 버튼, 저장하면 다음 버튼 테두리가 빨갛게 깜빡인다 ──
+  const checkReady =
+    !!team.trim() &&
+    !choiceMsg &&
+    !!checkNote.trim() &&
+    !missingRequiredCheck() &&
+    checkSlots.every((s) => !!urls[s.slotKey] || checkNaSlots.includes(s.slotKey));
+  const [checkSaved, setCheckSaved] = useState(false); // 1단계에서 저장을 눌렀는지(이번 방문 기준)
+  const [guidePopup, setGuidePopup] = useState<string | null>(null); // 안내 팝업 문구
+  // 테두리는 outline — 퍼지는 고리(animate-attn)가 box-shadow를 쓰므로 ring 유틸과 겹치면 안 된다
+  const ATTN = " animate-attn outline outline-2 outline-offset-2 outline-red-600";
+  // 설치 전 사진을 방금 다 채웠을 때 한 번 — 이미 다 찍힌 채로 들어온 경우는 띄우지 않는다
+  const beforeReady = beforeSlots.every((s) => !!urls[s.slotKey] || naSlots.includes(s.slotKey));
+  const beforeReadyPrev = useRef(beforeReady);
+  useEffect(() => {
+    if (step === 1 && beforeReady && !beforeReadyPrev.current) setGuidePopup("작업을 시작하세요");
+    beforeReadyPrev.current = beforeReady;
+  }, [beforeReady, step]);
+
   // 하차단말기 재확인 팝업 — 사진도 '없음' 체크도 없는 하차 칸이 있으면 진행 전 확인.
   // proceed는 확정된 na_slots를 받아 이어서 실행(닫힌 상태값이 낡아 override로 전달).
   const [alightConfirm, setAlightConfirm] = useState<{
@@ -418,6 +437,7 @@ export default function RecordEditor({ plate, initial, teamOptions = [], brand =
       return;
     }
     setStep(1);
+    if (!beforeReady) setGuidePopup("설치 전 사진을 찍어주세요");
   }
 
   // 1·2단계 중간 저장 — 특이사항 없이도 여기까지 저장. 팀명·비고만 확인.
@@ -459,6 +479,7 @@ export default function RecordEditor({ plate, initial, teamOptions = [], brand =
     });
     setSubmitting(false);
     if (ok) {
+      if (step === 0) setCheckSaved(true);
       setMidSavedPopup(true);
     } else {
       showToast("저장에 실패했습니다. 다시 시도해주세요", "error");
@@ -706,6 +727,21 @@ export default function RecordEditor({ plate, initial, teamOptions = [], brand =
               className="mt-4 w-full rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white active:bg-brand-700"
             >
               계속 촬영
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 다음 할 일 안내 팝업 — 설치 전 사진 촬영 / 작업 시작 */}
+      {guidePopup && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4 no-print">
+          <div className="w-full max-w-xs rounded-2xl bg-white p-5 text-center shadow-xl">
+            <p className="text-lg font-bold text-gray-800">{guidePopup}</p>
+            <button
+              onClick={() => setGuidePopup(null)}
+              className="mt-4 w-full rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white active:bg-brand-700"
+            >
+              확인
             </button>
           </div>
         </div>
@@ -1105,7 +1141,9 @@ export default function RecordEditor({ plate, initial, teamOptions = [], brand =
                 )
               }
               disabled={submitting}
-              className="flex-1 rounded-lg border border-blue-600 bg-white px-4 py-3 text-sm font-semibold text-blue-600 active:bg-blue-50 disabled:opacity-50"
+              className={`flex-1 rounded-lg border border-blue-600 bg-white px-4 py-3 text-sm font-semibold text-blue-600 active:bg-blue-50 disabled:opacity-50${
+                step === 0 && checkReady && !checkSaved ? ATTN : ""
+              }`}
             >
               {submitting ? "저장 중…" : "저장"}
             </button>
@@ -1113,7 +1151,9 @@ export default function RecordEditor({ plate, initial, teamOptions = [], brand =
           {step === 0 && (
             <button
               onClick={goNextFromCheck}
-              className="flex-1 rounded-lg bg-brand-600 px-4 py-3 text-sm font-semibold text-white active:bg-brand-700"
+              className={`flex-1 rounded-lg bg-brand-600 px-4 py-3 text-sm font-semibold text-white active:bg-brand-700${
+                checkReady && checkSaved ? ATTN : ""
+              }`}
             >
               다음 (설치 전) →
             </button>

@@ -50,6 +50,11 @@ const config: Config = {
           from: { strokeDashoffset: "60" },
           to: { strokeDashoffset: "0" },
         },
+        // 촬영 화면 — 지금 눌러야 할 버튼 테두리에 빨간 고리가 퍼져 나간다
+        attn: {
+          "0%": { boxShadow: "0 0 0 0 rgba(220,38,38,.75)" },
+          "70%, 100%": { boxShadow: "0 0 0 10px rgba(220,38,38,0)" },
+        },
       },
       animation: {
         rise: "rise .45s cubic-bezier(.2,.8,.2,1) both",
@@ -57,6 +62,7 @@ const config: Config = {
         "fade-in": "fade-in .25s ease-out both",
         pop: "pop .55s cubic-bezier(.2,.8,.2,1) both",
         draw: "draw .45s .3s ease-out both",
+        attn: "attn 1.2s ease-out infinite",
       },
     },
   },
