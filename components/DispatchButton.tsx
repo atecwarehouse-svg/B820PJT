@@ -36,6 +36,7 @@ const OFF = "OFF";
 interface Entry {
   plate: string;
   route: string;
+  operator?: string; // 차량의 실제 운수사(영업소 포함) — 운수사 단위로 묶어 볼 때 모뎀불량 기록에 쓴다
   outTime: string | null; // "HH:MM" 또는 "OFF"(휴차)
   sheetTime?: string; // 운수사 배차표 엑셀의 첫 출발 시간
   sheetFrom?: string; // 그 출발지(정류장)
@@ -747,7 +748,7 @@ export default function DispatchButton({ routeView = false }: { routeView?: bool
       const fd = new FormData();
       fd.set("date", date);
       fd.set("plate", f.plate);
-      fd.set("operator", operator);
+      fd.set("operator", entries.find((x) => x.plate === f.plate)?.operator || operator);
       if (clear) {
         fd.set("clear", "1");
       } else {

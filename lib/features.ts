@@ -18,6 +18,7 @@ export const FEATURES = [
   { key: "weather", label: "날씨", desc: "홈 오른쪽 위 작업 시간대 날씨", kinds: ["album"], b820: true, b830: true },
   { key: "bisKakao", label: "BIS·카카오맵 점검 항목", desc: "리포트·운행시작 보고의 인천 BIS·카카오맵(초정밀) 점검란 — 인천 시내버스용", kinds: ["album"], b820: true, b830: false },
   { key: "routeSheet", label: "운수사 배차표 엑셀", desc: "배차표 안 노선별 배차표·당일 배차표 업로드·설치완료 차량 리스트·차고지·운행시작/종료·입차순번 (배차표가 켜져 있어야 함, 아래 차번 규칙 필요)", kinds: ["album"], b820: false, b830: true },
+  { key: "dispatchByCompany", label: "배차표 운수사 단위", desc: "배차표에서 영업소(본사·○○영업소)를 나누지 않고 운수사 이름 첫 단어(회사) 단위로 묶어 표시 — 공항버스용", kinds: ["album"], b820: false, b830: true },
   { key: "checkChoices", label: "설치 전 선택 확인 3개", desc: "촬영 1단계의 TV소리·라디오·차량파손 필수 선택(비고 자동 기재)", kinds: ["album"], b820: false, b830: true },
   { key: "paManual", label: "안내방송 결선도", desc: "홈의 안내방송 결선도 버튼(공항 B830 작업지도서)", kinds: ["album"], b820: false, b830: true },
   { key: "statusSheet", label: "현황표", desc: "전체 센터 현황표 버튼", kinds: ["handover", "osupdate"], b820: true, b830: true },

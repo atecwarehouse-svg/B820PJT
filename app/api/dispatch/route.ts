@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
 import { fetchAll, chunk } from "@/lib/supabase/paginate";
 import { stdSlotKeys } from "@/lib/slots";
-import { getSetting, getSlotConfig } from "@/lib/settings";
+import { getCustom, getSetting, getSlotConfig } from "@/lib/settings";
 import { companyOf, dayDispatchKey, firstTimes, routeDispatchKey } from "@/lib/route-dispatch";
 import { loadVehicleDepots } from "@/lib/operator-address";
 import { currentSlug } from "@/lib/project";
@@ -25,19 +25,18 @@ export async function GET(req: NextRequest) {
   }
 
   const supabase = createServiceClient();
-  type VehicleRow = { plate: string; route: string | null };
-  const { data, error } = await supabase
-    .from("vehicles")
-    .select("plate, route")
-    .eq("operator", operator)
-    .eq("planned_date", date)
-    .order("route")
-    .order("plate")
-    .range(0, 999);
+  type VehicleRow = { plate: string; route: string | null; operator: string | null };
+  // 운수사 단위(공항버스) — operator는 회사 이름이고, 그 회사의 모든 영업소 차량을 한 목록으로 보여준다
+  const byCompany = (await getCustom(currentSlug())).flags.dispatchByCompany;
+  let q = supabase.from("vehicles").select("plate, route, operator").eq("planned_date", date);
+  if (!byCompany) q = q.eq("operator", operator);
+  const { data, error } = await q.order("route").order("plate").range(0, 999);
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
-  const vehicles = (data ?? []) as unknown as VehicleRow[];
+  const vehicles = ((data ?? []) as unknown as VehicleRow[]).filter(
+    (v) => !byCompany || companyOf(v.operator ?? "") === operator,
+  );
   const plates = vehicles.map((v) => v.plate);
 
   // 저장된 시간·체크리스트·타코 미연결 사유·설치제외 — 없는 컬럼(마이그레이션 전)은 단계적으로 빼고 재시도
@@ -214,6 +213,7 @@ export async function GET(req: NextRequest) {
     vehicles: vehicles.map((v) => ({
       plate: v.plate,
       route: v.route ?? "",
+      operator: v.operator ?? "", // 차량의 실제 운수사(영업소 포함) — 모뎀불량 기록용
       outTime: times.get(v.plate) ?? autoOf(v.plate),
       sheetTime: autoTimes.get(v.plate)?.time ?? "", // 운수사 배차표 엑셀의 첫 출발 시간·출발지(없으면 빈값)
       sheetFrom: autoTimes.get(v.plate)?.from ?? "",

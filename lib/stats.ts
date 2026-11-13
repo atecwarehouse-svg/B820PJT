@@ -621,7 +621,11 @@ export interface OperatorSchedule {
 
 // 운수사 협의사항 폼용 — 운수사별 설치 예정일 목록과 날짜별 대수·노선.
 // 예정일 없는 차량의 운수사도 목록에 포함(dates가 빈 배열일 수 있음).
-export async function loadOperatorSchedules(slug: string): Promise<OperatorSchedule[]> {
+// groupOf를 주면 운수사 이름을 그 값으로 묶는다(배차표 '운수사 단위' — 영업소를 회사로 합침)
+export async function loadOperatorSchedules(
+  slug: string,
+  groupOf: (operator: string) => string = (o) => o,
+): Promise<OperatorSchedule[]> {
   const supabase = createServiceClient(slug);
   const vehicles = await fetchAll<{
     operator: string | null;
@@ -634,7 +638,7 @@ export async function loadOperatorSchedules(slug: string): Promise<OperatorSched
   // 운수사 → 날짜 → 노선 → 대수
   const byOperator = new Map<string, Map<string, Map<string, number>>>();
   for (const v of vehicles) {
-    const operator = v.operator?.trim() || "미지정";
+    const operator = groupOf(v.operator?.trim() || "미지정");
     const dates = byOperator.get(operator) ?? new Map<string, Map<string, number>>();
     if (v.planned_date) {
       const date = v.planned_date.slice(0, 10);
