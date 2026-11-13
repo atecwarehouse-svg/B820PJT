@@ -5,11 +5,11 @@ import { useEffect, useState } from "react";
 import Link from "@/components/PLink";
 
 // 새 프로젝트 첫 진입 튜토리얼 — 프로젝트 홈(B820 제외)에서 쓴다.
-//   · 처음 들어오면 환영 팝업: 「사용방법 보기」 「설정 체크리스트」 「건너뛰기(이번만 / 다시 보지 않기)」
+//   · 안내 창은 자동으로 뜨지 않는다(11/13 사용자 요청: 불편) — 홈의 띠·링크를 눌렀을 때만 열린다: 「사용방법 보기」 「설정 체크리스트」 「건너뛰기(이번만 / 다시 보지 않기)」
 //   · 체크리스트: 관리자 페이지에서 해 둘 설정을 완료 여부(서버 계산)와 바로가기(관리자 탭 딥링크 ?tab=)로 보여준다
 //   · 페이지 안내: 홈 버튼·촬영 흐름·관리자 탭이 각각 무엇을 하는지 한 줄씩
 //   · 홈에는 "처음 설정 n/N" 띠가 남아 다시 열 수 있다 — 「다시 보지 않기」(localStorage)면 띠도 숨기고 작은 사용방법 링크만 남긴다
-// 저장: localStorage tutorial:<slug> = "never" / sessionStorage tutorialSkip:<slug> = "1"(이번만)
+// 저장: localStorage tutorial:<slug> = "never"(띠 숨김)
 
 export interface SetupStep {
   key: string;
@@ -54,35 +54,20 @@ export default function ProjectTutorial({ slug, projectName, steps }: { slug: st
   const [view, setView] = useState<View>("welcome");
   const [hidden, setHidden] = useState(true); // 띠(배너) 숨김 — "다시 보지 않기"
   const neverKey = `tutorial:${slug}`;
-  const skipKey = `tutorialSkip:${slug}`;
 
+  // 홈에 들어올 때 안내 창을 자동으로 띄우지 않는다(현장에서 불편) — 홈의 '처음 설정 안내' 띠나 '설정 안내 다시 열기'를 눌렀을 때만 연다
   useEffect(() => {
-    let never = false;
-    let skipped = false;
     try {
-      never = localStorage.getItem(neverKey) === "never";
-      skipped = sessionStorage.getItem(skipKey) === "1";
+      setHidden(localStorage.getItem(neverKey) === "never");
     } catch {
-      /* 저장소 못 쓰면 매번 띄움 */
+      setHidden(false); // 저장소를 못 쓰면 띠는 보여 준다
     }
-    setHidden(never);
-    if (!never && !skipped) {
-      setView("welcome");
-      setOpen(true);
-    }
-  }, [neverKey, skipKey]);
+  }, [neverKey]);
 
   const done = steps.filter((s) => s.done).length;
   const requiredLeft = steps.filter((s) => s.required && !s.done).length;
 
-  const skipOnce = () => {
-    try {
-      sessionStorage.setItem(skipKey, "1");
-    } catch {
-      /* ignore */
-    }
-    setOpen(false);
-  };
+  const skipOnce = () => setOpen(false);
   const skipForever = () => {
     try {
       localStorage.setItem(neverKey, "never");
