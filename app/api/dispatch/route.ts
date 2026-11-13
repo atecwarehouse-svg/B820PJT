@@ -3,7 +3,9 @@ import { createServiceClient } from "@/lib/supabase/server";
 import { fetchAll, chunk } from "@/lib/supabase/paginate";
 import { stdSlotKeys } from "@/lib/slots";
 import { getSetting, getSlotConfig } from "@/lib/settings";
-import { companyOf, firstTimes, routeDispatchKey } from "@/lib/route-dispatch";
+import { companyOf, dayDispatchKey, firstTimes, routeDispatchKey } from "@/lib/route-dispatch";
+import { loadVehicleDepots } from "@/lib/operator-address";
+import { currentSlug } from "@/lib/project";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -113,6 +115,20 @@ export async function GET(req: NextRequest) {
   } catch {
     doneEdits = {};
   }
+  // 당일 배차표의 운행종료 시간(마지막 T1 출발 + 2시간) — 캡쳐용 표에만 표시
+  let endTimes: Record<string, string> = {};
+  try {
+    endTimes = JSON.parse((await getSetting(dayDispatchKey(companyOf(operator), date))) ?? "{}")?.ends ?? {};
+  } catch {
+    endTimes = {};
+  }
+  // 차고지명 — 진행현황 차량리스트 D열(1시간 캐시). 캡쳐용 표에만 표시, 실패해도 무시
+  let depots: Record<string, string> = {};
+  try {
+    depots = await loadVehicleDepots(currentSlug());
+  } catch {
+    depots = {};
+  }
   const autoOf = (plate: string) =>
     !times.get(plate) && !excludes.has(plate) ? (autoTimes.get(plate)?.time ?? null) : null;
 
@@ -201,6 +217,8 @@ export async function GET(req: NextRequest) {
       outTime: times.get(v.plate) ?? autoOf(v.plate),
       sheetTime: autoTimes.get(v.plate)?.time ?? "", // 운수사 배차표 엑셀의 첫 출발 시간·출발지(없으면 빈값)
       sheetFrom: autoTimes.get(v.plate)?.from ?? "",
+      depot: depots[v.plate] ?? "", // 차고지명(진행현황 차량리스트 D열)
+      endTime: String(endTimes[v.plate] ?? ""), // 당일 배차표 기준 운행종료 시간(없으면 빈값)
       edit: doneEdits[v.plate]
         ? { time: String(doneEdits[v.plate].time ?? ""), from: String(doneEdits[v.plate].from ?? "") }
         : null,

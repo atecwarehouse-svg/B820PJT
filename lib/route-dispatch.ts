@@ -53,6 +53,15 @@ export function firstTimes(table: RouteDispatchTable): Map<string, { time: strin
   return m;
 }
 
+// 당일 배차표(운행종료 시간) 저장 키 — 캡쳐용 표에만 쓰인다. 값: { fileName, date, ends: { 차량번호: "HH:MM" } }
+export const dayDispatchKey = (company: string, date: string) => `day_dispatch:${company}:${date}`;
+// 운행종료 = 마지막 T1 출발 + 2시간(사용자 지정 기준)
+export const END_AFTER_T1_MIN = 120;
+export function addMinutes(time: string, min: number): string {
+  const t = (+time.slice(0, 2) * 60 + +time.slice(3) + min) % 1440;
+  return `${String(Math.floor(t / 60)).padStart(2, "0")}:${String(t % 60).padStart(2, "0")}`;
+}
+
 export const routeDispatchPrefix = (company: string) => `route_dispatch:${company}:`;
 export const routeDispatchKey = (company: string, date: string) => routeDispatchPrefix(company) + date;
 export const companyOf = (operator: string) => operator.trim().split(/\s+/)[0] ?? "";

@@ -7,17 +7,19 @@ import ExcelJS from "exceljs";
 import { createServiceClient } from "@/lib/supabase/server";
 import { TEMPLATE_BUCKET, templateObject } from "@/lib/template-path";
 
-export const loadOperatorAddresses = unstable_cache(
-  async (slug: string): Promise<Record<string, string>> => {
+// 차량리스트 한 번 읽어 운수사→주소(E)와 차량번호(F)→차고지(D)를 함께 만든다.
+const loadVehicleSheet = unstable_cache(
+  async (slug: string): Promise<{ addresses: Record<string, string>; depots: Record<string, string> }> => {
+    const empty = { addresses: {}, depots: {} };
     const supabase = createServiceClient(slug);
     const { data, error } = await supabase.storage
       .from(TEMPLATE_BUCKET)
       .download(templateObject(slug));
-    if (error || !data) return {};
+    if (error || !data) return empty;
     const wb = new ExcelJS.Workbook();
     await wb.xlsx.load(Buffer.from(await data.arrayBuffer()) as unknown as ArrayBuffer);
     const ws = wb.getWorksheet("차량리스트");
-    if (!ws) return {};
+    if (!ws) return empty;
     const txt = (v: unknown): string => {
       if (v == null) return "";
       if (typeof v === "object") {
@@ -31,15 +33,23 @@ export const loadOperatorAddresses = unstable_cache(
       return String(v);
     };
     const map: Record<string, string> = {};
+    const depots: Record<string, string> = {};
     for (let r = 2; r <= ws.rowCount; r++) {
       const row = ws.getRow(r);
       const op = txt(row.getCell("B").value).trim();
+      const plate = txt(row.getCell("F").value).trim();
+      const depot = txt(row.getCell("D").value).trim();
+      if (plate && depot) depots[plate] = depot;
       if (!op || map[op]) continue;
       const addr = txt(row.getCell("E").value).trim();
       if (addr) map[op] = addr;
     }
-    return map;
+    return { addresses: map, depots };
   },
-  ["operator-addresses"],
+  ["vehicle-sheet"],
   { revalidate: 3600 },
 );
+
+export const loadOperatorAddresses = async (slug: string) => (await loadVehicleSheet(slug)).addresses;
+// 차량번호 → 차고지명(진행현황 차량리스트 D열). 배차표 캡쳐용 표에 쓴다.
+export const loadVehicleDepots = async (slug: string) => (await loadVehicleSheet(slug)).depots;

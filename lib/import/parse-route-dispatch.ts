@@ -22,7 +22,12 @@ function timeOf(v: unknown): string | null {
 export function parseRouteDispatch(
   buf: Buffer,
   company: string,
-): { date: string; blocks: RouteDispatchBlock[]; plateRoutes: Record<string, Record<string, string>> } {
+): {
+  date: string;
+  blocks: RouteDispatchBlock[];
+  plateRoutes: Record<string, Record<string, string>>;
+  plateLastT1: Record<string, Record<string, string>>; // 요일 구분별 차량번호 → 그날 마지막 T1 출발 시간
+} {
   const wb = XLSX.read(buf, { type: "buffer" });
   const ws = wb.Sheets[wb.SheetNames[0]];
   if (!ws || !ws["!ref"]) throw new Error("시트가 없습니다.");
@@ -62,6 +67,8 @@ export function parseRouteDispatch(
 
   const blocks: RouteDispatchBlock[] = [];
   const earliest: Record<string, Record<string, { route: string; time: string }>> = {};
+  const plateLastT1: Record<string, Record<string, string>> = {};
+  const late = (t: string) => (t < "04:00" ? `3${t}` : t); // 자정 넘긴 심야편(00:10)은 23시보다 늦다
   for (const [hr, c0] of heads) {
     // 제목 — 머리글 위 1~3행, 차번 칸과 같은 열
     let title = "";
@@ -88,6 +95,17 @@ export function parseRouteDispatch(
     let r = hr + 1;
     if (typeof raw(r, c0) !== "number") r++; // 보조 머리글 행(T2/T1)
     for (; r <= range.e.r && typeof raw(r, c0) === "number"; r++) {
+      // 마지막 T1 출발 — 머리글에 T1이 든 칸 중 가장 오른쪽 시간(다른 블록에도 나오면 더 늦은 쪽)
+      const pl = plateOf(company, raw(r, c0) as number);
+      if (pl) {
+        for (let c = cEnd; c >= c0 + 2; c--) {
+          const t = /T1/.test(label(c)) ? timeOf(get(r, c)) : null;
+          if (!t) continue;
+          const m = (plateLastT1[day] ??= {});
+          if (!m[pl] || late(t) > late(m[pl])) m[pl] = t;
+          break;
+        }
+      }
       let first = -1;
       const notes: string[] = [];
       for (let c = c0 + 2; c <= cEnd; c++) {
@@ -124,5 +142,5 @@ export function parseRouteDispatch(
   for (const [d, m] of Object.entries(earliest)) {
     plateRoutes[d] = Object.fromEntries(Object.entries(m).map(([p, v]) => [p, v.route]));
   }
-  return { date, blocks, plateRoutes };
+  return { date, blocks, plateRoutes, plateLastT1 };
 }

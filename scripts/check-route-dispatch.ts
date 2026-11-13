@@ -2,7 +2,10 @@
 import { readFileSync } from "node:fs";
 import assert from "node:assert/strict";
 import { parseRouteDispatch } from "../lib/import/parse-route-dispatch";
-import { dayTypeOf, plateOf, routeChanges, WINDOW_FROM, WINDOW_TO } from "../lib/route-dispatch";
+import { addMinutes, dayTypeOf, plateOf, routeChanges, WINDOW_FROM, WINDOW_TO } from "../lib/route-dispatch";
+
+assert.equal(addMinutes("21:30", 120), "23:30");
+assert.equal(addMinutes("23:04", 120), "01:04"); // 자정 넘김
 
 assert.equal(dayTypeOf("2026-11-13"), "평일"); // 금
 assert.equal(dayTypeOf("2026-11-14"), "토·휴일"); // 토
@@ -33,7 +36,9 @@ assert.deepEqual(
 const path = process.argv[2];
 if (path) {
   const company = process.argv[3] ?? "공항리무진";
-  const { date, blocks, plateRoutes } = parseRouteDispatch(readFileSync(path), company);
+  const { date, blocks, plateRoutes, plateLastT1 } = parseRouteDispatch(readFileSync(path), company);
+  console.log("마지막 T1:", JSON.stringify(Object.fromEntries(Object.entries(plateLastT1).map(([d, m]) => [d, Object.entries(m).slice(0, 12)]))));
+  console.log("마지막 T1 대수:", Object.entries(plateLastT1).map(([d, m]) => `${d} ${Object.keys(m).length}`).join(" · "));
   console.log("노선 파악 차량:", Object.entries(plateRoutes).map(([d, m]) => `${d} ${Object.keys(m).length}대`).join(" · "));
   console.log(`날짜 ${date} · 블록 ${blocks.length}개`);
   for (const b of blocks) {

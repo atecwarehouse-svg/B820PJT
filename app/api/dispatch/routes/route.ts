@@ -7,7 +7,10 @@ import { fetchCompletedMap } from "@/lib/stats";
 import { kstDateString } from "@/lib/work-day";
 import { parseRouteDispatch } from "@/lib/import/parse-route-dispatch";
 import {
+  END_AFTER_T1_MIN,
+  addMinutes,
   companyOf,
+  dayDispatchKey,
   dayTypeOf,
   routeChanges,
   routeDispatchKey,
@@ -123,6 +126,19 @@ export async function POST(req: NextRequest) {
     parsed = parseRouteDispatch(Buffer.from(await file.arrayBuffer()), company);
   } catch (e) {
     return bad(e instanceof Error ? e.message : "파일을 읽지 못했습니다.");
+  }
+  // 당일 배차표 — 운행종료 시간(마지막 T1 출발 + 2시간)만 뽑아 따로 저장. 캡쳐용 표에만 쓰이고
+  // 노선별 배차표·나가는 시간 자동 입력·진행현황 노선명은 건드리지 않는다.
+  if (form.get("mode") === "day") {
+    const date = DATE_RE.test(parsed.date) ? parsed.date : kstDateString();
+    const last = parsed.plateLastT1[dayTypeOf(date)] ?? Object.values(parsed.plateLastT1)[0] ?? {};
+    const ends = Object.fromEntries(Object.entries(last).map(([p, t]) => [p, addMinutes(t, END_AFTER_T1_MIN)]));
+    try {
+      await setSetting(dayDispatchKey(company, date), JSON.stringify({ fileName: file.name.slice(0, 200), date, ends }));
+    } catch (e) {
+      return bad(`저장 실패: ${e instanceof Error ? e.message : ""}`, 500);
+    }
+    return NextResponse.json({ date, count: Object.keys(ends).length });
   }
   const table: RouteDispatchTable = {
     company,

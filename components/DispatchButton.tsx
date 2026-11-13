@@ -38,6 +38,8 @@ interface Entry {
   outTime: string | null; // "HH:MM" 또는 "OFF"(휴차)
   sheetTime?: string; // 운수사 배차표 엑셀의 첫 출발 시간
   sheetFrom?: string; // 그 출발지(정류장)
+  depot?: string; // 차고지명(진행현황 차량리스트 D열) — 캡쳐용 표에만 표시
+  endTime?: string; // 당일 배차표 기준 운행종료 시간(마지막 T1 출발 + 2시간) — 캡쳐용 표에만 표시
   edit?: { time: string; from: string } | null; // 설치완료 리스트에서 손으로 고친 시간·출발지(엑셀보다 우선)
   autoTime?: boolean; // 운수사 배차표 엑셀에서 자동으로 채운 시간(손으로 바꾸면 해제)
   checklist: boolean; // 체크리스트 작성 완료
@@ -353,6 +355,43 @@ export default function DispatchButton({ routeView = false }: { routeView?: bool
   // 설치완료 리스트에서 시간·출발지 손 수정 팝업
   const [doneEdit, setDoneEdit] = useState<{ plate: string; time: string; from: string } | null>(null);
   const [doneErr, setDoneErr] = useState("");
+
+  // 당일 배차표 업로드 — 운행종료 시간만 뽑아 저장(캡쳐용 표에만 반영). 입력 중인 시간이
+  // 날아가지 않도록 목록을 통째로 다시 부르지 않고 운행종료 시간만 받아 끼워 넣는다.
+  const dayFileRef = useRef<HTMLInputElement>(null);
+  const [dayBusy, setDayBusy] = useState(false);
+  const [dayMsg, setDayMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  async function uploadDaySheet(file: File) {
+    setDayBusy(true);
+    setDayMsg(null);
+    try {
+      const fd = new FormData();
+      fd.append("company", companyOf(operator));
+      fd.append("mode", "day");
+      fd.append("file", file);
+      const res = await fetch("/api/dispatch/routes", { method: "POST", body: fd });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok || j.error) return setDayMsg({ ok: false, text: j.error ?? "업로드 실패" });
+      const cur = await fetch(
+        `/api/dispatch?operator=${encodeURIComponent(operator)}&date=${encodeURIComponent(date)}`,
+      ).then((r) => r.json());
+      const ends = new Map<string, string>(
+        ((cur.vehicles ?? []) as { plate: string; endTime?: string }[]).map((v) => [v.plate, v.endTime ?? ""]),
+      );
+      setEntries((list) => list.map((e) => ({ ...e, endTime: ends.get(e.plate) ?? e.endTime })));
+      setDayMsg({
+        ok: true,
+        text:
+          j.date === date
+            ? `${j.date} 당일 배차표 저장 — 운행종료 시간 ${j.count}대`
+            : `${j.date} 배차표로 저장했습니다(지금 보는 날짜 ${date}와 다름) — 운행종료 시간 ${j.count}대`,
+      });
+    } catch {
+      setDayMsg({ ok: false, text: "업로드 실패 — 네트워크를 확인하세요." });
+    } finally {
+      setDayBusy(false);
+    }
+  }
 
   // 저장 즉시 반영. time·from 둘 다 비우면 수정값을 지워 엑셀 값으로 되돌린다.
   async function saveDoneEdit(plate: string, time: string, from: string) {
@@ -862,6 +901,8 @@ export default function DispatchButton({ routeView = false }: { routeView?: bool
   const offCount = visible.filter((e) => e.outTime === OFF).length;
   // 캡쳐용 표의 출발지 칸 — 설치완료 리스트는 항상, 일반 표는 운수사 배차표 엑셀이 올라와 있을 때만
   const showFrom = tableDone || visible.some((e) => e.sheetFrom);
+  const showDepot = routeView && visible.some((e) => e.depot); // 차고지 칸(공항 B830 캡쳐용 표)
+  const showEnd = visible.some((e) => e.endTime); // 당일 배차표가 올라와 있을 때만 운행종료 칸
   const exclCount = visible.filter((e) => e.excluded).length;
   // 메인 리스트 전용 — 타일 필터 적용 후 고정 차량을 맨 위로(캡쳐용 표는 항상 전체·시간순)
   const shown = tileFilter
@@ -975,6 +1016,36 @@ export default function DispatchButton({ routeView = false }: { routeView?: bool
                 >
                   📸 설치완료 차량 리스트 (캡쳐용) · {entries.filter((e) => e.completed).length}대
                 </button>
+              )}
+
+              {/* 당일 배차표 업로드 — 운행종료 시간(마지막 T1 출발 + 2시간)을 캡쳐용 표에만 표시 */}
+              {routeView && date && !listLoading && entries.length > 0 && (
+                <div>
+                  <input
+                    ref={dayFileRef}
+                    type="file"
+                    accept=".xlsx,.xls"
+                    className="hidden"
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      e.target.value = "";
+                      if (f) uploadDaySheet(f);
+                    }}
+                  />
+                  <button
+                    type="button"
+                    disabled={dayBusy}
+                    onClick={() => dayFileRef.current?.click()}
+                    className="w-full rounded-lg border border-blue-300 bg-white px-4 py-2.5 text-sm font-semibold text-blue-700 active:bg-blue-50 disabled:opacity-50"
+                  >
+                    {dayBusy ? "올리는 중…" : "📤 당일 배차표 업로드 (운행종료 시간 · 캡쳐용)"}
+                  </button>
+                  {dayMsg && (
+                    <p className={`mt-1 text-center text-xs ${dayMsg.ok ? "text-green-600" : "text-red-500"}`}>
+                      {dayMsg.text}
+                    </p>
+                  )}
+                </div>
               )}
 
               {/* 모뎀 예비품불량 등록 — 차량과 무관한 재고 불량이라 저장 버튼 위에 따로 둔다 */}
@@ -2144,6 +2215,11 @@ export default function DispatchButton({ routeView = false }: { routeView?: bool
                       <th className="border border-blue-700 px-2 py-1.5 text-center text-xs font-semibold">
                         노선
                       </th>
+                      {showDepot && (
+                        <th className="border border-blue-700 px-2 py-1.5 text-center text-xs font-semibold">
+                          차고지
+                        </th>
+                      )}
                       <th className="border border-blue-700 px-2 py-1.5 text-center text-xs font-semibold">
                         차량번호
                       </th>
@@ -2153,6 +2229,11 @@ export default function DispatchButton({ routeView = false }: { routeView?: bool
                       {showFrom && (
                         <th className="border border-blue-700 px-2 py-1.5 text-center text-xs font-semibold">
                           출발지
+                        </th>
+                      )}
+                      {showEnd && (
+                        <th className="border border-blue-700 px-2 py-1.5 text-center text-xs font-semibold">
+                          운행종료
                         </th>
                       )}
                     </tr>
@@ -2199,6 +2280,11 @@ export default function DispatchButton({ routeView = false }: { routeView?: bool
                           <td className="border border-gray-300 px-2 py-1.5 text-center text-gray-700">
                             {e.route || "-"}
                           </td>
+                          {showDepot && (
+                            <td className="border border-gray-300 px-2 py-1.5 text-center text-xs text-gray-700">
+                              {e.depot || "-"}
+                            </td>
+                          )}
                           <td
                             className={`border border-gray-300 px-2 py-1.5 text-center font-medium ${
                               isOff ? "text-red-500" : "text-gray-900"
@@ -2232,6 +2318,11 @@ export default function DispatchButton({ routeView = false }: { routeView?: bool
                                   ? doneView(e).from
                                   : e.sheetTime && e.outTime === e.sheetTime && e.sheetFrom)) ||
                                 "-"}
+                            </td>
+                          )}
+                          {showEnd && (
+                            <td className="border border-gray-300 px-2 py-1.5 text-center font-semibold text-gray-800">
+                              {e.endTime || "-"}
                             </td>
                           )}
                         </tr>
