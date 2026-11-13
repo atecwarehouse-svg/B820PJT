@@ -7,7 +7,19 @@ import HandoverLogin from "./HandoverLogin";
 import HandoverChecklist from "./HandoverChecklist";
 
 // 체크리스트형 프로젝트(양도양수·OS업데이트) 홈(서버) — 로그인 전엔 센터·이름 선택+직원 비밀번호, 로그인 후엔 내 센터 차량 체크리스트.
-export default function HandoverHome({ project, worker, version }: { project: Project; worker: Worker | null; version: string }) {
+export default function HandoverHome({
+  project,
+  worker,
+  version,
+  showStatus = true,
+  showVerify = true,
+}: {
+  project: Project;
+  worker: Worker | null;
+  version: string;
+  showStatus?: boolean; // 📊 현황표 버튼(프로젝트 기능 설정)
+  showVerify?: boolean; // 🔎 검증 버튼(프로젝트 기능 설정)
+}) {
   const icon = PROJECT_ICONS[project.icon];
   const label = KIND_LABEL[project.kind];
   return (
@@ -25,7 +37,7 @@ export default function HandoverHome({ project, worker, version }: { project: Pr
         <p className="mt-1 text-sm text-gray-500">{project.description || label}</p>
       </header>
 
-      {worker ? <HandoverChecklist worker={worker} kind={project.kind} /> : <HandoverLogin />}
+      {worker ? <HandoverChecklist worker={worker} kind={project.kind} showStatus={showStatus} showVerify={showVerify} /> : <HandoverLogin />}
 
       <div className="mt-8 flex flex-col items-center gap-2">
         <Link href="/admin" className="pill-muted text-xs">

@@ -29,7 +29,6 @@ import ProgressRateChart from "@/components/ProgressRateChart";
 import ScheduleMoveModal from "@/components/ScheduleMoveModal";
 import InstallDateSearch from "@/components/InstallDateSearch";
 import DailyReportModal from "@/components/DailyReportModal";
-import { DRIVER_EDU_FIXED } from "@/lib/report";
 import KpiCards from "@/components/KpiCards";
 import CompletedListModal from "@/components/CompletedListModal";
 import DriveOpenButton from "@/components/DriveOpenButton";
@@ -37,7 +36,7 @@ import RefreshButton from "@/components/RefreshButton";
 import DashboardDetailTabs from "@/components/DashboardDetailTabs";
 import { isProgressUnlocked } from "@/lib/admin-auth";
 import { brandName, currentProject, currentSlug, isDefault } from "@/lib/project";
-import { PROJECT_PERIOD_KEY, getConsultConfig, getInstallTeamsFull, getSetting, isQuotaMode, parsePeriod, teamLabel } from "@/lib/settings";
+import { PROJECT_PERIOD_KEY, getConsultConfig, getCustom, getInstallTeamsFull, getSetting, isQuotaMode, parsePeriod, teamLabel } from "@/lib/settings";
 import { carryOverIfQuota } from "@/lib/quota";
 
 export const runtime = "nodejs";
@@ -132,6 +131,7 @@ const getOperatorSchedules = unstable_cache(
 export default async function DashboardPage() {
   // 상세 섹션(설치 일정·운수사별·영업소별·날짜별)은 잠금 해제 전에는 서버가 아예 안 내려준다.
   const slug = currentSlug();
+  const custom = await getCustom(slug); // 프로젝트별 기능 켜기/끄기 + 맞춤 값
   const projectInfo = await currentProject();
   const brand = brandName(projectInfo); // 카드 미리보기 제목용 프로젝트명
   const projectLabel = isDefault(slug) ? undefined : `${projectInfo.name} 프로젝트`; // 리포트 머리말
@@ -243,7 +243,7 @@ export default async function DashboardPage() {
             startRemain={startRemain}
             inspectorList={inspectorList}
             teamList={teamList}
-            hideBisKakao={slug === "b800air"}
+            hideBisKakao={!custom.flags.bisKakao}
             brand={brand}
           />
           {ip && (
@@ -257,9 +257,9 @@ export default async function DashboardPage() {
               inProgress={inProgressCount}
               projectLabel={projectLabel}
               // 공항버스는 인천 BIS·카카오 초정밀버스 대상이 아니라 점검란에서 두 항목을 뺀다
-              hideBisKakao={slug === "b800air"}
-              // 승무사원 교육은 체크 대신 고정 문구(3:30 교육자 출근 기준) — lib/report DRIVER_EDU_FIXED
-              driverEduNote={DRIVER_EDU_FIXED[slug]}
+              hideBisKakao={!custom.flags.bisKakao}
+              // 승무사원 교육은 체크 대신 고정 문구 — 프로젝트 기능 설정(lib/features driverEduNote), 비어 있으면 체크박스
+              driverEduNote={custom.driverEduNote || undefined}
             />
           )}
           <ProgressDownloadButton today={today} scheduleDays={scheduleDays} />

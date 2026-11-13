@@ -53,11 +53,6 @@ export interface ServiceCheck {
   driverEduNote?: string; // 승무사원 교육을 체크 대신 고정 문구로 표기(공항 B800 — 교육자 출근 시각 기준 예정 안내)
 }
 
-// 프로젝트별 승무사원 교육 고정 문구 — 있으면 금일완료 리포트 점검란의 체크박스 대신 이 문구가 항상 들어간다
-export const DRIVER_EDU_FIXED: Record<string, string> = {
-  b800air: "3:30(교육자 출근) 첫차 운행기사부터 교육 예정",
-};
-
 // 점검 입력이 하나라도 있는지 (없으면 리포트에서 섹션 생략)
 export function hasServiceCheck(c?: ServiceCheck): boolean {
   if (!c) return false;

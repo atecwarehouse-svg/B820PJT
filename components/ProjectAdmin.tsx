@@ -12,6 +12,7 @@ import RawDataGuide from "@/components/RawDataGuide";
 import DonePopup from "@/components/DonePopup";
 import LoadingOverlay from "@/components/LoadingOverlay";
 import { DEFAULT_PLEDGE_TEMPLATE, PLEDGE_BASE_NAME, isDefaultPledgeTemplate, validatePledgeTemplate, type PledgeTemplate } from "@/lib/pledge-template";
+import { featuresFor, presetCustom, type Preset, type ProjectCustom } from "@/lib/features";
 import {
   CARD_COLORS,
   COLOR_KEYS,
@@ -87,12 +88,14 @@ export default function ProjectAdmin({
   periods = {},
   sharedPasswords = {},
   quotaModes = {},
+  customs = {},
 }: {
   projects: Project[];
   driveShared?: Record<string, boolean>; // 앨범 프로젝트 드라이브 폴더 링크 공유 여부
   periods?: Record<string, { start: string; end: string }>; // 앨범 프로젝트 기간 (수정 폼 프리필)
   sharedPasswords?: Record<string, string>; // 협력업체 공용 비밀번호 (수정 폼 프리필, ""=기본값)
   quotaModes?: Record<string, boolean>; // 수량 차감 방식(공항버스형) 켜짐 여부 (수정 폼 프리필)
+  customs?: Record<string, ProjectCustom>; // 기능 켜기/끄기 + 맞춤 값 (수정 폼 프리필)
 }) {
   const router = useRouter();
   const formRef = useRef<HTMLElement>(null);
@@ -114,7 +117,15 @@ export default function ProjectAdmin({
   const [photoSlots, setPhotoSlots] = useState<SlotConfigJson>(DEFAULT_SLOTS); // 새 프로젝트 사진 양식
   const [reportMail, setReportMail] = useState(""); // 완료리포트 메일 수신자 (쉼표·줄바꿈 구분)
   const [period, setPeriod] = useState({ start: "", end: "" }); // 프로젝트 기간 — 빈 양식 전개일정 3행 날짜
-  const [quotaMode, setQuotaMode] = useState(false); // 수량 차감 방식(공항버스형) — 수정 폼에서만
+  const [quotaMode, setQuotaMode] = useState(false); // 수량 차감 방식(공항버스형)
+  // 기능 켜기/끄기 + 맞춤 값(lib/features) — 새 프로젝트는 유형(B820형/B830형)을 고르면 기본값이 채워지고 하나씩 바꿀 수 있다
+  const [custom, setCustom] = useState<ProjectCustom>(() => presetCustom("b820"));
+  const [preset, setPreset] = useState<Preset | "">("b820"); // 마지막으로 고른 유형(직접 바꾸면 "")
+  function applyPreset(next: Preset) {
+    setPreset(next);
+    setCustom(presetCustom(next));
+    setQuotaMode(next === "b830");
+  }
   const [slotsOpen, setSlotsOpen] = useState(false); // 사진 양식 팝업
   const [slotsError, setSlotsError] = useState("");
   const [pledge, setPledge] = useState<PledgeTemplate>(DEFAULT_PLEDGE_TEMPLATE); // 새 프로젝트 서약서 양식
@@ -167,6 +178,9 @@ export default function ProjectAdmin({
     if (rawRef.current) rawRef.current.value = "";
     setReportMail("");
     setPeriod({ start: "", end: "" });
+    setQuotaMode(false);
+    setCustom(presetCustom("b820"));
+    setPreset("b820");
     setError("");
   }
 
@@ -223,6 +237,8 @@ export default function ProjectAdmin({
           else if (!period.start && !period.end) body.period = "";
         }
         if (editing.kind === "album" && quotaMode !== (quotaModes[editing.slug] ?? false)) body.quota_mode = quotaMode;
+      // 기능 설정 — B820 포함, 링크 카드 제외. 바뀐 경우에만 보낸다
+      if (editing.kind !== "link" && JSON.stringify(custom) !== JSON.stringify(customs[editing.slug] ?? presetCustom("b820"))) body.custom = custom;
       }
       setPhase("save");
       const j = await call("PUT", body);
@@ -248,6 +264,8 @@ export default function ProjectAdmin({
         ...(isDefaultPledgeTemplate(pledge) ? {} : { pledgeTemplate: pledge }),
         reportMail: mailList,
         ...(period.start && period.end ? { period } : {}),
+        custom,
+        ...(quotaMode ? { quota_mode: true } : {}),
       });
       if (j) {
         // 로우데이터를 붙였으면 바로 차량 리스트 등록 (API 노출 실패 시엔 건너뛰고 안내만)
@@ -285,7 +303,7 @@ export default function ProjectAdmin({
       // 체크리스트형(양도양수·OS업데이트) — 드라이브·양식 없음. 직원 비밀번호 필수, 로우데이터는 생성 후 /p/<slug>/api/handover/import 로.
       const newSlug = slug.trim().toLowerCase();
       setPhase("create");
-      const j = await call("POST", { kind, ...common, slug: newSlug, admin_password: adminPw, shared_password: sharedPw.trim() });
+      const j = await call("POST", { kind, ...common, slug: newSlug, admin_password: adminPw, shared_password: sharedPw.trim(), custom });
       if (j) {
         let uploaded: number | undefined;
         let uploadError: string | undefined;
@@ -334,6 +352,8 @@ export default function ProjectAdmin({
     setShareLink(driveShared[p.slug] ?? false);
     setPeriod(periods[p.slug] ?? { start: "", end: "" });
     setQuotaMode(quotaModes[p.slug] ?? false);
+    setCustom(customs[p.slug] ?? presetCustom("b820"));
+    setPreset("");
     setConfirmSlug("");
     setError("");
     formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -767,8 +787,7 @@ export default function ProjectAdmin({
                     ? "종료일이 시작일보다 빠릅니다."
                     : "프로젝트 기간(시작일~종료일, 선택) — 빈 양식의 전개일정 3행 날짜가 이 기간으로 자동 기입되고, 61일이 넘으면 날짜 열이 그만큼 늘어납니다(최대 366일). 업로드 때는 설치 예정일이 함께 들어갑니다."}
               </p>
-              {editing && (
-                <label className="mt-2 flex cursor-pointer items-start gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
+              <label className="mt-2 flex cursor-pointer items-start gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
                   <input
                     type="checkbox"
                     checked={quotaMode}
@@ -782,6 +801,85 @@ export default function ProjectAdmin({
                     </span>
                   </span>
                 </label>
+            </div>
+          )}
+          {/* 기능 선택 — 프로젝트마다 쓸 기능을 켜고 끈다(lib/features). 새 사진첩은 유형을 고르면 기본값이 채워진다 */}
+          {kind !== "link" && (
+            <div>
+              <p className="pt-2 text-xs font-bold text-gray-500">🧩 기능 선택</p>
+              {kind === "album" && !isB820 && (
+                <div className="mt-1.5 flex gap-1.5">
+                  {(
+                    [
+                      ["b820", "B820형 사진첩", "인천 시내버스 기본 구성"],
+                      ["b830", "B830형 사진첩", "공항버스 구성(배차표 엑셀·수량 차감)"],
+                    ] as [Preset, string, string][]
+                  ).map(([k, label, note]) => (
+                    <button
+                      key={k}
+                      type="button"
+                      onClick={() => applyPreset(k)}
+                      className={`flex-1 rounded-lg border px-2 py-2 text-left text-xs font-semibold ${
+                        preset === k ? "border-blue-500 bg-blue-50 text-blue-700" : "border-gray-200 bg-white text-gray-600"
+                      }`}
+                    >
+                      {label}
+                      <span className="mt-0.5 block text-[10px] font-normal text-gray-500">{note}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+              <div className="mt-1.5 divide-y divide-gray-100 rounded-lg border border-gray-200 bg-white">
+                {featuresFor(kind).map((f) => (
+                  <label key={f.key} className="flex cursor-pointer items-start gap-2 px-3 py-2">
+                    <input
+                      type="checkbox"
+                      checked={custom.flags[f.key]}
+                      onChange={(e) => {
+                        setPreset("");
+                        setCustom({ ...custom, flags: { ...custom.flags, [f.key]: e.target.checked } });
+                      }}
+                      className="mt-0.5 h-4 w-4"
+                    />
+                    <span className="text-xs text-gray-700">
+                      <b>{f.label}</b>
+                      <span className="mt-0.5 block text-[11px] text-gray-500">{f.desc}</span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+              {kind === "album" && custom.flags.routeSheet && (
+                <div className="mt-2">
+                  <p className="px-1 text-[11px] font-semibold text-gray-600">배차표 엑셀 차번 → 차량번호 규칙</p>
+                  <textarea
+                    value={custom.plateRules}
+                    onChange={(e) => {
+                      setPreset("");
+                      setCustom({ ...custom, plateRules: e.target.value });
+                    }}
+                    rows={4}
+                    placeholder={"회사, 시작~끝, 앞글자, 자릿수\n예) 공항리무진, 18~46, 서울75사11, 2"}
+                    className={`${input} font-mono text-xs`}
+                  />
+                  <p className="mt-1 px-1 text-[11px] text-gray-400">
+                    한 줄에 규칙 하나. 회사는 운수사명의 첫 단어. 예) &quot;공항리무진, 121~300, 서울70사8, 3&quot; → 차번 255는 서울70사8255. 비우면 내장 규칙(공항리무진)을 씁니다.
+                  </p>
+                </div>
+              )}
+              {kind === "album" && (
+                <div className="mt-2">
+                  <p className="px-1 text-[11px] font-semibold text-gray-600">리포트 승무사원 교육 고정 문구</p>
+                  <input
+                    value={custom.driverEduNote}
+                    onChange={(e) => {
+                      setPreset("");
+                      setCustom({ ...custom, driverEduNote: e.target.value });
+                    }}
+                    maxLength={100}
+                    placeholder="비우면 리포트에서 체크박스로 표시"
+                    className={input}
+                  />
+                </div>
               )}
             </div>
           )}

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { listProjects, projectHome } from "@/lib/project";
+import HelpBot from "@/components/HelpBot";
 import { CARD_COLORS, PROJECT_ICONS, Svg, UI, type ColorKey } from "@/components/ProjectIcon";
 
 export const dynamic = "force-dynamic";
@@ -101,6 +102,7 @@ export default async function ProjectSelectPage() {
           </li>
         </ul>
       </div>
+      <HelpBot />
     </main>
   );
 }

@@ -10,12 +10,13 @@ import WeatherWidget from "@/components/WeatherWidget";
 import ProjectTutorial, { type SetupStep } from "@/components/ProjectTutorial";
 import ShareInstallBar from "@/components/ShareInstallBar";
 import HandoverHome from "@/components/handover/HandoverHome";
+import HelpBot from "@/components/HelpBot";
 import { currentWorker } from "@/lib/handover";
 import { CARD_COLORS, PROJECT_ICONS, Svg } from "@/components/ProjectIcon";
 import { currentSlug, isDefault } from "@/lib/project";
 import { createServiceClient } from "@/lib/supabase/server";
 import {
-  CONSULT_FORM_KEY, INSPECT_CHECKLIST_KEY, INSTALL_TEAMS_KEY, PHOTO_SLOTS_KEY, PLEDGE_TEMPLATE_KEY, REPORT_MAIL_KEY, TEAM_COMPANIES_KEY, getSetting,
+  CONSULT_FORM_KEY, INSPECT_CHECKLIST_KEY, INSTALL_TEAMS_KEY, PHOTO_SLOTS_KEY, PLEDGE_TEMPLATE_KEY, REPORT_MAIL_KEY, TEAM_COMPANIES_KEY, getCustom, getSetting,
 } from "@/lib/settings";
 
 // 새 프로젝트 첫 설정 체크리스트(튜토리얼) — 관리자 탭 딥링크(/admin?tab=…)와 완료 여부
@@ -68,11 +69,12 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 // 홈 메뉴 타일(링크) — 이모지 배경색은 메뉴마다 다르게
-const MENU: { href: string; emoji: string; label: string; tint: string }[] = [
+// feature = 프로젝트별로 끌 수 있는 메뉴(lib/features.ts) — 없으면 항상 표시
+const MENU: { href: string; emoji: string; label: string; tint: string; feature?: "safety" | "teams" }[] = [
   { href: "/dashboard", emoji: "📊", label: "진행 현황", tint: "bg-indigo-50" },
   { href: "/list", emoji: "📋", label: "저장 목록 · 다운로드", tint: "bg-sky-50" },
-  { href: "/safety", emoji: "🖊️", label: "안전관리 서약서", tint: "bg-rose-50" },
-  { href: "/teams", emoji: "👷", label: "설치팀별 확인", tint: "bg-amber-50" },
+  { href: "/safety", emoji: "🖊️", label: "안전관리 서약서", tint: "bg-rose-50", feature: "safety" },
+  { href: "/teams", emoji: "👷", label: "설치팀별 확인", tint: "bg-amber-50", feature: "teams" },
   { href: "/admin", emoji: "🔒", label: "관리자", tint: "bg-gray-100" },
 ];
 
@@ -80,14 +82,16 @@ export default async function HomePage() {
   const project = await currentProject();
   // 체크리스트형 프로젝트(양도양수·OS업데이트) — 홈이 곧 체크리스트(로그인 → 내 센터 차량 완료 체크). 튜토리얼·촬영 메뉴 없음.
   if (isChecklist(project.kind)) {
-    return <HandoverHome project={project} worker={await currentWorker()} version={`v${BUILD_TIME}${COMMIT ? ` · ${COMMIT}` : ""}`} />;
+    const cf = (await getCustom()).flags;
+    return <><HandoverHome project={project} worker={await currentWorker()} showStatus={cf.statusSheet} showVerify={cf.verify} version={`v${BUILD_TIME}${COMMIT ? ` · ${COMMIT}` : ""}`} /><HelpBot /></>;
   }
   const icon = PROJECT_ICONS[project.icon];
   const slug = currentSlug();
   const steps = isDefault(slug) ? null : await setupSteps(slug); // B820은 운영 중 — 튜토리얼 없음
+  const f = (await getCustom(slug)).flags; // 프로젝트별 기능 켜기/끄기
   return (
     <main className="relative mx-auto flex min-h-screen max-w-md flex-col px-4 pb-10 pt-16">
-      <WeatherWidget />
+      {f.weather && <WeatherWidget />}
       <Link href="/" className="pill absolute left-4 top-3 text-xs">
         ← 프로젝트 선택
       </Link>
@@ -120,17 +124,17 @@ export default async function HomePage() {
           iOS 사파리는 애니메이션이 끝난 뒤에도 조상 transform 기준으로 fixed 를 잡아 팝업 아래가 잘린다. 투명도만 */}
       <div className="mt-4 grid grid-cols-2 gap-2.5 motion-safe:animate-fade-in" style={{ animationDelay: "160ms" }}>
         {/* 공항 B800 전용 — 안내방송 결선 작업지도서(public/manuals, 이미지 내장 단일 HTML). 정적 파일이라 /p/ 접두사 없이 새 탭 */}
-        {slug === "b800air" && (
+        {f.paManual && (
           <a href="/manuals/b800air-pa-wiring.html" target="_blank" rel="noopener" className="home-tile col-span-2 !flex-row gap-2 !py-3 text-blue-700">
             <span className="emoji !h-9 !w-9 bg-blue-50 text-xl">🔌</span>
             안내방송 결선도
           </a>
         )}
-        <AdminCallButton />
-        <DispatchButton routeView={slug === "b800air"} />
-        <VocModal />
-        <TeamCallButton />
-        {MENU.map((m) => (
+        {f.adminCall && <AdminCallButton />}
+        {f.dispatch && <DispatchButton routeView={f.routeSheet} />}
+        {f.voc && <VocModal />}
+        {f.teamCall && <TeamCallButton />}
+        {MENU.filter((m) => !m.feature || f[m.feature]).map((m) => (
           <Link key={m.href} href={m.href} className="home-tile">
             <span className={`emoji ${m.tint}`}>{m.emoji}</span>
             {m.label}
@@ -143,6 +147,8 @@ export default async function HomePage() {
         v{BUILD_TIME}
         {COMMIT && ` · ${COMMIT}`}
       </p>
+      {/* 사용법 도우미 — 누르면 관리자 비밀번호를 묻는다 */}
+      <HelpBot />
     </main>
   );
 }

@@ -2,7 +2,7 @@ import Link from "@/components/PLink";
 import { notFound } from "next/navigation";
 import { brandName, currentProject, isChecklist } from "@/lib/project";
 import { createServiceClient } from "@/lib/supabase/server";
-import { getInstallTeams, getSlotConfig, isQuotaMode } from "@/lib/settings";
+import { getCustom, getInstallTeams, getSlotConfig, isQuotaMode } from "@/lib/settings";
 import { getReferenceUrls } from "@/lib/reference";
 import { workDateString } from "@/lib/work-day";
 import type { RecordBundle } from "@/lib/types";
@@ -116,7 +116,7 @@ export default async function RecordPage({
           operator={quota ? vehicle.operator : undefined}
         />
       )}
-      <RecordEditor plate={plate} initial={bundle} teamOptions={teamOptions} brand={brandName(await currentProject())} slotConfig={await getSlotConfig()} exampleUrls={await getReferenceUrls()} choices={(await currentProject()).slug === "b800air" ? B800_CHOICES : []} />
+      <RecordEditor plate={plate} initial={bundle} teamOptions={teamOptions} brand={brandName(await currentProject())} slotConfig={await getSlotConfig()} exampleUrls={await getReferenceUrls()} choices={(await getCustom()).flags.checkChoices ? B800_CHOICES : []} />
     </>
   );
 }

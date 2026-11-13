@@ -50,7 +50,17 @@ export function fmtDone(iso: string): string {
 // 내 센터 차량 체크리스트(모바일) — 차량번호 검색이 메인, 큰 완료 토글, 묶음별 리스트, 요약 %, 5초 폴링으로 동료 체크 반영.
 //   묶음 = 양도양수: 노선(공동배차는 각 노선에) / OS업데이트: 운수사(영업소) — 운수사 50개·노선 140개라 노선 묶음은 너무 길다.
 //   osupdate 면 완료 체크 전 "통합+승하차 전체 적용하셨나요?" 확인, 시내/마을버스 구분 탭.
-export default function HandoverChecklist({ worker, kind = "handover" }: { worker: Worker; kind?: string }) {
+export default function HandoverChecklist({
+  worker,
+  kind = "handover",
+  showStatus = true,
+  showVerify = true,
+}: {
+  worker: Worker;
+  kind?: string;
+  showStatus?: boolean;
+  showVerify?: boolean;
+}) {
   const osupdate = kind === "osupdate";
   const router = useRouter();
   const [vehicles, setVehicles] = useState<Vehicle[] | null>(null);
@@ -262,12 +272,16 @@ export default function HandoverChecklist({ worker, kind = "handover" }: { worke
           </span>
         </span>
         <div className="flex shrink-0 items-center gap-1.5">
-          <button type="button" onClick={() => setStatusOpen(true)} className="pill-muted px-2.5 text-xs" aria-label="전체 센터 현황표" title="현황표">
-            📊
-          </button>
-          <button type="button" onClick={() => setVerifyOpen(true)} className="pill-muted px-2.5 text-xs" aria-label="서버 등록 검증" title="검증">
-            🔎
-          </button>
+          {showStatus && (
+            <button type="button" onClick={() => setStatusOpen(true)} className="pill-muted px-2.5 text-xs" aria-label="전체 센터 현황표" title="현황표">
+              📊
+            </button>
+          )}
+          {showVerify && (
+            <button type="button" onClick={() => setVerifyOpen(true)} className="pill-muted px-2.5 text-xs" aria-label="서버 등록 검증" title="검증">
+              🔎
+            </button>
+          )}
           <button type="button" onClick={() => load()} className="pill-muted text-xs" aria-label="새로고침">
             🔄 {ago === null ? "…" : `${ago}초 전`}
           </button>

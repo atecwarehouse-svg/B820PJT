@@ -4,6 +4,7 @@ import { parsePledgeTemplate, type PledgeTemplate } from "@/lib/pledge-template"
 
 import { createServiceClient } from "@/lib/supabase/server";
 import { currentSlug, isDefault } from "@/lib/project";
+import { FEATURES_KEY, resolveCustom, type ProjectCustom } from "@/lib/features";
 import { parseSlotConfig, type SlotConfig } from "@/lib/slots";
 import { parseConsultConfig, type ConsultField } from "@/lib/consultation-form";
 
@@ -163,6 +164,12 @@ export async function getInstallTeamsFull(slug?: string): Promise<InstallTeam[]>
 // 설치팀 드롭다운 선택지("팀명 이름") — 기록 페이지용 (비면 자유입력으로 폴백)
 export async function getInstallTeams(): Promise<string[]> {
   return (await getInstallTeamsFull()).map(teamLabel);
+}
+
+// 프로젝트별 기능 켜기/끄기 + 맞춤 값(lib/features.ts) — 저장값 없으면 종류별 기본값
+export async function getCustom(slug?: string): Promise<ProjectCustom> {
+  const s = slug ?? currentSlug();
+  return resolveCustom(s, await getSetting(FEATURES_KEY, s));
 }
 
 // 값 읽기. 행 없음/테이블 미생성 등 오류 시 null → 호출측에서 env 폴백.

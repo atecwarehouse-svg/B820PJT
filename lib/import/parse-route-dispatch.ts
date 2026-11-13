@@ -4,7 +4,8 @@
 //   차량마다 가장 왼쪽 시간 = 그날 첫 출발. 그 시간이 04:00~08:59 인 차량만 남긴다.
 //   '평일시간표'/'토·휴일시간표' 세로 글자 칸으로 평일·휴일 구역을 가른다.
 import * as XLSX from "xlsx";
-import { WINDOW_FROM, WINDOW_TO, plateOf, type RouteDispatchBlock } from "@/lib/route-dispatch";
+import { WINDOW_FROM, WINDOW_TO, plateOf as plateOfRule, type RouteDispatchBlock } from "@/lib/route-dispatch";
+import type { PlateRules } from "@/lib/features";
 
 const squash = (s: string) => s.replace(/\s+/g, " ").trim();
 
@@ -22,6 +23,7 @@ function timeOf(v: unknown): string | null {
 export function parseRouteDispatch(
   buf: Buffer,
   company: string,
+  rules?: PlateRules, // 프로젝트 설정의 차번 규칙(없으면 내장 규칙)
 ): {
   date: string;
   blocks: RouteDispatchBlock[];
@@ -30,6 +32,7 @@ export function parseRouteDispatch(
   // 요일 구분별 읽은 결과 요약 — 업로드 후 화면에 보여 줘 빠진 노선·차량을 바로 알 수 있게 한다
   summary: Record<string, { routes: string[]; plates: string[]; unmapped: number[] }>;
 } {
+  const plateOf = (c: string, no: number) => plateOfRule(c, no, rules);
   const wb = XLSX.read(buf, { type: "buffer" });
   const ws = wb.Sheets[wb.SheetNames[0]];
   if (!ws || !ws["!ref"]) throw new Error("시트가 없습니다.");

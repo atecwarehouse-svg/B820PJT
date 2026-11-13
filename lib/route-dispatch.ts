@@ -87,8 +87,9 @@ const PLATE_RULES: Record<string, [from: number, to: number, prefix: string, dig
     [310, 478, "서울71사2", 3],
   ],
 };
-export function plateOf(company: string, no: number): string {
-  const r = PLATE_RULES[company]?.find(([a, b]) => no >= a && no <= b);
+// rules = 프로젝트 설정의 차번 규칙(lib/features parsePlateRules). 없으면 내장 규칙.
+export function plateOf(company: string, no: number, rules: typeof PLATE_RULES = PLATE_RULES): string {
+  const r = rules[company]?.find(([a, b]) => no >= a && no <= b);
   return r ? r[2] + String(no).padStart(r[3], "0") : "";
 }
 

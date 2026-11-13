@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
 import { chunk } from "@/lib/supabase/paginate";
 import { stdSlotKeys } from "@/lib/slots";
-import { getSetting, getSlotConfig, setSetting } from "@/lib/settings";
+import { getCustom, getSetting, getSlotConfig, setSetting } from "@/lib/settings";
+import { parsePlateRules } from "@/lib/features";
 import { fetchCompletedMap } from "@/lib/stats";
 import { kstDateString } from "@/lib/work-day";
 import { parseRouteDispatch } from "@/lib/import/parse-route-dispatch";
@@ -124,7 +125,12 @@ export async function POST(req: NextRequest) {
 
   let parsed: ReturnType<typeof parseRouteDispatch>;
   try {
-    parsed = parseRouteDispatch(Buffer.from(await file.arrayBuffer()), company);
+    const ruleText = (await getCustom()).plateRules; // 프로젝트 설정의 차번 규칙(비어 있으면 내장 규칙)
+    parsed = parseRouteDispatch(
+      Buffer.from(await file.arrayBuffer()),
+      company,
+      ruleText ? parsePlateRules(ruleText).rules : undefined,
+    );
   } catch (e) {
     return bad(e instanceof Error ? e.message : "파일을 읽지 못했습니다.");
   }

@@ -17,6 +17,7 @@ import { TEMPLATE_BUCKET } from "@/lib/template-path";
 import { PHOTO_SLOTS_KEY, PLEDGE_TEMPLATE_KEY, PROJECT_PERIOD_KEY, QUOTA_MODE_KEY, REPORT_MAIL_KEY, SHARED_PASSWORD_KEY, parsePeriod, setSetting } from "@/lib/settings";
 import { toSlotConfigJson, validateSlotConfig } from "@/lib/slots";
 import { validatePledgeTemplate } from "@/lib/pledge-template";
+import { FEATURES_KEY, cleanCustom, parsePlateRules } from "@/lib/features";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -169,6 +170,15 @@ export async function POST(req: NextRequest) {
       settings.push({ key: SHARED_PASSWORD_KEY, value: sp });
     }
 
+    // 기능 켜기/끄기 + 맞춤 값(lib/features) · 수량 차감 방식 — 만들 때 고른 값
+    if (body.custom != null) {
+      const c = cleanCustom(body.custom);
+      const badLines = parsePlateRules(c.plateRules).badLines;
+      if (badLines.length) return bad(`차번 규칙 ${badLines.join(", ")}번째 줄 형식을 확인하세요. (예: 공항리무진, 18~46, 서울75사11, 2)`);
+      settings.push({ key: FEATURES_KEY, value: JSON.stringify(c) });
+    }
+    if (body.quota_mode === true) settings.push({ key: QUOTA_MODE_KEY, value: "1" });
+
     // 1) 드라이브 폴더
     let folderId: string;
     try {
@@ -304,7 +314,16 @@ export async function POST(req: NextRequest) {
         if (attempt) await new Promise((r) => setTimeout(r, 700));
         const { error } = await dst
           .from("app_settings")
-          .upsert({ key: SHARED_PASSWORD_KEY, value: staffPw, updated_at: new Date().toISOString() }, { onConflict: "key" });
+          .upsert(
+            [
+              { key: SHARED_PASSWORD_KEY, value: staffPw, updated_at: new Date().toISOString() },
+              // 기능 켜기/끄기(현황표·검증) — 만들 때 고른 값
+              ...(body.custom != null
+                ? [{ key: FEATURES_KEY, value: JSON.stringify(cleanCustom(body.custom)), updated_at: new Date().toISOString() }]
+                : []),
+            ],
+            { onConflict: "key" },
+          );
         if (!error) saved = true;
         else last = error.message;
       }
@@ -393,7 +412,15 @@ export async function PUT(req: NextRequest) {
   }
   // 수량 차감 방식(공항버스형) — 앨범 프로젝트(B820 제외)만, true/false
   const quotaMode = row.kind === "album" && !isDefault(slug) && typeof body.quota_mode === "boolean" ? body.quota_mode : undefined;
-  if (!Object.keys(patch).length && shareLink === undefined && period === undefined && sharedPw === undefined && quotaMode === undefined) return bad("바꿀 내용이 없습니다.");
+  // 기능 켜기/끄기 + 맞춤 값 — 링크 카드 빼고 전부(B820 포함)
+  let custom: string | undefined;
+  if (row.kind !== "link" && body.custom != null) {
+    const c = cleanCustom(body.custom);
+    const badLines = parsePlateRules(c.plateRules).badLines;
+    if (badLines.length) return bad(`차번 규칙 ${badLines.join(", ")}번째 줄 형식을 확인하세요. (예: 공항리무진, 18~46, 서울75사11, 2)`);
+    custom = JSON.stringify(c);
+  }
+  if (!Object.keys(patch).length && shareLink === undefined && period === undefined && sharedPw === undefined && quotaMode === undefined && custom === undefined) return bad("바꿀 내용이 없습니다.");
 
   if (Object.keys(patch).length) {
     const { error } = await sb.from("projects").update(patch).eq("slug", slug);
@@ -409,6 +436,11 @@ export async function PUT(req: NextRequest) {
   if (sharedPw !== undefined) {
     await setSetting(SHARED_PASSWORD_KEY, sharedPw, slug).catch(() => {
       warning = (warning ? warning + " " : "") + "협력업체 공용 비밀번호 저장에 실패했습니다. 잠시 뒤 다시 저장해 주세요.";
+    });
+  }
+  if (custom !== undefined) {
+    await setSetting(FEATURES_KEY, custom, slug).catch(() => {
+      warning = (warning ? warning + " " : "") + "기능 설정 저장에 실패했습니다. 잠시 뒤 다시 저장해 주세요.";
     });
   }
   if (quotaMode !== undefined) {

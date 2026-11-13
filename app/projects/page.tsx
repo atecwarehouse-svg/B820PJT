@@ -1,8 +1,10 @@
 import { isAdmin } from "@/lib/admin-auth";
 import { DEFAULT_SLUG, isDefault, listProjects } from "@/lib/project";
-import { PROJECT_PERIOD_KEY, SHARED_PASSWORD_KEY, getSetting, isQuotaMode, parsePeriod } from "@/lib/settings";
+import { PROJECT_PERIOD_KEY, SHARED_PASSWORD_KEY, getCustom, getSetting, isQuotaMode, parsePeriod } from "@/lib/settings";
+import type { ProjectCustom } from "@/lib/features";
 import AdminLogin from "@/components/AdminLogin";
 import ProjectAdmin from "@/components/ProjectAdmin";
+import HelpBot from "@/components/HelpBot";
 import { isLinkShared } from "@/lib/gdrive";
 
 export const runtime = "nodejs";
@@ -23,17 +25,25 @@ export default async function ProjectsPage() {
   const sharedPasswords: Record<string, string> = {};
   // 수량 차감 방식(공항버스형) 켜진 앨범 프로젝트 — 수정 폼 체크박스 프리필
   const quotaModes: Record<string, boolean> = {};
+  // 기능 켜기/끄기 + 맞춤 값 — 수정 폼 프리필
+  const customs: Record<string, ProjectCustom> = {};
   await Promise.all(
     projects
       .filter((p) => p.kind !== "link") // 앨범·양도양수 — 자기 스키마가 있는 프로젝트
       .map(async (p) => {
         if (p.driveFolderId) driveShared[p.slug] = await isLinkShared(p.driveFolderId).catch(() => false);
         sharedPasswords[p.slug] = (await getSetting(SHARED_PASSWORD_KEY, p.slug)) ?? "";
+        customs[p.slug] = await getCustom(p.slug);
         if (isDefault(p.slug)) return;
         const period = parsePeriod(await getSetting(PROJECT_PERIOD_KEY, p.slug));
         if (period) periods[p.slug] = period;
         if (p.kind === "album") quotaModes[p.slug] = await isQuotaMode(p.slug);
       }),
   );
-  return <ProjectAdmin projects={projects} driveShared={driveShared} periods={periods} sharedPasswords={sharedPasswords} quotaModes={quotaModes} />;
+  return (
+    <>
+      <ProjectAdmin projects={projects} driveShared={driveShared} periods={periods} sharedPasswords={sharedPasswords} quotaModes={quotaModes} customs={customs} />
+      <HelpBot />
+    </>
+  );
 }
