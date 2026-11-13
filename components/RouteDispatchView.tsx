@@ -67,8 +67,8 @@ export default function RouteDispatchView({
         apply(j.table, j.status ?? {}, j.dates ?? []);
         setMsg(
           j.routeChanged == null
-            ? { ok: false, text: `${j.table.date} 배차표는 저장했지만 진행현황 노선명 반영에 실패했습니다. 다시 올려주세요.` }
-            : { ok: true, text: `${j.table.date} 배차표로 저장했습니다. 진행현황 노선 변경 ${j.routeChanged}대.` },
+            ? { ok: false, text: `${j.table.date} 배차표는 저장했지만 진행현황 노선명 반영에 실패했습니다. 다시 올려주세요. (${j.summary ?? ""})` }
+            : { ok: true, text: `${j.table.date} 배차표로 저장했습니다. ${j.summary ?? ""} · 진행현황 노선 변경 ${j.routeChanged}대` },
         );
       }
     } catch {

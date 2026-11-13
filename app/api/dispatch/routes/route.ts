@@ -12,6 +12,7 @@ import {
   companyOf,
   dayDispatchKey,
   dayTypeOf,
+  readSummary,
   routeChanges,
   routeDispatchKey,
   routeDispatchPrefix,
@@ -138,7 +139,13 @@ export async function POST(req: NextRequest) {
     } catch (e) {
       return bad(`저장 실패: ${e instanceof Error ? e.message : ""}`, 500);
     }
-    return NextResponse.json({ date, count: Object.keys(ends).length });
+    const sm = parsed.summary[dayTypeOf(date)] ?? Object.values(parsed.summary)[0];
+    const noT1 = (sm?.plates.length ?? 0) - Object.keys(ends).length;
+    return NextResponse.json({
+      date,
+      count: Object.keys(ends).length,
+      summary: readSummary(sm) + (noT1 > 0 ? ` · ⚠ T1 출발 시간이 없는 차량 ${noT1}대` : ""),
+    });
   }
   const table: RouteDispatchTable = {
     company,
@@ -160,5 +167,11 @@ export async function POST(req: NextRequest) {
   } catch {
     routeChanged = null; // 화면에 '노선명 반영 실패'로 알린다
   }
-  return NextResponse.json({ table, dates: await datesOf(company), status: await statusOf(table), routeChanged });
+  return NextResponse.json({
+    table,
+    dates: await datesOf(company),
+    status: await statusOf(table),
+    routeChanged,
+    summary: readSummary(parsed.summary[dayTypeOf(table.date)] ?? Object.values(parsed.summary)[0]),
+  });
 }

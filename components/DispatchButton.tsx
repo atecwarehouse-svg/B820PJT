@@ -470,8 +470,8 @@ export default function DispatchButton({ routeView = false }: { routeView?: bool
         ok: true,
         text:
           j.date === date
-            ? `${j.date} 당일 배차표 저장 — 운행종료 시간 ${j.count}대`
-            : `${j.date} 배차표로 저장했습니다(지금 보는 날짜 ${date}와 다름) — 운행종료 시간 ${j.count}대`,
+            ? `${j.date} 당일 배차표 저장 — 운행종료 시간 ${j.count}대 · ${j.summary ?? ""}`
+            : `${j.date} 배차표로 저장했습니다(지금 보는 날짜 ${date}와 다름) — 운행종료 시간 ${j.count}대 · ${j.summary ?? ""}`,
       });
     } catch {
       setDayMsg({ ok: false, text: "업로드 실패 — 네트워크를 확인하세요." });

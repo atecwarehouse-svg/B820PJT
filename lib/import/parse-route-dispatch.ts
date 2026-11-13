@@ -27,6 +27,8 @@ export function parseRouteDispatch(
   blocks: RouteDispatchBlock[];
   plateRoutes: Record<string, Record<string, string>>;
   plateLastT1: Record<string, Record<string, string>>; // 요일 구분별 차량번호 → 그날 마지막 T1 출발 시간
+  // 요일 구분별 읽은 결과 요약 — 업로드 후 화면에 보여 줘 빠진 노선·차량을 바로 알 수 있게 한다
+  summary: Record<string, { routes: string[]; plates: string[]; unmapped: number[] }>;
 } {
   const wb = XLSX.read(buf, { type: "buffer" });
   const ws = wb.Sheets[wb.SheetNames[0]];
@@ -68,6 +70,7 @@ export function parseRouteDispatch(
   const blocks: RouteDispatchBlock[] = [];
   const earliest: Record<string, Record<string, { route: string; time: string }>> = {};
   const plateLastT1: Record<string, Record<string, string>> = {};
+  const summary: Record<string, { routes: string[]; plates: string[]; unmapped: number[] }> = {};
   const late = (t: string) => (t < "04:00" ? `3${t}` : t); // 자정 넘긴 심야편(00:10)은 23시보다 늦다
   for (const [hr, c0] of heads) {
     // 제목 — 머리글 위 1~3행, 차번 칸과 같은 열
@@ -97,6 +100,11 @@ export function parseRouteDispatch(
     for (; r <= range.e.r && typeof raw(r, c0) === "number"; r++) {
       // 마지막 T1 출발 — 머리글에 T1이 든 칸 중 가장 오른쪽 시간(다른 블록에도 나오면 더 늦은 쪽)
       const pl = plateOf(company, raw(r, c0) as number);
+      const sm = (summary[day] ??= { routes: [], plates: [], unmapped: [] });
+      if (!sm.routes.includes(route)) sm.routes.push(route);
+      if (!pl) {
+        if (!sm.unmapped.includes(raw(r, c0) as number)) sm.unmapped.push(raw(r, c0) as number);
+      } else if (!sm.plates.includes(pl)) sm.plates.push(pl);
       if (pl) {
         for (let c = cEnd; c >= c0 + 2; c--) {
           const t = /T1/.test(label(c)) ? timeOf(get(r, c)) : null;
@@ -142,5 +150,5 @@ export function parseRouteDispatch(
   for (const [d, m] of Object.entries(earliest)) {
     plateRoutes[d] = Object.fromEntries(Object.entries(m).map(([p, v]) => [p, v.route]));
   }
-  return { date, blocks, plateRoutes, plateLastT1 };
+  return { date, blocks, plateRoutes, plateLastT1, summary };
 }

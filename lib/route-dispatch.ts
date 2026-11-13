@@ -62,6 +62,17 @@ export function addMinutes(time: string, min: number): string {
   return `${String(Math.floor(t / 60)).padStart(2, "0")}:${String(t % 60).padStart(2, "0")}`;
 }
 
+// 업로드 결과 한 줄 — "노선 17개 · 차량 207대 읽음" + 빠진 것(노선명 못 찾은 블록, 차량번호 못 만든 차번)
+export function readSummary(s?: { routes: string[]; plates: string[]; unmapped: number[] }): string {
+  if (!s) return "";
+  const parts = [`노선 ${s.routes.length}개 · 차량 ${s.plates.length}대 읽음`];
+  if (s.routes.includes("노선 미상")) parts.push("⚠ 노선명을 못 찾은 표가 있음");
+  if (s.unmapped.length) {
+    parts.push(`⚠ 차량번호를 못 만든 차번 ${s.unmapped.length}개: ${s.unmapped.slice(0, 15).join(", ")}${s.unmapped.length > 15 ? " …" : ""}`);
+  }
+  return parts.join(" · ");
+}
+
 export const routeDispatchPrefix = (company: string) => `route_dispatch:${company}:`;
 export const routeDispatchKey = (company: string, date: string) => routeDispatchPrefix(company) + date;
 export const companyOf = (operator: string) => operator.trim().split(/\s+/)[0] ?? "";
