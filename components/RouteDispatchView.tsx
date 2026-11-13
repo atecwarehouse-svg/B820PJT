@@ -3,7 +3,7 @@
 // 노선별 배차표 — 운수사가 날마다 주는 배차표 엑셀(04~09시 첫 출발 차량만)을 날짜·노선별 표로 본다.
 // 배차표 팝업 안에서 전체화면으로 열린다. 기존 배차표(나가는 시간 입력)와는 별개의 참고 뷰.
 import { useEffect, useRef, useState } from "react";
-import { dayTypeOf, type RouteDispatchTable } from "@/lib/route-dispatch";
+import { blocksFor, type RouteDispatchTable } from "@/lib/route-dispatch";
 
 type Status = Record<string, "done" | "working">;
 
@@ -74,10 +74,9 @@ export default function RouteDispatchView({
     }
   }
 
-  // 배차 날짜에 맞는 표 하나만(평일 / 토·휴일). 파일에 구분이 없거나 그 표가 없으면 있는 것을 그대로.
-  const want = table?.date ? dayTypeOf(table.date) : "";
-  const day = (table?.blocks ?? []).some((b) => b.day === want) ? want : (table?.blocks[0]?.day ?? "");
-  const dayBlocks = (table?.blocks ?? []).filter((b) => b.day === day);
+  // 배차 날짜에 맞는 표 하나만(평일 / 토·휴일)
+  const dayBlocks = table ? blocksFor(table) : [];
+  const day = dayBlocks[0]?.day ?? "";
   const shown = dayBlocks
     .filter((b) => !route || b.route === route)
     .map((b) => ({ ...b, rows: onlyWork ? b.rows.filter((r) => status[r.plate]) : b.rows }))

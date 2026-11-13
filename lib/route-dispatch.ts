@@ -35,6 +35,24 @@ export function dayTypeOf(date: string): "평일" | "토·휴일" {
   return wd === 0 || wd === 6 || WEEKDAY_HOLIDAYS.has(date) ? "토·휴일" : "평일";
 }
 
+// 그 배차 날짜에 맞는 표의 블록들. 파일에 평일/휴일 구분이 없거나 해당 표가 없으면 첫 표를 그대로.
+export function blocksFor(table: RouteDispatchTable): RouteDispatchBlock[] {
+  const want = table.date ? dayTypeOf(table.date) : "";
+  const day = table.blocks.some((b) => b.day === want) ? want : (table.blocks[0]?.day ?? "");
+  return table.blocks.filter((b) => b.day === day);
+}
+
+// 차량번호 → 첫 출발 시간(같은 차량이 여러 노선에 나오면 가장 이른 시간) — 배차표 '나가는 시간' 자동 입력용
+export function firstTimes(table: RouteDispatchTable): Map<string, string> {
+  const m = new Map<string, string>();
+  for (const b of blocksFor(table)) {
+    for (const r of b.rows) {
+      if (r.plate && (!m.has(r.plate) || r.time < m.get(r.plate)!)) m.set(r.plate, r.time);
+    }
+  }
+  return m;
+}
+
 export const routeDispatchPrefix = (company: string) => `route_dispatch:${company}:`;
 export const routeDispatchKey = (company: string, date: string) => routeDispatchPrefix(company) + date;
 export const companyOf = (operator: string) => operator.trim().split(/\s+/)[0] ?? "";

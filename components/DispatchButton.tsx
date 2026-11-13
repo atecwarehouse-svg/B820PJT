@@ -36,6 +36,7 @@ interface Entry {
   plate: string;
   route: string;
   outTime: string | null; // "HH:MM" 또는 "OFF"(휴차)
+  autoTime?: boolean; // 운수사 배차표 엑셀에서 자동으로 채운 시간(손으로 바꾸면 해제)
   checklist: boolean; // 체크리스트 작성 완료
   completed: boolean; // 설치완료(서버 판정 — 저장+설치전후 사진 충족)
   installing: boolean; // 설치중(서버 판정 — 시작했으나 아직 미완료)
@@ -512,7 +513,7 @@ export default function DispatchButton({ routeView = false }: { routeView?: bool
   function setTime(plate: string, v: string | null) {
     markDirty(plate, "outTime");
     setEntries((list) =>
-      list.map((e) => (e.plate === plate ? { ...e, outTime: v } : e)),
+      list.map((e) => (e.plate === plate ? { ...e, outTime: v, autoTime: false } : e)),
     );
     setSaveMsg(null);
   }
@@ -731,7 +732,7 @@ export default function DispatchButton({ routeView = false }: { routeView?: bool
     setEntries((list) =>
       list.map((e) =>
         timeByPlate.has(e.plate)
-          ? { ...e, outTime: timeByPlate.get(e.plate)! }
+          ? { ...e, outTime: timeByPlate.get(e.plate)!, autoTime: false }
           : e,
       ),
     );
@@ -1272,7 +1273,12 @@ export default function DispatchButton({ routeView = false }: { routeView?: bool
                                   체크 3개는 아래 줄에서 행 전체 폭을 쓰고 절대 접지 않는다(flex-nowrap):
                                   체크와 시간을 한 줄에 두면 폰 폭에서 '휴차'가 '검수완료' 바로 아래로
                                   접혀 붙어(같은 x, 4px 간격) 휴차를 눌러도 검수완료가 눌린다. */}
-                              <div className="mt-1 flex justify-end">
+                              <div className="mt-1 flex items-center justify-end gap-1.5">
+                                {e.autoTime && e.outTime && !isOff && (
+                                  <span className="rounded bg-blue-50 px-1 py-0.5 text-[10px] font-semibold text-blue-600">
+                                    배차표 자동
+                                  </span>
+                                )}
                                 <RowTime
                                   value={isOff ? null : e.outTime}
                                   disabled={isOff || e.excluded}
