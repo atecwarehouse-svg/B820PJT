@@ -27,6 +27,14 @@ export interface RouteDispatchTable {
 export const WINDOW_FROM = "04:00";
 export const WINDOW_TO = "09:00"; // 미만
 
+// 그 날짜에 적용되는 표 — 토·일·공휴일은 "토·휴일", 나머지는 "평일". 화면은 이 표 하나만 보여준다.
+// ponytail: 평일에 걸리는 공휴일을 손으로 적어 둠(프로젝트 기간분) — 기간이 늘면 날짜 추가.
+const WEEKDAY_HOLIDAYS = new Set(["2026-12-25", "2027-01-01"]);
+export function dayTypeOf(date: string): "평일" | "토·휴일" {
+  const wd = new Date(`${date}T00:00:00Z`).getUTCDay();
+  return wd === 0 || wd === 6 || WEEKDAY_HOLIDAYS.has(date) ? "토·휴일" : "평일";
+}
+
 export const routeDispatchPrefix = (company: string) => `route_dispatch:${company}:`;
 export const routeDispatchKey = (company: string, date: string) => routeDispatchPrefix(company) + date;
 export const companyOf = (operator: string) => operator.trim().split(/\s+/)[0] ?? "";

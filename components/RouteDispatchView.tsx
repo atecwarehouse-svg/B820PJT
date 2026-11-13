@@ -3,7 +3,7 @@
 // 노선별 배차표 — 운수사가 날마다 주는 배차표 엑셀(04~09시 첫 출발 차량만)을 날짜·노선별 표로 본다.
 // 배차표 팝업 안에서 전체화면으로 열린다. 기존 배차표(나가는 시간 입력)와는 별개의 참고 뷰.
 import { useEffect, useRef, useState } from "react";
-import type { RouteDispatchTable } from "@/lib/route-dispatch";
+import { dayTypeOf, type RouteDispatchTable } from "@/lib/route-dispatch";
 
 type Status = Record<string, "done" | "working">;
 
@@ -23,7 +23,6 @@ export default function RouteDispatchView({
   const [status, setStatus] = useState<Status>({});
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
-  const [day, setDay] = useState("");
   const [route, setRoute] = useState(""); // "" = 전체
   const [onlyWork, setOnlyWork] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -34,11 +33,6 @@ export default function RouteDispatchView({
     setDates(ds ?? []);
     setStatus(s ?? {});
     setRoute("");
-    const days = [...new Set((t?.blocks ?? []).map((b) => b.day))];
-    // 배차 날짜가 토·일이면 토·휴일 표부터(공휴일은 직접 전환)
-    const wd = t?.date ? new Date(`${t.date}T00:00:00Z`).getUTCDay() : -1;
-    const want = wd === 0 || wd === 6 ? "토·휴일" : "평일";
-    setDay(days.includes(want) ? want : (days[0] ?? ""));
   };
 
   useEffect(() => {
@@ -80,7 +74,9 @@ export default function RouteDispatchView({
     }
   }
 
-  const days = [...new Set((table?.blocks ?? []).map((b) => b.day))];
+  // 배차 날짜에 맞는 표 하나만(평일 / 토·휴일). 파일에 구분이 없거나 그 표가 없으면 있는 것을 그대로.
+  const want = table?.date ? dayTypeOf(table.date) : "";
+  const day = (table?.blocks ?? []).some((b) => b.day === want) ? want : (table?.blocks[0]?.day ?? "");
   const dayBlocks = (table?.blocks ?? []).filter((b) => b.day === day);
   const shown = dayBlocks
     .filter((b) => !route || b.route === route)
@@ -129,7 +125,7 @@ export default function RouteDispatchView({
               {table ? (
                 <>
                   <span className="block truncate font-semibold text-gray-800">{table.fileName}</span>
-                  04시~09시 이전 첫 출발 차량만 표시
+                  {day && `${day} 시간표 · `}04시~09시 이전 첫 출발 차량만 표시
                 </>
               ) : loading ? (
                 "불러오는 중…"
@@ -182,12 +178,6 @@ export default function RouteDispatchView({
         {table && (
           <>
             <div className="flex flex-wrap items-center gap-1.5">
-              {days.length > 1 &&
-                days.map((d) => (
-                  <button key={d} type="button" onClick={() => setDay(d)} className={chip(d === day)}>
-                    {d || "전체"}
-                  </button>
-                ))}
               <label className="ml-auto flex items-center gap-1.5 py-1.5 text-xs font-medium text-gray-600">
                 <input type="checkbox" checked={onlyWork} onChange={(e) => setOnlyWork(e.target.checked)} className="h-4 w-4" />
                 작업 차량만

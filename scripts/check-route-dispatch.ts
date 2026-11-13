@@ -2,7 +2,12 @@
 import { readFileSync } from "node:fs";
 import assert from "node:assert/strict";
 import { parseRouteDispatch } from "../lib/import/parse-route-dispatch";
-import { plateOf, WINDOW_FROM, WINDOW_TO } from "../lib/route-dispatch";
+import { dayTypeOf, plateOf, WINDOW_FROM, WINDOW_TO } from "../lib/route-dispatch";
+
+assert.equal(dayTypeOf("2026-11-13"), "평일"); // 금
+assert.equal(dayTypeOf("2026-11-14"), "토·휴일"); // 토
+assert.equal(dayTypeOf("2026-11-15"), "토·휴일"); // 일
+assert.equal(dayTypeOf("2026-12-25"), "토·휴일"); // 금요일 성탄절
 
 assert.equal(plateOf("공항리무진", 18), "서울75사1118");
 assert.equal(plateOf("공항리무진", 84), "서울71사2284");
