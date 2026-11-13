@@ -17,6 +17,8 @@ import {
   needsPhoto,
   sparePlate,
 } from "@/lib/modem";
+import { companyOf } from "@/lib/route-dispatch";
+import RouteDispatchView from "@/components/RouteDispatchView";
 
 // 홈 화면 '배차표' 버튼 + 팝업 — 그날 설치할 운수사·노선을 골라 차량별
 // 나가는 시간을 입력한다. 시간은 DB(dispatch_times)에 공용 저장되어
@@ -279,8 +281,9 @@ function ModemPhoto({
   );
 }
 
-export default function DispatchButton() {
+export default function DispatchButton({ routeView = false }: { routeView?: boolean }) {
   const [open, setOpen] = useState(false);
+  const [routeOpen, setRouteOpen] = useState(false); // 노선별 배차표(운수사 엑셀) 보기
 
   // 선택지(운수사·예정일·노선) — 모달 처음 열 때 1회 로드
   const [operators, setOperators] = useState<OperatorSchedule[] | null>(null);
@@ -913,6 +916,17 @@ export default function DispatchButton() {
                   📶 모뎀 사용내역
                 </button>
               </div>
+
+              {/* 노선별 배차표 — 운수사가 준 배차표 엑셀을 노선별로 보기(기존 배차표와 별개) */}
+              {routeView && operators !== null && (
+                <button
+                  type="button"
+                  onClick={() => setRouteOpen(true)}
+                  className="w-full rounded-lg border border-blue-300 bg-blue-50 px-4 py-2.5 text-sm font-semibold text-blue-700 active:bg-blue-100"
+                >
+                  🗂 노선별 배차표 (운수사 엑셀)
+                </button>
+              )}
 
               {/* 모뎀 예비품불량 등록 — 차량과 무관한 재고 불량이라 저장 버튼 위에 따로 둔다 */}
               {date && !listLoading && entries.length > 0 && (
@@ -1958,6 +1972,14 @@ export default function DispatchButton() {
                 </button>
               </div>
             </div>
+          )}
+
+          {routeOpen && (
+            <RouteDispatchView
+              companies={[...new Set((operators ?? []).map((o) => companyOf(o.operator)))]}
+              initial={companyOf(operator)}
+              onClose={() => setRouteOpen(false)}
+            />
           )}
 
           {/* 캡쳐용 표 보기 — 흰 배경 전체화면. 상단 바(닫기)만 있고 나머지는

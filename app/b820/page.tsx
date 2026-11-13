@@ -127,7 +127,7 @@ export default async function HomePage() {
           </a>
         )}
         <AdminCallButton />
-        <DispatchButton />
+        <DispatchButton routeView={slug === "b800air"} />
         <VocModal />
         <TeamCallButton />
         {MENU.map((m) => (

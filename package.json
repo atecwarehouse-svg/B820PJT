@@ -17,6 +17,7 @@
     "check:modem": "tsx scripts/check-modem-xlsx.ts",
     "check:choices": "tsx scripts/check-choices.ts",
     "check:quota": "tsx scripts/check-quota.ts",
+    "check:route-dispatch": "tsx scripts/check-route-dispatch.ts",
     "quota:backfill": "tsx scripts/quota-backfill.ts"
   },
   "dependencies": {

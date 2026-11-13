@@ -1,0 +1,110 @@
+import { NextRequest, NextResponse } from "next/server";
+import { createServiceClient } from "@/lib/supabase/server";
+import { chunk } from "@/lib/supabase/paginate";
+import { stdSlotKeys } from "@/lib/slots";
+import { getSetting, getSlotConfig, setSetting } from "@/lib/settings";
+import { fetchCompletedMap } from "@/lib/stats";
+import { kstDateString } from "@/lib/work-day";
+import { parseRouteDispatch } from "@/lib/import/parse-route-dispatch";
+import { routeDispatchKey, routeDispatchPrefix, type RouteDispatchTable } from "@/lib/route-dispatch";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+export const maxDuration = 60;
+
+// 노선별 배차표 — 운수사가 날마다 주는 배차표 엑셀을 올려 두고 검수자가 노선별로 본다(기존 배차표와 별개).
+// GET  ?company=&date= : 그 날짜 파일(04~09시 첫 출발 차량만, date 없으면 가장 최근 날짜) + 올라온 날짜 목록 + 차량별 설치 상태
+// POST multipart { company, file } : 엑셀 파싱 → app_settings `route_dispatch:<회사>:<파일 날짜>` (같은 날짜면 교체)
+
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const bad = (error: string, status = 400) => NextResponse.json({ error }, { status });
+// 저장 키·like 검색에 쓰이므로 구분자(:)와 와일드카드(% _)는 뺀다
+const cleanCompany = (v: unknown) => String(v ?? "").replace(/[:%_]/g, "").trim().slice(0, 50);
+
+// 차량별 상태 — done(설치완료, 대시보드와 같은 판정) · working(기록 있음 = 작업 시작). 실패해도 표는 보여준다.
+async function statusOf(table: RouteDispatchTable): Promise<Record<string, "done" | "working">> {
+  const plates = [...new Set(table.blocks.flatMap((b) => b.rows.map((r) => r.plate)).filter(Boolean))];
+  const out: Record<string, "done" | "working"> = {};
+  try {
+    const supabase = createServiceClient();
+    for (const part of chunk(plates)) {
+      const { data, error } = await supabase.from("records").select("plate").in("plate", part);
+      if (error) return {};
+      for (const r of data ?? []) out[r.plate] = "working";
+    }
+    const done = await fetchCompletedMap(supabase, stdSlotKeys(await getSlotConfig()));
+    for (const p of plates) if (done.has(p)) out[p] = "done";
+  } catch {
+    return {};
+  }
+  return out;
+}
+
+// 이 회사로 올라온 날짜들(최근순)
+async function datesOf(company: string): Promise<string[]> {
+  const prefix = routeDispatchPrefix(company);
+  const { data, error } = await createServiceClient()
+    .from("app_settings")
+    .select("key")
+    .like("key", `${prefix}%`)
+    .range(0, 999);
+  if (error) return [];
+  return (data ?? [])
+    .map((r) => String(r.key).slice(prefix.length))
+    .filter((d) => DATE_RE.test(d))
+    .sort()
+    .reverse();
+}
+
+export async function GET(req: NextRequest) {
+  const company = cleanCompany(req.nextUrl.searchParams.get("company"));
+  if (!company) return bad("회사를 확인하세요.");
+  const dates = await datesOf(company);
+  const want = (req.nextUrl.searchParams.get("date") ?? "").trim();
+  const date = dates.includes(want) ? want : dates[0];
+  let table: RouteDispatchTable | null = null;
+  if (date) {
+    try {
+      table = JSON.parse((await getSetting(routeDispatchKey(company, date))) ?? "null");
+    } catch {
+      table = null;
+    }
+  }
+  if (!table || !Array.isArray(table.blocks)) return NextResponse.json({ table: null, dates, status: {} });
+  return NextResponse.json({ table, dates, status: await statusOf(table) });
+}
+
+export async function POST(req: NextRequest) {
+  let form: FormData;
+  try {
+    form = await req.formData();
+  } catch {
+    return bad("잘못된 요청입니다.");
+  }
+  const company = cleanCompany(form.get("company"));
+  const file = form.get("file");
+  if (!company) return bad("회사를 확인하세요.");
+  if (!(file instanceof File) || file.size === 0) return bad("엑셀 파일을 선택하세요.");
+  if (file.size > 4 * 1024 * 1024) return bad("파일이 너무 큽니다(4MB 이하).");
+  if (!/\.xlsx?$/i.test(file.name)) return bad("엑셀(.xlsx/.xls) 파일만 올릴 수 있습니다.");
+
+  let parsed: ReturnType<typeof parseRouteDispatch>;
+  try {
+    parsed = parseRouteDispatch(Buffer.from(await file.arrayBuffer()), company);
+  } catch (e) {
+    return bad(e instanceof Error ? e.message : "파일을 읽지 못했습니다.");
+  }
+  const table: RouteDispatchTable = {
+    company,
+    fileName: file.name.slice(0, 200),
+    date: DATE_RE.test(parsed.date) ? parsed.date : kstDateString(), // 파일에 날짜가 없으면 올린 날
+    uploadedAt: new Date().toISOString(),
+    blocks: parsed.blocks,
+  };
+  try {
+    await setSetting(routeDispatchKey(company, table.date), JSON.stringify(table));
+  } catch (e) {
+    return bad(`저장 실패: ${e instanceof Error ? e.message : ""}`, 500);
+  }
+  return NextResponse.json({ table, dates: await datesOf(company), status: await statusOf(table) });
+}

@@ -1,0 +1,47 @@
+// 노선별 배차표(운수사가 주는 엑셀 시간표) — 검수자용 참고 뷰. 기존 배차표(dispatch_times)와는 별개.
+//   회사(운수사명 첫 단어: "공항리무진 본사"·"공항리무진 인천공항영업소" → "공항리무진")·날짜마다 파일 1건을
+//   app_settings `route_dispatch:<회사>:<YYYY-MM-DD>` 에 저장한다(일자별 업로드, 같은 날짜를 다시 올리면 교체).
+//   한국공항리무진·공항리무진은 서로 다른 회사.
+//   필요한 건 아침 첫 출발뿐이라 04:00 ~ 08:59 에 첫 출발하는 차량만 남긴다.
+
+export interface RouteDispatchRow {
+  no: number; // 차번(호수)
+  plate: string; // 차번 → 차량번호(규칙 없으면 "")
+  time: string; // 첫 출발 "HH:MM"
+  from: string; // 출발지(머리글)
+  note: string; // 첫 출발 앞뒤 메모(경유·지원 등)
+}
+export interface RouteDispatchBlock {
+  route: string; // "6015 (명동)"
+  day: string; // "평일" | "토·휴일" | ""
+  rows: RouteDispatchRow[];
+}
+export interface RouteDispatchTable {
+  company: string;
+  fileName: string;
+  date: string; // 배차 날짜 "YYYY-MM-DD" — 파일 안 날짜(없으면 올린 날)
+  uploadedAt: string;
+  blocks: RouteDispatchBlock[];
+}
+
+export const WINDOW_FROM = "04:00";
+export const WINDOW_TO = "09:00"; // 미만
+
+export const routeDispatchPrefix = (company: string) => `route_dispatch:${company}:`;
+export const routeDispatchKey = (company: string, date: string) => routeDispatchPrefix(company) + date;
+export const companyOf = (operator: string) => operator.trim().split(/\s+/)[0] ?? "";
+
+// 차번(호수) → 차량번호. 회사별 규칙(범위, 앞부분, 뒤에 붙는 차번 자릿수).
+// ponytail: 규칙을 코드에 둠 — 다른 회사 규칙을 받으면 여기에 추가(자주 바뀌면 관리자 설정으로).
+const PLATE_RULES: Record<string, [from: number, to: number, prefix: string, digits: number][]> = {
+  공항리무진: [
+    [18, 46, "서울75사11", 2],
+    [78, 88, "서울71사22", 2],
+    [121, 300, "서울70사8", 3],
+    [310, 478, "서울71사2", 3],
+  ],
+};
+export function plateOf(company: string, no: number): string {
+  const r = PLATE_RULES[company]?.find(([a, b]) => no >= a && no <= b);
+  return r ? r[2] + String(no).padStart(r[3], "0") : "";
+}
