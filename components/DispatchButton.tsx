@@ -1071,7 +1071,7 @@ export default function DispatchButton({ routeView = false }: { routeView?: bool
                 <button
                   type="button"
                   onClick={() => setChecklistView(true)}
-                  className="rounded-lg border border-emerald-300 bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-700 active:bg-emerald-100"
+                  className="rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-800 active:bg-gray-100"
                 >
                   <Icon name="done" /> 검수항목 보기
                 </button>
@@ -1079,7 +1079,7 @@ export default function DispatchButton({ routeView = false }: { routeView?: bool
                 <button
                   type="button"
                   onClick={() => downloadUrl("/api/export/modem")}
-                  className="rounded-lg border border-purple-300 bg-purple-50 px-4 py-2.5 text-sm font-semibold text-purple-700 active:bg-purple-100"
+                  className="rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-800 active:bg-gray-100"
                 >
                   <Icon name="signal" /> 모뎀 사용내역
                 </button>
@@ -1090,7 +1090,7 @@ export default function DispatchButton({ routeView = false }: { routeView?: bool
                 <button
                   type="button"
                   onClick={() => setRouteOpen(true)}
-                  className="w-full rounded-lg border border-blue-300 bg-blue-50 px-4 py-2.5 text-sm font-semibold text-blue-700 active:bg-blue-100"
+                  className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-800 active:bg-gray-100"
                 >
                   <Icon name="files" /> 노선별 배차표 (운수사 엑셀)
                 </button>
@@ -1104,7 +1104,7 @@ export default function DispatchButton({ routeView = false }: { routeView?: bool
                     setTableDone(true);
                     setTableView(true);
                   }}
-                  className="w-full rounded-lg border border-green-300 bg-green-50 px-4 py-2.5 text-sm font-semibold text-green-700 active:bg-green-100"
+                  className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-800 active:bg-gray-100"
                 >
                   <Icon name="camera" /> 설치완료 차량 리스트 (캡쳐용) · {entries.filter((e) => e.completed).length}대
                 </button>
@@ -1128,7 +1128,7 @@ export default function DispatchButton({ routeView = false }: { routeView?: bool
                     type="button"
                     disabled={dayBusy}
                     onClick={() => dayFileRef.current?.click()}
-                    className="w-full rounded-lg border border-blue-300 bg-white px-4 py-2.5 text-sm font-semibold text-blue-700 active:bg-blue-50 disabled:opacity-50"
+                    className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-800 active:bg-gray-100 disabled:opacity-50"
                   >
                     {dayBusy ? "올리는 중…" : <><Icon name="upload" /> 당일 배차표 업로드 (운행종료 시간 · 캡쳐용)</>}
                   </button>
@@ -1148,7 +1148,7 @@ export default function DispatchButton({ routeView = false }: { routeView?: bool
                     setModemErr("");
                     setSpareEdit({ sn: "", symptom: MODEM_SYMPTOMS[0] });
                   }}
-                  className="w-full rounded-lg border border-purple-300 bg-white px-4 py-2.5 text-sm font-semibold text-purple-700 active:bg-purple-50"
+                  className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-800 active:bg-gray-100"
                 >
                   <Icon name="wrench" /> 모뎀 예비품불량 등록
                 </button>
@@ -1307,7 +1307,7 @@ export default function DispatchButton({ routeView = false }: { routeView?: bool
                       setAutoAlert(null);
                       setAutoView(true);
                     }}
-                    className="rounded-lg border border-orange-300 bg-white px-4 py-2.5 text-sm font-semibold text-orange-600 active:bg-orange-50"
+                    className="rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-800 active:bg-gray-100"
                   >
                     <Icon name="zap" /> 배차표 자동 입력
                   </button>
@@ -1317,7 +1317,7 @@ export default function DispatchButton({ routeView = false }: { routeView?: bool
                       setTableDone(false);
                       setTableView(true);
                     }}
-                    className="rounded-lg border border-blue-300 bg-white px-4 py-2.5 text-sm font-semibold text-blue-700 active:bg-blue-50"
+                    className="rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-800 active:bg-gray-100"
                   >
                     <Icon name="clipboard" /> 표로 보기 (캡쳐용)
                   </button>
@@ -1464,7 +1464,7 @@ export default function DispatchButton({ routeView = false }: { routeView?: bool
                                       <button
                                         type="button"
                                         onClick={() => callTeam(e.team)}
-                                        className="rounded border border-green-300 bg-green-50 px-1.5 py-0.5 text-[10px] font-semibold text-green-700 active:bg-green-100"
+                                        className="rounded border border-gray-300 bg-white px-1.5 py-0.5 text-[10px] font-semibold text-gray-700 active:bg-gray-100"
                                         aria-label={`${e.team} 전화걸기`}
                                       >
                                         <Icon name="phone" />
@@ -1614,7 +1614,7 @@ export default function DispatchButton({ routeView = false }: { routeView?: bool
                   maxLength={200}
                   autoFocus
                   placeholder="예) 타코메타 단자 불량으로 연결 불가"
-                  className="mt-3 w-full resize-none rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm transition-colors focus:border-amber-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-amber-100"
+                  className="mt-3 w-full resize-none rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm transition-colors focus:border-brand-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-100"
                 />
                 <p className="mt-1 text-[11px] text-gray-400">
                   사유를 적으면 &lsquo;타코 미연결&rsquo;로 표시되고, 금일 완료
@@ -1646,7 +1646,7 @@ export default function DispatchButton({ routeView = false }: { routeView?: bool
                     onClick={() =>
                       applyTachoReason(tachoEdit.plate, tachoEdit.reason.trim())
                     }
-                    className="flex-1 rounded-lg bg-amber-600 px-3 py-2.5 text-sm font-semibold text-white active:bg-amber-700 disabled:opacity-40"
+                    className="flex-1 rounded-lg bg-brand-600 px-3 py-2.5 text-sm font-semibold text-white active:bg-brand-700 disabled:opacity-40"
                   >
                     미연결 저장
                   </button>
@@ -1709,7 +1709,7 @@ export default function DispatchButton({ routeView = false }: { routeView?: bool
                     type="button"
                     disabled={!doneEdit.time && !doneEdit.from.trim()}
                     onClick={() => saveDoneEdit(doneEdit.plate, doneEdit.time, doneEdit.from.trim())}
-                    className="flex-1 rounded-lg bg-green-600 px-3 py-2.5 text-sm font-semibold text-white active:bg-green-700 disabled:opacity-40"
+                    className="flex-1 rounded-lg bg-brand-600 px-3 py-2.5 text-sm font-semibold text-white active:bg-brand-700 disabled:opacity-40"
                   >
                     저장
                   </button>
@@ -1749,7 +1749,7 @@ export default function DispatchButton({ routeView = false }: { routeView?: bool
                   maxLength={50}
                   autoFocus
                   placeholder="예) 1057034"
-                  className="mt-1 w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-base transition-colors focus:border-purple-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-100"
+                  className="mt-1 w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-base transition-colors focus:border-brand-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-100"
                 />
 
                 <label className="mt-3 block text-xs font-medium text-gray-500">
@@ -1760,7 +1760,7 @@ export default function DispatchButton({ routeView = false }: { routeView?: bool
                   onChange={(e) =>
                     setSpareEdit({ ...spareEdit, symptom: e.target.value })
                   }
-                  className="mt-1 w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-base transition-colors focus:border-purple-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-100"
+                  className="mt-1 w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-base transition-colors focus:border-brand-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-100"
                 >
                   <option value="">선택 안 함</option>
                   {MODEM_SYMPTOMS.map((x) => (
@@ -1792,7 +1792,7 @@ export default function DispatchButton({ routeView = false }: { routeView?: bool
                     type="button"
                     disabled={modemSaving}
                     onClick={() => saveSpare()}
-                    className="flex-1 rounded-lg bg-purple-600 px-3 py-2.5 text-sm font-semibold text-white active:bg-purple-700 disabled:opacity-40"
+                    className="flex-1 rounded-lg bg-brand-600 px-3 py-2.5 text-sm font-semibold text-white active:bg-brand-700 disabled:opacity-40"
                   >
                     {modemSaving ? "저장 중…" : "등록"}
                   </button>
@@ -1833,7 +1833,7 @@ export default function DispatchButton({ routeView = false }: { routeView?: bool
                       onClick={() => setModemEdit({ ...modemEdit, kind: k })}
                       className={`rounded-lg border px-1 py-2 text-xs font-semibold ${
                         modemEdit.kind === k
-                          ? "border-purple-500 bg-purple-50 text-purple-700"
+                          ? "border-brand-500 bg-brand-50 text-brand-700"
                           : "border-gray-300 bg-white text-gray-500"
                       }`}
                     >
@@ -1853,7 +1853,7 @@ export default function DispatchButton({ routeView = false }: { routeView?: bool
                       onChange={(e) =>
                         setModemEdit({ ...modemEdit, symptom: e.target.value })
                       }
-                      className="mt-1 w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-base transition-colors focus:border-purple-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-100"
+                      className="mt-1 w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-base transition-colors focus:border-brand-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-100"
                     >
                       <option value="">선택 안 함</option>
                       {MODEM_SYMPTOMS.map((x) => (
@@ -1874,7 +1874,7 @@ export default function DispatchButton({ routeView = false }: { routeView?: bool
                       inputMode="numeric"
                       maxLength={50}
                       placeholder="예) 1023921"
-                      className="mt-1 w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-base transition-colors focus:border-purple-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-100"
+                      className="mt-1 w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-base transition-colors focus:border-brand-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-100"
                     />
                   </>
                 )}
@@ -1893,7 +1893,7 @@ export default function DispatchButton({ routeView = false }: { routeView?: bool
                       inputMode="numeric"
                       maxLength={50}
                       placeholder="예) 1057034"
-                      className="mt-1 w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-base transition-colors focus:border-purple-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-100"
+                      className="mt-1 w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-base transition-colors focus:border-brand-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-100"
                     />
                   </>
                 )}
@@ -1969,7 +1969,7 @@ export default function DispatchButton({ routeView = false }: { routeView?: bool
                     type="button"
                     disabled={modemSaving}
                     onClick={() => saveModem(false)}
-                    className="flex-1 rounded-lg bg-purple-600 px-3 py-2.5 text-sm font-semibold text-white active:bg-purple-700 disabled:opacity-40"
+                    className="flex-1 rounded-lg bg-brand-600 px-3 py-2.5 text-sm font-semibold text-white active:bg-brand-700 disabled:opacity-40"
                   >
                     {modemSaving ? "저장 중…" : "저장"}
                   </button>
@@ -1999,8 +1999,8 @@ export default function DispatchButton({ routeView = false }: { routeView?: bool
               </div>
               <div className="space-y-4 px-4 py-4">
                 {/* 1. 차량 이상유무 */}
-                <section className="rounded-xl border border-emerald-200 bg-white shadow-sm">
-                  <h3 className="rounded-t-xl bg-emerald-600 px-3 py-2 text-sm font-bold text-white">
+                <section className="rounded-xl border border-gray-200 bg-white shadow-sm">
+                  <h3 className="rounded-t-xl bg-gray-800 px-3 py-2 text-sm font-bold text-white">
                     1. 차량 이상유무
                   </h3>
                   <ol className="divide-y divide-gray-100 px-3 text-sm text-gray-800">
@@ -2019,8 +2019,8 @@ export default function DispatchButton({ routeView = false }: { routeView?: bool
                 </section>
 
                 {/* 2. 단말기 설치 상태 */}
-                <section className="rounded-xl border border-blue-200 bg-white shadow-sm">
-                  <h3 className="rounded-t-xl bg-brand-600 px-3 py-2 text-sm font-bold text-white">
+                <section className="rounded-xl border border-gray-200 bg-white shadow-sm">
+                  <h3 className="rounded-t-xl bg-gray-800 px-3 py-2 text-sm font-bold text-white">
                     2. 단말기 설치 상태
                   </h3>
                   <ol className="divide-y divide-gray-100 px-3 text-sm text-gray-800">
@@ -2073,7 +2073,7 @@ export default function DispatchButton({ routeView = false }: { routeView?: bool
                 </p>
 
                 {/* 첫차 출발시간 + 분 간격 */}
-                <div className="mt-3 flex flex-wrap items-end gap-4 rounded-2xl bg-orange-50 px-3 py-3 ring-1 ring-orange-100">
+                <div className="mt-3 flex flex-wrap items-end gap-4 rounded-2xl bg-gray-50 px-3 py-3 ring-1 ring-gray-200">
                   <div>
                     <p className="mb-1 text-[11px] font-medium text-gray-600">
                       첫차 출발시간
@@ -2082,7 +2082,7 @@ export default function DispatchButton({ routeView = false }: { routeView?: bool
                       <select
                         value={autoH}
                         onChange={(e) => setAutoH(e.target.value)}
-                        className="rounded-xl border border-gray-200 bg-gray-50 px-1.5 py-1.5 text-base transition-colors focus:border-orange-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-orange-100"
+                        className="rounded-xl border border-gray-200 bg-gray-50 px-1.5 py-1.5 text-base transition-colors focus:border-brand-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-100"
                       >
                         {HOURS.map((x) => (
                           <option key={x} value={x}>
@@ -2094,7 +2094,7 @@ export default function DispatchButton({ routeView = false }: { routeView?: bool
                       <select
                         value={autoM}
                         onChange={(e) => setAutoM(e.target.value)}
-                        className="rounded-xl border border-gray-200 bg-gray-50 px-1.5 py-1.5 text-base transition-colors focus:border-orange-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-orange-100"
+                        className="rounded-xl border border-gray-200 bg-gray-50 px-1.5 py-1.5 text-base transition-colors focus:border-brand-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-100"
                       >
                         {MINUTES.map((x) => (
                           <option key={x} value={x}>
@@ -2113,7 +2113,7 @@ export default function DispatchButton({ routeView = false }: { routeView?: bool
                       <select
                         value={autoGap}
                         onChange={(e) => setAutoGap(Number(e.target.value))}
-                        className="rounded-xl border border-gray-200 bg-gray-50 px-1.5 py-1.5 text-base transition-colors focus:border-orange-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-orange-100"
+                        className="rounded-xl border border-gray-200 bg-gray-50 px-1.5 py-1.5 text-base transition-colors focus:border-brand-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-100"
                       >
                         {Array.from({ length: 90 }, (_, i) => i + 1).map(
                           (n) => (
@@ -2210,7 +2210,7 @@ export default function DispatchButton({ routeView = false }: { routeView?: bool
                               }))
                             }
                             placeholder={isOff ? "휴차" : "순번"}
-                            className="w-16 rounded-lg border border-gray-300 px-2 py-1.5 text-center text-base tabular-nums focus:border-orange-500 focus:outline-none disabled:bg-gray-50 disabled:text-gray-300"
+                            className="w-16 rounded-lg border border-gray-300 px-2 py-1.5 text-center text-base tabular-nums focus:border-brand-500 focus:outline-none disabled:bg-gray-50 disabled:text-gray-300"
                           />
                         </div>
                       </li>
@@ -2236,7 +2236,7 @@ export default function DispatchButton({ routeView = false }: { routeView?: bool
                     <button
                       type="button"
                       onClick={() => setAutoAlert(null)}
-                      className="mt-4 w-full rounded-lg bg-orange-600 px-4 py-2.5 text-sm font-semibold text-white active:bg-orange-700"
+                      className="mt-4 w-full rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white active:bg-brand-700"
                     >
                       확인
                     </button>
@@ -2249,7 +2249,7 @@ export default function DispatchButton({ routeView = false }: { routeView?: bool
                 <button
                   type="button"
                   onClick={applyAuto}
-                  className="mx-auto block w-full max-w-md rounded-lg bg-orange-600 px-4 py-3 text-sm font-semibold text-white active:bg-orange-700"
+                  className="mx-auto block w-full max-w-md rounded-lg bg-brand-600 px-4 py-3 text-sm font-semibold text-white active:bg-brand-700"
                 >
                   <Icon name="zap" /> 시간 자동 입력
                 </button>
