@@ -66,9 +66,9 @@ export function addMinutes(time: string, min: number): string {
 export function readSummary(s?: { routes: string[]; plates: string[]; unmapped: number[] }): string {
   if (!s) return "";
   const parts = [`노선 ${s.routes.length}개 · 차량 ${s.plates.length}대 읽음`];
-  if (s.routes.includes("노선 미상")) parts.push("⚠ 노선명을 못 찾은 표가 있음");
+  if (s.routes.includes("노선 미상")) parts.push("노선명을 못 찾은 표가 있음");
   if (s.unmapped.length) {
-    parts.push(`⚠ 차량번호를 못 만든 차번 ${s.unmapped.length}개: ${s.unmapped.slice(0, 15).join(", ")}${s.unmapped.length > 15 ? " …" : ""}`);
+    parts.push(`차량번호를 못 만든 차번 ${s.unmapped.length}개: ${s.unmapped.slice(0, 15).join(", ")}${s.unmapped.length > 15 ? " …" : ""}`);
   }
   return parts.join(" · ");
 }

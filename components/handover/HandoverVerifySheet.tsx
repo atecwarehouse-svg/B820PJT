@@ -1,5 +1,6 @@
 "use client";
 
+import Icon from "@/components/Icon";
 import { useEffect, useRef, useState } from "react";
 import { downloadUrl } from "@/lib/download";
 import { shortRoute } from "./HandoverChecklist";
@@ -86,7 +87,7 @@ export default function HandoverVerifySheet({ onClose }: { onClose: () => void }
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center" onClick={onClose}>
       <div className="flex max-h-[88vh] w-full max-w-md flex-col rounded-t-3xl bg-white sm:rounded-3xl" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between px-4 pt-4">
-          <p className="text-base font-bold text-gray-900">🔎 서버 등록 검증</p>
+          <p className="text-base font-bold text-gray-900"><Icon name="search" /> 서버 등록 검증</p>
           <button type="button" onClick={onClose} className="pill-muted text-xs" aria-label="닫기">
             닫기
           </button>
@@ -106,14 +107,14 @@ export default function HandoverVerifySheet({ onClose }: { onClose: () => void }
             onClick={() => fileRef.current?.click()}
             className="mt-3 w-full rounded-xl bg-brand-600 py-3 text-sm font-semibold text-white active:bg-brand-700 disabled:opacity-50"
           >
-            {busy ? "검증 중…" : loading ? "최근 파일 불러오는 중…" : res ? "📂 새 파일 올려 교체" : "📂 차량단말기버전 파일 선택"}
+            {busy ? "검증 중…" : loading ? "최근 파일 불러오는 중…" : res ? <><Icon name="folder-open" /> 새 파일 올려 교체</> : <><Icon name="folder-open" /> 차량단말기버전 파일 선택</>}
           </button>
           {error && <p className="mt-2 rounded-xl bg-red-50 px-3 py-2 text-xs text-red-600">{error}</p>}
 
           {res && (
             <>
               <p className="mt-3 truncate text-[11px] text-gray-400">
-                📎 {res.fileName} · 파일 차량 {res.fileVehicles}대
+                <Icon name="clip" /> {res.fileName} · 파일 차량 {res.fileVehicles}대
               </p>
               <p className="truncate text-[11px] text-gray-400">
                 {new Date(res.fileAt).toLocaleString("ko-KR", { timeZone: "Asia/Seoul", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })} {res.fileBy} 업로드 · 현재 체크 상태로 다시 대조함
@@ -142,7 +143,7 @@ export default function HandoverVerifySheet({ onClose }: { onClose: () => void }
               </ul>
               {doneNotVerified.length > 0 && (
                 <p className="mt-2 rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-800">
-                  ⚠️ 체크리스트는 완료인데 서버 미등록 {doneNotVerified.length}대: {doneNotVerified.map((i) => i.plate).join(", ")}
+                  <Icon name="warn" /> 체크리스트는 완료인데 서버 미등록 {doneNotVerified.length}대: {doneNotVerified.map((i) => i.plate).join(", ")}
                 </p>
               )}
               {res.extra.length > 0 && (
@@ -153,7 +154,7 @@ export default function HandoverVerifySheet({ onClose }: { onClose: () => void }
                 onClick={() => downloadUrl("/api/handover/verify?format=xlsx")}
                 className="mt-2 w-full rounded-xl bg-emerald-600 py-3 text-sm font-semibold text-white active:bg-emerald-700"
               >
-                📥 검증 결과 엑셀 다운로드
+                <Icon name="download" /> 검증 결과 엑셀 다운로드
               </button>
 
               <div className="mt-3 flex items-center justify-between">
@@ -164,15 +165,15 @@ export default function HandoverVerifySheet({ onClose }: { onClose: () => void }
                 </label>
               </div>
               {shown.length === 0 ? (
-                <p className="py-6 text-center text-sm text-green-600">✅ 미완료 차량이 없습니다.</p>
+                <p className="py-6 text-center text-sm text-green-600"><Icon name="done" /> 미완료 차량이 없습니다.</p>
               ) : (
                 groups.map(([center, routes]) => (
                   <section key={center} className="mt-2">
-                    <h4 className="px-1 text-sm font-bold text-gray-800">📍 {center}</h4>
+                    <h4 className="px-1 text-sm font-bold text-gray-800"><Icon name="pin" /> {center}</h4>
                     {routes.map(([route, list]) => (
                       <div key={route} className="mt-1.5">
                         <p className="mb-1 flex items-baseline justify-between px-1 text-xs font-semibold text-gray-600">
-                          <span>🚌 {route}</span>
+                          <span><Icon name="bus" /> {route}</span>
                           <span className="tabular-nums text-gray-400">{list.length}대</span>
                         </p>
                         <ul className="divide-y divide-gray-100 rounded-2xl bg-white ring-1 ring-black/5">
@@ -180,7 +181,7 @@ export default function HandoverVerifySheet({ onClose }: { onClose: () => void }
                             <li key={i.plate} className={`flex items-center justify-between gap-2 px-3 py-2 ${i.status === "ok" ? "" : "bg-red-50/60"}`}>
                               <div className="min-w-0">
                                 <p className={`text-sm font-bold ${i.status === "ok" ? "text-gray-800" : "text-red-700"}`}>{i.plate}</p>
-                                {i.done_by && <p className="truncate text-[11px] text-green-700">✔ {i.done_by}</p>}
+                                {i.done_by && <p className="truncate text-[11px] text-green-700"><Icon name="check" /> {i.done_by}</p>}
                               </div>
                               <span className={`shrink-0 rounded-full px-2 py-1 text-[11px] font-semibold ${i.status === "ok" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
                                 {i.status === "ok" ? "등록 확인" : i.status === "missing" ? "미완료 · 파일에 없음" : `미완료 · ${i.reason}`}

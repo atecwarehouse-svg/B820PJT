@@ -1,5 +1,6 @@
 "use client";
 
+import Icon from "@/components/Icon";
 import { useCallback, useEffect, useState } from "react";
 
 interface Consultation {
@@ -171,7 +172,7 @@ export default function ConsultationManager() {
   return (
     <section className="mb-5">
       <h2 className="mb-2 text-sm font-semibold text-gray-700">
-        📋 운수사 협의사항
+        <Icon name="clipboard" /> 운수사 협의사항
       </h2>
       <p className="mb-3 text-xs text-gray-500">
         협의사항 폼에서 팀즈 전송한 내용이 운수사+설치일 기준으로 저장됩니다.

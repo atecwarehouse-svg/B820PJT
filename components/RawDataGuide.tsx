@@ -1,3 +1,4 @@
+import Icon from "@/components/Icon";
 // 로우데이터(전개현황 엑셀) 열 안내 — 프로젝트 생성 폼·최초 업로드 팝업·사용방법에서 같이 쓴다.
 // 열 위치는 새 양식(lib/import/vehicle-columns.ts V2_COLS)과 맞춰 둔다. 앱은 1행 제목 이름으로 열을 찾는다.
 export const RAW_DATA_COLS: { col: string; name: string; need: "필수" | "권장" | "선택"; note: string }[] = [
@@ -34,7 +35,7 @@ export default function RawDataGuide({
   return (
     <details open={open} className="group rounded-xl bg-white/80 text-xs text-gray-600 ring-1 ring-black/5">
       <summary className="cursor-pointer select-none px-3 py-2 font-semibold text-gray-700">
-        📑 엑셀 어느 열에 뭘 넣나요? <span className="font-normal text-gray-400 group-open:hidden">(펼치기)</span>
+        <Icon name="sheets" /> 엑셀 어느 열에 뭘 넣나요? <span className="font-normal text-gray-400 group-open:hidden">(펼치기)</span>
       </summary>
       <div className="space-y-2 px-3 pb-3">
         <a
@@ -42,7 +43,7 @@ export default function RawDataGuide({
           download
           className="flex items-center justify-center gap-1.5 rounded-xl bg-emerald-600 px-3 py-2.5 text-sm font-semibold text-white shadow-sm active:bg-emerald-700"
         >
-          ⬇️ 빈 양식 다운로드 (차량리스트 · 설치 진행현황 · 전개일정 · 일자별 현황)
+          <Icon name="arrow-down" /> 빈 양식 다운로드 (차량리스트 · 설치 진행현황 · 전개일정 · 일자별 현황)
         </a>
         <p className="leading-relaxed">
           <b>「차량리스트」 시트</b>의 1행은 제목줄, 2행부터 차량 한 대가 한 줄입니다. 나머지 시트(설치 진행현황·설치

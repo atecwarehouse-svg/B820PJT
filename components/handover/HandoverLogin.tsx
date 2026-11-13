@@ -1,5 +1,6 @@
 "use client";
 
+import Icon from "@/components/Icon";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
@@ -77,7 +78,7 @@ export default function HandoverLogin() {
 
   return (
     <section className="rounded-3xl bg-white p-4 shadow-sm ring-1 ring-black/5 motion-safe:animate-rise">
-      <p className="text-sm font-semibold text-gray-800">👤 본인을 선택하세요</p>
+      <p className="text-sm font-semibold text-gray-800"><Icon name="user" /> 본인을 선택하세요</p>
       <p className="mt-0.5 text-xs text-gray-400">센터 → 이름을 고르고 직원 비밀번호를 입력하면 내 센터 차량 목록이 열립니다.</p>
 
       {centers === null ? (

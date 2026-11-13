@@ -1,5 +1,6 @@
 "use client";
 
+import Icon from "@/components/Icon";
 import { useEffect, useState } from "react";
 import { downloadUrl } from "@/lib/download";
 import { FOLD_OVER, fmtDone, shortRoute, typeEmoji } from "./HandoverChecklist";
@@ -78,7 +79,7 @@ export default function HandoverStatusSheet({ byOperator = false, onClose }: { b
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center" onClick={onClose}>
       <div className="flex max-h-[88vh] w-full max-w-md flex-col rounded-t-3xl bg-white sm:rounded-3xl" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between px-4 pt-4">
-          <p className="text-base font-bold text-gray-900">📊 전체 센터 현황표</p>
+          <p className="text-base font-bold text-gray-900"><Icon name="chart" /> 전체 센터 현황표</p>
           <button type="button" onClick={onClose} className="pill-muted text-xs" aria-label="닫기">
             닫기
           </button>
@@ -142,7 +143,7 @@ export default function HandoverStatusSheet({ byOperator = false, onClose }: { b
                   {[...byRoute.entries()].sort(([a], [b]) => a.localeCompare(b, "ko")).map(([r, n]) => (
                     <li key={r} className="flex items-center gap-2 text-xs">
                       <span className="w-32 shrink-0 truncate font-semibold text-gray-700">
-                        {!byOperator && n.type ? `${typeEmoji(n.type)} ` : ""}
+                        {!byOperator && n.type ? <>{typeEmoji(n.type)} </> : ""}
                         {groupLabel(r)} <span className="font-normal text-gray-400">· {n.center}</span>
                       </span>
                       {bar(n.d, n.t)}
@@ -180,7 +181,7 @@ export default function HandoverStatusSheet({ byOperator = false, onClose }: { b
             disabled={!done}
             className="flex-1 rounded-xl bg-emerald-600 py-3 text-sm font-semibold text-white active:bg-emerald-700 disabled:opacity-40"
           >
-            📥 완료 차량 리스트 ({done}대)
+            <Icon name="download" /> 완료 차량 리스트 ({done}대)
           </button>
           <button type="button" onClick={() => downloadUrl("/api/handover/export")} className="rounded-xl bg-gray-100 px-4 py-3 text-sm font-medium text-gray-700 active:bg-gray-200">
             전체 현황

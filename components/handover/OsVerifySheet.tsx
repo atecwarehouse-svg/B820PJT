@@ -1,5 +1,6 @@
 "use client";
 
+import Icon from "@/components/Icon";
 import { useEffect, useRef, useState } from "react";
 import { downloadUrl } from "@/lib/download";
 import { OS_FILE_LABEL, OS_FILE_TYPES, OS_RULE_TEXT, type OsFileType } from "@/lib/import/osverify-types";
@@ -146,7 +147,7 @@ export default function OsVerifySheet({ myCenter, onClose, inline = false }: { m
     <>
       {/* 검증 기간·기준 시각 — 카드 맨 위와 엑셀 요약에 "10/20 ~ 10/28 14:00 기준 파일"로 표기 */}
       <div className="mb-2 rounded-xl bg-gray-50 px-3 py-2 ring-1 ring-black/5">
-        <p className="text-[11px] font-semibold text-gray-600">📅 검증 기준 (언제부터 ~ 언제까지, 몇 시 기준 파일인지)</p>
+        <p className="text-[11px] font-semibold text-gray-600"><Icon name="calendar" /> 검증 기준 (언제부터 ~ 언제까지, 몇 시 기준 파일인지)</p>
         <div className="mt-1 flex items-center gap-1 text-xs">
           <input type="date" value={basis.from} onChange={(e) => setBasis({ ...basis, from: e.target.value })} className="min-w-0 flex-1 rounded-lg border border-gray-200 px-2 py-1.5" aria-label="시작일" />
           <span className="text-gray-400">~</span>
@@ -162,7 +163,7 @@ export default function OsVerifySheet({ myCenter, onClose, inline = false }: { m
           onClick={sendCards}
           className="flex-1 rounded-xl bg-brand-600 py-3 text-sm font-semibold text-white active:bg-brand-700 disabled:opacity-40"
         >
-          {sending ? "발송 중…" : "🔔 검증 발송 (팀즈)"}
+          {sending ? "발송 중…" : <><Icon name="bell" /> 검증 발송 (팀즈)</>}
         </button>
         <button
           type="button"
@@ -170,25 +171,25 @@ export default function OsVerifySheet({ myCenter, onClose, inline = false }: { m
           onClick={() => downloadUrl("/api/handover/osverify?format=xlsx")}
           className="rounded-xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white active:bg-emerald-700 disabled:opacity-40"
         >
-          📥 검증 엑셀
+          <Icon name="download" /> 검증 엑셀
         </button>
       </div>
-      {sentAt && <p className="mt-1.5 text-center text-[11px] text-green-700">✅ {sentAt} 발송했습니다</p>}
+      {sentAt && <p className="mt-1.5 text-center text-[11px] text-green-700"><Icon name="done" /> {sentAt} 발송했습니다</p>}
       <button
         type="button"
         disabled={!res || !res.overall.mismatch}
         onClick={() => downloadUrl("/api/handover/osverify?format=xlsx&only=mismatch")}
         className="mt-2 w-full rounded-xl bg-amber-500 py-2.5 text-xs font-semibold text-white active:bg-amber-600 disabled:opacity-40"
       >
-        ⚠️ 이상 차량만 엑셀 (자산등록 누락 {res?.overall.mismatch ?? 0}대)
+        <Icon name="warn" /> 이상 차량만 엑셀 (자산등록 누락 {res?.overall.mismatch ?? 0}대)
       </button>
       {inline && (
         <div className="mt-2 flex gap-2">
           <button type="button" onClick={() => downloadUrl("/api/handover/export")} className="flex-1 rounded-xl bg-gray-100 py-2.5 text-xs font-semibold text-gray-700 active:bg-gray-200">
-            📥 현황(OS적용리스트) 엑셀
+            <Icon name="download" /> 현황(OS적용리스트) 엑셀
           </button>
           <button type="button" onClick={() => downloadUrl("/api/handover/export?done=1")} className="flex-1 rounded-xl bg-gray-100 py-2.5 text-xs font-semibold text-gray-700 active:bg-gray-200">
-            📥 완료 차량만
+            <Icon name="download" /> 완료 차량만
           </button>
         </div>
       )}
@@ -202,7 +203,7 @@ export default function OsVerifySheet({ myCenter, onClose, inline = false }: { m
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-4 pt-4">
-          <p className="text-base font-bold text-gray-900">🔎 OS업데이트 적용 검증</p>
+          <p className="text-base font-bold text-gray-900"><Icon name="search" /> OS업데이트 적용 검증</p>
           {!inline && (
             <button type="button" onClick={onClose} className="pill-muted text-xs" aria-label="닫기">
               닫기
@@ -234,7 +235,7 @@ export default function OsVerifySheet({ myCenter, onClose, inline = false }: { m
                   }`}
                 >
                   <span className="block text-sm font-semibold">
-                    {busy === t ? "검증 중…" : `📂 ${OS_FILE_LABEL[t]}`}
+                    {busy === t ? "검증 중…" : `${OS_FILE_LABEL[t]}`}
                   </span>
                   <span className={`mt-0.5 block truncate text-[11px] ${f?.saved ? "text-emerald-800" : "text-blue-100"}`}>
                     {f?.saved ? `✓ ${fmtAt(f.at!)} · ${f.vehicles}대 중 충족 ${f.ok}대` : loading ? "…" : "파일 없음 — 눌러서 올리기"}
@@ -313,17 +314,17 @@ export default function OsVerifySheet({ myCenter, onClose, inline = false }: { m
                 <span className="text-gray-400"> (전부 완료가 아닌 차량 — 차량별 내역은 엑셀)</span>
               </p>
               <p className="mt-3 text-xs font-semibold text-amber-800">
-                ⚠️ 자산등록 누락 — 웹 완료 · OS 정상인데 장애목록에 없음: {mismatchAll.length}대
+                <Icon name="warn" /> 자산등록 누락 — 웹 완료 · OS 정상인데 장애목록에 없음: {mismatchAll.length}대
               </p>
               {mismatchAll.length === 0 ? (
-                <p className="mt-1.5 rounded-2xl bg-green-50 px-3 py-3 text-center text-xs text-green-700">✅ 해당 차량 없음</p>
+                <p className="mt-1.5 rounded-2xl bg-green-50 px-3 py-3 text-center text-xs text-green-700"><Icon name="done" /> 해당 차량 없음</p>
               ) : (
                 <>
                   <ul className="mt-1.5 divide-y divide-gray-100 rounded-2xl bg-white ring-1 ring-black/5">
                     {mismatchGroups.map(([op, plates]) => (
                       <li key={op} className="px-3 py-2 text-xs">
                         <p className="font-semibold text-gray-800">
-                          🏢 {op} <span className="font-normal text-gray-400">{plates.length}대</span>
+                          <Icon name="building" /> {op} <span className="font-normal text-gray-400">{plates.length}대</span>
                         </p>
                         <p className="mt-0.5 break-words text-[13px] font-bold tracking-tight text-gray-900">{plates.join(", ")}</p>
                       </li>

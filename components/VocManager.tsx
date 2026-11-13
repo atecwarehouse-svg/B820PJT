@@ -1,5 +1,6 @@
 "use client";
 
+import Icon from "@/components/Icon";
 import { useCallback, useEffect, useState } from "react";
 import StarRating from "./StarRating";
 import {
@@ -131,7 +132,7 @@ export default function VocManager() {
 
   return (
     <section className="mb-5">
-      <h2 className="mb-2 text-sm font-semibold text-gray-700">📣 운수사 VOC</h2>
+      <h2 className="mb-2 text-sm font-semibold text-gray-700"><Icon name="megaphone" /> 운수사 VOC</h2>
       <p className="mb-3 text-xs text-gray-500">
         대시보드 &lsquo;VOC 접수&rsquo;에서 저장된 내용이 운수사+설치일 기준으로 보관됩니다. (다시
         저장하면 최신 내용으로 갱신 · 여기서 직접 수정도 가능)

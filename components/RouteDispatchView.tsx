@@ -2,6 +2,7 @@
 
 // 노선별 배차표 — 운수사가 날마다 주는 배차표 엑셀(04~09시 첫 출발 차량만)을 날짜·노선별 표로 본다.
 // 배차표 팝업 안에서 전체화면으로 열린다. 기존 배차표(나가는 시간 입력)와는 별개의 참고 뷰.
+import Icon from "@/components/Icon";
 import { useEffect, useRef, useState } from "react";
 import { blocksFor, type RouteDispatchTable } from "@/lib/route-dispatch";
 
@@ -93,7 +94,7 @@ export default function RouteDispatchView({
   return (
     <div className="fixed inset-0 z-[60] overflow-y-auto bg-white pb-16" onClick={(e) => e.stopPropagation()}>
       <div className="sticky top-0 z-10 flex items-center justify-between border-b border-gray-200 bg-white px-4 py-2.5">
-        <p className="text-sm font-bold text-gray-800">🗂 노선별 배차표</p>
+        <p className="text-sm font-bold text-gray-800"><Icon name="files" /> 노선별 배차표</p>
         <button
           type="button"
           onClick={onClose}
@@ -153,7 +154,7 @@ export default function RouteDispatchView({
               onClick={() => fileRef.current?.click()}
               className="shrink-0 rounded-lg border border-blue-300 bg-white px-3 py-2 text-xs font-semibold text-blue-700 active:bg-blue-50 disabled:opacity-50"
             >
-              📤 엑셀 업로드
+              <Icon name="upload" /> 엑셀 업로드
             </button>
           </div>
           {msg && <p className={`mt-1 text-xs ${msg.ok ? "text-green-600" : "text-red-500"}`}>{msg.text}</p>}

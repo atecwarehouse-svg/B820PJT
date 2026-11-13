@@ -1,3 +1,4 @@
+import Icon from "@/components/Icon";
 import Link from "@/components/PLink";
 import { createServiceClient } from "@/lib/supabase/server";
 import { fetchAll } from "@/lib/supabase/paginate";
@@ -69,7 +70,7 @@ export default async function SafetyPage() {
         <Link href="/b820" className="pill">
           ← 차량 입력
         </Link>
-        <h1>🖊️ 안전관리 서약서</h1>
+        <h1><Icon name="sign" /> 안전관리 서약서</h1>
         <span className="w-20" />
       </div>
       <SafetyManager sessions={rows} />

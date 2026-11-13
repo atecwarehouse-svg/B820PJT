@@ -1,5 +1,6 @@
 "use client";
 
+import Icon from "@/components/Icon";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "@/components/PLink";
@@ -39,7 +40,7 @@ export default function AdminLogin({ backHref = "/b820" }: { backHref?: string }
     <main className="mx-auto flex min-h-screen max-w-sm flex-col justify-center px-6">
       <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-black/5 motion-safe:animate-rise">
       <div className="mb-4 text-center">
-        <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-600 text-2xl shadow-sm">🔒</span>
+        <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-600 text-2xl text-white shadow-sm"><Icon name="lock" /></span>
         <h1 className="mt-3 text-xl font-bold text-gray-900">관리자</h1>
         <p className="mt-1 text-sm text-gray-500">비밀번호를 입력하세요</p>
       </div>

@@ -86,16 +86,16 @@ const geocodeDong = unstable_cache(
 
 // WMO weather code → 이모지·설명
 function describe(code: number): { icon: string; text: string } {
-  if (code === 0) return { icon: "☀️", text: "맑음" };
-  if (code <= 2) return { icon: "🌤️", text: "구름 조금" };
-  if (code === 3) return { icon: "☁️", text: "흐림" };
-  if (code === 45 || code === 48) return { icon: "🌫️", text: "안개" };
-  if (code <= 57) return { icon: "🌦️", text: "이슬비" };
-  if (code <= 67) return { icon: "🌧️", text: "비" };
-  if (code <= 77) return { icon: "🌨️", text: "눈" };
-  if (code <= 82) return { icon: "🌧️", text: "소나기" };
-  if (code <= 86) return { icon: "🌨️", text: "눈" };
-  return { icon: "⛈️", text: "뇌우" };
+  if (code === 0) return { icon: "sun", text: "맑음" };
+  if (code <= 2) return { icon: "cloud-sun", text: "구름 조금" };
+  if (code === 3) return { icon: "cloud", text: "흐림" };
+  if (code === 45 || code === 48) return { icon: "fog", text: "안개" };
+  if (code <= 57) return { icon: "drizzle", text: "이슬비" };
+  if (code <= 67) return { icon: "rain", text: "비" };
+  if (code <= 77) return { icon: "snow", text: "눈" };
+  if (code <= 82) return { icon: "rain", text: "소나기" };
+  if (code <= 86) return { icon: "snow", text: "눈" };
+  return { icon: "storm", text: "뇌우" };
 }
 
 // "YYYY-MM-DD" + n일

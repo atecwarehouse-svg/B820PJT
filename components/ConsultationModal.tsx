@@ -1,5 +1,6 @@
 "use client";
 
+import Icon from "@/components/Icon";
 import { useState } from "react";
 import type { OperatorSchedule } from "@/lib/stats";
 import { noteBullet } from "@/lib/report";
@@ -454,7 +455,7 @@ export default function ConsultationModal({
             <div className="p-4">
               {step === "done" ? (
                 <div className="py-6 text-center">
-                  <p className="text-3xl">✅</p>
+                  <p className="text-3xl"><Icon name="done" /></p>
                   <p className="mt-2 text-sm font-semibold text-gray-700">
                     팀즈로 전송했습니다
                   </p>
@@ -524,7 +525,7 @@ export default function ConsultationModal({
                         onClick={openVehicleList}
                         className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-xs font-semibold text-gray-600 hover:bg-gray-50"
                       >
-                        🚌 차량리스트 보기 ({count}대)
+                        <Icon name="bus" /> 차량리스트 보기 ({count}대)
                       </button>
                     )}
 
@@ -585,7 +586,7 @@ export default function ConsultationModal({
                     </p>
                     <div className="rounded-lg border border-gray-200 bg-white p-3 text-xs leading-relaxed shadow-sm">
                       <p className="text-sm font-bold text-gray-900">
-                        📋 [{date ? fmtDot(date) : "0000.00.00"} 설치 일정]
+                        <Icon name="clipboard" /> [{date ? fmtDot(date) : "0000.00.00"} 설치 일정]
                         운수사 협의사항
                       </p>
                       <p className="font-bold text-blue-600">

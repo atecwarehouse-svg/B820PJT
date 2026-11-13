@@ -1,3 +1,4 @@
+import Icon from "@/components/Icon";
 import Link from "@/components/PLink";
 import { brandName, currentProject } from "@/lib/project";
 import { createServiceClient } from "@/lib/supabase/server";
@@ -93,7 +94,7 @@ export default async function ListPage() {
         <Link href="/b820" className="pill">
           ← 차량 입력
         </Link>
-        <h1>📋 저장 목록</h1>
+        <h1><Icon name="clipboard" /> 저장 목록</h1>
         <span className="pill-muted text-xs">{items.length}대</span>
       </div>
 

@@ -20,8 +20,8 @@ export const FEATURES = [
   { key: "routeSheet", label: "운수사 배차표 엑셀", desc: "배차표 안 노선별 배차표·당일 배차표 업로드·설치완료 차량 리스트·차고지·운행시작/종료·입차순번 (배차표가 켜져 있어야 함, 아래 차번 규칙 필요)", kinds: ["album"], b820: false, b830: true },
   { key: "checkChoices", label: "설치 전 선택 확인 3개", desc: "촬영 1단계의 TV소리·라디오·차량파손 필수 선택(비고 자동 기재)", kinds: ["album"], b820: false, b830: true },
   { key: "paManual", label: "안내방송 결선도", desc: "홈의 안내방송 결선도 버튼(공항 B830 작업지도서)", kinds: ["album"], b820: false, b830: true },
-  { key: "statusSheet", label: "현황표", desc: "📊 전체 센터 현황표 버튼", kinds: ["handover", "osupdate"], b820: true, b830: true },
-  { key: "verify", label: "검증", desc: "🔎 서버 등록 검증(양도양수) / OS 적용 검증(OS업데이트) 버튼", kinds: ["handover", "osupdate"], b820: true, b830: true },
+  { key: "statusSheet", label: "현황표", desc: "전체 센터 현황표 버튼", kinds: ["handover", "osupdate"], b820: true, b830: true },
+  { key: "verify", label: "검증", desc: "서버 등록 검증(양도양수) / OS 적용 검증(OS업데이트) 버튼", kinds: ["handover", "osupdate"], b820: true, b830: true },
 ] as const satisfies readonly Def[];
 
 export type FeatureKey = (typeof FEATURES)[number]["key"];

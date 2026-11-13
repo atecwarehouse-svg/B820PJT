@@ -1,5 +1,6 @@
 "use client";
 
+import Icon from "@/components/Icon";
 import { useEffect, useRef, useState } from "react";
 import type { OperatorSchedule } from "@/lib/stats";
 import { workDateString } from "@/lib/work-day";
@@ -265,14 +266,14 @@ function ModemPhoto({
         onClick={() => cameraRef.current?.click()}
         className="shrink-0 rounded border border-gray-300 px-2 py-1 text-[11px] font-semibold text-gray-600 active:bg-gray-100"
       >
-        📷 촬영
+        <Icon name="camera" /> 촬영
       </button>
       <button
         type="button"
         onClick={() => galleryRef.current?.click()}
         className="shrink-0 rounded border border-gray-300 px-2 py-1 text-[11px] font-semibold text-gray-600 active:bg-gray-100"
       >
-        🖼 앨범
+        <Icon name="image" /> 앨범
       </button>
       <input
         ref={cameraRef}
@@ -1014,7 +1015,7 @@ export default function DispatchButton({ routeView = false }: { routeView?: bool
         }}
         className="home-tile"
       >
-        <span className="emoji bg-blue-50">🚌</span>
+        <span className="emoji"><Icon name="bus" /></span>
         배차표
       </button>
 
@@ -1029,7 +1030,7 @@ export default function DispatchButton({ routeView = false }: { routeView?: bool
           >
             <div className="flex items-start justify-between rounded-t-3xl bg-brand-600 px-4 py-3 text-white">
               <div>
-                <p className="text-sm font-bold">🚌 배차표</p>
+                <p className="text-sm font-bold"><Icon name="bus" /> 배차표</p>
                 <p className="text-xs text-blue-200">
                   차량별 나가는 시간 — 시간순 자동 정렬
                 </p>
@@ -1052,7 +1053,7 @@ export default function DispatchButton({ routeView = false }: { routeView?: bool
                   className="rounded-md px-2 py-0.5 text-lg leading-none text-brand-100 active:bg-brand-700 disabled:opacity-40"
                   aria-label="새로고침"
                 >
-                  🔄
+                  <Icon name="refresh" />
                 </button>
                 <button
                   onClick={() => setOpen(false)}
@@ -1072,7 +1073,7 @@ export default function DispatchButton({ routeView = false }: { routeView?: bool
                   onClick={() => setChecklistView(true)}
                   className="rounded-lg border border-emerald-300 bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-700 active:bg-emerald-100"
                 >
-                  ✅ 검수항목 보기
+                  <Icon name="done" /> 검수항목 보기
                 </button>
                 {/* AI텔레콤 'LTE모뎀 사용 현황' 양식 — 지난 내역 아래에 앱 기록이 이어 붙는다 */}
                 <button
@@ -1080,7 +1081,7 @@ export default function DispatchButton({ routeView = false }: { routeView?: bool
                   onClick={() => downloadUrl("/api/export/modem")}
                   className="rounded-lg border border-purple-300 bg-purple-50 px-4 py-2.5 text-sm font-semibold text-purple-700 active:bg-purple-100"
                 >
-                  📶 모뎀 사용내역
+                  <Icon name="signal" /> 모뎀 사용내역
                 </button>
               </div>
 
@@ -1091,7 +1092,7 @@ export default function DispatchButton({ routeView = false }: { routeView?: bool
                   onClick={() => setRouteOpen(true)}
                   className="w-full rounded-lg border border-blue-300 bg-blue-50 px-4 py-2.5 text-sm font-semibold text-blue-700 active:bg-blue-100"
                 >
-                  🗂 노선별 배차표 (운수사 엑셀)
+                  <Icon name="files" /> 노선별 배차표 (운수사 엑셀)
                 </button>
               )}
 
@@ -1105,7 +1106,7 @@ export default function DispatchButton({ routeView = false }: { routeView?: bool
                   }}
                   className="w-full rounded-lg border border-green-300 bg-green-50 px-4 py-2.5 text-sm font-semibold text-green-700 active:bg-green-100"
                 >
-                  📸 설치완료 차량 리스트 (캡쳐용) · {entries.filter((e) => e.completed).length}대
+                  <Icon name="camera" /> 설치완료 차량 리스트 (캡쳐용) · {entries.filter((e) => e.completed).length}대
                 </button>
               )}
 
@@ -1129,7 +1130,7 @@ export default function DispatchButton({ routeView = false }: { routeView?: bool
                     onClick={() => dayFileRef.current?.click()}
                     className="w-full rounded-lg border border-blue-300 bg-white px-4 py-2.5 text-sm font-semibold text-blue-700 active:bg-blue-50 disabled:opacity-50"
                   >
-                    {dayBusy ? "올리는 중…" : "📤 당일 배차표 업로드 (운행종료 시간 · 캡쳐용)"}
+                    {dayBusy ? "올리는 중…" : <><Icon name="upload" /> 당일 배차표 업로드 (운행종료 시간 · 캡쳐용)</>}
                   </button>
                   {dayMsg && (
                     <p className={`mt-1 text-center text-xs ${dayMsg.ok ? "text-green-600" : "text-red-500"}`}>
@@ -1149,7 +1150,7 @@ export default function DispatchButton({ routeView = false }: { routeView?: bool
                   }}
                   className="w-full rounded-lg border border-purple-300 bg-white px-4 py-2.5 text-sm font-semibold text-purple-700 active:bg-purple-50"
                 >
-                  🧰 모뎀 예비품불량 등록
+                  <Icon name="wrench" /> 모뎀 예비품불량 등록
                 </button>
               )}
 
@@ -1161,7 +1162,7 @@ export default function DispatchButton({ routeView = false }: { routeView?: bool
                     disabled={saving || !dbReady}
                     className="w-full rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm active:bg-brand-700 disabled:opacity-50"
                   >
-                    {saving ? "저장 중…" : "💾 저장"}
+                    {saving ? "저장 중…" : <><Icon name="save" /> 저장</>}
                   </button>
                   {saveMsg && (
                     <p
@@ -1308,7 +1309,7 @@ export default function DispatchButton({ routeView = false }: { routeView?: bool
                     }}
                     className="rounded-lg border border-orange-300 bg-white px-4 py-2.5 text-sm font-semibold text-orange-600 active:bg-orange-50"
                   >
-                    ⚡ 배차표 자동 입력
+                    <Icon name="zap" /> 배차표 자동 입력
                   </button>
                   <button
                     type="button"
@@ -1318,7 +1319,7 @@ export default function DispatchButton({ routeView = false }: { routeView?: bool
                     }}
                     className="rounded-lg border border-blue-300 bg-white px-4 py-2.5 text-sm font-semibold text-blue-700 active:bg-blue-50"
                   >
-                    📋 표로 보기 (캡쳐용)
+                    <Icon name="clipboard" /> 표로 보기 (캡쳐용)
                   </button>
                 </div>
               )}
@@ -1442,7 +1443,7 @@ export default function DispatchButton({ routeView = false }: { routeView?: bool
                                         : "border-gray-300 bg-gray-50 text-gray-500"
                                     }`}
                                   >
-                                    {e.tachoReason ? "⚠ 타코 미연결" : "타코 정상"}
+                                    {e.tachoReason ? <><Icon name="warn" /> 타코 미연결</> : "타코 정상"}
                                   </button>
                                   <button
                                     type="button"
@@ -1453,7 +1454,7 @@ export default function DispatchButton({ routeView = false }: { routeView?: bool
                                         : "border-gray-300 bg-gray-50 text-gray-500"
                                     }`}
                                   >
-                                    {e.modem ? `⚠ ${e.modem.kind}` : "모뎀 정상"}
+                                    {e.modem ? `${e.modem.kind}` : "모뎀 정상"}
                                   </button>
                                   {e.team && (
                                     <span className="flex items-center gap-1 whitespace-nowrap">
@@ -1466,7 +1467,7 @@ export default function DispatchButton({ routeView = false }: { routeView?: bool
                                         className="rounded border border-green-300 bg-green-50 px-1.5 py-0.5 text-[10px] font-semibold text-green-700 active:bg-green-100"
                                         aria-label={`${e.team} 전화걸기`}
                                       >
-                                        📞
+                                        <Icon name="phone" />
                                       </button>
                                     </span>
                                   )}
@@ -1732,7 +1733,7 @@ export default function DispatchButton({ routeView = false }: { routeView?: bool
                 onClick={(e) => e.stopPropagation()}
               >
                 <p className="text-center text-sm font-bold text-gray-800">
-                  🧰 모뎀 예비품불량 등록
+                  <Icon name="wrench" /> 모뎀 예비품불량 등록
                 </p>
                 <p className="mt-0.5 text-center text-xs text-gray-500">
                   {operator} · {fmtDot(date)}
@@ -1815,7 +1816,7 @@ export default function DispatchButton({ routeView = false }: { routeView?: bool
                 onClick={(e) => e.stopPropagation()}
               >
                 <p className="text-center text-sm font-bold text-gray-800">
-                  📶 LTE 모뎀
+                  <Icon name="signal" /> LTE 모뎀
                 </p>
                 <p className="mt-0.5 text-center text-xs text-gray-500">
                   {operator} · {modemEdit.plate}
@@ -1987,7 +1988,7 @@ export default function DispatchButton({ routeView = false }: { routeView?: bool
               onClick={(e) => e.stopPropagation()}
             >
               <div className="sticky top-0 z-10 flex items-center justify-between border-b border-gray-200 bg-white px-4 py-2.5">
-                <p className="text-sm font-bold text-gray-800">✅ 검수항목</p>
+                <p className="text-sm font-bold text-gray-800"><Icon name="done" /> 검수항목</p>
                 <button
                   type="button"
                   onClick={() => setChecklistView(false)}
@@ -2054,7 +2055,7 @@ export default function DispatchButton({ routeView = false }: { routeView?: bool
             >
               <div className="sticky top-0 z-10 flex items-center justify-between border-b border-gray-200 bg-white px-4 py-2.5">
                 <p className="text-sm font-bold text-gray-800">
-                  ⚡ 배차표 자동 입력
+                  <Icon name="zap" /> 배차표 자동 입력
                 </p>
                 <button
                   type="button"
@@ -2228,7 +2229,7 @@ export default function DispatchButton({ routeView = false }: { routeView?: bool
                     className="w-full max-w-xs rounded-2xl bg-white p-5 text-center shadow-xl"
                     onClick={(ev) => ev.stopPropagation()}
                   >
-                    <div className="text-4xl">⚠️</div>
+                    <div className="text-4xl"><Icon name="warn" /></div>
                     <p className="mt-2 whitespace-pre-line text-sm font-semibold text-gray-800">
                       {autoAlert}
                     </p>
@@ -2250,7 +2251,7 @@ export default function DispatchButton({ routeView = false }: { routeView?: bool
                   onClick={applyAuto}
                   className="mx-auto block w-full max-w-md rounded-lg bg-orange-600 px-4 py-3 text-sm font-semibold text-white active:bg-orange-700"
                 >
-                  ⚡ 시간 자동 입력
+                  <Icon name="zap" /> 시간 자동 입력
                 </button>
               </div>
             </div>
@@ -2273,7 +2274,7 @@ export default function DispatchButton({ routeView = false }: { routeView?: bool
             >
               <div className="sticky top-0 flex items-center justify-between border-b border-gray-200 bg-white px-4 py-2.5">
                 <p className="text-sm font-bold text-gray-800">
-                  {tableDone ? "📸 설치완료 차량 (캡쳐용)" : "📋 배차표 (캡쳐용)"}
+                  {tableDone ? <><Icon name="camera" /> 설치완료 차량 (캡쳐용)</> : <><Icon name="clipboard" /> 배차표 (캡쳐용)</>}
                 </p>
                 <div className="flex gap-2">
                   <button
@@ -2282,7 +2283,7 @@ export default function DispatchButton({ routeView = false }: { routeView?: bool
                     onClick={saveCapImage}
                     className="rounded-lg bg-brand-600 px-3 py-1.5 text-sm font-semibold text-white active:bg-brand-700 disabled:opacity-50"
                   >
-                    💾 이미지 저장
+                    <Icon name="save" /> 이미지 저장
                   </button>
                   <button
                     type="button"

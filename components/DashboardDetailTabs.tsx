@@ -1,5 +1,6 @@
 "use client";
 
+import Icon from "@/components/Icon";
 import { useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 
@@ -70,7 +71,7 @@ export default function DashboardDetailTabs({
   if (!unlocked) {
     return (
       <section className="mt-6 rounded-2xl border border-dashed border-gray-300 bg-white p-6 text-center">
-        <div className="text-2xl">🔒</div>
+        <div className="text-2xl"><Icon name="lock" /></div>
         <p className="mt-2 text-sm font-bold text-gray-700">
           설치 일정 · 진척율 · 운수사별 · 영업소별 · 날짜별 검색
         </p>
@@ -116,7 +117,7 @@ export default function DashboardDetailTabs({
             onClick={() => setAsking(true)}
             className="mt-4 rounded-xl bg-brand-600 px-5 py-2.5 text-sm font-bold text-white shadow-sm active:bg-brand-700"
           >
-            🔓 잠금 해제
+            <Icon name="unlock" /> 잠금 해제
           </button>
         )}
       </section>
@@ -150,7 +151,7 @@ export default function DashboardDetailTabs({
           onClick={lockAgain}
           className="shrink-0 text-xs font-medium text-gray-400 active:text-gray-600"
         >
-          🔒 잠그기
+          <Icon name="lock" /> 잠그기
         </button>
       </div>
 

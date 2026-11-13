@@ -3,6 +3,7 @@
 // 사용법 도우미(챗봇) — 관리자 화면 오른쪽 아래 버튼.
 // 사전 우선: 질문·답변 사전(관리자가 '사전 편집'에서 추가·수정·삭제)에서 답을 찾고, 없을 때만 AI가 보조로 답한다.
 // 설정·데이터는 바꾸지 않는다. 대화는 이 화면에만 있고 저장하지 않는다(사전만 저장).
+import Icon from "@/components/Icon";
 import { useEffect, useRef, useState } from "react";
 import { similarity, type Faq } from "@/lib/help-faq";
 
@@ -84,10 +85,10 @@ export default function HelpBot() {
         ...next,
         res.ok && j.text
           ? { role: "bot", text: j.text, source: j.source }
-          : { role: "bot", text: `⚠ ${j.error ?? "답변을 받지 못했습니다."}` },
+          : { role: "bot", text: `${j.error ?? "답변을 받지 못했습니다."}` },
       ]);
     } catch {
-      setMsgs([...next, { role: "bot", text: "⚠ 네트워크를 확인하세요." }]);
+      setMsgs([...next, { role: "bot", text: "네트워크를 확인하세요." }]);
     } finally {
       setBusy(false);
     }
@@ -122,7 +123,7 @@ export default function HelpBot() {
         onClick={() => setOpen(true)}
         className="chatbot-fab fixed bottom-4 right-4 z-40 rounded-full bg-brand-600 px-4 py-3 text-sm font-semibold text-white shadow-md active:bg-brand-700"
       >
-        💬 챗봇
+        <Icon name="chat" /> 챗봇
       </button>
     );
   }
@@ -145,16 +146,16 @@ export default function HelpBot() {
   return (
     <div className="fixed inset-x-0 bottom-0 z-50 mx-auto flex h-[80vh] max-w-md flex-col rounded-t-2xl bg-white shadow-2xl ring-1 ring-black/10">
       <div className="flex items-center justify-between gap-2 border-b border-gray-200 px-4 py-2.5">
-        <p className="text-sm font-bold text-gray-800">{edit ? "✏️ 질문·답변 사전 편집" : log ? "🗂 대화 기록" : "💬 챗봇"}</p>
+        <p className="text-sm font-bold text-gray-800">{edit ? <><Icon name="edit" /> 질문·답변 사전 편집</> : log ? <><Icon name="files" /> 대화 기록</> : <><Icon name="chat" /> 챗봇</>}</p>
         <div className="flex gap-2">
           {!edit && !log && !locked && (
             <button type="button" onClick={openLog} className={btn}>
-              🗂 기록
+              <Icon name="files" /> 기록
             </button>
           )}
           {!edit && !log && !locked && (
             <button type="button" onClick={() => { setEditMsg(""); setEdit(faq.map((f) => ({ ...f }))); }} className={btn}>
-              ✏️ 사전 편집
+              <Icon name="edit" /> 사전 편집
             </button>
           )}
           <button type="button" onClick={() => (edit ? setEdit(null) : log ? setLog(null) : setOpen(false))} className={btn}>
@@ -165,7 +166,7 @@ export default function HelpBot() {
 
       {locked ? (
         <form onSubmit={login} className="flex flex-1 flex-col justify-center gap-3 px-6">
-          <p className="text-center text-sm text-gray-600">🔒 관리자 비밀번호를 입력하세요</p>
+          <p className="text-center text-sm text-gray-600"><Icon name="lock" /> 관리자 비밀번호를 입력하세요</p>
           <input
             type="password"
             value={pw}
@@ -206,7 +207,7 @@ export default function HelpBot() {
             </p>
             {missed.length > 0 && (
               <div className="space-y-1 rounded-xl border border-amber-200 bg-amber-50 p-2">
-                <p className="text-xs font-semibold text-amber-700">❓ 답하지 못한 질문 — 답을 적어 사전에 넣으세요</p>
+                <p className="text-xs font-semibold text-amber-700"><Icon name="help" /> 답하지 못한 질문 — 답을 적어 사전에 넣으세요</p>
                 {missed.map((q) => (
                   <div key={q} className="flex items-center gap-1.5 text-xs text-gray-700">
                     <span className="min-w-0 flex-1 break-all">{q}</span>
@@ -230,7 +231,7 @@ export default function HelpBot() {
             )}
             {edit.map((f, i) => (
               <div key={i} className={`space-y-1 rounded-xl border p-2 ${f.auto ? "border-purple-200 bg-purple-50/50" : "border-gray-200"}`}>
-                {f.auto && <p className="text-[10px] font-semibold text-purple-600">🤖 AI가 답해서 자동으로 쌓인 항목 — 틀렸으면 고치거나 삭제하세요 (고치면 표시가 사라집니다)</p>}
+                {f.auto && <p className="text-[10px] font-semibold text-purple-600"><Icon name="bot" /> AI가 답해서 자동으로 쌓인 항목 — 틀렸으면 고치거나 삭제하세요 (고치면 표시가 사라집니다)</p>}
                 <div className="flex gap-1.5">
                   <input
                     value={f.q}
@@ -274,7 +275,7 @@ export default function HelpBot() {
                 onClick={saveFaq}
                 className="flex-1 rounded-xl bg-brand-600 px-3 py-2 text-sm font-semibold text-white active:bg-brand-700 disabled:opacity-40"
               >
-                {busy ? "저장 중…" : "💾 사전 저장"}
+                {busy ? "저장 중…" : <><Icon name="save" /> 사전 저장</>}
               </button>
             </div>
           </div>
@@ -298,10 +299,10 @@ export default function HelpBot() {
                   {m.source && (
                     <span className={`mt-1 block text-[10px] font-semibold ${m.source === "사전" ? "text-green-600" : "text-purple-600"}`}>
                       {m.source === "사전"
-                        ? "📖 사전 답변"
+                        ? <><Icon name="book" /> 사전 답변</>
                         : m.source === "학습"
-                          ? "🤖 전에 AI가 답한 내용 — 틀리면 사전 편집에서 고치세요"
-                          : "🤖 AI 답변 — 틀릴 수 있습니다 (사전에 자동 저장)"}
+                          ? <><Icon name="bot" /> 전에 AI가 답한 내용 — 틀리면 사전 편집에서 고치세요</>
+                          : <><Icon name="bot" /> AI 답변 — 틀릴 수 있습니다 (사전에 자동 저장)</>}
                     </span>
                   )}
                 </p>
@@ -319,7 +320,7 @@ export default function HelpBot() {
                   onClick={() => ask(f.q)}
                   className="block w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-1.5 text-left text-xs text-gray-700 active:bg-gray-100"
                 >
-                  📖 {f.q}
+                  <Icon name="book" /> {f.q}
                 </button>
               ))}
             </div>

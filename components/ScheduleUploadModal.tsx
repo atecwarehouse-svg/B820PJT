@@ -1,5 +1,6 @@
 "use client";
 
+import Icon from "@/components/Icon";
 import { useEffect, useRef, useState } from "react";
 import { OPEN_UPLOAD_EVENT } from "@/components/InitialUploadPrompt";
 import RawDataGuide from "@/components/RawDataGuide";
@@ -189,7 +190,7 @@ export default function ScheduleUploadModal({
         <>
           {result.templateReplaced ? (
             <p className="mt-2 rounded-lg bg-blue-50 px-3 py-2 text-[11px] leading-relaxed text-blue-700">
-              📄 <b>진행현황 다운로드 양식(템플릿)</b>도 이 파일로 교체되었습니다.
+              <Icon name="file" /> <b>진행현황 다운로드 양식(템플릿)</b>도 이 파일로 교체되었습니다.
             </p>
           ) : result.templateNote ? (
             <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-[11px] leading-relaxed text-amber-700">
@@ -198,7 +199,7 @@ export default function ScheduleUploadModal({
           ) : null}
           {result.templateReplaced && result.templateNote && (
             <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-[11px] leading-relaxed text-amber-700">
-              ⚠️ {result.templateNote}
+              <Icon name="warn" /> {result.templateNote}
             </p>
           )}
         </>
@@ -210,7 +211,7 @@ export default function ScheduleUploadModal({
       <>
         {result.template.ok ? (
           <p className="mt-2 rounded-lg bg-blue-50 px-3 py-2 text-[11px] leading-relaxed text-blue-700">
-            📄 반영 시 이 파일이 <b>진행현황 다운로드 양식(템플릿)</b>으로도 함께 교체됩니다.
+            <Icon name="file" /> 반영 시 이 파일이 <b>진행현황 다운로드 양식(템플릿)</b>으로도 함께 교체됩니다.
           </p>
         ) : (
           <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-[11px] leading-relaxed text-amber-700">
@@ -219,12 +220,12 @@ export default function ScheduleUploadModal({
         )}
         {result.template.warn && (
           <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-[11px] leading-relaxed text-amber-700">
-            ⚠️ {result.template.warn}
+            <Icon name="warn" /> {result.template.warn}
           </p>
         )}
         {result.template.initialNote && (
           <p className="mt-2 rounded-lg bg-blue-50 px-3 py-2 text-[11px] leading-relaxed text-blue-700">
-            🧹 {result.template.initialNote}
+            <Icon name="eraser" /> {result.template.initialNote}
           </p>
         )}
       </>
@@ -405,7 +406,7 @@ export default function ScheduleUploadModal({
                     disabled={busy || !pw}
                     className="mt-3 flex w-full flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed border-blue-300 px-4 py-6 text-blue-500 active:bg-blue-50 disabled:opacity-50"
                   >
-                    <span className="text-2xl">⬆️</span>
+                    <span className="text-2xl"><Icon name="arrow-up" /></span>
                     <span className="text-sm font-medium">
                       {busy ? "분석 중…" : "엑셀 파일 선택"}
                     </span>
@@ -486,7 +487,7 @@ export default function ScheduleUploadModal({
                 // 3단계: 반영 완료
                 <div>
                   <div className="text-center">
-                    <div className="text-3xl">✅</div>
+                    <div className="text-3xl"><Icon name="done" /></div>
                     <p className="mt-2 text-base font-bold text-gray-800">반영 완료</p>
                     <p className="mt-1 text-xs text-gray-500">
                       차량 {(result.updated ?? result.total).toLocaleString()}대 반영 · 일정 변경{" "}

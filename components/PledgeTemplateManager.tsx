@@ -1,5 +1,6 @@
 "use client";
 
+import Icon from "@/components/Icon";
 import { useEffect, useState } from "react";
 import {
   DEFAULT_PLEDGE_TEMPLATE,
@@ -150,7 +151,7 @@ export default function PledgeTemplateManager() {
   return (
     <div className="space-y-4">
       <div className="rounded-lg bg-blue-50 px-3 py-2.5 text-xs leading-relaxed text-gray-600">
-        <p className="font-semibold text-blue-700">🖊️ 안전관리 서약서 양식 — 기준양식: {PLEDGE_BASE_NAME}</p>
+        <p className="font-semibold text-blue-700"><Icon name="sign" /> 안전관리 서약서 양식 — 기준양식: {PLEDGE_BASE_NAME}</p>
         <p className="mt-1">
           서약서 PDF의 제목·회사명·교육내용·서약 문구를 이 프로젝트에 맞게 고칩니다. 작업자 서명표(2페이지)는 공통입니다.{" "}
           {isDefault ? "지금은 기준양식입니다." : "현재 이 프로젝트 전용 양식이 적용돼 있습니다."}

@@ -2,7 +2,7 @@
  * paper: rgb(246 246 246) · accent: rgb(199 10 81) · display: SUIT · body: SUIT
  * nav: kept · signature: kept · states: the ones the screens have
  * axes: light/grotesk-sans/chromatic-crimson · posture: kept · contrast: pass · brand: 에이텍모빌리티 (spec 2026-11-13) · v2.0.0 */
-/* Hallmark · pre-emit critique: P4 H3 E3 S4 R4 V3 · weakest: E, emoji icons remain inside task screens; first screens cleaned, the rest listed for stage 2 */
+/* Hallmark · pre-emit critique: P4 H3 E4 S4 R4 V3 · weakest: V, pastel status buttons inside the dispatch sheet keep their own hues; emoji icons replaced with line icons (components/Icon.tsx) */
 /* Hallmark · waive 26b · pressed states live in the components as Tailwind active: utilities, not in this file */
 /* Hallmark · waive 39b, 71 · layout kept at restyle depth: 28px pills and head spacing are the existing screens */
 @import "./tokens.css";
@@ -45,12 +45,12 @@ textarea {
   .pill-muted {
     @apply inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-white px-3 py-1.5 text-sm text-gray-500 shadow-sm ring-1 ring-black/5 active:bg-gray-50;
   }
-  /* 프로젝트 홈 메뉴 타일 — 흰 카드 + 큰 이모지 + 한 줄 이름 */
+  /* 프로젝트 홈 메뉴 타일 — 흰 카드 + 회색 칸 안 선 아이콘 + 한 줄 이름 */
   .home-tile {
     @apply flex flex-col items-center justify-center gap-1.5 rounded-2xl bg-white px-2 py-4 text-center text-sm font-semibold text-gray-800 shadow-sm ring-1 ring-black/5 transition-transform duration-150 active:scale-[.97] active:bg-gray-50;
   }
   .home-tile > .emoji {
-    @apply flex h-11 w-11 items-center justify-center rounded-xl text-2xl;
+    @apply flex h-11 w-11 items-center justify-center rounded-xl bg-gray-100 text-2xl text-gray-800;
   }
 }
 

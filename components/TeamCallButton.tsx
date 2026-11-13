@@ -1,5 +1,6 @@
 "use client";
 
+import Icon from "@/components/Icon";
 import { useState } from "react";
 import type { InstallTeam } from "@/lib/settings";
 import { loadTeamContacts, telHref } from "@/lib/team-call";
@@ -40,7 +41,7 @@ export default function TeamCallButton() {
         onClick={onClick}
         className="home-tile"
       >
-        <span className="emoji bg-emerald-50">📞</span>
+        <span className="emoji"><Icon name="phone" /></span>
         {loading ? "불러오는 중…" : "설치팀 호출"}
       </button>
 
@@ -73,7 +74,7 @@ export default function TeamCallButton() {
                       <span className="text-sm font-semibold text-gray-800">
                         {[c.team, c.name].filter(Boolean).join(" ")}
                       </span>
-                      <span className="text-sm text-green-600">📞 {c.phone}</span>
+                      <span className="text-sm text-green-600"><Icon name="phone" /> {c.phone}</span>
                     </a>
                   </li>
                 ))}

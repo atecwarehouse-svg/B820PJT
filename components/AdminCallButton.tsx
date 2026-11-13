@@ -1,5 +1,6 @@
 "use client";
 
+import Icon from "@/components/Icon";
 import { useEffect, useRef, useState } from "react";
 import type { Vehicle } from "@/lib/types";
 
@@ -137,7 +138,7 @@ export default function AdminCallButton() {
       if (last) {
         const min = Math.max(1, Math.ceil((Date.now() - last) / 60000));
         setCooldownWarn(
-          `⚠️ 약 ${min}분 전에 이 차량으로 이미 호출했습니다. 그래도 다시 보내시겠어요?`,
+          `약 ${min}분 전에 이 차량으로 이미 호출했습니다. 그래도 다시 보내시겠어요?`,
         );
         return;
       }
@@ -184,7 +185,7 @@ export default function AdminCallButton() {
         onClick={openModal}
         className="home-tile col-span-2 !flex-row gap-2 !py-3 text-red-700"
       >
-        <span className="emoji !h-9 !w-9 bg-red-50 text-xl">🚨</span>
+        <span className="emoji !h-9 !w-9 !bg-red-50 text-xl !text-red-600"><Icon name="siren" /></span>
         관리자 호출
       </button>
 
@@ -198,14 +199,14 @@ export default function AdminCallButton() {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="rounded-t-2xl bg-red-600 px-4 py-3 text-white">
-              <p className="text-sm font-bold">🚨 관리자 호출</p>
+              <p className="text-sm font-bold"><Icon name="siren" /> 관리자 호출</p>
               <p className="text-xs text-red-200">팀즈로 관리자에게 알림이 전송됩니다</p>
             </div>
 
             {sent ? (
               <div className="px-4 py-6 text-center">
                 <p className="text-sm font-semibold text-green-600">
-                  ✅ 관리자에게 호출을 보냈습니다.
+                  <Icon name="done" /> 관리자에게 호출을 보냈습니다.
                 </p>
                 <button
                   onClick={() => setOpen(false)}
@@ -410,7 +411,7 @@ export default function AdminCallButton() {
                       disabled={sending}
                       className="flex-1 rounded-lg bg-red-600 px-3 py-2 text-sm font-semibold text-white active:bg-red-700 disabled:opacity-50"
                     >
-                      {sending ? "전송 중…" : "🚨 관리자 호출하기"}
+                      {sending ? "전송 중…" : <><Icon name="siren" /> 관리자 호출하기</>}
                     </button>
                   </div>
                 )}

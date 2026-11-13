@@ -1,5 +1,6 @@
 "use client";
 
+import Icon from "@/components/Icon";
 import { useMemo, useRef, useState } from "react";
 import type { CompletedVehicle } from "@/lib/stats";
 import StarRating from "./StarRating";
@@ -232,7 +233,7 @@ export default function VocModal() {
         onClick={openModal}
         className="home-tile"
       >
-        <span className="emoji bg-green-50">📣</span>
+        <span className="emoji"><Icon name="megaphone" /></span>
         VOC 접수
       </button>
 
@@ -261,7 +262,7 @@ export default function VocModal() {
             <div className="p-4">
               {step === "done" ? (
                 <div className="py-6 text-center">
-                  <p className="text-3xl">{doneComplete ? "✅" : "💾"}</p>
+                  <p className="text-3xl">{doneComplete ? <Icon name="done" /> : <Icon name="save" />}</p>
                   <p className="mt-2 text-sm font-semibold text-gray-700">
                     {doneComplete ? "VOC를 저장했습니다" : "중간 저장했습니다"}
                   </p>

@@ -1,5 +1,6 @@
 "use client";
 
+import Icon from "@/components/Icon";
 import { useEffect, useState } from "react";
 import type { Checklist, ChecklistItem } from "@/lib/checklist";
 
@@ -78,7 +79,7 @@ export default function ChecklistManager() {
 
   return (
     <section className="mb-6">
-      <h2 className="mb-2 text-sm font-semibold text-gray-700">✅ 검수항목 관리</h2>
+      <h2 className="mb-2 text-sm font-semibold text-gray-700"><Icon name="done" /> 검수항목 관리</h2>
       <p className="mb-3 text-xs text-gray-500">
         배차표의 &lsquo;검수항목 보기&rsquo; 체크리스트입니다. 항목명은 필수, 부연 설명은
         괄호 안에 작게 표시됩니다(비워도 됨). 저장하면 모든 기기에 바로 반영됩니다.

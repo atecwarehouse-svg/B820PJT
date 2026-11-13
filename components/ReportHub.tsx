@@ -1,5 +1,6 @@
 "use client";
 
+import Icon from "@/components/Icon";
 import { useEffect, useState } from "react";
 import { workDateString } from "@/lib/work-day";
 
@@ -35,7 +36,7 @@ function DonePanel({
 }) {
   return (
     <div className="py-6 text-center">
-      <p className="text-3xl">✅</p>
+      <p className="text-3xl"><Icon name="done" /></p>
       <p className="mt-2 text-sm font-semibold text-gray-700">{title}</p>
       {sub && <p className="mt-1 text-xs text-gray-400">{sub}</p>}
       <button
@@ -523,7 +524,7 @@ function ShareStatPanel({
       <p className="mb-2 text-[11px] text-gray-400">아래 내용으로 설치 진행중 공유방에 전송됩니다.</p>
       <div className={`rounded-xl px-4 py-3 text-white ${headBg}`}>
         <p className="text-sm font-bold">
-          {isStart ? `${brand} 단말기 설치 시작 보고` : `🚌 ${brand} 단말기 설치 진행 현황`}
+          {isStart ? `${brand} 단말기 설치 시작 보고` : `${brand} 단말기 설치 진행 현황`}
         </p>
         <p className={`text-xs ${headSub}`}>
           {isStart ? `${label} ${startTime} 설치 시작` : `${label} 기준`}
@@ -966,7 +967,7 @@ export default function ReportHub(props: {
         }}
         className="rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-brand-700"
       >
-        📢 보고
+        <Icon name="megaphone" /> 보고
       </button>
 
       {open && (

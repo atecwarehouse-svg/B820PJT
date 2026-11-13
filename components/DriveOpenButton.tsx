@@ -1,5 +1,6 @@
 "use client";
 
+import Icon from "@/components/Icon";
 import { useState } from "react";
 
 // 대시보드 「구글드라이브 열기」 — 현재 프로젝트 폴더를 새 탭으로. 관리자 비밀번호(프로젝트별) 필요.
@@ -75,7 +76,7 @@ export default function DriveOpenButton() {
         disabled={busy}
         className="inline-flex items-center gap-1 rounded-full bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition-colors active:bg-emerald-700 disabled:opacity-50"
       >
-        📁 {busy && !ask ? "확인 중…" : "구글드라이브 열기"}
+        <Icon name="folder" /> {busy && !ask ? "확인 중…" : "구글드라이브 열기"}
       </button>
 
       {ask && (
@@ -85,7 +86,7 @@ export default function DriveOpenButton() {
             onClick={(e) => e.stopPropagation()}
             className="w-full max-w-xs rounded-2xl bg-white p-5 shadow-xl motion-safe:animate-rise"
           >
-            <p className="text-base font-bold text-gray-900">📁 구글드라이브 열기</p>
+            <p className="text-base font-bold text-gray-900"><Icon name="folder" /> 구글드라이브 열기</p>
             <p className="mt-1 text-xs text-gray-500">이 프로젝트의 관리자 비밀번호를 입력하세요.</p>
             {url ? (
               <a

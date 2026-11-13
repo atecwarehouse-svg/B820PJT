@@ -1,5 +1,6 @@
 "use client";
 
+import Icon from "@/components/Icon";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { OperatorSchedule } from "@/lib/stats";
@@ -144,7 +145,7 @@ export default function ScheduleMoveModal() {
             <div className="p-4">
               {done ? (
                 <div className="text-center">
-                  <div className="text-3xl">✅</div>
+                  <div className="text-3xl"><Icon name="done" /></div>
                   <p className="mt-2 text-base font-bold text-gray-800">변경 완료</p>
                   <p className="mt-1 text-xs text-gray-500">
                     <b className="text-blue-700">{done.moved}대</b> → {fmtDot(done.date)} 설치 예정

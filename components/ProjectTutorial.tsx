@@ -1,5 +1,6 @@
 "use client";
 
+import Icon, { type IconName } from "@/components/Icon";
 import { useEffect, useState } from "react";
 import Link from "@/components/PLink";
 
@@ -20,17 +21,17 @@ export interface SetupStep {
   doneNote?: string; // 완료 상태 설명 (예: 기본 양식 사용 중)
 }
 
-const PAGES: { emoji: string; title: string; desc: string; href?: string }[] = [
-  { emoji: "🚍", title: "차량번호 입력 → 촬영", desc: "차량번호를 넣으면 3단계 촬영(설치전 특이사항 → 설치 전 → 설치 후)으로 들어갑니다. 사진은 찍는 즉시 저장되고, 저장 버튼에서 팀즈 시작·완료 카드가 나갑니다." },
-  { emoji: "🚨", title: "관리자 호출", desc: "현장에서 한 번 누르면 관리자 채팅방에 호출 카드가 갑니다(연타 방지)." },
-  { emoji: "🚌", title: "배차표", desc: "금일 설치 차량의 나가는 시간·휴차·검수완료·설치제외·타코 미연결을 기록합니다. 모든 기기가 같은 표를 봅니다.", href: "/b820" },
-  { emoji: "📣", title: "운수사 VOC", desc: "최근 완료한 운수사의 차량별 VOC를 적어 진행중 공유방에 보냅니다." },
-  { emoji: "📞", title: "설치팀 호출", desc: "관리자 비밀번호 후 등록된 설치팀 전화번호로 바로 연결합니다." },
-  { emoji: "📊", title: "진행 현황(대시보드)", desc: "완료율·KPI·설치일정 달력·진척율, 보고 발송(설치 시작/완료 리포트), 진행현황 엑셀 다운로드, 차량리스트 업로드.", href: "/dashboard" },
-  { emoji: "📋", title: "저장 목록 · 다운로드", desc: "저장된 차량 검색, 차량별 PDF/엑셀, 운수사별 묶음 다운로드(비밀번호).", href: "/list" },
-  { emoji: "🖊️", title: "안전관리 서약서", desc: "작업자 전자 서명 세션(설치 전/후 서명) 관리와 PDF 보관.", href: "/safety" },
-  { emoji: "👷", title: "설치팀별 확인", desc: "팀별 누적 설치 현황을 기간·운수사·노선·차량번호로 검색(비밀번호 없음).", href: "/teams" },
-  { emoji: "🔒", title: "관리자", desc: "설치팀·소속·검수항목·사진 양식·서약서 양식·협의사항 양식·메일 수신자·협의사항·VOC·모뎀불량·차량/DB 삭제 탭.", href: "/admin" },
+const PAGES: { emoji: IconName; title: string; desc: string; href?: string }[] = [
+  { emoji: "bus", title: "차량번호 입력 → 촬영", desc: "차량번호를 넣으면 3단계 촬영(설치전 특이사항 → 설치 전 → 설치 후)으로 들어갑니다. 사진은 찍는 즉시 저장되고, 저장 버튼에서 팀즈 시작·완료 카드가 나갑니다." },
+  { emoji: "siren", title: "관리자 호출", desc: "현장에서 한 번 누르면 관리자 채팅방에 호출 카드가 갑니다(연타 방지)." },
+  { emoji: "bus", title: "배차표", desc: "금일 설치 차량의 나가는 시간·휴차·검수완료·설치제외·타코 미연결을 기록합니다. 모든 기기가 같은 표를 봅니다.", href: "/b820" },
+  { emoji: "megaphone", title: "운수사 VOC", desc: "최근 완료한 운수사의 차량별 VOC를 적어 진행중 공유방에 보냅니다." },
+  { emoji: "phone", title: "설치팀 호출", desc: "관리자 비밀번호 후 등록된 설치팀 전화번호로 바로 연결합니다." },
+  { emoji: "chart", title: "진행 현황(대시보드)", desc: "완료율·KPI·설치일정 달력·진척율, 보고 발송(설치 시작/완료 리포트), 진행현황 엑셀 다운로드, 차량리스트 업로드.", href: "/dashboard" },
+  { emoji: "clipboard", title: "저장 목록 · 다운로드", desc: "저장된 차량 검색, 차량별 PDF/엑셀, 운수사별 묶음 다운로드(비밀번호).", href: "/list" },
+  { emoji: "sign", title: "안전관리 서약서", desc: "작업자 전자 서명 세션(설치 전/후 서명) 관리와 PDF 보관.", href: "/safety" },
+  { emoji: "worker", title: "설치팀별 확인", desc: "팀별 누적 설치 현황을 기간·운수사·노선·차량번호로 검색(비밀번호 없음).", href: "/teams" },
+  { emoji: "lock", title: "관리자", desc: "설치팀·소속·검수항목·사진 양식·서약서 양식·협의사항 양식·메일 수신자·협의사항·VOC·모뎀불량·차량/DB 삭제 탭.", href: "/admin" },
 ];
 
 const ADMIN_TABS: [string, string][] = [
@@ -108,7 +109,7 @@ export default function ProjectTutorial({ slug, projectName, steps }: { slug: st
           className="mt-3 flex w-full items-center justify-between rounded-2xl bg-amber-50 px-4 py-3 text-left text-sm text-amber-900 shadow-sm ring-1 ring-amber-200 active:bg-amber-100"
         >
           <span>
-            🧭 <b>처음 설정 안내</b> · {done}/{steps.length} 완료
+            <Icon name="compass" /> <b>처음 설정 안내</b> · {done}/{steps.length} 완료
             {requiredLeft ? <span className="ml-1 text-xs text-amber-700">(필수 {requiredLeft}개 남음)</span> : null}
           </span>
           <span className="text-xs text-amber-700">보기 →</span>
@@ -116,7 +117,7 @@ export default function ProjectTutorial({ slug, projectName, steps }: { slug: st
       )}
       <p className="mt-2 text-center text-xs">
         <a href="/help" className="text-gray-400 underline-offset-2 hover:underline">
-          📖 사용방법 보기
+          <Icon name="book" /> 사용방법 보기
         </a>
         {hidden && (
           <>
@@ -136,7 +137,7 @@ export default function ProjectTutorial({ slug, projectName, steps }: { slug: st
           >
             {view === "welcome" && (
               <div className="p-5 text-center">
-                <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-50 text-3xl">🧭</span>
+                <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-50 text-3xl"><Icon name="compass" /></span>
                 <h2 className="mt-3 text-base font-bold text-gray-900">{projectName}에 처음 오셨나요?</h2>
                 <p className="mt-2 text-sm leading-relaxed text-gray-500">
                   관리자 페이지에서 해 둘 설정이 몇 가지 있습니다. 체크리스트를 따라가면 끝나고, 각 페이지가 무슨 일을
@@ -144,13 +145,13 @@ export default function ProjectTutorial({ slug, projectName, steps }: { slug: st
                 </p>
                 <div className="mt-4 grid gap-2">
                   <a href="/help" className={`${btn} bg-brand-600 text-white active:bg-brand-700`}>
-                    📖 사용방법 보기
+                    <Icon name="book" /> 사용방법 보기
                   </a>
                   <button type="button" onClick={() => setView("checklist")} className={`${btn} bg-amber-500 text-white active:bg-amber-600`}>
-                    ✅ 설정 체크리스트 ({done}/{steps.length})
+                    <Icon name="done" /> 설정 체크리스트 ({done}/{steps.length})
                   </button>
                   <button type="button" onClick={() => setView("pages")} className={`${btn} bg-white text-gray-700 ring-1 ring-black/5 active:bg-gray-100`}>
-                    🗺️ 페이지별 기능 안내
+                    <Icon name="map" /> 페이지별 기능 안내
                   </button>
                   <button type="button" onClick={() => setView("skip")} className="mt-1 text-sm text-gray-400 underline-offset-2 hover:underline">
                     건너뛰기
@@ -187,7 +188,7 @@ export default function ProjectTutorial({ slug, projectName, steps }: { slug: st
                       onClick={() => setView(v)}
                       className={`flex-1 rounded-xl px-3 py-2 text-sm font-semibold ${view === v ? "bg-brand-600 text-white" : "text-gray-500 active:bg-gray-100"}`}
                     >
-                      {v === "checklist" ? `✅ 설정 체크리스트 ${done}/${steps.length}` : "🗺️ 페이지별 기능"}
+                      {v === "checklist" ? `설정 체크리스트 ${done}/${steps.length}` : <><Icon name="map" /> 페이지별 기능</>}
                     </button>
                   ))}
                   <button type="button" onClick={skipOnce} aria-label="닫기" className="rounded-xl px-3 py-2 text-gray-400 active:bg-gray-100">
@@ -229,7 +230,7 @@ export default function ProjectTutorial({ slug, projectName, steps }: { slug: st
                       <ul className="space-y-1.5">
                         {PAGES.map((p) => (
                           <li key={p.title} className="flex items-start gap-2 rounded-2xl bg-white p-3 ring-1 ring-black/5">
-                            <span className="text-xl leading-none">{p.emoji}</span>
+                            <span className="text-xl leading-none text-gray-700"><Icon name={p.emoji} /></span>
                             <div className="min-w-0 flex-1">
                               <p className="text-sm font-semibold text-gray-800">{p.title}</p>
                               <p className="mt-0.5 text-xs leading-relaxed text-gray-500">{p.desc}</p>
@@ -243,7 +244,7 @@ export default function ProjectTutorial({ slug, projectName, steps }: { slug: st
                         ))}
                       </ul>
                       <div>
-                        <p className="mb-1.5 text-xs font-semibold text-gray-600">🔒 관리자 탭</p>
+                        <p className="mb-1.5 text-xs font-semibold text-gray-600"><Icon name="lock" /> 관리자 탭</p>
                         <ul className="space-y-1.5">
                           {ADMIN_TABS.map(([t, d]) => (
                             <li key={t} className="rounded-2xl bg-white p-3 ring-1 ring-black/5">
@@ -254,7 +255,7 @@ export default function ProjectTutorial({ slug, projectName, steps }: { slug: st
                         </ul>
                       </div>
                       <a href="/help" className="block rounded-2xl bg-blue-50 px-4 py-3 text-center text-sm font-semibold text-blue-700 active:bg-blue-100">
-                        📖 더 자세한 사용방법 보기
+                        <Icon name="book" /> 더 자세한 사용방법 보기
                       </a>
                     </div>
                   )}

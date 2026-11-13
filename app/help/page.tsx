@@ -1,3 +1,4 @@
+import Icon, { type IconName } from "@/components/Icon";
 import Link from "next/link";
 import { Svg, UI } from "@/components/ProjectIcon";
 import RawDataGuide from "@/components/RawDataGuide";
@@ -21,18 +22,18 @@ const TONES: Record<Tone, { ring: string; badge: string; chip: string; dot: stri
   indigo: { ring: "border-indigo-200", badge: "bg-indigo-600", chip: "bg-indigo-50 text-indigo-700", dot: "bg-indigo-600" },
 };
 
-const NAV: { id: string; label: string; emoji: string }[] = [
-  { id: "start", label: "시작하기", emoji: "🚀" },
-  { id: "project", label: "프로젝트 만들기", emoji: "🗂️" },
-  { id: "record", label: "현장 촬영", emoji: "📸" },
-  { id: "home", label: "홈 화면 버튼", emoji: "🏠" },
-  { id: "dispatch", label: "배차표", emoji: "🚌" },
-  { id: "dashboard", label: "대시보드·보고", emoji: "📊" },
-  { id: "download", label: "다운로드", emoji: "📥" },
-  { id: "safety", label: "안전 서약서", emoji: "🖊️" },
-  { id: "handover", label: "양도양수 체크리스트", emoji: "✅" },
-  { id: "admin", label: "관리자", emoji: "🔒" },
-  { id: "tips", label: "팁·문제 해결", emoji: "💡" },
+const NAV: { id: string; label: string; emoji: IconName }[] = [
+  { id: "start", label: "시작하기", emoji: "rocket" },
+  { id: "project", label: "프로젝트 만들기", emoji: "files" },
+  { id: "record", label: "현장 촬영", emoji: "camera" },
+  { id: "home", label: "홈 화면 버튼", emoji: "home" },
+  { id: "dispatch", label: "배차표", emoji: "bus" },
+  { id: "dashboard", label: "대시보드·보고", emoji: "chart" },
+  { id: "download", label: "다운로드", emoji: "download" },
+  { id: "safety", label: "안전 서약서", emoji: "sign" },
+  { id: "handover", label: "양도양수 체크리스트", emoji: "done" },
+  { id: "admin", label: "관리자", emoji: "lock" },
+  { id: "tips", label: "팁·문제 해결", emoji: "tip" },
 ];
 
 export default function HelpPage() {
@@ -88,13 +89,13 @@ export default function HelpPage() {
               href={`#${n.id}`}
               className="shrink-0 rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 shadow-sm ring-1 ring-black/5 active:bg-blue-50"
             >
-              {n.emoji} {n.label}
+              <Icon name={n.emoji} /> {n.label}
             </a>
           ))}
         </nav>
 
         {/* 1. 시작하기 */}
-        <Section id="start" tone="blue" emoji="🚀" title="시작하기" sub="첫 화면 = 프로젝트 선택">
+        <Section id="start" tone="blue" emoji="rocket" title="시작하기" sub="첫 화면 = 프로젝트 선택">
           <ol className="space-y-3">
             <Step n={1} title="프로젝트 카드를 누릅니다">
               첫 화면의 색 카드가 프로젝트입니다. 누르면 그 프로젝트의 홈(차량번호 입력 화면)으로 들어갑니다. 다른
@@ -105,8 +106,8 @@ export default function HelpPage() {
               관리자 비밀번호로 들어갑니다.
             </Step>
             <Step n={3} title="작업자에게 공유 · 휴대폰 홈 화면에 추가">
-              프로젝트 홈 오른쪽 위 <b>🔗 링크 복사</b>로 그 프로젝트 주소(…/p/프로젝트ID)를 작업자에게 보냅니다. 링크로 들어온
-              작업자는 <b>📲 앱 설치</b>(Android는 설치 창, iPhone은 공유 → 홈 화면에 추가 안내)로 그 프로젝트 홈에서 바로 시작하는
+              프로젝트 홈 오른쪽 위 <b><Icon name="link" /> 링크 복사</b>로 그 프로젝트 주소(…/p/프로젝트ID)를 작업자에게 보냅니다. 링크로 들어온
+              작업자는 <b><Icon name="mobile" /> 앱 설치</b>(Android는 설치 창, iPhone은 공유 → 홈 화면에 추가 안내)로 그 프로젝트 홈에서 바로 시작하는
               앱 아이콘을 만들 수 있습니다(프로젝트마다 이름·아이콘이 다른 별도 앱). 브라우저 메뉴 → <b>홈 화면에 추가</b>도 같습니다. 설치 없이 항상 최신판이
               적용됩니다. (프로젝트 홈 맨 아래 <b>v날짜·시각</b>이 배포 버전입니다)
             </Step>
@@ -117,7 +118,7 @@ export default function HelpPage() {
         </Section>
 
         {/* 2. 프로젝트 만들기 */}
-        <Section id="project" tone="violet" emoji="🗂️" title="프로젝트 만들기" sub="톱니바퀴 → 프로젝트 관리">
+        <Section id="project" tone="violet" emoji="files" title="프로젝트 만들기" sub="톱니바퀴 → 프로젝트 관리">
           <ol className="space-y-3">
             <Step n={1} title="앨범 프로젝트 / 양도양수 체크리스트 / 링크 카드 선택">
               <b>앨범 프로젝트</b>는 B820과 똑같은 기능을 이 앱 안에 새로 만드는 것(차량 데이터·드라이브 사진
@@ -157,7 +158,7 @@ export default function HelpPage() {
               열기」로 돌아올 수 있습니다.
             </Step>
           </ol>
-          <p className="pt-1 text-sm font-semibold text-gray-800">📑 전개현황 엑셀(로우데이터) 작성 흐름</p>
+          <p className="pt-1 text-sm font-semibold text-gray-800"><Icon name="sheets" /> 전개현황 엑셀(로우데이터) 작성 흐름</p>
           <List
             tone="violet"
             items={[
@@ -184,7 +185,7 @@ export default function HelpPage() {
         </Section>
 
         {/* 3. 현장 촬영 */}
-        <Section id="record" tone="emerald" emoji="📸" title="현장 촬영 (작업자)" sub="차량번호 입력 → 3단계 촬영 → 저장">
+        <Section id="record" tone="emerald" emoji="camera" title="현장 촬영 (작업자)" sub="차량번호 입력 → 3단계 촬영 → 저장">
           <ol className="space-y-3">
             <Step n={1} title="차량번호 입력">
               프로젝트 홈에서 차량번호를 치면 자동완성으로 차량을 찾아 촬영 페이지로 갑니다. 금일 설치 대상이 아닌
@@ -225,19 +226,19 @@ export default function HelpPage() {
         </Section>
 
         {/* 4. 홈 화면 버튼 */}
-        <Section id="home" tone="teal" emoji="🏠" title="프로젝트 홈 버튼" sub="위에서부터 순서대로">
+        <Section id="home" tone="teal" emoji="home" title="프로젝트 홈 버튼" sub="위에서부터 순서대로">
           <List
             tone="teal"
             items={[
-              ["🚨 관리자 호출", "현장에서 한 번 누르면 관리자 채팅방에 호출 카드가 갑니다. 연타 방지 쿨다운이 있습니다."],
-              ["🚌 배차표", "금일 설치 차량의 나가는 시간·휴차·검수완료·설치제외·타코 미연결 등을 기록합니다. (아래 배차표 참고)"],
-              ["📣 운수사 VOC", "최근 완료한 운수사의 차량별 VOC를 적어 진행중 공유방에 보냅니다."],
-              ["📞 설치팀 호출", "관리자 비밀번호 후 설치팀 전화번호로 바로 연결합니다."],
-              ["📊 진행 현황 (대시보드)", "완료율·KPI·일정 달력·진척율·보고 발송·엑셀 다운로드."],
-              ["📋 저장 목록 / 다운로드", "저장된 차량 검색, 차량별 PDF/엑셀, 운수사별 묶음 다운로드."],
-              ["🖊️ 안전관리 서약서", "작업자 전자 서명 세션 관리."],
-              ["👷 설치팀별 확인", "팀별 누적 설치 현황을 기간·운수사·노선·차량번호로 검색 (비밀번호 없음)."],
-              ["🔒 관리자", "설치팀·사진 양식·메일 수신자 등 설정 (프로젝트 관리자 비밀번호)."],
+              ["관리자 호출", "현장에서 한 번 누르면 관리자 채팅방에 호출 카드가 갑니다. 연타 방지 쿨다운이 있습니다."],
+              ["배차표", "금일 설치 차량의 나가는 시간·휴차·검수완료·설치제외·타코 미연결 등을 기록합니다. (아래 배차표 참고)"],
+              ["운수사 VOC", "최근 완료한 운수사의 차량별 VOC를 적어 진행중 공유방에 보냅니다."],
+              ["설치팀 호출", "관리자 비밀번호 후 설치팀 전화번호로 바로 연결합니다."],
+              ["진행 현황 (대시보드)", "완료율·KPI·일정 달력·진척율·보고 발송·엑셀 다운로드."],
+              ["저장 목록 / 다운로드", "저장된 차량 검색, 차량별 PDF/엑셀, 운수사별 묶음 다운로드."],
+              ["안전관리 서약서", "작업자 전자 서명 세션 관리."],
+              ["설치팀별 확인", "팀별 누적 설치 현황을 기간·운수사·노선·차량번호로 검색 (비밀번호 없음)."],
+              ["관리자", "설치팀·사진 양식·메일 수신자 등 설정 (프로젝트 관리자 비밀번호)."],
             ]}
           />
           <Note>
@@ -247,7 +248,7 @@ export default function HelpPage() {
         </Section>
 
         {/* 5. 배차표 */}
-        <Section id="dispatch" tone="amber" emoji="🚌" title="배차표" sub="금일 설치 차량을 한눈에 · 전 기기 공용">
+        <Section id="dispatch" tone="amber" emoji="bus" title="배차표" sub="금일 설치 차량을 한눈에 · 전 기기 공용">
           <List
             tone="amber"
             items={[
@@ -263,7 +264,7 @@ export default function HelpPage() {
         </Section>
 
         {/* 6. 대시보드 */}
-        <Section id="dashboard" tone="indigo" emoji="📊" title="대시보드 · 보고" sub="진행 현황 확인과 보고 발송">
+        <Section id="dashboard" tone="indigo" emoji="chart" title="대시보드 · 보고" sub="진행 현황 확인과 보고 발송">
           <Grid>
             <Mini tone="indigo" title="요약 · KPI">
               금일/누적 완료, 진행률, 완료·진행중·설치대상 카드. 금일 설치현황 3타일(대상 = 예정 − 설치제외).
@@ -272,7 +273,7 @@ export default function HelpPage() {
               운수사별 · 영업소별 · 설치 일정(월별 달력, 날짜 탭하면 노선·모델별 대수) · <b>진척율</b>(일별/주별/월별
               계획 대비 실적).
             </Mini>
-            <Mini tone="indigo" title="📢 보고 팝업">
+            <Mini tone="indigo" title="보고 팝업">
               설치계획 보고 · 설치시작 보고(운수사별 개별 발송, 검수 담당자 지정) · 설치진행중 공유(매일 02시 자동도
               동일) · 운행시작 보고.
             </Mini>
@@ -298,7 +299,7 @@ export default function HelpPage() {
         </Section>
 
         {/* 7. 다운로드 */}
-        <Section id="download" tone="slate" emoji="📥" title="다운로드" sub="저장 목록 / 다운로드 메뉴">
+        <Section id="download" tone="slate" emoji="download" title="다운로드" sub="저장 목록 / 다운로드 메뉴">
           <List
             tone="slate"
             items={[
@@ -315,7 +316,7 @@ export default function HelpPage() {
         </Section>
 
         {/* 8. 안전 서약서 */}
-        <Section id="safety" tone="rose" emoji="🖊️" title="안전관리 서약서" sub="전자 서명">
+        <Section id="safety" tone="rose" emoji="sign" title="안전관리 서약서" sub="전자 서명">
           <ol className="space-y-3">
             <Step n={1} title="세션 만들기">
               안전관리자가 세션(날짜·장소)을 만들고 공유 링크를 작업자에게 보냅니다.
@@ -331,7 +332,7 @@ export default function HelpPage() {
 
         {/* 9. 관리자 */}
         {/* 양도양수 체크리스트 */}
-        <Section id="handover" tone="teal" emoji="✅" title="양도양수 체크리스트" sub="직원 전용 · 차량별 완료 체크 · 센터별 분리">
+        <Section id="handover" tone="teal" emoji="done" title="양도양수 체크리스트" sub="직원 전용 · 차량별 완료 체크 · 센터별 분리">
           <ol className="space-y-3">
             <Step n={1} title="만들기">
               프로젝트 관리에서 종류를 <b>양도양수 체크리스트</b>로 고르고 이름·프로젝트 ID·관리자 비밀번호·<b>직원 비밀번호</b>(필수)를 정합니다.
@@ -339,7 +340,7 @@ export default function HelpPage() {
               등록됩니다. 차량번호 기준 1대 1행이고, 공동배차로 여러 노선에 나오는 차량은 노선을 이어 1대로 등록됩니다. 드라이브 폴더·사진·서약서는 없습니다.
             </Step>
             <Step n={2} title="센터 배정 · 작업자 등록 (관리자)">
-              프로젝트 홈 아래 <b>🔒 관리자</b> → <b>센터 배정</b> 탭에서 영업소마다 담당 센터명을 적습니다(예: 본사 → 강남센터, 일산영업소 → 강북센터).{" "}
+              프로젝트 홈 아래 <b><Icon name="lock" /> 관리자</b> → <b>센터 배정</b> 탭에서 영업소마다 담당 센터명을 적습니다(예: 본사 → 강남센터, 일산영업소 → 강북센터).{" "}
               <b>작업자</b> 탭에서 센터·직급·이름을 등록합니다. 로우데이터가 바뀌면 <b>차량 업로드</b> 탭에서 다시 올리면 되고, 이미 완료 체크된 차량은 그대로 유지됩니다.
             </Step>
             <Step n={3} title="직원 로그인">
@@ -352,7 +353,7 @@ export default function HelpPage() {
               화면은 <b>5초마다 자동 동기화</b>되어 동료가 체크한 차량이 바로 반영되고, 위 요약에 센터 진행률(%)과 노선별 진행이 보입니다.
             </Step>
             <Step n={5} title="현황 · 엑셀">
-              관리자 <b>현황</b> 탭에서 전체·센터별·노선별 진행률과 차량 목록(완료자·시각·메모)을 보고 <b>📥 엑셀 다운로드</b>로 받습니다. 관리자도 여기서 완료를 해제할 수 있습니다.
+              관리자 <b>현황</b> 탭에서 전체·센터별·노선별 진행률과 차량 목록(완료자·시각·메모)을 보고 <b><Icon name="download" /> 엑셀 다운로드</b>로 받습니다. 관리자도 여기서 완료를 해제할 수 있습니다.
             </Step>
           </ol>
           <Note>
@@ -364,7 +365,7 @@ export default function HelpPage() {
             적용하셨나요?」 확인이 뜹니다. 다운로드 엑셀은 같은 양식에 완료여부(완료)·완료일·특이사항·작업자가 채워져 나오고 그대로 다시 올릴 수 있습니다. 팀즈 카드는 관리자{" "}
             <b>팀즈 알림</b> 탭에서 <b>센터별</b> 웹훅 주소로 지정합니다(센터 칸이 비면 기본 주소, 그것도 비면 B820 관리자 호출방). 같은 탭에서 「매주 수요일 진척율 카드」를
             켜고 종료일을 정하면 수요일 09:00에 센터마다 완료/잔여/진척율·이번 주 완료·시내/마을·종료 D-day 카드가 그 센터 방으로, 전체 취합은 관리자 호출방으로 갑니다.
-            체크리스트의 🔎 버튼은 <b>OS업데이트 적용 검증</b>으로, 서버에서 받은 <b>장애목록·B710·B700·B800 OS버전 조회 파일(.xls)</b> 4종을 각각 올리면 차량마다
+            체크리스트의 <Icon name="search" /> 버튼은 <b>OS업데이트 적용 검증</b>으로, 서버에서 받은 <b>장애목록·B710·B700·B800 OS버전 조회 파일(.xls)</b> 4종을 각각 올리면 차량마다
             웹 체크 완료·자산등록(장애목록: 기타·F/W, OS 적용·개선OS 업데이트)·기종별 OS버전(B710 32/32, B700 40·39, B800 19·19)을 대조해 센터별 표와 미완료 목록·엑셀을
             보여 줍니다. 파일은 저장만 되고, 다 올린 뒤 <b>검증 발송</b>을 누르면 센터 카드는 그 센터 방으로, 전체 취합은 관리자 호출방으로 갑니다(미완료는 대수만, 목록은 웹 완료·OS
             정상인데 자산등록이 안 된 차량만 운수사·차량번호로). 검증은 한 사람이 하므로 관리자 「작업자」에서 센터를 <b>검증</b>으로 등록하면 그 사람의 홈은 체크리스트 대신
@@ -372,7 +373,7 @@ export default function HelpPage() {
           </Note>
         </Section>
 
-        <Section id="admin" tone="blue" emoji="🔒" title="관리자 페이지" sub="프로젝트별 관리자 비밀번호 · 탭 구성">
+        <Section id="admin" tone="blue" emoji="lock" title="관리자 페이지" sub="프로젝트별 관리자 비밀번호 · 탭 구성">
           <Grid>
             <Mini tone="blue" title="설치팀 · 소속">
               팀명·이름·전화·소속 통합 관리. 소속 탭에서 소속사를 추가·이름 변경·삭제할 수 있고(이름을 바꾸면 그 소속 팀도 함께 바뀜),
@@ -411,7 +412,7 @@ export default function HelpPage() {
         </Section>
 
         {/* 10. 팁 */}
-        <Section id="tips" tone="amber" emoji="💡" title="팁 · 문제 해결" sub="자주 묻는 것">
+        <Section id="tips" tone="amber" emoji="tip" title="팁 · 문제 해결" sub="자주 묻는 것">
           <List
             tone="amber"
             items={[
@@ -442,7 +443,7 @@ function Section({
 }: {
   id: string;
   tone: Tone;
-  emoji: string;
+  emoji: IconName;
   title: string;
   sub?: string;
   children: React.ReactNode;
@@ -452,7 +453,7 @@ function Section({
     <section id={id} className={`mt-6 scroll-mt-4 rounded-3xl border bg-white p-5 shadow-sm ${t.ring}`}>
       <div className="mb-4 flex items-center gap-3">
         <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl text-xl text-white shadow ${t.badge}`}>
-          {emoji}
+          <Icon name={emoji} />
         </span>
         <div>
           <h2 className="text-base font-bold text-gray-900">{title}</h2>

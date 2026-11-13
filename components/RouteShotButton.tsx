@@ -1,5 +1,6 @@
 "use client";
 
+import Icon from "@/components/Icon";
 import { useEffect, useState } from "react";
 import { workDateString } from "@/lib/work-day";
 
@@ -130,7 +131,7 @@ export default function RouteShotButton() {
         onClick={() => setOpen(true)}
         className="mt-2 rounded-xl border border-indigo-300 bg-indigo-50 px-4 py-3 text-center text-sm font-semibold text-indigo-700 shadow-sm active:bg-indigo-100"
       >
-        🚌 노선 스크린샷
+        <Icon name="bus" /> 노선 스크린샷
       </button>
 
       {open && (
@@ -144,7 +145,7 @@ export default function RouteShotButton() {
           >
             <div className="flex items-start justify-between rounded-t-2xl bg-indigo-600 px-4 py-3 text-white">
               <div>
-                <p className="text-sm font-bold">🚌 노선 스크린샷</p>
+                <p className="text-sm font-bold"><Icon name="bus" /> 노선 스크린샷</p>
                 <p className="text-xs text-indigo-200">
                   인천버스정보 + 카카오맵을 한 장으로
                 </p>
@@ -271,7 +272,7 @@ export default function RouteShotButton() {
                             onClick={() => saveShot(s)}
                             className="mt-2 w-full rounded-lg border border-indigo-300 bg-indigo-50 px-3 py-2 text-sm font-semibold text-indigo-700 active:bg-indigo-100"
                           >
-                            📥 폰에 저장
+                            <Icon name="download" /> 폰에 저장
                           </button>
                         </div>
                       ))}

@@ -1,5 +1,6 @@
 "use client";
 
+import Icon from "@/components/Icon";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { CompletedVehicle, ScheduleDay } from "@/lib/stats";
 import { buildReport, formatReportText } from "@/lib/report";
@@ -463,7 +464,7 @@ export default function DailyReportCard({
       setMsg({ ok: false, text: "카카오(초정밀) 이상 증상을 입력하세요." });
       return;
     }
-    const warn = inProgress > 0 ? `⚠️ 미완료(진행중) 차량이 ${inProgress}대 있습니다.\n\n` : "";
+    const warn = inProgress > 0 ? `미완료(진행중) 차량이 ${inProgress}대 있습니다.\n\n` : "";
     const what = stage === 1 ? "팀즈 카드만 전송" : "메일 발송 + 팀즈 카드 전송";
     if (!window.confirm(`${warn}[${stage}차] 이 내용으로 ${what}할까요?`)) return;
     setSending(true);
@@ -542,7 +543,7 @@ export default function DailyReportCard({
         {driverEduNote ? (
           <div className="rounded-lg border border-gray-200 bg-white px-2.5 py-2">
             <span className="block text-xs font-medium text-gray-800">승무사원 교육</span>
-            <span className="mt-0.5 block text-[11px] text-gray-500">🕒 {driverEduNote} (고정 문구)</span>
+            <span className="mt-0.5 block text-[11px] text-gray-500"><Icon name="clock" /> {driverEduNote} (고정 문구)</span>
           </div>
         ) : (
           <ChkRow
@@ -597,7 +598,7 @@ export default function DailyReportCard({
       {showExclInputs && (
         <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50/60 p-3">
           <p className="text-xs font-semibold text-amber-800">
-            ⚠️ 설치제외 {exclPlates.length}대 — 차량별 제외 사유를 적어주세요
+            <Icon name="warn" /> 설치제외 {exclPlates.length}대 — 차량별 제외 사유를 적어주세요
           </p>
           <p className="mt-0.5 text-[11px] text-amber-600">
             특이사항에 자동으로 포함됩니다 (미리보기 확인)
@@ -632,7 +633,7 @@ export default function DailyReportCard({
       {tachoOff.length > 0 && !tachoInNotes && (
         <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50/60 p-3">
           <p className="text-xs font-semibold text-amber-800">
-            ⚠️ 타코 미연결 {tachoOff.length}대 — 사유를 고치면 배차표에도 함께
+            <Icon name="warn" /> 타코 미연결 {tachoOff.length}대 — 사유를 고치면 배차표에도 함께
             반영됩니다
           </p>
           <p className="mt-0.5 text-[11px] text-amber-600">
@@ -714,7 +715,7 @@ export default function DailyReportCard({
 
       {inProgress > 0 && (
         <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs font-medium text-amber-700">
-          ⚠️ 미완료(진행중) 차량이 {inProgress}대 있습니다. 발송 전 확인하세요.
+          <Icon name="warn" /> 미완료(진행중) 차량이 {inProgress}대 있습니다. 발송 전 확인하세요.
         </p>
       )}
 

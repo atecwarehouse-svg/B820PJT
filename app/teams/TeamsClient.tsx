@@ -1,5 +1,6 @@
 "use client";
 
+import Icon from "@/components/Icon";
 import { useMemo, useState } from "react";
 
 interface Vehicle {
@@ -300,9 +301,9 @@ export default function TeamsClient({
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "발송 실패");
       localStorage.setItem("teams_mail_to", to);
-      setMailMsg(`✅ 발송 완료 — 이미지 ${json.count}장${json.xlsx ? " + 엑셀" : ""}`);
+      setMailMsg(`발송 완료 — 이미지 ${json.count}장${json.xlsx ? " + 엑셀" : ""}`);
     } catch (e) {
-      setMailMsg("❌ " + (e instanceof Error ? e.message : "발송 실패"));
+      setMailMsg("" + (e instanceof Error ? e.message : "발송 실패"));
     } finally {
       setMailBusy(false);
     }
@@ -465,7 +466,7 @@ export default function TeamsClient({
               onClick={() => setCapOpen((o) => !o)}
               className="rounded-lg bg-sky-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm active:bg-sky-700"
             >
-              📷 캡쳐하기
+              <Icon name="camera" /> 캡쳐하기
             </button>
             {capOpen && (
               <div className="absolute right-0 top-full z-10 mt-1 w-48 rounded-xl border border-gray-200 bg-white p-1 shadow-lg">
@@ -569,7 +570,7 @@ export default function TeamsClient({
               {/* 메일로 받기 — 이미지 전체 + 정리 엑셀 첨부 */}
               <div className="rounded-xl border border-gray-200 bg-gray-50/50 p-2">
                 <p className="px-1 pb-1.5 text-xs font-semibold text-gray-700">
-                  📧 메일로 받기 <span className="font-normal text-gray-400">(이미지 전체 + 엑셀)</span>
+                  <Icon name="mail" /> 메일로 받기 <span className="font-normal text-gray-400">(이미지 전체 + 엑셀)</span>
                 </p>
                 <div className="flex gap-2">
                   <input

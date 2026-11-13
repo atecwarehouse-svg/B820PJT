@@ -1,3 +1,4 @@
+import Icon from "@/components/Icon";
 import Link from "@/components/PLink";
 import { unstable_cache } from "next/cache";
 import {
@@ -210,7 +211,7 @@ export default async function DashboardPage() {
         <Link href="/b820" className="pill">
           ← 차량 입력
         </Link>
-        <h1>📊 진행 현황</h1>
+        <h1><Icon name="chart" /> 진행 현황</h1>
         <Link href="/list" className="pill">
           저장 목록 →
         </Link>
@@ -226,7 +227,7 @@ export default async function DashboardPage() {
       {/* ===== 설치 진행현황 (완료 = 저장 + 설치 전·후 사진 완료) — 최상단 + 버튼 ===== */}
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-sm font-bold text-gray-800">
-          🏁 설치 진행현황
+          <Icon name="flag" /> 설치 진행현황
           <span className="ml-1 font-normal text-gray-400">(완료 = 저장 + 설치 전·후 사진 완료)</span>
         </h2>
         <div className="flex flex-wrap items-center gap-2">
@@ -307,7 +308,7 @@ export default async function DashboardPage() {
 
       {/* ===== 금일 설치현황 — 금일 설치대상(예정일 기준) vs 설치완료(저장 기준) ===== */}
       <h2 className="mb-2 mt-5 text-sm font-bold text-gray-800">
-        📅 금일 설치현황
+        <Icon name="calendar" /> 금일 설치현황
         <span className="ml-1 font-normal text-gray-400">({today.replace(/-/g, ".")})</span>
       </h2>
       <div className="grid grid-cols-3 gap-2">
@@ -344,7 +345,7 @@ export default async function DashboardPage() {
 
       {/* ===== 운수사 협의사항 · 설치일정 변경 업로드 (잠금과 무관하게 항상 노출) ===== */}
       <div className="mb-2 mt-6 flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-sm font-bold text-gray-800">🔎 상세 현황</h2>
+        <h2 className="text-sm font-bold text-gray-800"><Icon name="search" /> 상세 현황</h2>
         <div className="flex flex-wrap items-center gap-2">
           <ConsultationModal operators={operatorSchedules} fields={consultFields} />
           <ScheduleUploadModal initial={initialUpload} projectName={projectInfo.name} period={period} />

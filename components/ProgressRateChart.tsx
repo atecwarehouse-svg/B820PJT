@@ -1,5 +1,6 @@
 "use client";
 
+import Icon from "@/components/Icon";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ScheduleDay } from "@/lib/stats";
 import { workDateString } from "@/lib/work-day";
@@ -202,7 +203,7 @@ export default function ProgressRateChart({
       {/* 기간 넘김 */}
       <div className="flex items-center justify-between gap-2">
         <button type="button" onClick={() => setPage((p) => p + 1)} disabled={!canPrev} aria-label="이전 기간" className={navBtn}>
-          ◀
+          <Icon name="prev" />
         </button>
         <p className="flex items-center gap-2 text-xs font-semibold text-gray-700">
           {rangeLabel}
@@ -217,7 +218,7 @@ export default function ProgressRateChart({
           )}
         </p>
         <button type="button" onClick={() => setPage((p) => p - 1)} disabled={!canNext} aria-label="다음 기간" className={navBtn}>
-          ▶
+          <Icon name="next" />
         </button>
       </div>
 

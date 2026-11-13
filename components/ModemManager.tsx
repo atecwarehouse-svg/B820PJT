@@ -1,5 +1,6 @@
 "use client";
 
+import Icon from "@/components/Icon";
 import { useCallback, useEffect, useState } from "react";
 
 interface ModemRow {
@@ -65,7 +66,7 @@ export default function ModemManager() {
 
   return (
     <section className="mb-5">
-      <h2 className="mb-2 text-sm font-semibold text-gray-700">📶 예비품불량</h2>
+      <h2 className="mb-2 text-sm font-semibold text-gray-700"><Icon name="signal" /> 예비품불량</h2>
       <p className="mb-3 text-xs text-gray-500">
         배차표에서 등록한 모뎀불량(현장교체·증차·예비품불량·장애접수) 기록입니다. 잘못 등록한
         건을 삭제하면 Drive 사진도 함께 지워지고 사용내역 엑셀에서도 빠집니다.

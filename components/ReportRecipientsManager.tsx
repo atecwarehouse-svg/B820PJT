@@ -1,5 +1,6 @@
 "use client";
 
+import Icon from "@/components/Icon";
 import { useEffect, useState } from "react";
 
 // 완료리포트 메일 기본 수신자 관리 — 관리자 페이지 섹션.
@@ -67,7 +68,7 @@ export default function ReportRecipientsManager() {
 
   return (
     <section className="mb-6">
-      <h2 className="mb-2 text-sm font-semibold text-gray-700">📧 완료리포트 메일 수신자</h2>
+      <h2 className="mb-2 text-sm font-semibold text-gray-700"><Icon name="mail" /> 완료리포트 메일 수신자</h2>
       <p className="mb-3 text-xs text-gray-500">
         금일 완료 리포트의 기본 받는사람입니다. 리포트 발송 시 받는사람을 비우면 이 목록으로
         발송됩니다.

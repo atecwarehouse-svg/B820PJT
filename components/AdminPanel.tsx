@@ -1,5 +1,6 @@
 "use client";
 
+import Icon from "@/components/Icon";
 import { useCallback, useEffect, useState } from "react";
 import Link from "@/components/PLink";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -112,7 +113,7 @@ export default function AdminPanel() {
         <Link href="/b820" className="pill">
           ← 처음으로
         </Link>
-        <h1>🔒 관리자</h1>
+        <h1><Icon name="lock" /> 관리자</h1>
         <button onClick={logout} className="pill-muted text-xs">
           로그아웃
         </button>
@@ -123,7 +124,7 @@ export default function AdminPanel() {
         href="/admin/reference"
         className="mb-5 flex items-center justify-between rounded-2xl bg-white px-4 py-3 text-sm font-medium text-gray-700 shadow-sm ring-1 ring-black/5 active:bg-gray-50"
       >
-        <span>🖼️ 기준(양식) 사진 관리</span>
+        <span><Icon name="image" /> 기준(양식) 사진 관리</span>
         <span className="text-gray-400">→</span>
       </Link>
 

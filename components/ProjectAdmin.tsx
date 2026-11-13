@@ -1,5 +1,6 @@
 "use client";
 
+import Icon from "@/components/Icon";
 import { useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -533,7 +534,7 @@ export default function ProjectAdmin({
       {created && isChecklist(created.kind) && (
         <section className="mb-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900 motion-safe:animate-rise">
           <p className="font-bold">
-            {created.exposed ? "✅ " : "⚠️ "}
+            {created.exposed ? <Icon name="done" />  : <Icon name="warn" /> }
             {created.name} 체크리스트를 만들었습니다
           </p>
           {created.warning && <p className="mt-2 text-xs leading-relaxed text-amber-800">{created.warning}</p>}
@@ -581,7 +582,7 @@ export default function ProjectAdmin({
       {created && !isChecklist(created.kind) && (
         <section className="mb-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900 motion-safe:animate-rise">
           <p className="font-bold">
-            {created.exposed ? "✅ " : "⚠️ "}
+            {created.exposed ? <Icon name="done" />  : <Icon name="warn" /> }
             {created.name} 프로젝트를 만들었습니다
           </p>
           {created.warning && <p className="mt-2 text-xs leading-relaxed text-amber-800">{created.warning}</p>}
@@ -697,7 +698,7 @@ export default function ProjectAdmin({
           </div>
         </div>
 
-        <p className="mb-2 text-xs font-bold text-gray-500">🎨 아이콘</p>
+        <p className="mb-2 text-xs font-bold text-gray-500"><Icon name="palette" /> 아이콘</p>
         <div className="mb-4 grid grid-cols-5 gap-2">
           {ICON_KEYS.map((k) => {
             const on = icon === k;
@@ -721,7 +722,7 @@ export default function ProjectAdmin({
           })}
         </div>
 
-        <p className="mb-2 text-xs font-bold text-gray-500">🌈 카드 색상</p>
+        <p className="mb-2 text-xs font-bold text-gray-500"><Icon name="palette" /> 카드 색상</p>
         <div className="mb-4 flex items-center justify-between px-1">
           {COLOR_KEYS.map((k) => {
             const on = color === k;
@@ -741,7 +742,7 @@ export default function ProjectAdmin({
         </div>
 
         <div className="space-y-2">
-          {!isB820 && <p className="pt-1 text-xs font-bold text-gray-500">✏️ 기본 정보</p>}
+          {!isB820 && <p className="pt-1 text-xs font-bold text-gray-500"><Icon name="edit" /> 기본 정보</p>}
           {!isB820 && (
             <input
               value={name}
@@ -806,7 +807,7 @@ export default function ProjectAdmin({
           {/* 기능 선택 — 프로젝트마다 쓸 기능을 켜고 끈다(lib/features). 새 사진첩은 유형을 고르면 기본값이 채워진다 */}
           {kind !== "link" && (
             <div>
-              <p className="pt-2 text-xs font-bold text-gray-500">🧩 기능 선택</p>
+              <p className="pt-2 text-xs font-bold text-gray-500"><Icon name="puzzle" /> 기능 선택</p>
               {kind === "album" && !isB820 && (
                 <div className="mt-1.5 flex gap-1.5">
                   {(
@@ -885,7 +886,7 @@ export default function ProjectAdmin({
           )}
           {kind !== "link" && (
             <div>
-              <p className="pt-2 text-xs font-bold text-gray-500">{isChecklist(kind) ? "👤 직원 비밀번호 (필수)" : "🤝 협력업체 공용 비밀번호"}</p>
+              <p className="pt-2 text-xs font-bold text-gray-500">{isChecklist(kind) ? <><Icon name="user" /> 직원 비밀번호 (필수)</> : <><Icon name="handshake" /> 협력업체 공용 비밀번호</>}</p>
               <div className="relative mt-1">
                 <input
                   value={sharedPw}
@@ -937,7 +938,7 @@ export default function ProjectAdmin({
                     : "주소에 쓰이는 영문 ID (예: b900 → /p/b900)"}
                 </p>
               </div>
-              <p className="pt-2 text-xs font-bold text-gray-500">🔐 보안 · 저장</p>
+              <p className="pt-2 text-xs font-bold text-gray-500"><Icon name="lock" /> 보안 · 저장</p>
               <div className="relative">
                 <input
                   value={adminPw}
@@ -971,7 +972,7 @@ export default function ProjectAdmin({
                   </span>
                 </label>
               )}
-              {!editing && kind === "album" && <p className="pt-2 text-xs font-bold text-gray-500">📮 양식 · 알림</p>}
+              {!editing && kind === "album" && <p className="pt-2 text-xs font-bold text-gray-500"><Icon name="mail" /> 양식 · 알림</p>}
               {!editing && kind === "album" && (
                 <div>
                   <textarea
@@ -1031,10 +1032,10 @@ export default function ProjectAdmin({
                 <div className="rounded-xl border border-dashed border-emerald-200 bg-emerald-50/60 px-3 py-2.5 text-xs text-gray-600">
                   <p className="mb-1.5 font-bold text-gray-700">
                     {kind === "handover"
-                      ? "📂 차량 리스트 (로우데이터 · 노선별 차량현황 엑셀)"
+                      ? <><Icon name="folder-open" /> 차량 리스트 (로우데이터 · 노선별 차량현황 엑셀)</>
                       : kind === "osupdate"
-                        ? "📂 차량 리스트 (OS적용리스트 엑셀)"
-                        : "📂 차량 리스트 (로우데이터 · 전개현황 엑셀)"}
+                        ? <><Icon name="folder-open" /> 차량 리스트 (OS적용리스트 엑셀)</>
+                        : <><Icon name="folder-open" /> 차량 리스트 (로우데이터 · 전개현황 엑셀)</>}
                   </p>
                   <input
                     ref={rawRef}
@@ -1206,8 +1207,8 @@ export default function ProjectAdmin({
                 <div className="mt-2 w-full basis-full rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-800">
                   <p className="font-semibold">
                     {isChecklist(p.kind)
-                      ? "⚠️ 이 프로젝트의 차량·완료 체크·작업자 명단이 전부 삭제됩니다."
-                      : "⚠️ 이 프로젝트의 차량·설치기록·사진·서약서 데이터가 전부 삭제됩니다."}
+                      ? <><Icon name="warn" /> 이 프로젝트의 차량·완료 체크·작업자 명단이 전부 삭제됩니다.</>
+                      : <><Icon name="warn" /> 이 프로젝트의 차량·설치기록·사진·서약서 데이터가 전부 삭제됩니다.</>}
                   </p>
                   <p className="mt-1 text-red-700/80">
                     {p.kind === "album" && (

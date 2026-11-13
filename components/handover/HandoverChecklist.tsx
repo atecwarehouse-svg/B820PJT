@@ -1,5 +1,6 @@
 "use client";
 
+import Icon from "@/components/Icon";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import HandoverStatusSheet from "./HandoverStatusSheet";
@@ -26,7 +27,7 @@ interface Vehicle {
 
 const POLL_MS = 5000;
 const BUS_TYPES = ["시내버스", "마을버스"] as const;
-export const typeEmoji = (t: string | null | undefined) => (t === "마을버스" ? "🚐" : "🚌");
+export const typeEmoji = (t: string | null | undefined) => <Icon name={t === "마을버스" ? "minibus" : "bus"} />;
 // OS업데이트: 완료 체크 전 재확인 문구(통합+승하차 단말기 모두 적용했는지)
 const OSUPDATE_CONFIRM = "통합+승하차 전체 적용하셨나요?";
 // 묶음(그룹) 진행 목록을 접어 두는 기준 — 이보다 많으면 details 로 접는다(운수사 50개가 펼쳐지면 차량 리스트까지 한참 내려가야 함)
@@ -235,13 +236,13 @@ export default function HandoverChecklist({
         <div className="flex items-center justify-between gap-2">
           <span className="pill min-w-0 text-xs">
             <span className="truncate">
-              👤 {worker.rank ? `${worker.rank} ` : ""}
+              <Icon name="user" /> {worker.rank ? `${worker.rank} ` : ""}
               {worker.name} · <b>검증 담당</b>
             </span>
           </span>
           <div className="flex shrink-0 items-center gap-1.5">
             <button type="button" onClick={() => setStatusOpen(true)} className="pill-muted px-2.5 text-xs" aria-label="전체 센터 현황표" title="현황표">
-              📊
+              <Icon name="chart" />
             </button>
             <button
               type="button"
@@ -267,23 +268,23 @@ export default function HandoverChecklist({
       <div className="flex items-center justify-between gap-2">
         <span className="pill min-w-0 text-xs">
           <span className="truncate">
-            👤 {worker.rank ? `${worker.rank} ` : ""}
+            <Icon name="user" /> {worker.rank ? `${worker.rank} ` : ""}
             {worker.name} · <b>{worker.center}</b>
           </span>
         </span>
         <div className="flex shrink-0 items-center gap-1.5">
           {showStatus && (
             <button type="button" onClick={() => setStatusOpen(true)} className="pill-muted px-2.5 text-xs" aria-label="전체 센터 현황표" title="현황표">
-              📊
+              <Icon name="chart" />
             </button>
           )}
           {showVerify && (
             <button type="button" onClick={() => setVerifyOpen(true)} className="pill-muted px-2.5 text-xs" aria-label="서버 등록 검증" title="검증">
-              🔎
+              <Icon name="search" />
             </button>
           )}
           <button type="button" onClick={() => load()} className="pill-muted text-xs" aria-label="새로고침">
-            🔄 {ago === null ? "…" : `${ago}초 전`}
+            <Icon name="refresh" /> {ago === null ? "…" : `${ago}초 전`}
           </button>
           <button
             type="button"
@@ -301,7 +302,7 @@ export default function HandoverChecklist({
       {/* 검색(메인) — 차량번호 끝자리만 쳐도 찾는다 */}
       <div className="sticky top-0 z-20 -mx-4 bg-white/70 px-4 pb-2 pt-1 backdrop-blur">
         <div className="relative">
-          <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-lg">🔍</span>
+          <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-lg"><Icon name="search" /></span>
           <input
             value={q}
             onChange={(e) => setQ(e.target.value)}
@@ -348,7 +349,7 @@ export default function HandoverChecklist({
                   on ? "bg-indigo-600 text-white ring-indigo-600 shadow-sm" : "bg-white text-gray-700 ring-black/5 active:bg-indigo-50"
                 }`}
               >
-                {s.t === "all" ? "전체" : `${typeEmoji(s.t)} ${s.t}`}
+                {s.t === "all" ? "전체" : <>{typeEmoji(s.t)} {s.t}</>}
                 <span className={`ml-1 tabular-nums ${on ? "text-indigo-100" : s.done === s.total && s.total ? "text-green-600" : "text-gray-400"}`}>
                   {s.done}/{s.total}
                 </span>
@@ -462,7 +463,7 @@ export default function HandoverChecklist({
             <section key={key}>
               <div className="mb-1.5 flex items-baseline justify-between px-1">
                 <h2 className="min-w-0 truncate text-sm font-bold text-gray-800">
-                  {osupdate ? "🏢" : typeEmoji(g.type)} {groupLabel(key)}
+                  {osupdate ? <Icon name="building" /> : typeEmoji(g.type)} {groupLabel(key)}
                   {!osupdate && <span className="ml-1.5 text-xs font-normal text-gray-400">{g.all[0]?.operator}</span>}
                 </h2>
                 <span className="shrink-0 text-xs tabular-nums text-gray-500">
@@ -483,10 +484,10 @@ export default function HandoverChecklist({
                           </p>
                         )}
                         <p className={`text-xs ${isDone ? "text-green-700" : "text-gray-500"}`}>
-                          {isDone ? `✔ ${v.done_by ?? ""} · ${fmtDone(v.done_at!)}` : "미완료"}
+                          {isDone ? `${v.done_by ?? ""} · ${fmtDone(v.done_at!)}` : "미완료"}
                           {!v.note && <span className="ml-1.5 text-gray-300">메모</span>}
                         </p>
-                        {v.note && <p className="break-words text-xs text-amber-700">📝 {v.note}</p>}
+                        {v.note && <p className="break-words text-xs text-amber-700"><Icon name="note" /> {v.note}</p>}
                       </button>
                       <button
                         type="button"
@@ -496,7 +497,7 @@ export default function HandoverChecklist({
                           isDone ? "bg-green-600 text-white shadow-sm" : "bg-white text-gray-500 ring-2 ring-gray-200"
                         }`}
                       >
-                        {isDone ? "✅ 완료" : "미완료"}
+                        {isDone ? <><Icon name="done" /> 완료</> : "미완료"}
                       </button>
                     </li>
                   );
@@ -514,7 +515,7 @@ export default function HandoverChecklist({
       {noteFor && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center" onClick={() => setNoteFor(null)}>
           <div className="w-full max-w-md rounded-t-3xl bg-white p-4 sm:rounded-3xl" onClick={(e) => e.stopPropagation()}>
-            <p className="text-base font-bold text-gray-900">📝 {noteFor.plate} 메모</p>
+            <p className="text-base font-bold text-gray-900"><Icon name="note" /> {noteFor.plate} 메모</p>
             <p className="mt-0.5 text-xs text-gray-400">
               {osupdate ? `${noteFor.operator} · ` : ""}
               {shortRoute(noteFor.route)} · {noteFor.done_at ? `완료 ${noteFor.done_by ?? ""} ${fmtDone(noteFor.done_at)}` : "미완료"}

@@ -1,5 +1,6 @@
 "use client";
 
+import Icon from "@/components/Icon";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { weekdayLabel } from "@/lib/work-day";
@@ -23,7 +24,7 @@ export default function PlanDateGuard({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-6">
       <div className="w-full max-w-sm rounded-2xl bg-white p-5 text-center shadow-xl">
-        <p className="text-3xl">⚠️</p>
+        <p className="text-3xl"><Icon name="warn" /></p>
         <p className="mt-2 text-lg font-bold text-red-600">
           {operator ? "금일 설치 운수사가 아닙니다" : "금일 설치 대상 차량이 아닙니다"}
         </p>

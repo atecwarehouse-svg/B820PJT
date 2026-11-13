@@ -1,3 +1,4 @@
+import Icon from "@/components/Icon";
 import Link from "@/components/PLink";
 import ShareInstallBar from "@/components/ShareInstallBar";
 import { CARD_COLORS, PROJECT_ICONS, Svg } from "@/components/ProjectIcon";
@@ -41,7 +42,7 @@ export default function HandoverHome({
 
       <div className="mt-8 flex flex-col items-center gap-2">
         <Link href="/admin" className="pill-muted text-xs">
-          🔒 관리자
+          <Icon name="lock" /> 관리자
         </Link>
         <p className="text-[10px] text-gray-400">{version}</p>
       </div>

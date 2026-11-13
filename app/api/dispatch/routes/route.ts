@@ -150,7 +150,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       date,
       count: Object.keys(ends).length,
-      summary: readSummary(sm) + (noT1 > 0 ? ` · ⚠ T1 출발 시간이 없는 차량 ${noT1}대` : ""),
+      summary: readSummary(sm) + (noT1 > 0 ? ` · T1 출발 시간이 없는 차량 ${noT1}대` : ""),
     });
   }
   const table: RouteDispatchTable = {

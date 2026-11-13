@@ -1,3 +1,4 @@
+import Icon from "@/components/Icon";
 import Link from "@/components/PLink";
 import { createServiceClient } from "@/lib/supabase/server";
 import { fetchAll } from "@/lib/supabase/paginate";
@@ -50,7 +51,7 @@ export default async function TeamsPage() {
         <Link href="/b820" className="pill">
           ← 홈
         </Link>
-        <h1>👷 설치팀별 확인</h1>
+        <h1><Icon name="worker" /> 설치팀별 확인</h1>
         <span className="w-14" />
       </div>
       <p className="-mt-2 mb-3 text-center text-xs text-gray-500">

@@ -1,5 +1,6 @@
 "use client";
 
+import Icon from "@/components/Icon";
 import { useEffect, useState } from "react";
 
 // 새 프로젝트에서 차량 리스트가 아직 없을 때(최초 업로드 전) 대시보드에 들어오면 한 번 띄우는 안내 팝업.
@@ -29,7 +30,7 @@ export default function InitialUploadPrompt({ show }: { show: boolean }) {
         className="w-full max-w-sm rounded-3xl bg-white p-5 text-center shadow-xl motion-safe:animate-rise"
         onClick={(e) => e.stopPropagation()}
       >
-        <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-50 text-3xl">📂</span>
+        <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-50 text-3xl"><Icon name="folder-open" /></span>
         <h2 className="mt-3 text-base font-bold text-gray-900">현황 파일을 업로드해 주세요</h2>
         <p className="mt-2 text-sm leading-relaxed text-gray-500">
           아직 차량 리스트가 없습니다. 전개현황 엑셀(로우데이터)을 올리면 차량 리스트와 설치 일정이 등록되고 진행

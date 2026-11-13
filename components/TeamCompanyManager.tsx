@@ -1,5 +1,6 @@
 "use client";
 
+import Icon from "@/components/Icon";
 import { useEffect, useState } from "react";
 
 interface Row {
@@ -106,7 +107,7 @@ export default function TeamCompanyManager() {
 
   return (
     <section className="mb-6">
-      <h2 className="mb-2 text-sm font-semibold text-gray-700">🏢 설치팀 소속 관리</h2>
+      <h2 className="mb-2 text-sm font-semibold text-gray-700"><Icon name="building" /> 설치팀 소속 관리</h2>
       <p className="mb-3 text-xs text-gray-500">
         소속사를 등록하고 팀별 소속을 지정합니다. &lsquo;설치팀별 확인&rsquo; 페이지의 그룹 필터에
         사용됩니다. 팀 추가·삭제는 &lsquo;설치팀&rsquo; 탭에서 하세요.

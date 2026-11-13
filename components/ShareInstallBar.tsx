@@ -1,5 +1,6 @@
 "use client";
 
+import Icon from "@/components/Icon";
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { prefixOf } from "@/components/PLink";
@@ -75,11 +76,11 @@ export default function ShareInstallBar({ projectName, kindLabel = "설치 사�
     <>
       <div className="absolute right-4 top-3 flex items-center gap-1.5">
         <button type="button" onClick={share} className="pill text-xs">
-          🔗 링크 복사
+          <Icon name="link" /> 링크 복사
         </button>
         {!standalone && (
           <button type="button" onClick={install} className="pill text-xs">
-            📲 앱 설치
+            <Icon name="mobile" /> 앱 설치
           </button>
         )}
       </div>
@@ -93,10 +94,10 @@ export default function ShareInstallBar({ projectName, kindLabel = "설치 사�
       {guide && (
         <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/40 p-4 sm:items-center" onClick={() => setGuide(null)}>
           <div className="w-full max-w-sm rounded-3xl bg-white p-5 shadow-xl motion-safe:animate-rise" onClick={(e) => e.stopPropagation()}>
-            <h2 className="text-base font-bold text-gray-900">📲 홈 화면에 앱으로 추가</h2>
+            <h2 className="text-base font-bold text-gray-900"><Icon name="mobile" /> 홈 화면에 앱으로 추가</h2>
             {guide === "ios" ? (
               <ol className="mt-3 space-y-2 text-sm leading-relaxed text-gray-600">
-                <li>1. Safari 아래(또는 위) <b>공유 버튼</b>(네모에 화살표 ⬆︎)을 누릅니다.</li>
+                <li>1. Safari 아래(또는 위) <b>공유 버튼</b>(네모에 화살표 <Icon name="arrow-up" />︎)을 누릅니다.</li>
                 <li>2. 목록에서 <b>「홈 화면에 추가」</b>를 누릅니다.</li>
                 <li>3. 오른쪽 위 <b>「추가」</b>. 홈 화면에 「{projectName}」 아이콘이 생기고, 누르면 이 프로젝트 홈이 바로 열립니다.</li>
                 <li className="text-xs text-gray-400">카카오톡·네이버 같은 앱 안 브라우저에서는 안 보일 수 있습니다. 오른쪽 아래 메뉴에서 「Safari로 열기」 후 진행하세요.</li>

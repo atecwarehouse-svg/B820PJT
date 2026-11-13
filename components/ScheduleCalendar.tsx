@@ -1,5 +1,6 @@
 "use client";
 
+import Icon from "@/components/Icon";
 import { Fragment, useState } from "react";
 import type { ScheduleDay } from "@/lib/stats";
 import { workDateString } from "@/lib/work-day";
@@ -65,7 +66,7 @@ export default function ScheduleCalendar({ days }: { days: ScheduleDay[] }) {
           className="rounded-lg border border-gray-300 px-3 py-1 text-sm font-bold text-gray-600 active:bg-gray-100 disabled:opacity-30"
           aria-label="이전 달"
         >
-          ◀
+          <Icon name="prev" />
         </button>
         <p className="w-28 text-center text-sm font-bold text-gray-800">
           {yy}년 {mm}월
@@ -77,7 +78,7 @@ export default function ScheduleCalendar({ days }: { days: ScheduleDay[] }) {
           className="rounded-lg border border-gray-300 px-3 py-1 text-sm font-bold text-gray-600 active:bg-gray-100 disabled:opacity-30"
           aria-label="다음 달"
         >
-          ▶
+          <Icon name="next" />
         </button>
       </div>
 
@@ -241,7 +242,7 @@ export default function ScheduleCalendar({ days }: { days: ScheduleDay[] }) {
                   )}
                   {o.address && (
                     <p className="mt-0.5 text-[11px] leading-4 text-gray-400">
-                      📍 {o.address}
+                      <Icon name="pin" /> {o.address}
                     </p>
                   )}
                 </li>

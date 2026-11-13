@@ -1,5 +1,6 @@
 "use client";
 
+import Icon from "@/components/Icon";
 import { useEffect, useState } from "react";
 
 interface Row {
@@ -77,7 +78,7 @@ export default function TeamNamesManager() {
 
   return (
     <section className="mb-6">
-      <h2 className="mb-2 text-sm font-semibold text-gray-700">👷 설치팀 관리</h2>
+      <h2 className="mb-2 text-sm font-semibold text-gray-700"><Icon name="worker" /> 설치팀 관리</h2>
       <p className="mb-3 text-xs text-gray-500">
         기록 페이지 팀 선택지와 홈 &lsquo;설치팀 호출&rsquo; 버튼의 연락처입니다. 드롭다운·팀즈
         카드에는 팀명+이름까지만 표시되고 전화번호는 호출 버튼에서만 쓰입니다. (목록이 비어

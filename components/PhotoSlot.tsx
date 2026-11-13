@@ -1,5 +1,6 @@
 "use client";
 
+import Icon from "@/components/Icon";
 import { useRef, useState } from "react";
 import type { SlotDef } from "@/lib/slots";
 import { compressImage } from "@/lib/image-compress";
@@ -237,7 +238,7 @@ export default function PhotoSlot({
               disabled={busy}
               className="mt-1.5 w-full rounded bg-emerald-600 px-2 py-1.5 text-xs font-medium text-white active:bg-emerald-700 disabled:opacity-50"
             >
-              📱 휴대폰에 저장
+              <Icon name="mobile" /> 휴대폰에 저장
             </button>
           )}
 

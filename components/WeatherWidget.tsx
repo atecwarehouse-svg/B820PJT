@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Icon, { type IconName } from "@/components/Icon";
 
 interface WeatherItem {
   label: string; // 예: "서구 석남동"
@@ -44,7 +45,7 @@ export default function WeatherWidget() {
           className="flex items-center gap-1 rounded-full border border-gray-200 bg-white/90 px-2.5 py-1 text-[11px] text-gray-600 shadow-sm"
         >
           <span className="font-medium">{w.label}</span>
-          <span>{w.icon}</span>
+          <Icon name={w.icon as IconName} />
           <span className="tabular-nums">
             {w.tempMin === w.tempMax ? `${w.tempMin}°` : `${w.tempMin}~${w.tempMax}°`}
           </span>

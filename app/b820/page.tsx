@@ -1,3 +1,4 @@
+import Icon, { type IconName } from "@/components/Icon";
 import Link from "@/components/PLink";
 import type { Metadata } from "next";
 import { currentProject, isChecklist } from "@/lib/project";
@@ -70,12 +71,12 @@ export async function generateMetadata(): Promise<Metadata> {
 
 // 홈 메뉴 타일(링크) — 이모지 배경색은 메뉴마다 다르게
 // feature = 프로젝트별로 끌 수 있는 메뉴(lib/features.ts) — 없으면 항상 표시
-const MENU: { href: string; emoji: string; label: string; tint: string; feature?: "safety" | "teams" }[] = [
-  { href: "/dashboard", emoji: "📊", label: "진행 현황", tint: "bg-indigo-50" },
-  { href: "/list", emoji: "📋", label: "저장 목록 · 다운로드", tint: "bg-sky-50" },
-  { href: "/safety", emoji: "🖊️", label: "안전관리 서약서", tint: "bg-rose-50", feature: "safety" },
-  { href: "/teams", emoji: "👷", label: "설치팀별 확인", tint: "bg-amber-50", feature: "teams" },
-  { href: "/admin", emoji: "🔒", label: "관리자", tint: "bg-gray-100" },
+const MENU: { href: string; emoji: IconName; label: string; feature?: "safety" | "teams" }[] = [
+  { href: "/dashboard", emoji: "chart", label: "진행 현황" },
+  { href: "/list", emoji: "clipboard", label: "저장 목록 · 다운로드" },
+  { href: "/safety", emoji: "sign", label: "안전관리 서약서", feature: "safety" },
+  { href: "/teams", emoji: "worker", label: "설치팀별 확인", feature: "teams" },
+  { href: "/admin", emoji: "lock", label: "관리자" },
 ];
 
 export default async function HomePage() {
@@ -111,7 +112,7 @@ export default async function HomePage() {
 
       {/* 차량번호 검색 카드 */}
       <section className="rounded-3xl bg-white p-4 shadow-sm ring-1 ring-black/5 motion-safe:animate-rise" style={{ animationDelay: "80ms" }}>
-        <p className="mb-2 text-sm font-semibold text-gray-800">🚍 차량번호를 입력해 사진첩을 작성하세요</p>
+        <p className="mb-2 text-sm font-semibold text-gray-800"><Icon name="bus" /> 차량번호를 입력해 사진첩을 작성하세요</p>
         <PlateSearch />
         <p className="mt-2 text-xs text-gray-400">예) 인천70바4005</p>
       </section>
@@ -126,7 +127,7 @@ export default async function HomePage() {
         {/* 공항 B800 전용 — 안내방송 결선 작업지도서(public/manuals, 이미지 내장 단일 HTML). 정적 파일이라 /p/ 접두사 없이 새 탭 */}
         {f.paManual && (
           <a href="/manuals/b800air-pa-wiring.html" target="_blank" rel="noopener" className="home-tile col-span-2 !flex-row gap-2 !py-3 text-blue-700">
-            <span className="emoji !h-9 !w-9 bg-blue-50 text-xl">🔌</span>
+            <span className="emoji !h-9 !w-9 text-xl"><Icon name="plug" /></span>
             안내방송 결선도
           </a>
         )}
@@ -136,7 +137,7 @@ export default async function HomePage() {
         {f.teamCall && <TeamCallButton />}
         {MENU.filter((m) => !m.feature || f[m.feature]).map((m) => (
           <Link key={m.href} href={m.href} className="home-tile">
-            <span className={`emoji ${m.tint}`}>{m.emoji}</span>
+            <span className="emoji"><Icon name={m.emoji} /></span>
             {m.label}
           </Link>
         ))}

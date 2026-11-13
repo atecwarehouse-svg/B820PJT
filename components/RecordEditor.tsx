@@ -1,5 +1,6 @@
 "use client";
 
+import Icon from "@/components/Icon";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "@/components/PLink";
 import { useRouter } from "next/navigation";
@@ -609,7 +610,7 @@ export default function RecordEditor({ plate, initial, teamOptions = [], brand =
               toast.type === "success" ? "bg-green-600" : "bg-red-600"
             }`}
           >
-            {toast.type === "success" ? "✓ " : "⚠ "}
+            {toast.type === "success" ? "✓ " : <Icon name="warn" /> }
             {toast.msg}
           </div>
         </div>
@@ -619,7 +620,7 @@ export default function RecordEditor({ plate, initial, teamOptions = [], brand =
       {alightConfirm && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4 no-print">
           <div className="w-full max-w-xs rounded-2xl bg-white p-5 text-center shadow-xl">
-            <div className="text-4xl">⚠️</div>
+            <div className="text-4xl"><Icon name="warn" /></div>
             <p className="mt-2 text-lg font-bold text-gray-800">
               하차단말기 확인
             </p>
@@ -659,7 +660,7 @@ export default function RecordEditor({ plate, initial, teamOptions = [], brand =
       {savedPopup && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4 no-print">
           <div className="w-full max-w-xs rounded-2xl bg-white p-5 text-center shadow-xl">
-            <div className="text-4xl">✅</div>
+            <div className="text-4xl"><Icon name="done" /></div>
             <p className="mt-2 text-lg font-bold text-gray-800">저장되었습니다</p>
             <p className="mt-1 text-xs text-gray-500">{plate}</p>
             {/* 목록(/list)은 비밀번호가 걸려 있어 현장에서 번거롭다 — 홈으로 가거나 이 화면에서 사진을 다시 본다 */}
@@ -691,7 +692,7 @@ export default function RecordEditor({ plate, initial, teamOptions = [], brand =
       {midSavedPopup && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4 no-print">
           <div className="w-full max-w-xs rounded-2xl bg-white p-5 text-center shadow-xl">
-            <div className="text-4xl">✅</div>
+            <div className="text-4xl"><Icon name="done" /></div>
             <p className="mt-2 text-lg font-bold text-gray-800">
               여기까지 저장되었습니다
             </p>

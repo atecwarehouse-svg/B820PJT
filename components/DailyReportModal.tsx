@@ -1,5 +1,6 @@
 "use client";
 
+import Icon from "@/components/Icon";
 import { useState } from "react";
 import type { CompletedVehicle, ScheduleDay } from "@/lib/stats";
 import DailyReportCard from "@/components/DailyReportCard";
@@ -92,7 +93,7 @@ export default function DailyReportModal(props: {
       {sentTo && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4">
           <div className="w-full max-w-xs rounded-2xl bg-white p-5 text-center shadow-xl">
-            <div className="text-3xl">✅</div>
+            <div className="text-3xl"><Icon name="done" /></div>
             <p className="mt-2 text-base font-bold text-gray-800">
               {sentStage === 1 ? "1차 전송 완료" : "2차 발송 완료"}
             </p>
@@ -106,7 +107,7 @@ export default function DailyReportModal(props: {
                 ? "팀즈 '설치 진행중' 공유방으로 완료보고 카드를 보냈습니다. (메일 미발송)"
                 : teamsSent
                   ? "메일과 함께 팀즈 공유방에도 VOC 포함 완료보고 카드를 보냈습니다."
-                  : "⚠️ 팀즈 완료보고 카드 전송에 실패했습니다. (메일은 발송됨)"}
+                  : <><Icon name="warn" /> 팀즈 완료보고 카드 전송에 실패했습니다. (메일은 발송됨)</>}
             </p>
             <button
               onClick={() => {

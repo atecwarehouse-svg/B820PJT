@@ -1,5 +1,6 @@
 "use client";
 
+import Icon from "@/components/Icon";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "@/components/PLink";
@@ -162,12 +163,12 @@ function UploadTab({ kind, centers, onApplied, setMsg }: { kind: ProjectKind; ce
 
   return (
     <section className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-black/5">
-      <h2 className="text-sm font-semibold text-gray-800">{osupdate ? "📂 OS적용리스트 업로드" : "📂 로우데이터(노선별 차량현황) 업로드"}</h2>
+      <h2 className="text-sm font-semibold text-gray-800">{osupdate ? <><Icon name="folder-open" /> OS적용리스트 업로드</> : <><Icon name="folder-open" /> 로우데이터(노선별 차량현황) 업로드</>}</h2>
       <p className="mt-1 text-xs leading-relaxed text-gray-500">
         {osupdate ? (
           <>
             첫 행 머리글에 <b>센터 · 차량(번호) · 기종 · 운수사 · 노선</b>이 있는 엑셀(전체센터_차량.xlsx — 완료여부·완료일·특이사항 열은 무시). <b>센터 열</b>로 차량마다 담당 센터가
-            정해지고, 기종(서울시내버스/서울마을버스)으로 <b>시내·마을</b>을 나눕니다(없으면 노선명으로 판정). <b>공항버스(B620)</b> 기종은 대상이 아니라 제외됩니다. 📥 다운로드한 현황
+            정해지고, 기종(서울시내버스/서울마을버스)으로 <b>시내·마을</b>을 나눕니다(없으면 노선명으로 판정). <b>공항버스(B620)</b> 기종은 대상이 아니라 제외됩니다. <Icon name="download" /> 다운로드한 현황
             파일을 그대로 다시 올릴 수 있습니다.
           </>
         ) : (
@@ -192,7 +193,7 @@ function UploadTab({ kind, centers, onApplied, setMsg }: { kind: ProjectKind; ce
         className="mt-3 block w-full text-xs text-gray-600 file:mr-2 file:rounded-lg file:border-0 file:bg-brand-600 file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-white"
       />
       <div className="mt-3">
-        <label className="text-xs font-semibold text-gray-600">🏢 센터 (선택)</label>
+        <label className="text-xs font-semibold text-gray-600"><Icon name="building" /> 센터 (선택)</label>
         <input
           value={center}
           onChange={(e) => setCenter(e.target.value)}
@@ -246,7 +247,7 @@ function UploadTab({ kind, centers, onApplied, setMsg }: { kind: ProjectKind; ce
           {preview.centers && (
             <p className="mt-0.5 text-blue-700">
               {Object.entries(preview.centers)
-                .map(([c, n]) => `📍 ${c} ${n}대`)
+                .map(([c, n]) => `${c} ${n}대`)
                 .join(" · ")}
             </p>
           )}
@@ -301,7 +302,7 @@ function CentersTab({ s, setS, setMsg }: { s: Settings; setS: (s: Settings) => v
 
   return (
     <section className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-black/5">
-      <h2 className="text-sm font-semibold text-gray-800">🏢 영업소 → 담당 센터</h2>
+      <h2 className="text-sm font-semibold text-gray-800"><Icon name="building" /> 영업소 → 담당 센터</h2>
       <p className="mt-1 text-xs leading-relaxed text-gray-500">
         업로드된 차량의 영업소마다 담당 센터명을 적습니다(예: 본사 → 강남센터, 일산영업소 → 강북센터). 작업자는 자기 센터에 배정된 영업소 차량만 봅니다.
       </p>
@@ -333,7 +334,7 @@ function CentersTab({ s, setS, setMsg }: { s: Settings; setS: (s: Settings) => v
         ))}
       </datalist>
       {s.offices.some((o) => !centers[o.name]?.trim()) && s.offices.length > 0 && (
-        <p className="mt-2 text-xs text-amber-700">⚠️ 센터가 비어 있는 영업소의 차량은 아무 작업자에게도 보이지 않습니다.</p>
+        <p className="mt-2 text-xs text-amber-700"><Icon name="warn" /> 센터가 비어 있는 영업소의 차량은 아무 작업자에게도 보이지 않습니다.</p>
       )}
       <button
         type="button"
@@ -379,7 +380,7 @@ function WorkersTab({ s, setS, setMsg }: { s: Settings; setS: (s: Settings) => v
 
   return (
     <section className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-black/5">
-      <h2 className="text-sm font-semibold text-gray-800">👤 작업자 명단</h2>
+      <h2 className="text-sm font-semibold text-gray-800"><Icon name="user" /> 작업자 명단</h2>
       <p className="mt-1 text-xs leading-relaxed text-gray-500">
         소속 센터·직급·이름. 작업자는 홈에서 센터→이름을 고르고 <b>직원 비밀번호</b>(프로젝트 관리 → 연필에서 변경)를 입력해 들어옵니다. 명단에서 지우면 그 사람은 더 못 들어옵니다.
         OS업데이트 프로젝트에서 <b>검증 담당자</b>는 센터를 「검증」으로 등록하면 홈이 체크리스트 대신 검증 화면(파일 4종 업로드·현황 엑셀·팀즈 발송)으로 열립니다.
@@ -479,7 +480,7 @@ function WebhookTab({ s, setS, setMsg }: { s: Settings; setS: (s: Settings) => v
 
   return (
     <section className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-black/5">
-      <h2 className="text-sm font-semibold text-gray-800">💬 팀즈 알림 채팅방</h2>
+      <h2 className="text-sm font-semibold text-gray-800"><Icon name="chat" /> 팀즈 알림 채팅방</h2>
       <p className="mt-1 text-xs leading-relaxed text-gray-500">
         차량 완료 체크 카드를 받을 채팅방의 <b>Power Automate 웹훅 주소</b>(팀즈 워크플로 「웹후크 요청 수신」으로 발급)를 <b>센터마다</b> 넣습니다. 그 센터 차량의 완료 카드가 그 방으로
         갑니다. 센터 칸이 비면 아래 기본 주소로, 기본도 비면 B820 관리자 호출방으로 갑니다.
@@ -488,7 +489,7 @@ function WebhookTab({ s, setS, setMsg }: { s: Settings; setS: (s: Settings) => v
       <ul className="mt-3 space-y-3">
         {centers.map((c) => (
           <li key={c}>
-            <label className="text-xs font-bold text-gray-700">📍 {c}</label>
+            <label className="text-xs font-bold text-gray-700"><Icon name="pin" /> {c}</label>
             {area(byCenter[c] ?? "", (v) => setByCenter({ ...byCenter, [c]: v }))}
           </li>
         ))}
@@ -500,7 +501,7 @@ function WebhookTab({ s, setS, setMsg }: { s: Settings; setS: (s: Settings) => v
       <div className="mt-4 border-t border-gray-100 pt-3">
         <label className="flex items-center gap-2 text-xs font-bold text-gray-700">
           <input type="checkbox" checked={weekly} onChange={(e) => setWeekly(e.target.checked)} className="h-4 w-4" />
-          📅 매주 수요일 아침 센터별 진척율 카드 보내기
+          <Icon name="calendar" /> 매주 수요일 아침 센터별 진척율 카드 보내기
         </label>
         <p className="mt-1 text-[11px] leading-relaxed text-gray-400">
           수요일 09:00에 센터마다 위 채팅방으로 「완료/잔여/진척율·이번 주 완료·시내/마을·전체·종료 D-day」 카드를 보냅니다. 종료일이 지나면 자동으로 멈춥니다.
@@ -633,7 +634,7 @@ function StatusTab({ kind, setMsg }: { kind: ProjectKind; setMsg: SetMsg }) {
           {/* OS업데이트: 시내/마을버스 구분별 */}
           {byType.map(([t, n]) => (
             <li key={t} className="flex justify-between">
-              <span className="text-gray-600">{t === "마을버스" ? "🚐" : "🚌"} {t}</span>
+              <span className="text-gray-600">{t === "마을버스" ? <Icon name="minibus" /> : <Icon name="bus" />} {t}</span>
               <span className="tabular-nums text-gray-500">
                 {n.d}/{n.t} · {pct(n.d, n.t)}%
               </span>
@@ -659,14 +660,14 @@ function StatusTab({ kind, setMsg }: { kind: ProjectKind; setMsg: SetMsg }) {
         </details>
         <div className="mt-3 flex gap-2">
           <button type="button" onClick={load} className="rounded-lg bg-gray-100 px-3 py-2 text-xs font-medium text-gray-700 active:bg-gray-200">
-            🔄 새로고침
+            <Icon name="refresh" /> 새로고침
           </button>
           <button
             type="button"
             onClick={() => downloadUrl("/api/handover/export")}
             className="flex-1 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white active:bg-emerald-700"
           >
-            📥 엑셀 다운로드
+            <Icon name="download" /> 엑셀 다운로드
           </button>
         </div>
       </section>
@@ -685,8 +686,8 @@ function StatusTab({ kind, setMsg }: { kind: ProjectKind; setMsg: SetMsg }) {
               <span className="block text-sm font-bold text-gray-900">{v.plate}</span>
               <span className="block truncate text-[11px] text-gray-500">
                 {centerOf(v)} · {shortRoute(v.route)}
-                {v.done_at ? ` · ✔ ${v.done_by ?? ""} ${fmtDone(v.done_at)}` : ""}
-                {v.note ? ` · 📝 ${v.note}` : ""}
+                {v.done_at ? ` · ${v.done_by ?? ""} ${fmtDone(v.done_at)}` : ""}
+                {v.note ? ` · ${v.note}` : ""}
               </span>
             </span>
             <button
