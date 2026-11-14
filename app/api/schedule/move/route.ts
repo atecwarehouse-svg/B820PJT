@@ -5,6 +5,7 @@ import { chunk } from "@/lib/supabase/paginate";
 import { PILOT_CUTOFF } from "@/lib/import/parse-schedule";
 import { checkAdminPassword, isAdmin } from "@/lib/admin-auth";
 import { currentSlug, isDefault } from "@/lib/project";
+import { getPlanDays, savePlanDays, shiftPlan } from "@/lib/quota";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -38,12 +39,25 @@ export async function POST(req: NextRequest) {
   // 시범설치 판정은 업로드 파서와 같은 기준(예정일 < 컷오프)으로 다시 계산해 어긋나지 않게 한다.
   const patch = { planned_date: date, is_pilot: isDefault(currentSlug()) && date < PILOT_CUTOFF }; // 시범설치 컷오프는 B820 전용
   const moved: string[] = [];
+  const before = new Map<string, string | null>(); // 옮기기 전 예정일 — 원본 계획 조정용
   for (const part of chunk(plates)) {
+    const { data: old } = await createServiceClient().from("vehicles").select("plate, planned_date").in("plate", part);
+    for (const v of (old ?? []) as { plate: string; planned_date: string | null }[]) before.set(v.plate, v.planned_date);
     const { data, error } = await supabaseUpdate(part, patch);
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
     moved.push(...data);
+  }
+
+  // 보관된 원본 계획(lib/quota.ts)이 있으면 옮긴 대수만큼 같이 옮긴다 — 합의로 바꾼 일정은 계획 변경이다.
+  // 실패해도 일정 이동은 유지.
+  try {
+    const plan = await getPlanDays();
+    const known = moved.filter((p) => before.has(p)); // 이전 예정일을 못 읽은 차량은 빼고(계획만 늘어나지 않게)
+    if (plan && known.length) await savePlanDays(shiftPlan(plan, known.map((p) => before.get(p)), date));
+  } catch (e) {
+    console.error("[schedule/move] 원본 계획 조정 실패", e instanceof Error ? e.message : e);
   }
 
   revalidateTag("dashboard"); // 대시보드 집계(60초 캐시) 즉시 갱신

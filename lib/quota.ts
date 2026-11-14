@@ -9,7 +9,7 @@
 // vehicles 부분 갱신은 반드시 update().in()/eq() — upsert는 operator not-null에 걸린다.
 import { createServiceClient } from "@/lib/supabase/server";
 import { chunk, fetchAll } from "@/lib/supabase/paginate";
-import { isQuotaMode } from "@/lib/settings";
+import { getSetting, isQuotaMode, setSetting } from "@/lib/settings";
 import { workDateString } from "@/lib/work-day";
 import { companyOf } from "@/lib/route-dispatch";
 
@@ -47,6 +47,55 @@ export function pickSwap(
 }
 
 const ymd = (v: unknown) => (v ? String(v).slice(0, 10) : null);
+
+// ── 원본 계획(합의 수량) ──
+// 예정일을 실제 설치일로 옮기므로 지난 날짜의 예정일 대수는 실적과 같아진다 — 그걸 계획으로 읽으면
+// 리포트 '누적 계획'이 실적을 따라 바뀐다(11/13 계획 20대 → 22대, 누적 28대 → 30대).
+// 그래서 날짜별 계획 대수를 따로 보관한다: 일정 업로드가 파일 날짜 그대로 저장하고,
+// 설치 일정변경(차량 이동)이 옮긴 만큼 조정한다. 예정일 재배정·이월은 이 값을 건드리지 않는다.
+export const PLAN_DAYS_KEY = "plan_days"; // app_settings JSON {"YYYY-MM-DD": 대수}
+export type PlanDays = Record<string, number>;
+
+/** 예정일 목록 → 날짜별 대수(예정일 없는 차량 제외) */
+export function countPlan(dates: Iterable<string | null | undefined>): PlanDays {
+  const out: PlanDays = {};
+  for (const d of dates) if (d) out[d.slice(0, 10)] = (out[d.slice(0, 10)] ?? 0) + 1;
+  return out;
+}
+
+/**
+ * 일정 업로드 시 보관할 계획 — 오늘 이후는 올린 파일, 지난 날짜는 이전 보관값을 유지한다.
+ * 내려받은 진행현황 엑셀(지난 날짜 예정일 = 실제 설치일)을 고쳐 다시 올려도 지난 계획이 실적으로 덮이지 않게.
+ */
+export function mergePlan(prev: PlanDays | null, file: PlanDays, today: string): PlanDays {
+  if (!prev) return file;
+  const pick = (p: PlanDays, keep: (d: string) => boolean) => Object.entries(p).filter(([d]) => keep(d));
+  return Object.fromEntries([...pick(prev, (d) => d < today), ...pick(file, (d) => d >= today)]);
+}
+
+/** 설치 일정변경 — 차량을 옮긴 만큼 계획 대수도 옮긴다(from: 옮기기 전 예정일들) */
+export function shiftPlan(plan: PlanDays, from: Iterable<string | null | undefined>, to: string): PlanDays {
+  const out = { ...plan };
+  for (const f of from) {
+    const d = f?.slice(0, 10);
+    if (d === to) continue;
+    if (d && out[d]) out[d] > 1 ? out[d]-- : delete out[d];
+    out[to] = (out[to] ?? 0) + 1;
+  }
+  return out;
+}
+
+/** 보관된 원본 계획(없거나 깨졌으면 null — 읽는 쪽은 예정일 대수로 폴백) */
+export async function getPlanDays(slug?: string): Promise<PlanDays | null> {
+  try {
+    const v = JSON.parse((await getSetting(PLAN_DAYS_KEY, slug)) ?? "null");
+    return v && typeof v === "object" && !Array.isArray(v) ? (v as PlanDays) : null;
+  } catch {
+    return null;
+  }
+}
+
+export const savePlanDays = (plan: PlanDays, slug?: string) => setSetting(PLAN_DAYS_KEY, JSON.stringify(plan), slug);
 
 async function platesWithRecords(sb: SB, plates: string[], onlyCompleted: boolean): Promise<Set<string>> {
   const out = new Set<string>();

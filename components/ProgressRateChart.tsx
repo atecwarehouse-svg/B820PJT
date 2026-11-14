@@ -62,7 +62,9 @@ function dow(date: string): string {
   return DOW[new Date(utc(date)).getUTCDay()];
 }
 
-function buildRows(mode: Mode, days: ScheduleDay[], doneByDate: { date: string; done: number }[], today: string): Row[] {
+type PlanDay = Pick<ScheduleDay, "date" | "planned">; // 계획은 날짜·대수만 쓴다(수량 차감 방식은 원본 계획이 넘어온다)
+
+function buildRows(mode: Mode, days: PlanDay[], doneByDate: { date: string; done: number }[], today: string): Row[] {
   const keyOf = mode === "day" ? (d: string) => d : mode === "week" ? weekStart : monthKey;
   const planned = new Map<string, number>();
   const done = new Map<string, number>();
@@ -111,7 +113,7 @@ export default function ProgressRateChart({
   days,
   doneByDate,
 }: {
-  days: ScheduleDay[];
+  days: PlanDay[];
   doneByDate: { date: string; done: number }[];
 }) {
   const [mode, setMode] = useState<Mode>("week");

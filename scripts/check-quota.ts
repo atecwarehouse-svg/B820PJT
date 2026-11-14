@@ -1,6 +1,7 @@
 // 수량 차감 방식 순수 로직(lib/quota.ts) 자체 점검 — DB 없이 실행: npm run check:quota
 import assert from "node:assert/strict";
-import { nextDateFor, pickSwap, swapOrder } from "../lib/quota";
+import { countPlan, mergePlan, nextDateFor, pickSwap, shiftPlan, swapOrder } from "../lib/quota";
+import { buildReport, serviceCheckRows } from "../lib/report";
 
 // 이월 날짜: 오늘 이후 가장 가까운 예정일(오늘 포함), 없으면 null
 assert.equal(nextDateFor(["2026-11-04", "2026-11-05", "2026-11-26"], "2026-11-05"), "2026-11-05");
@@ -62,5 +63,33 @@ assert.deepEqual(
 
 // 교환은 내 예정일이 미래일 때만 — 과거 날짜 비교 규칙(settleQuota의 cur > today 가드와 동일 문자열 비교)
 assert.ok("2026-11-16" > "2026-11-13" && !("2026-11-08" > "2026-11-09"));
+
+// ── 원본 계획(누적 계획이 실적을 따라 바뀌던 문제 — 11/13 계획 20대인데 22대 설치) ──
+assert.deepEqual(countPlan(["2026-11-13", "2026-11-13T00:00:00", null, "2026-11-16"]), { "2026-11-13": 2, "2026-11-16": 1 });
+// 재업로드: 지난 날짜는 이전 보관값, 오늘 이후는 파일
+assert.deepEqual(
+  mergePlan({ "2026-11-13": 20, "2026-11-16": 27 }, { "2026-11-13": 22, "2026-11-16": 25, "2026-11-17": 30 }, "2026-11-14"),
+  { "2026-11-13": 20, "2026-11-16": 25, "2026-11-17": 30 },
+);
+assert.deepEqual(mergePlan(null, { "2026-11-13": 22 }, "2026-11-14"), { "2026-11-13": 22 });
+// 설치 일정변경: 옮긴 만큼만, 같은 날짜로는 변화 없음, 0대가 된 날짜는 지움
+assert.deepEqual(
+  shiftPlan({ "2026-11-16": 2, "2026-11-17": 1 }, ["2026-11-16", "2026-11-17", "2026-11-18", null], "2026-11-18"),
+  { "2026-11-16": 1, "2026-11-18": 3 },
+);
+// 리포트 금일·누적 계획은 원본 계획 기준(예정일 대수 22대는 실적이 덮은 값)
+{
+  const r = buildReport({
+    date: "2026-11-13",
+    completedList: [],
+    scheduleDays: [{ date: "2026-11-05", planned: 8 }, { date: "2026-11-13", planned: 22 }],
+    planDays: [{ date: "2026-11-05", planned: 8 }, { date: "2026-11-13", planned: 20 }, { date: "2026-11-16", planned: 27 }],
+  });
+  assert.equal(r.cumPlanned, 28);
+  assert.equal(r.dailyPlanned, 20);
+}
+// 승무사원 교육: 예정(고정 문구) / 완료 선택
+assert.equal(serviceCheckRows({ driverEduNote: "3:30 교육 예정" })[0].value, "🕒 3:30 교육 예정");
+assert.equal(serviceCheckRows({ driverEdu: true })[0].value, "✅ 교육완료");
 
 console.log("OK — check-quota");

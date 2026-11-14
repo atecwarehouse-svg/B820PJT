@@ -5,7 +5,8 @@ import { createServiceClient } from "@/lib/supabase/server";
 import { fetchAll, chunk } from "@/lib/supabase/paginate";
 import { workDateString } from "@/lib/work-day";
 import { BEFORE_SLOTS, AFTER_SLOTS, isDefaultSlotConfig, photoCount, stdSlotKeys } from "@/lib/slots";
-import { getSlotConfig } from "@/lib/settings";
+import { getSlotConfig, isQuotaMode } from "@/lib/settings";
+import { getPlanDays } from "@/lib/quota";
 import { loadOperatorAddresses } from "@/lib/operator-address";
 import { MODEM_FAULT_KIND } from "@/lib/modem";
 
@@ -493,6 +494,9 @@ export interface ScheduleStats {
   doneByDate: { date: string; done: number }[]; // 완료 업무일(saved_at 기준)별 실적 대수 — 진척율 탭용, 날짜 오름차순
   cumPlanned: number[]; // days 순서의 누적 계획
   cumDone: number[]; // days 순서의 누적 실적
+  // 원본 계획(수량 차감 방식 프로젝트만, 날짜 오름차순) — days의 지난 날짜는 실적으로 덮이므로
+  // 리포트 누적 계획·진척율 계획은 이걸 쓴다(lib/quota.ts PLAN_DAYS_KEY). 없으면 days 그대로.
+  planDays?: { date: string; planned: number }[];
   totalPlanned: number;
   totalDone: number;
   pilotTotal: number;
@@ -605,7 +609,14 @@ export async function loadScheduleStats(slug: string): Promise<ScheduleStats> {
     .map(([date, done]) => ({ date, done }))
     .sort((a, b) => a.date.localeCompare(b.date));
 
-  return { days, doneByDate, cumPlanned, cumDone, totalPlanned: cp, totalDone: cd, pilotTotal, pilotDone };
+  const plan = (await isQuotaMode(slug)) ? await getPlanDays(slug) : null;
+  const planDays = plan
+    ? Object.entries(plan)
+        .map(([date, planned]) => ({ date, planned }))
+        .sort((a, b) => a.date.localeCompare(b.date))
+    : undefined;
+
+  return { days, doneByDate, cumPlanned, cumDone, planDays, totalPlanned: cp, totalDone: cd, pilotTotal, pilotDone };
 }
 
 export interface OperatorScheduleDate {

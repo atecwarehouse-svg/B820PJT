@@ -130,6 +130,7 @@ function splitAutoBlocks(notes: string): { rest: string; reasons: Record<string,
 export default function DailyReportCard({
   completedList,
   scheduleDays,
+  planDays,
   totalVehicles,
   cumDone,
   cumPlanned,
@@ -143,6 +144,7 @@ export default function DailyReportCard({
 }: {
   completedList: CompletedVehicle[];
   scheduleDays: ScheduleDay[];
+  planDays?: { date: string; planned: number }[]; // 원본 계획(수량 차감 방식) — 누적 계획용
   totalVehicles?: number; // 전체 설치대상(전체 차량 수) — 누적 달성률·잔여 분모
   cumDone: number;
   cumPlanned: number;
@@ -155,6 +157,8 @@ export default function DailyReportCard({
   driverEduNote?: string; // 승무사원 교육 고정 문구 — 있으면 체크박스 대신 이 문구가 리포트에 항상 들어간다 (공항 B800)
 }) {
   const [date, setDate] = useState(today);
+  // 계획 수량의 기준 — 수량 차감 방식은 원본 계획(예정일은 실제 설치일로 옮겨져 지난 날짜가 실적과 같아진다)
+  const planSource = planDays ?? scheduleDays;
   const [planned, setPlanned] = useState(""); // 금일 계획 수량 직접 입력
   const [notes, setNotes] = useState("");
   // 운행시작 점검 (특이사항 위에 표기)
@@ -269,7 +273,7 @@ export default function DailyReportCard({
         if (typeof d.planned === "number") {
           // 사용자가 이미 계획 수량을 직접 고쳤으면(자동 채움값과 다르면) 덮지 않는다
           setPlanned((cur) => {
-            const auto = String(scheduleDays.find((s) => s.date === date)?.planned ?? 0);
+            const auto = String(planSource.find((s) => s.date === date)?.planned ?? 0);
             return cur === "" || cur === auto ? String(d.planned) : cur;
           });
         }
@@ -299,7 +303,7 @@ export default function DailyReportCard({
     return () => {
       alive = false;
     };
-  }, [stage, date, scheduleDays]);
+  }, [stage, date, planSource]);
 
   // 배차표 설치제외 차량 조회 — 날짜 바뀌면 다시(사유 입력도 초기화).
   useEffect(() => {
@@ -415,14 +419,14 @@ export default function DailyReportCard({
   // 같을 때(=안 고쳤을 때)만 갱신한다.
   const plannedAutoRef = useRef<{ date: string; auto: string } | null>(null);
   useEffect(() => {
-    const sd = String(scheduleDays.find((d) => d.date === date)?.planned ?? 0);
+    const sd = String(planSource.find((d) => d.date === date)?.planned ?? 0);
     const prev = plannedAutoRef.current;
     plannedAutoRef.current = { date, auto: sd };
     setPlanned((cur) => {
       if (!prev || prev.date !== date) return sd; // 최초·날짜 변경 — 자동 채움
       return cur === "" || cur === prev.auto ? sd : cur; // 직접 고친 값은 유지
     });
-  }, [date, scheduleDays]);
+  }, [date, planSource]);
 
   const check: ServiceCheck = useMemo(
     () => ({
@@ -434,7 +438,8 @@ export default function DailyReportCard({
       kakaoStatus,
       kakaoSymptom,
       ...(hideBisKakao ? { hideBisKakao: true } : {}),
-      ...(driverEduNote ? { driverEduNote } : {}),
+      // 고정 문구 프로젝트: '교육 예정'이면 문구, '교육 완료'를 고르면 문구 없이 완료 표기(✅ 교육완료)
+      ...(driverEduNote && !driverEdu ? { driverEduNote } : {}),
     }),
     [driverEdu, fareSetting, baseFare, bisStatus, bisSymptom, kakaoStatus, kakaoSymptom, hideBisKakao, driverEduNote],
   );
@@ -446,8 +451,8 @@ export default function DailyReportCard({
 
   const report = useMemo(
     () =>
-      buildReport({ date, completedList, scheduleDays, totalVehicles, cumDone, cumPlanned, plannedOverride }),
-    [date, completedList, scheduleDays, totalVehicles, cumDone, cumPlanned, plannedOverride],
+      buildReport({ date, completedList, scheduleDays, planDays, totalVehicles, cumDone, cumPlanned, plannedOverride }),
+    [date, completedList, scheduleDays, planDays, totalVehicles, cumDone, cumPlanned, plannedOverride],
   );
   const text = useMemo(
     () => formatReportText(report, mergedNotes, check, stage === 2 ? vocs : undefined, projectLabel),
@@ -543,7 +548,28 @@ export default function DailyReportCard({
         {driverEduNote ? (
           <div className="rounded-lg border border-gray-200 bg-white px-2.5 py-2">
             <span className="block text-xs font-medium text-gray-800">승무사원 교육</span>
-            <span className="mt-0.5 block text-[11px] text-gray-500"><Icon name="clock" /> {driverEduNote} (고정 문구)</span>
+            <div className="mt-1.5 flex gap-2">
+              {([false, true] as const).map((done) => (
+                <button
+                  key={String(done)}
+                  type="button"
+                  onClick={() => setDriverEdu(done)}
+                  aria-pressed={driverEdu === done}
+                  className={`flex-1 rounded-lg border px-2 py-1 text-xs font-semibold ${
+                    driverEdu === done
+                      ? done
+                        ? "border-emerald-600 bg-emerald-600 text-white"
+                        : "border-brand-600 bg-brand-600 text-white"
+                      : "border-gray-300 bg-white text-gray-600"
+                  }`}
+                >
+                  {done ? "교육 완료" : "교육 예정"}
+                </button>
+              ))}
+            </div>
+            <span className="mt-1.5 block text-[11px] text-gray-500">
+              {driverEdu ? "리포트에 '교육완료'로 표기됩니다" : <><Icon name="clock" /> {driverEduNote}</>}
+            </span>
           </div>
         ) : (
           <ChkRow

@@ -9,6 +9,7 @@ import DailyReportCard from "@/components/DailyReportCard";
 export default function DailyReportModal(props: {
   completedList: CompletedVehicle[];
   scheduleDays: ScheduleDay[];
+  planDays?: { date: string; planned: number }[]; // 원본 계획(수량 차감 방식) — 누적 계획용
   totalVehicles?: number; // 전체 설치대상(전체 차량 수) — 누적 달성률·잔여 분모
   cumDone: number;
   cumPlanned: number;

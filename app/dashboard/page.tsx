@@ -253,6 +253,7 @@ export default async function DashboardPage() {
             <DailyReportModal
               completedList={ip.completedList}
               scheduleDays={sch?.days ?? []}
+              planDays={sch?.planDays}
               totalVehicles={ip.totalVehicles}
               cumDone={ip.complete}
               cumPlanned={sch?.totalPlanned ?? 0}
@@ -394,7 +395,7 @@ export default async function DashboardPage() {
                     설치 일정 데이터가 없습니다. (예정일 임포트 필요)
                   </p>
                 ) : (
-                  <ProgressRateChart days={sch.days} doneByDate={sch.doneByDate} />
+                  <ProgressRateChart days={sch.planDays ?? sch.days} doneByDate={sch.doneByDate} />
                 )}
               </section>
             </>

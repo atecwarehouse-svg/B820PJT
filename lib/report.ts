@@ -8,6 +8,9 @@ export interface ReportInput {
   date: string; // 업무일 YYYY-MM-DD
   completedList: { operator: string; route: string; workDate: string }[];
   scheduleDays: { date: string; planned: number }[];
+  // 원본 계획(수량 차감 방식 프로젝트) — 있으면 금일·누적 계획은 이걸로 센다.
+  // 그 방식은 예정일이 실제 설치일로 옮겨져 scheduleDays의 지난 날짜가 실적과 같아지기 때문(lib/quota.ts).
+  planDays?: { date: string; planned: number }[];
   plannedOverride?: number | null; // 금일 계획 수량 직접 입력값(있으면 우선)
   // 전체 설치대상(전체 차량 수, 예: 2,739대) — 누적 달성률·잔여의 분모.
   // 완료 목록에는 예정일 없는 차량(증차 등)도 포함되므로, 분모도 예정일 유무와
@@ -118,11 +121,11 @@ export function buildReport(input: ReportInput): DailyReport {
   const dailyPlanned =
     typeof input.plannedOverride === "number" && isFinite(input.plannedOverride)
       ? input.plannedOverride
-      : input.scheduleDays.find((s) => s.date === date)?.planned ?? 0;
+      : (input.planDays ?? input.scheduleDays).find((s) => s.date === date)?.planned ?? 0;
   const dailyPct = dailyPlanned ? (dailyDone / dailyPlanned) * 100 : 0;
 
   // 누적(기준일까지): 설치예정일 누적 계획, 그 날짜까지 완료
-  const cumPlanned = input.scheduleDays
+  const cumPlanned = (input.planDays ?? input.scheduleDays)
     .filter((s) => s.date <= date)
     .reduce((sum, s) => sum + s.planned, 0);
   const cumDone = input.completedList.filter((c) => c.workDate <= date).length;

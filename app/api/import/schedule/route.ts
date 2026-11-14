@@ -7,6 +7,8 @@ import { prepareTemplateBuffer } from "@/lib/import/prepare-template";
 import { checkAdminPassword, isAdmin } from "@/lib/admin-auth";
 import { currentSlug, isDefault } from "@/lib/project";
 import { isQuotaMode } from "@/lib/settings";
+import { countPlan, getPlanDays, mergePlan, savePlanDays } from "@/lib/quota";
+import { workDateString } from "@/lib/work-day";
 import { TEMPLATE_BUCKET, templateObject, templateBackup } from "@/lib/template-path";
 
 export const runtime = "nodejs";
@@ -130,6 +132,9 @@ export async function POST(req: NextRequest) {
     }
     if (data.length < PAGE) break;
   }
+
+  // 원본 계획(날짜별 합의 수량) — 아래 1-1이 예정일을 바꾸기 전, 올린 파일 날짜 그대로 센다(반영 시 보관).
+  const filePlan = countPlan(parsed.rows.map((r) => r.planned_date));
 
   // 1-1) 수량 차감 방식(quota_mode): 착수·완료한 차량(records 있음)의 예정일은 앱이 실제에 맞춰
   //      재배정한 값이므로 파일의 명목 날짜로 덮어쓰지 않는다(미리보기 집계·반영 모두 기존 값 유지).
@@ -307,6 +312,14 @@ export async function POST(req: NextRequest) {
     if (error) {
       return NextResponse.json({ error: `제외 차량 삭제 실패: ${error.message}` }, { status: 500 });
     }
+  }
+
+  // 원본 계획 보관 — 수량 차감 방식의 리포트 누적 계획 기준(lib/quota.ts). 지난 날짜는 이전 보관값 유지.
+  // 실패해도 일정 반영은 유지(누적 계획이 예정일 대수로 폴백될 뿐).
+  try {
+    await savePlanDays(mergePlan(await getPlanDays(), filePlan, workDateString(new Date())));
+  } catch (e) {
+    console.error("[import/schedule] 원본 계획 보관 실패", e instanceof Error ? e.message : e);
   }
 
   // 대시보드 집계(60초 캐시)를 즉시 갱신 — 없으면 업로드 직후 총대수가 옛 숫자로 보인다.

@@ -100,6 +100,7 @@ export async function POST(req: NextRequest) {
       date,
       completedList: ip.completedList,
       scheduleDays: sch.days,
+      planDays: sch.planDays,
       totalVehicles: ip.totalVehicles,
       cumDone: ip.complete,
       cumPlanned: sch.totalPlanned,
