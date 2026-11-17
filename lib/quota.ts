@@ -67,9 +67,9 @@ export function countPlan(dates: Iterable<string | null | undefined>): PlanDays 
  * 일정 업로드 시 보관할 계획 — 오늘 이후는 올린 파일, 지난 날짜는 이전 보관값을 유지한다.
  * 내려받은 진행현황 엑셀(지난 날짜 예정일 = 실제 설치일)을 고쳐 다시 올려도 지난 계획이 실적으로 덮이지 않게.
  */
-export function mergePlan(prev: PlanDays | null, file: PlanDays, today: string): PlanDays {
+export function mergePlan<T>(prev: Record<string, T> | null, file: Record<string, T>, today: string): Record<string, T> {
   if (!prev) return file;
-  const pick = (p: PlanDays, keep: (d: string) => boolean) => Object.entries(p).filter(([d]) => keep(d));
+  const pick = (p: Record<string, T>, keep: (d: string) => boolean) => Object.entries(p).filter(([d]) => keep(d));
   return Object.fromEntries([...pick(prev, (d) => d < today), ...pick(file, (d) => d >= today)]);
 }
 
@@ -96,6 +96,56 @@ export async function getPlanDays(slug?: string): Promise<PlanDays | null> {
 }
 
 export const savePlanDays = (plan: PlanDays, slug?: string) => setSetting(PLAN_DAYS_KEY, JSON.stringify(plan), slug);
+
+// 운수사별 원본 계획 — 설치계획·설치시작 보고의 운수사 대수. 예정일 대수는 앞당겨 설치한 만큼 줄어서(11/17 28→25)
+// 올린 엑셀 차량리스트의 날짜×운수사 대수를 따로 보관한다. 갱신 규칙은 plan_days와 같다(업로드·일정변경).
+export const PLAN_OPS_KEY = "plan_ops"; // app_settings JSON {"YYYY-MM-DD": {"운수사": 대수}}
+export type PlanOps = Record<string, Record<string, number>>;
+const opName = (o: string | null | undefined) => o?.trim() || "미지정"; // loadTodayPlanGroups와 같은 이름 규칙
+
+export function countPlanOps(rows: Iterable<{ planned_date: string | null | undefined; operator: string | null | undefined }>): PlanOps {
+  const out: PlanOps = {};
+  for (const r of rows) {
+    const d = r.planned_date?.slice(0, 10);
+    if (!d) continue;
+    const day = (out[d] ??= {});
+    day[opName(r.operator)] = (day[opName(r.operator)] ?? 0) + 1;
+  }
+  return out;
+}
+
+/** 설치 일정변경 — 옮긴 차량만큼 그 운수사의 계획도 옮긴다 */
+export function shiftPlanOps(
+  plan: PlanOps,
+  from: Iterable<{ date: string | null | undefined; operator: string | null | undefined }>,
+  to: string,
+): PlanOps {
+  const out: PlanOps = Object.fromEntries(Object.entries(plan).map(([d, m]) => [d, { ...m }]));
+  for (const f of from) {
+    const d = f.date?.slice(0, 10);
+    if (d === to) continue;
+    const op = opName(f.operator);
+    if (d && out[d]?.[op]) {
+      if (out[d][op] > 1) out[d][op]--;
+      else delete out[d][op];
+      if (!Object.keys(out[d]).length) delete out[d];
+    }
+    const day = (out[to] ??= {});
+    day[op] = (day[op] ?? 0) + 1;
+  }
+  return out;
+}
+
+export async function getPlanOps(slug?: string): Promise<PlanOps | null> {
+  try {
+    const v = JSON.parse((await getSetting(PLAN_OPS_KEY, slug)) ?? "null");
+    return v && typeof v === "object" && !Array.isArray(v) ? (v as PlanOps) : null;
+  } catch {
+    return null;
+  }
+}
+
+export const savePlanOps = (plan: PlanOps, slug?: string) => setSetting(PLAN_OPS_KEY, JSON.stringify(plan), slug);
 
 async function platesWithRecords(sb: SB, plates: string[], onlyCompleted: boolean): Promise<Set<string>> {
   const out = new Set<string>();

@@ -6,7 +6,7 @@ import { fetchAll, chunk } from "@/lib/supabase/paginate";
 import { workDateString } from "@/lib/work-day";
 import { BEFORE_SLOTS, AFTER_SLOTS, isDefaultSlotConfig, photoCount, stdSlotKeys } from "@/lib/slots";
 import { getSlotConfig, isQuotaMode } from "@/lib/settings";
-import { getPlanDays } from "@/lib/quota";
+import { getPlanDays, getPlanOps } from "@/lib/quota";
 import { loadOperatorAddresses } from "@/lib/operator-address";
 import { MODEM_FAULT_KIND } from "@/lib/modem";
 
@@ -344,6 +344,12 @@ export interface TodayPlanGroup {
 
 // byOperator: 수량 차감 방식 프로젝트 — 노선별 대수는 임의 배정된 명목값이라 운수사 단위로만(route "")
 export async function loadTodayPlanGroups(slug: string, date: string, byOperator = false): Promise<TodayPlanGroup[]> {
+  // 수량 차감 방식은 올린 엑셀의 운수사별 계획(plan_ops) — 예정일 대수는 앞당겨 설치한 만큼 줄어 있다
+  const planned = byOperator ? (await getPlanOps(slug))?.[date] : undefined;
+  if (planned)
+    return Object.entries(planned)
+      .map(([operator, n]) => ({ operator, route: "", planned: n }))
+      .sort((a, b) => b.planned - a.planned || a.operator.localeCompare(b.operator, "ko"));
   const supabase = createServiceClient(slug);
   const vehicles = await fetchAll<{
     planned_date: string | null;

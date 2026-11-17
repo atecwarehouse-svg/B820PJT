@@ -1,6 +1,6 @@
 // 수량 차감 방식 순수 로직(lib/quota.ts) 자체 점검 — DB 없이 실행: npm run check:quota
 import assert from "node:assert/strict";
-import { countPlan, mergePlan, nextDateFor, pickSwap, shiftPlan, swapOrder } from "../lib/quota";
+import { countPlan, countPlanOps, mergePlan, nextDateFor, pickSwap, shiftPlan, shiftPlanOps, swapOrder } from "../lib/quota";
 import { buildReport, serviceCheckRows } from "../lib/report";
 
 // 이월 날짜: 오늘 이후 가장 가까운 예정일(오늘 포함), 없으면 null
@@ -95,5 +95,25 @@ assert.equal(serviceCheckRows({ driverEdu: true })[0].value, "✅ 교육완료")
 assert.equal(serviceCheckRows({ driverEduStatus: "planned", driverEduNote: "3:30 교육 예정" })[0].value, "🕒 3:30 교육 예정");
 assert.equal(serviceCheckRows({ driverEduStatus: "ongoing" })[0].value, "🔄 교육중");
 assert.equal(serviceCheckRows({ driverEduStatus: "done", driverEdu: true })[0].value, "✅ 교육완료");
+
+// 운수사별 원본 계획: 날짜×운수사 대수, 운수사 빈값은 "미지정", 예정일 없는 차량 제외
+assert.deepEqual(
+  countPlanOps([
+    { planned_date: "2026-11-17", operator: "공항리무진 본사" },
+    { planned_date: "2026-11-17", operator: " 공항리무진 본사 " },
+    { planned_date: "2026-11-17", operator: "" },
+    { planned_date: null, operator: "공항리무진 본사" },
+  ]),
+  { "2026-11-17": { "공항리무진 본사": 2, 미지정: 1 } },
+);
+// 일정변경: 옮긴 차량의 운수사 계획만 이동, 0이 되면 키 삭제, 같은 날짜는 그대로
+assert.deepEqual(
+  shiftPlanOps(
+    { "2026-11-17": { A: 1, B: 2 } },
+    [{ date: "2026-11-17", operator: "A" }, { date: "2026-11-17", operator: "B" }, { date: "2026-11-18", operator: "B" }],
+    "2026-11-18",
+  ),
+  { "2026-11-17": { B: 1 }, "2026-11-18": { A: 1, B: 1 } }, // 이미 11/18이던 차량은 이동 아님
+);
 
 console.log("OK — check-quota");

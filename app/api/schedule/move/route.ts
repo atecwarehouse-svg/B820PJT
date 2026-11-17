@@ -5,7 +5,7 @@ import { chunk } from "@/lib/supabase/paginate";
 import { PILOT_CUTOFF } from "@/lib/import/parse-schedule";
 import { checkAdminPassword, isAdmin } from "@/lib/admin-auth";
 import { currentSlug, isDefault } from "@/lib/project";
-import { getPlanDays, savePlanDays, shiftPlan } from "@/lib/quota";
+import { getPlanDays, getPlanOps, savePlanDays, savePlanOps, shiftPlan, shiftPlanOps } from "@/lib/quota";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -40,9 +40,13 @@ export async function POST(req: NextRequest) {
   const patch = { planned_date: date, is_pilot: isDefault(currentSlug()) && date < PILOT_CUTOFF }; // 시범설치 컷오프는 B820 전용
   const moved: string[] = [];
   const before = new Map<string, string | null>(); // 옮기기 전 예정일 — 원본 계획 조정용
+  const opOf = new Map<string, string | null>(); // 운수사 — 운수사별 원본 계획 조정용
   for (const part of chunk(plates)) {
-    const { data: old } = await createServiceClient().from("vehicles").select("plate, planned_date").in("plate", part);
-    for (const v of (old ?? []) as { plate: string; planned_date: string | null }[]) before.set(v.plate, v.planned_date);
+    const { data: old } = await createServiceClient().from("vehicles").select("plate, planned_date, operator").in("plate", part);
+    for (const v of (old ?? []) as { plate: string; planned_date: string | null; operator: string | null }[]) {
+      before.set(v.plate, v.planned_date);
+      opOf.set(v.plate, v.operator);
+    }
     const { data, error } = await supabaseUpdate(part, patch);
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
@@ -56,6 +60,9 @@ export async function POST(req: NextRequest) {
     const plan = await getPlanDays();
     const known = moved.filter((p) => before.has(p)); // 이전 예정일을 못 읽은 차량은 빼고(계획만 늘어나지 않게)
     if (plan && known.length) await savePlanDays(shiftPlan(plan, known.map((p) => before.get(p)), date));
+    const ops = await getPlanOps();
+    if (ops && known.length)
+      await savePlanOps(shiftPlanOps(ops, known.map((p) => ({ date: before.get(p), operator: opOf.get(p) })), date));
   } catch (e) {
     console.error("[schedule/move] 원본 계획 조정 실패", e instanceof Error ? e.message : e);
   }
