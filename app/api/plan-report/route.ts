@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { currentProject, reportLabel } from "@/lib/project";
 import { createServiceClient } from "@/lib/supabase/server";
-import { getConsultConfig } from "@/lib/settings";
+import { getConsultConfig, getSetting, setSetting } from "@/lib/settings";
 import { consultTitle } from "@/lib/consultation-form";
 import {
   sendPlanReportCard,
@@ -11,6 +11,20 @@ import {
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+// 보고한 입력값(운수사별 집합시간·장소·휴차·특이사항) — 다시 열면 그대로 채워진다. 키에 날짜가 있어 날짜가 바뀌면 빈 칸.
+const draftKey = (date: string) => `plan_report_input:${date}`;
+const isDate = (d: string) => /^\d{4}-\d{2}-\d{2}$/.test(d);
+
+export async function GET(req: NextRequest) {
+  const date = req.nextUrl.searchParams.get("date") ?? "";
+  if (!isDate(date)) return NextResponse.json({ input: {} });
+  try {
+    return NextResponse.json({ input: JSON.parse((await getSetting(draftKey(date))) ?? "{}") });
+  } catch {
+    return NextResponse.json({ input: {} });
+  }
+}
 
 // POST /api/plan-report — 대시보드 '설치계획 보고' 버튼.
 // 금일 계획(운수사·노선·대수)+집합시간·설치장소를 시작보고/협의사항 두 채팅방에 전송.
@@ -107,6 +121,14 @@ export async function POST(req: NextRequest) {
   }
 
   const total = groups.reduce((s, g) => s + g.count, 0);
+
+  // 입력값 보관 — 전송 실패해도 쓴 내용은 남긴다. 저장 실패는 보고를 막지 않음.
+  if (isDate(date)) {
+    const input = Object.fromEntries(
+      groups.map((g) => [g.operator, { time: g.time ?? "", place: g.place ?? "", dayOff: g.dayOff ?? "", nextDayOff: g.nextDayOff ?? "", notes: g.notes ?? "" }]),
+    );
+    await setSetting(draftKey(date), JSON.stringify(input)).catch((e) => console.error("[plan-report] 입력값 저장 실패", e));
+  }
 
   // rooms 지정 시 그 방에만 전송 — 한 방만 실패한 재시도가 성공한 방에 중복 발송하지 않게.
   const roomsIn = Array.isArray(body.rooms)

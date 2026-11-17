@@ -181,6 +181,28 @@ function PlanReportPanel({
       } catch {
         // 실패 시 빈 값
       }
+      // 오늘 이미 보고했으면 그때 입력값 그대로(협의사항 프리필보다 우선) — 날짜가 바뀌면 저장값이 없어 빈 칸
+      try {
+        const res = await fetch(`/api/plan-report?date=${today}`, { cache: "no-store" });
+        const saved = ((await res.json()).input ?? {}) as Record<
+          string,
+          { time?: string; place?: string; dayOff?: string; nextDayOff?: string; notes?: string }
+        >;
+        for (const [op, v] of Object.entries(saved)) {
+          if (!init[op] || !v || typeof v !== "object") continue;
+          const [hour = "", minute = "00"] = (v.time ?? "").split(":");
+          init[op] = {
+            hour,
+            minute: hour ? minute : "00",
+            place: v.place ?? "",
+            dayOff: v.dayOff ?? "",
+            nextDayOff: v.nextDayOff ?? "",
+            notes: v.notes ?? "",
+          };
+        }
+      } catch {
+        // 없으면 협의사항 프리필만
+      }
       // 응답이 오는 사이 사용자가 입력한 값은 프리필로 덮지 않는다
       if (alive) {
         setEntries((cur) => {
