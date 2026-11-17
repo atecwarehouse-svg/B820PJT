@@ -19,7 +19,8 @@ import { workDateString, workDateExcelSerial, excelSerialFromDate } from "@/lib/
 import { TEMPLATE_BUCKET, templateObject } from "@/lib/template-path";
 import { currentSlug, getProject, isDefault } from "@/lib/project";
 import { stdSlotKeys } from "@/lib/slots";
-import { PROJECT_PERIOD_KEY, getSetting, getSlotConfig, parsePeriod } from "@/lib/settings";
+import { PROJECT_PERIOD_KEY, getCustom, getSetting, getSlotConfig, parsePeriod } from "@/lib/settings";
+import { fillOwnForm } from "@/lib/export/own-form";
 
 
 // asOfDate: 기준일(업무일 "YYYY-MM-DD"). 지정 없으면 현재 업무일.
@@ -135,7 +136,12 @@ export async function buildProgressXlsx(opts?: { asOfDate?: string; slug?: strin
   const prefix = isDefault(slug) ? "인천버스" : ((await getProject(slug))?.name ?? slug);
   const { buffer, filled, added, removed } = isDefault(slug)
     ? await fillProgressXlsx(template, completed, asOfSerial, dailyPlan, cumPlan, dbInfo, exclusions)
-    : await buildV2Progress(template, prefix, completed, asOfSerial, dbInfo, exclusions, parsePeriod(await getSetting(PROJECT_PERIOD_KEY, slug)));
+    : (await getCustom(slug)).flags.ownForm
+      ? await fillOwnForm(template, completed, asOfSerial, exclusions).then((r) => {
+          if (r.missing.length) console.warn(`[export/progress] 올린 양식에 없는 완료 차량 ${r.missing.length}대(다시 올리면 반영): ${r.missing.join(", ")}`);
+          return { buffer: r.buffer, filled: r.filled, added: 0, removed: 0 };
+        })
+      : await buildV2Progress(template, prefix, completed, asOfSerial, dbInfo, exclusions, parsePeriod(await getSetting(PROJECT_PERIOD_KEY, slug)));
 
   // 파일명: 기준일 YYMMDD
   const [yy, mm, dd] = asOfDate.split("-");

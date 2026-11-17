@@ -6,7 +6,7 @@ import { parseScheduleBuffer } from "@/lib/import/parse-schedule";
 import { prepareTemplateBuffer } from "@/lib/import/prepare-template";
 import { checkAdminPassword, isAdmin } from "@/lib/admin-auth";
 import { currentSlug, isDefault } from "@/lib/project";
-import { isQuotaMode } from "@/lib/settings";
+import { getCustom, isQuotaMode } from "@/lib/settings";
 import { countPlan, getPlanDays, mergePlan, savePlanDays } from "@/lib/quota";
 import { workDateString } from "@/lib/work-day";
 import { TEMPLATE_BUCKET, templateObject, templateBackup } from "@/lib/template-path";
@@ -252,13 +252,16 @@ export async function POST(req: NextRequest) {
   // + 이 파일이 다운로드 양식(템플릿)으로 교체 가능한지 미리 알려준다.
   // 새 프로젝트(B820 아님)의 저장 양식 = 올린 파일의 차량리스트 그대로. 진행현황 엑셀은 다운로드 때
   // 마스터 양식(설치 진행현황·전개일정·일자별 현황)에 차량리스트 ⊕ DB 완료를 넣어 새로 만든다(lib/export/v2-form.ts).
+  const ownForm = foreign && (await getCustom()).flags.ownForm; // 다운로드 = 올린 엑셀 그대로(lib/export/own-form.ts)
   const v2Note = () => {
     const ops = new Set(parsed.rows.map((r) => r.operator)).size;
     const days = new Set(parsed.rows.map((r) => r.planned_date).filter(Boolean)).size;
     return (
       `차량리스트 ${parsed.rows.length.toLocaleString()}대(운수사 ${ops}곳, 설치 예정일 ${days}일)` +
       (parsed.excluded ? ` · 설치 대상이 아닌(제외·말소) ${parsed.excluded}대는 등록하지 않습니다` : "") +
-      ". 진행현황 엑셀(설치 진행현황·전개일정·일자별 현황)은 다운로드 때 이 차량리스트 기준으로 자동 생성됩니다."
+      (ownForm
+        ? ". 진행현황 엑셀은 다운로드 때 이 파일 그대로(설치 완료여부·완료일·기준일만 채워서) 내려받습니다. 계획·일정이 바뀌면 엑셀을 다시 올려 주세요."
+        : ". 진행현황 엑셀(설치 진행현황·전개일정·일자별 현황)은 다운로드 때 이 차량리스트 기준으로 자동 생성됩니다.")
     );
   };
   if (!apply) {

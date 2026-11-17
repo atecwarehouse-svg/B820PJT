@@ -20,6 +20,7 @@ export const FEATURES = [
   { key: "routeSheet", label: "운수사 배차표 엑셀", desc: "배차표 안 노선별 배차표·당일 배차표 업로드·설치완료 차량 리스트·차고지·운행시작/종료·입차순번 (배차표가 켜져 있어야 함, 아래 차번 규칙 필요)", kinds: ["album"], b820: false, b830: true },
   { key: "dispatchByCompany", label: "배차표 운수사 단위", desc: "배차표에서 영업소(본사·○○영업소)를 나누지 않고 운수사 이름 첫 단어(회사) 단위로 묶어 표시 — 공항버스용", kinds: ["album"], b820: false, b830: true },
   { key: "checkChoices", label: "설치 전 선택 확인 3개", desc: "촬영 1단계의 TV소리·라디오·차량파손 필수 선택(비고 자동 기재)", kinds: ["album"], b820: false, b830: true },
+  { key: "ownForm", label: "진행현황 엑셀 = 올린 양식 그대로", desc: "다운로드 때 마지막으로 올린 전개현황 엑셀을 그대로 쓰고 설치 완료여부·완료일·기준일만 채움(계획은 엑셀에 적은 값 고정, 운수사·일정이 바뀌면 엑셀을 다시 올림). 끄면 표준 양식으로 새로 만듦", kinds: ["album"], b820: false, b830: true },
   { key: "paManual", label: "안내방송 결선도", desc: "홈의 안내방송 결선도 버튼(공항 B830 작업지도서)", kinds: ["album"], b820: false, b830: true },
   { key: "statusSheet", label: "현황표", desc: "전체 센터 현황표 버튼", kinds: ["handover", "osupdate"], b820: true, b830: true },
   { key: "verify", label: "검증", desc: "서버 등록 검증(양도양수) / OS 적용 검증(OS업데이트) 버튼", kinds: ["handover", "osupdate"], b820: true, b830: true },
