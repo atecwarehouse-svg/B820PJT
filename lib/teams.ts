@@ -1,7 +1,7 @@
 // 팀즈 설치 진행 현황 카드 전송 — 공유 버튼/크론이 공유하는 로직.
 
 import type { DailyReport, ServiceCheck } from "./report";
-import { groupByOperator, noteBullet, serviceCheckRows } from "./report";
+import { checkTone, groupByOperator, noteBullet, noteRows, serviceCheckRows } from "./report";
 import type { VocOperatorSummary } from "./voc";
 import { VOC_RATINGS, starBar } from "./voc";
 import { isNewModem } from "./modem";
@@ -358,94 +358,179 @@ export async function sendStartReportCard(d: {
   await post(url, card, "시작보고");
 }
 
-// 완료보고 카드용 3열 격자 — 칸 너비가 같은 ColumnSet이라 줄마다 열이 세로로 맞는다.
-const REPORT_COLS = 3;
-// 수치 타일 한 줄(작은 라벨 + 굵은 값) — 금일/누적 수치를 3칸씩 두 줄로.
-function kpiRow(items: [label: string, value: string][], spacing = "Small"): unknown {
+// ── 금일 설치 완료 보고 카드 ──────────────────────────────
+// 보고용 이미지(lib/report-image.ts)와 같은 모양: 머리띠 → 수치 상자 3칸×2줄 → 운수사 띠 + 노선 칸
+// → 운행시작 점검 → (VOC) → 특이사항. 칸은 ColumnSet/Column 배경(style)으로 만든다 — 팀즈 폰 앱은
+// 카드 1.2까지만 확실히 그리므로 Table(1.5)은 쓰지 않는다. 테두리(showBorder/roundedCorners)는 PC에서만
+// 보이고, 모르는 기기는 무시하므로 폰에서도 배경색 칸으로 오와 열이 그대로 맞는다.
+const REPORT_COLS = 3; // 노선 칸 열 수(이미지는 4열 — 팀즈 카드는 폰 폭을 고려해 3열)
+const boxed = { showBorder: true, roundedCorners: true };
+
+// 수치 상자 한 줄 — 작은 라벨 + 굵은 값, 회색 상자 3칸
+function kpiRow(items: [label: string, value: string, color?: string][], spacing: string): unknown {
   return {
     type: "ColumnSet",
     spacing,
-    columns: items.map(([label, value]) => ({
+    columns: items.map(([label, value, color]) => ({
       type: "Column",
       width: "stretch",
+      style: "emphasis",
+      ...boxed,
       items: [
         { type: "TextBlock", text: label, isSubtle: true, size: "Small", wrap: true },
-        { type: "TextBlock", text: value, weight: "Bolder", spacing: "None", wrap: true },
+        {
+          type: "TextBlock",
+          text: value,
+          weight: "Bolder",
+          size: "Medium",
+          spacing: "None",
+          wrap: true,
+          ...(color ? { color } : {}),
+        },
       ],
     })),
   };
 }
-// 글자 목록을 3열 격자 줄들로 — 마지막 줄의 빈 칸도 채워 열 너비를 유지한다.
-function textGrid(texts: string[]): unknown[] {
-  const out: unknown[] = [];
-  for (let i = 0; i < texts.length; i += REPORT_COLS) {
+
+// 운수사 줄(이름 ··· 합계, 아래 구분선) + 노선 칸 격자. 노선 칸은 회색 바탕 상자 — 테두리를 못 그리는
+// 기기에서도 칸끼리 구분된다. 마지막 줄의 빈 칸도 채워 열 너비를 유지한다.
+function operatorBlocks(o: { operator: string; total: number; routes: { route: string; count: number }[] }): unknown[] {
+  const out: unknown[] = [
+    {
+      type: "Container",
+      spacing: "Medium",
+      items: [
+        {
+          type: "ColumnSet",
+          columns: [
+            { type: "Column", width: "stretch", items: [{ type: "TextBlock", text: o.operator, weight: "Bolder", wrap: true }] },
+            {
+              type: "Column",
+              width: "auto",
+              verticalContentAlignment: "Center",
+              items: [{ type: "TextBlock", text: `${o.total.toLocaleString()}대`, weight: "Bolder", color: "Attention" }],
+            },
+          ],
+        },
+      ],
+    },
+  ];
+  for (let i = 0; i < o.routes.length; i += REPORT_COLS) {
     out.push({
       type: "ColumnSet",
-      spacing: "None",
-      columns: Array.from({ length: REPORT_COLS }, (_, k) => ({
-        type: "Column",
-        width: "stretch",
-        items: [{ type: "TextBlock", text: texts[i + k] ?? " ", spacing: "None", wrap: true }],
-      })),
+      spacing: "Small",
+      columns: Array.from({ length: REPORT_COLS }, (_, k) => {
+        const c = o.routes[i + k];
+        return {
+          type: "Column",
+          width: "stretch",
+          ...(c ? { style: "emphasis", ...boxed } : {}),
+          // 노선·대수를 칸 안에서 다시 둘로 나누면 폰 폭에서 대수가 "5…"로 잘린다 — 한 줄 글자로 두고
+          // 대수만 굵게(팀즈 카드 글자는 **굵게** 표기를 지원), 좁으면 잘리지 않고 줄바꿈된다.
+          items: [{ type: "TextBlock", text: c ? `${c.route}  **${c.count.toLocaleString()}대**` : " ", wrap: true }],
+        };
+      }),
     });
   }
   return out;
 }
 
+// 섹션 제목(구분선 + 굵은 글씨)
+function sectionTitle(text: string): unknown {
+  return { type: "TextBlock", text, weight: "Bolder", spacing: "Large", separator: true, wrap: true };
+}
+
 // 금일 설치 완료 보고 카드 — 진행현황·설치시작 보고 카드와 같은 채팅방(설치 진행중 공유방, TEAMS_WEBHOOK_URL).
-// 금일 완료 리포트 메일 발송 시 함께 전송. 수치는 3칸 타일 두 줄, 설치 내역은 운수사별로 묶어
-// 노선을 3열 격자로 — 노선마다 한 줄씩 쓰면 카드가 길어지고 운수사명이 접혀 줄이 틀어진다.
+// 금일 완료 리포트 1차(팀즈만)·2차(메일과 함께) 발송 시 전송.
 export async function sendCompletionReportCard(
   r: DailyReport,
   notes: string,
   check?: ServiceCheck,
   vocs?: VocOperatorSummary[], // 2차 발송에서만 전달 — 운수사 VOC 섹션
-  projectName?: string,
+  projectLabel = "인천버스 B820 단말기 설치 프로젝트", // 머리띠 "[…]" — 메일·보고용 이미지와 같은 문구
 ): Promise<void> {
   const url = process.env.TEAMS_WEBHOOK_URL;
   if (!url)
     throw new Error("팀즈 웹후크가 설정되지 않았습니다. (TEAMS_WEBHOOK_URL)");
 
-  const noteText = notes.trim()
-    ? notes.trim().split(/\r?\n/).map(noteBullet).filter(Boolean).join("\n")
-    : "- 없음";
-
-  // 운행시작 점검 섹션 (있을 때만) — 특이사항 위에 표기
+  const ops = groupByOperator(r.groups);
   const checkRows = serviceCheckRows(check);
-  const checkBlocks: unknown[] = checkRows.length
-    ? [
-        {
-          type: "TextBlock",
-          weight: "Bolder",
-          text: "○ 운행시작 점검",
-          spacing: "Medium",
-          separator: true,
-          wrap: true,
-        },
-        {
-          type: "FactSet",
-          spacing: "Small",
-          facts: checkRows.map((row) => ({
-            title: row.title,
-            value: row.value,
-          })),
-        },
-      ]
-    : [];
+  const TONE = { ok: { color: "Good" }, bad: { color: "Attention" }, none: { isSubtle: true }, info: {} } as const;
 
-  // 운수사 VOC 섹션 (2차 발송에서만) — 운수사별 평균/항목별 평균/개별 의견
-  const vocBlocks: unknown[] = vocs?.length
-    ? [
+  const body: unknown[] = [
+    // 머리띠
+    {
+      type: "Container",
+      style: "accent",
+      bleed: true,
+      items: [
+        { type: "TextBlock", text: `[${projectLabel}]`, size: "Small", isSubtle: true, wrap: true },
         {
           type: "TextBlock",
+          text: `설치 완료 보고 (${r.label}, ${r.dow})`,
+          size: "Large",
           weight: "Bolder",
-          text: "○ 운수사 VOC",
-          spacing: "Medium",
+          spacing: "None",
           wrap: true,
         },
-        ...vocs.flatMap((v) => vocSummaryBlocks(v, "Small")),
-      ]
-    : [];
+      ],
+    },
+    // 수치 상자 3칸 × 2줄
+    kpiRow(
+      [
+        ["금일 실적", `${r.dailyDone.toLocaleString()}대`],
+        ["금일 계획", `${r.dailyPlanned.toLocaleString()}대`],
+        ["달성률", `${r.dailyPct.toFixed(1)}%`, "Attention"],
+      ],
+      "Medium",
+    ),
+    kpiRow(
+      [
+        ["누적 계획", `${r.cumPlanned.toLocaleString()}대`],
+        ["누적 완료", `${r.cumDone.toLocaleString()}대 (${r.cumPct.toFixed(1)}%)`],
+        ["잔여", `${r.remaining.toLocaleString()}대`],
+      ],
+      "Small",
+    ),
+    // 금일 설치 내역
+    { type: "TextBlock", text: "금일 설치 내역", weight: "Bolder", spacing: "Large", wrap: true },
+    ...(ops.length
+      ? ops.flatMap(operatorBlocks)
+      : [{ type: "TextBlock", text: "(완료 없음)", isSubtle: true, spacing: "Small", wrap: true }]),
+  ];
+
+  // 운행시작 점검 — 라벨 칸 너비를 고정해 값이 한 열로 맞게, 그림문자 대신 글자색으로 상태 표시
+  if (checkRows.length) {
+    body.push(sectionTitle("운행시작 점검"));
+    for (const row of checkRows) {
+      const v = checkTone(row.value);
+      body.push({
+        type: "ColumnSet",
+        spacing: "Small",
+        columns: [
+          { type: "Column", width: "110px", items: [{ type: "TextBlock", text: row.title, isSubtle: true, wrap: true }] },
+          { type: "Column", width: "stretch", items: [{ type: "TextBlock", text: v.text, wrap: true, ...TONE[v.tone] }] },
+        ],
+      });
+    }
+  }
+
+  // 운수사 VOC (2차 발송에서만) — VOC 등록 카드와 같은 블록
+  if (vocs?.length) {
+    body.push(sectionTitle("운수사 VOC"), ...vocs.flatMap((v) => vocSummaryBlocks(v, "Small")));
+  }
+
+  // 특이사항 — 자동 목록 머리줄([설치제외 N대] 등)은 굵게
+  body.push(
+    sectionTitle("특이사항"),
+    ...noteRows(notes).map((n, i) => ({
+      type: "TextBlock",
+      text: n.text,
+      spacing: i === 0 ? "Small" : "None",
+      wrap: true,
+      ...(n.head ? { weight: "Bolder" } : {}),
+    })),
+  );
 
   const card = {
     type: "message",
@@ -456,62 +541,8 @@ export async function sendCompletionReportCard(
           $schema: "http://adaptivecards.io/schemas/adaptive-card.json",
           type: "AdaptiveCard",
           version: "1.4",
-          body: [
-            {
-              type: "TextBlock",
-              size: "Large",
-              weight: "Bolder",
-              text: `✅ ${projectName ?? "B820"} 단말기 설치 완료 보고`,
-              wrap: true,
-            },
-            {
-              type: "TextBlock",
-              text: `${r.label} (${r.dow}) 설치 완료`,
-              isSubtle: true,
-              spacing: "None",
-              wrap: true,
-            },
-            kpiRow(
-              [
-                ["금일 실적", `${r.dailyDone.toLocaleString()}대`],
-                ["금일 계획", `${r.dailyPlanned.toLocaleString()}대`],
-                ["달성률", `${r.dailyPct.toFixed(1)}%`],
-              ],
-              "Medium",
-            ),
-            kpiRow([
-              ["누적 계획", `${r.cumPlanned.toLocaleString()}대`],
-              ["누적 완료", `${r.cumDone.toLocaleString()}대 (${r.cumPct.toFixed(1)}%)`],
-              ["잔여", `${r.remaining.toLocaleString()}대`],
-            ]),
-            ...groupByOperator(r.groups).flatMap((o, i) => [
-              {
-                type: "TextBlock",
-                weight: "Bolder",
-                text: `○ ${o.operator} — ${o.total.toLocaleString()}대`,
-                spacing: "Medium",
-                separator: i === 0,
-                wrap: true,
-              },
-              ...textGrid(o.routes.map((x) => `${x.route} · ${x.count.toLocaleString()}대`)),
-            ]),
-            ...checkBlocks,
-            ...vocBlocks,
-            {
-              type: "TextBlock",
-              weight: "Bolder",
-              text: "○ 특이사항",
-              spacing: "Medium",
-              separator: true,
-              wrap: true,
-            },
-            {
-              type: "TextBlock",
-              text: noteText,
-              spacing: "None",
-              wrap: true,
-            },
-          ],
+          msteams: { width: "Full" }, // 팀즈 PC에서 카드 폭을 넓게 — 칸이 좁아 노선명이 접히지 않게
+          body,
         },
       },
     ],

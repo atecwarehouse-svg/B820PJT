@@ -1,5 +1,5 @@
 import type { DailyReport, ServiceCheck } from "@/lib/report";
-import { groupByOperator, noteLines, serviceCheckRows } from "@/lib/report";
+import { checkTone, groupByOperator, noteRows, serviceCheckRows } from "@/lib/report";
 import type { VocOperatorSummary } from "@/lib/voc";
 import { VOC_RATINGS, starBar } from "@/lib/voc";
 
@@ -33,14 +33,7 @@ function wrap(ctx: CanvasRenderingContext2D, text: string, maxW: number): string
   return out;
 }
 
-// 점검값 앞의 그림문자는 기기마다 모양이 달라 떼고, 글자색으로 상태를 나타낸다.
-function checkValue(v: string): { text: string; color: string } {
-  const m = /^(✅|⬜|🕒|⚠️)\s*/u.exec(v);
-  const text = m ? v.slice(m[0].length) : v;
-  const color =
-    m?.[1] === "✅" ? "#15803d" : m?.[1] === "⚠️" ? "#dc2626" : m?.[1] === "⬜" ? "#9ca3af" : "#111827";
-  return { text, color };
-}
+const TONE_COLOR = { ok: "#15803d", bad: "#dc2626", none: "#9ca3af", info: "#111827" } as const;
 
 // 캔버스에 그리고 다 그린 높이를 돌려준다 — 한 번은 높이를 재려고, 한 번은 실제로 그리려고 두 번 부른다.
 function paint(ctx: CanvasRenderingContext2D, d: ReportImageInput, font: string): number {
@@ -155,8 +148,8 @@ function paint(ctx: CanvasRenderingContext2D, d: ReportImageInput, font: string)
     rule();
     section("운행시작 점검");
     for (const row of checkRows) {
-      const v = checkValue(row.value);
-      kv(row.title, v.text, v.color);
+      const v = checkTone(row.value);
+      kv(row.title, v.text, TONE_COLOR[v.tone]);
     }
     y += 10;
   }
@@ -182,12 +175,7 @@ function paint(ctx: CanvasRenderingContext2D, d: ReportImageInput, font: string)
 
   rule();
   section("특이사항");
-  for (const ln of noteLines(d.notes)) {
-    // 자동 목록 머리줄([설치제외 N대] 등)은 불릿을 떼고 굵게 — 아래 차량 목록의 제목 역할
-    const head = /^-\s*(\[.+\])$/.exec(ln);
-    if (head) para(head[1], "#111827", true);
-    else para(ln, "#111827");
-  }
+  for (const n of noteRows(d.notes)) para(n.text, "#111827", n.head);
   return y + PAD - 8;
 }
 

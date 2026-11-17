@@ -190,6 +190,24 @@ export function noteLines(notes: string): string[] {
   return t.split(/\r?\n/).map(noteBullet).filter(Boolean);
 }
 
+// 특이사항 → 표기용 줄 목록. 자동 목록 머리줄([설치제외 N대] 등)은 불릿을 떼고 head=true(굵게) —
+// 아래 차량 목록의 제목 역할. 팀즈 완료보고 카드와 보고용 이미지가 같은 규칙을 쓴다.
+export function noteRows(notes: string): { text: string; head: boolean }[] {
+  return noteLines(notes).map((ln) => {
+    const m = /^-\s*(\[.+\])$/.exec(ln);
+    return m ? { text: m[1], head: true } : { text: ln, head: false };
+  });
+}
+
+// 점검값('✅ 확인', '⚠️ 이상 - …' 등) → 그림문자를 뗀 글자 + 상태. 그림문자는 기기마다 모양이
+// 달라 표·카드에서는 떼고 글자색으로 상태를 나타낸다(ok=초록, bad=빨강, none=흐리게).
+export function checkTone(v: string): { text: string; tone: "ok" | "bad" | "none" | "info" } {
+  const m = /^(✅|⬜|🕒|⚠️)\s*/u.exec(v);
+  if (!m) return { text: v, tone: "info" };
+  const tone = m[1] === "✅" ? "ok" : m[1] === "⚠️" ? "bad" : m[1] === "⬜" ? "none" : "info";
+  return { text: v.slice(m[0].length), tone };
+}
+
 const HR = "━━━━━━━━━━━━━━━";
 
 // 메일/복사용 평문 카드

@@ -129,7 +129,7 @@ export async function POST(req: NextRequest) {
   // 1차 — 메일 없이 팀즈 완료보고 카드만 전송.
   if (stage === 1) {
     try {
-      await sendCompletionReportCard(report, notes, check, undefined, brand);
+      await sendCompletionReportCard(report, notes, check, undefined, projectLabel);
     } catch (e) {
       return NextResponse.json(
         { error: "팀즈 전송 실패: " + (e instanceof Error ? e.message : "알 수 없는 오류") },
@@ -205,7 +205,7 @@ export async function POST(req: NextRequest) {
   // 팀즈 '설치 진행중' 공유방에도 완료보고 카드 전송 (실패해도 메일 발송 결과는 성공 유지)
   let teams = false;
   try {
-    await sendCompletionReportCard(report, notes, check, vocs, brand);
+    await sendCompletionReportCard(report, notes, check, vocs, projectLabel);
     teams = true;
   } catch (e) {
     console.warn("[report/send] 팀즈 완료보고 카드 전송 실패:", e instanceof Error ? e.message : e);
