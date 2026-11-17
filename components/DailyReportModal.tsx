@@ -113,9 +113,10 @@ export default function DailyReportModal(props: {
                   : <><Icon name="warn" /> 팀즈 완료보고 카드 전송에 실패했습니다. (메일은 발송됨)</>}
             </p>
             {/* 팀즈 카드를 다시 캡쳐하지 않게 — 방금 보낸 내용 그대로의 이미지 파일 */}
+            <p className="mt-4 text-xs font-medium text-gray-600">보고용 이미지도 저장할까요?</p>
             <button
               onClick={() => saveImageRef.current?.()}
-              className="mt-4 w-full rounded-lg bg-gray-100 px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-200"
+              className="mt-2 w-full rounded-lg bg-gray-100 px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-200"
             >
               보고용 이미지 저장
             </button>

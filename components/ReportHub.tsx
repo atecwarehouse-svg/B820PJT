@@ -81,7 +81,12 @@ function DonePanel({
       <p className="text-3xl"><Icon name="done" /></p>
       <p className="mt-2 text-sm font-semibold text-gray-700">{title}</p>
       {sub && <p className="mt-1 text-xs text-gray-400">{sub}</p>}
-      {image && <SheetImageButton {...image} className="mt-4 w-full font-semibold" />}
+      {image && (
+        <>
+          <p className="mt-4 text-xs font-medium text-gray-600">보고용 이미지도 저장할까요?</p>
+          <SheetImageButton {...image} className="mt-2 w-full font-semibold" />
+        </>
+      )}
       <button
         type="button"
         onClick={onClose}
@@ -427,6 +432,7 @@ function ShareStatPanel({
   const isStart = kind === "start";
   // 마지막으로 보고한 내용 — 보고하면 선택이 비워지므로, 보고 직후 이미지는 이 값으로 만든다
   const [lastSent, setLastSent] = useState<{ groups: PlanGroup[]; startTime: string; note: string } | null>(null);
+  const [startDone, setStartDone] = useState(false); // 설치시작 보고 직후 완료 화면(이미지 저장 여부 묻기)
   const [sharing, setSharing] = useState(false);
   const [sent, setSent] = useState(false); // 전송 성공 — 버튼을 잠가 중복 카드 방지
   const [note, setNote] = useState(""); // 설치시작 보고 특이사항 — 카드에 함께 표시
@@ -541,6 +547,7 @@ function ShareStatPanel({
       if (!res.ok) throw new Error(j.error ?? "전송 실패");
       if (isStart) {
         setLastSent({ groups: selGroups, startTime, note: note.trim() });
+        setStartDone(true);
         setSentOps((prev) => [...new Set([...prev, ...selected])]);
         setSelected(new Set());
       } else {
@@ -597,6 +604,22 @@ function ShareStatPanel({
       ),
     fileName: sheetFileName(projectLabel, "설치시작보고", today),
   };
+
+  // 보고 직후 — 설치계획·설치완료와 같은 완료 화면에서 보고용 이미지 저장 여부를 묻는다.
+  // 확인을 누르면 아직 보고 안 한 운수사가 남았을 때는 폼으로 돌아가고, 다 했으면 창을 닫는다.
+  if (isStart && startDone && lastSent) {
+    return (
+      <DonePanel
+        title="팀즈로 설치시작 보고를 보냈습니다"
+        sub={`${[...new Set(lastSent.groups.map((g) => g.operator))].join(", ")} · ${lastSent.groups
+          .reduce((s, g) => s + g.planned, 0)
+          .toLocaleString()}대`}
+        onClose={() => (allSent ? onClose() : setStartDone(false))}
+        btnClass="bg-orange-600 active:bg-orange-700"
+        image={image}
+      />
+    );
+  }
 
   // Tailwind가 스캔할 수 있게 정적 클래스로 분기
   const headBg = isStart ? "bg-orange-600" : "bg-indigo-600";
