@@ -232,7 +232,8 @@ export function planSheet(d: PlanSheetInput, variant: "start" | "consult", proje
     kpis: [
       [
         { label: "금일 설치계획", value: dae(d.total), accent: true },
-        { label: "운수사", value: `${d.groups.length.toLocaleString()}곳` },
+        // 같은 회사의 영업소가 '운수사 2곳'으로 세어지던 자리 — 설치 장소를 적고, 같은 곳이면 한 번만
+        { label: "설치 위치", value: [...new Set(d.groups.map((g) => g.place?.trim()).filter(Boolean))].join(" · ") || "-" },
       ],
     ],
     sections: [{ title: "운수사별 계획", blocks }],
