@@ -66,6 +66,9 @@ export async function GET(req: NextRequest) {
   if ("error" in r) return bad(r.error, 500);
   // ?format=xlsx → 전체 검증 결과 / ?format=xlsx&only=mismatch → 이상 차량(웹 완료·OS 정상·자산등록 없음)만
   if (req.nextUrl.searchParams.get("format") === "xlsx") {
+    // 화면에 입력된 검증 기준(아직 발송 전이어도)을 엑셀 요약에 — 없으면 마지막 발송 때 저장된 값
+    const q = req.nextUrl.searchParams;
+    if (q.has("from") || q.has("to") || q.has("asOf")) r.basis = { from: q.get("from") ?? "", to: q.get("to") ?? "", asOf: q.get("asOf") ?? "" };
     return excel(r, (await getProject(currentSlug()))?.name ?? currentSlug(), req.nextUrl.searchParams.get("only") === "mismatch");
   }
   return NextResponse.json(r);

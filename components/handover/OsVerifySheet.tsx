@@ -117,6 +117,9 @@ export default function OsVerifySheet({ myCenter, onClose, inline = false }: { m
       const j = (await r.json().catch(() => ({}))) as Result & { error?: string };
       if (!r.ok) throw new Error(j.error ?? "검증 실패");
       setRes(j);
+      // 오늘 올린 파일이면 검증 기간 끝도 오늘(지난 발송 때 날짜가 남아 엑셀·카드에 옛 날짜가 찍히던 문제)
+      const today = new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Seoul" });
+      setBasis((b) => (b.to < today ? { ...b, to: today } : b));
     } catch (e) {
       setError(e instanceof Error ? e.message : "검증 실패");
     } finally {
@@ -168,7 +171,7 @@ export default function OsVerifySheet({ myCenter, onClose, inline = false }: { m
         <button
           type="button"
           disabled={!res}
-          onClick={() => downloadUrl("/api/handover/osverify?format=xlsx")}
+          onClick={() => downloadUrl(`/api/handover/osverify?format=xlsx&${new URLSearchParams({ ...basis })}`)}
           className="rounded-xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white active:bg-emerald-700 disabled:opacity-40"
         >
           <Icon name="download" /> 검증 엑셀
