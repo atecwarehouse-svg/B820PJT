@@ -52,7 +52,7 @@ export default function ScheduleChart({ stats }: { stats: ScheduleStats }) {
       </div>
 
       {/* 월별 달력 — 칸 탭하면 운수사별 상세 */}
-      <ScheduleCalendar days={days} />
+      <ScheduleCalendar days={days} planDays={stats.planDays} doneByDate={stats.planDays ? stats.doneByDate : undefined} />
     </div>
   );
 }

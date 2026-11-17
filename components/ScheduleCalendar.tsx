@@ -8,6 +8,8 @@ import { workDateString } from "@/lib/work-day";
 // 설치 일정 달력 — 월별 페이지 넘김. 칸에 예정 대수 + 운수사명(축약),
 // 칸 색은 대수(진할수록 많음), 하단 초록 줄 = 완료율, ✓ = 전량 완료, 보라 점 = 시범설치일.
 // 칸을 탭하면 운수사별 상세 팝업.
+// 수량 차감 방식(planDays 있음): 큰 숫자 = 올린 엑셀의 계획(보관값), 아래 초록 = 그날 실제 설치 대수.
+//   차량 예정일은 설치하면 실제 날짜로 옮겨지므로, 예정일 대수를 그대로 쓰면 엑셀 계획과 달라 보인다.
 
 const DOW = ["일", "월", "화", "수", "목", "금", "토"];
 
@@ -22,12 +24,27 @@ function dowOf(date: string): number {
   return new Date(Date.UTC(y, m - 1, d)).getUTCDay();
 }
 
-export default function ScheduleCalendar({ days }: { days: ScheduleDay[] }) {
+export default function ScheduleCalendar({
+  days,
+  planDays,
+  doneByDate,
+}: {
+  days: ScheduleDay[];
+  planDays?: { date: string; planned: number }[];
+  doneByDate?: { date: string; done: number }[];
+}) {
   const byDate = new Map(days.map((d) => [d.date, d]));
+  const planMode = !!planDays;
+  const planOf = new Map((planDays ?? []).map((p) => [p.date, p.planned]));
+  const doneOf = new Map((doneByDate ?? []).map((p) => [p.date, p.done]));
+  // 칸 숫자: 계획·완료 (수량 차감 방식이면 엑셀 계획·실제 설치)
+  const planAt = (date: string) => (planMode ? planOf.get(date) ?? 0 : byDate.get(date)?.planned ?? 0);
+  const doneAt = (date: string) => (planMode ? doneOf.get(date) ?? 0 : byDate.get(date)?.done ?? 0);
+  const allDates = [...new Set([...days.map((d) => d.date), ...(planMode ? [...planOf.keys(), ...doneOf.keys()] : [])])];
   const today = workDateString(new Date()); // 업무일 기준(다른 화면의 '금일'과 동일)
 
   // 일정이 있는 달 목록 (YYYY-MM, 오름차순)
-  const months = [...new Set(days.map((d) => d.date.slice(0, 7)))].sort();
+  const months = [...new Set(allDates.map((d) => d.slice(0, 7)))].sort();
   const todayMonth = today.slice(0, 7);
   const initIdx = (() => {
     const i = months.indexOf(todayMonth);
@@ -36,14 +53,18 @@ export default function ScheduleCalendar({ days }: { days: ScheduleDay[] }) {
     return 0;
   })();
   const [idx, setIdx] = useState(initIdx);
-  const [popup, setPopup] = useState<ScheduleDay | null>(null);
+  const [popupDate, setPopupDate] = useState<string | null>(null);
+  const popup = popupDate
+    ? { ...(byDate.get(popupDate) ?? { date: popupDate, planned: 0, pilot: 0, done: 0, ops: [] }), plan: planAt(popupDate), installed: doneAt(popupDate) }
+    : null;
+  const setPopup = (d: { date: string } | null) => setPopupDate(d?.date ?? null);
 
   if (months.length === 0) return null;
   const month = months[idx];
   const [yy, mm] = month.split("-").map(Number);
   const firstDow = new Date(Date.UTC(yy, mm - 1, 1)).getUTCDay();
   const daysInMonth = new Date(Date.UTC(yy, mm, 0)).getUTCDate();
-  const maxPlanned = Math.max(...days.map((d) => d.planned), 1);
+  const maxPlanned = Math.max(...allDates.map(planAt), 1);
 
   // 대수 → 칸 배경(파랑 4단계, 진할수록 많음)
   function cellBg(planned: number): string {
@@ -98,9 +119,11 @@ export default function ScheduleCalendar({ days }: { days: ScheduleDay[] }) {
         {Array.from({ length: daysInMonth }, (_, i) => {
           const dd = i + 1;
           const date = `${month}-${String(dd).padStart(2, "0")}`;
-          const d = byDate.get(date);
-          const pct = d && d.planned > 0 ? (d.done / d.planned) * 100 : 0;
-          const full = !!d && d.planned > 0 && d.done >= d.planned;
+          const plan = planAt(date);
+          const done = doneAt(date);
+          const d = byDate.get(date) ?? (plan || done ? { date, planned: 0, pilot: 0, done: 0, ops: [] } : undefined);
+          const pct = plan > 0 ? Math.min(100, (done / plan) * 100) : 0;
+          const full = plan > 0 && done >= plan;
           const ops = d?.ops ?? [];
           return (
             <button
@@ -108,7 +131,7 @@ export default function ScheduleCalendar({ days }: { days: ScheduleDay[] }) {
               type="button"
               disabled={!d}
               onClick={() => d && setPopup(d)}
-              className={`relative flex min-h-[58px] flex-col items-center overflow-hidden rounded-lg p-0.5 text-center ${cellBg(d?.planned ?? 0)} ${
+              className={`relative flex min-h-[58px] flex-col items-center overflow-hidden rounded-lg p-0.5 text-center ${cellBg(plan)} ${
                 date === today ? "ring-2 ring-inset ring-blue-600" : ""
               } ${d ? "active:opacity-80" : ""}`}
             >
@@ -116,12 +139,15 @@ export default function ScheduleCalendar({ days }: { days: ScheduleDay[] }) {
               {d && (
                 <>
                   <span className="text-[13px] font-extrabold leading-4 tabular-nums text-gray-800">
-                    {d.planned}
+                    {plan}
                   </span>
+                  {planMode && done > 0 && (
+                    <span className="text-[8px] font-bold leading-[10px] tabular-nums text-green-700">설치 {done}</span>
+                  )}
                   <span className="w-full truncate text-[7.5px] leading-[10px] text-gray-600">
                     {ops[0] ? shortOp(ops[0].operator) : ""}
                   </span>
-                  <span className="w-full truncate text-[7.5px] leading-[10px] text-gray-600">
+                  <span className={`w-full truncate text-[7.5px] leading-[10px] text-gray-600 ${planMode && done > 0 ? "hidden" : ""}`}>
                     {ops.length === 2
                       ? shortOp(ops[1].operator)
                       : ops.length > 2
@@ -159,6 +185,7 @@ export default function ScheduleCalendar({ days }: { days: ScheduleDay[] }) {
           <span className="inline-block h-[3px] w-3 rounded bg-green-600" /> 완료율
         </span>
         <span>✓ 전량 완료</span>
+        {planMode && <span>큰 숫자 = 엑셀 계획 · <b className="text-green-700">설치 N</b> = 실제 설치</span>}
         <span className="flex items-center gap-1">
           <span className="inline-block h-2 w-2 rounded-full bg-purple-500" /> 시범설치
         </span>
@@ -186,8 +213,8 @@ export default function ScheduleCalendar({ days }: { days: ScheduleDay[] }) {
                   )}
                 </p>
                 <p className="mt-0.5 text-xs text-gray-500">
-                  계획 {popup.planned.toLocaleString()}대 · 완료{" "}
-                  <b className="text-green-600">{popup.done.toLocaleString()}대</b>
+                  계획 {popup.plan.toLocaleString()}대{planMode ? "(엑셀)" : ""} · {planMode ? "설치" : "완료"}{" "}
+                  <b className="text-green-600">{popup.installed.toLocaleString()}대</b>
                   {popup.pilot > 0 && (
                     <span className="text-purple-600"> · 시범 {popup.pilot}대</span>
                   )}
@@ -247,6 +274,11 @@ export default function ScheduleCalendar({ days }: { days: ScheduleDay[] }) {
                   )}
                 </li>
               ))}
+              {planMode && (popup.ops ?? []).length > 0 && (
+                <li className="px-1 text-[11px] text-gray-400">
+                  아래는 이 날 설치했거나 배정된 차량({popup.planned}대) — 먼저 설치한 차량은 실제 설치일로 옮겨져 엑셀 계획과 다를 수 있습니다.
+                </li>
+              )}
               {(popup.ops ?? []).length === 0 && (
                 <li className="py-2 text-center text-xs text-gray-400">
                   운수사 정보가 없습니다. (잠시 후 새로고침)

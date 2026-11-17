@@ -366,7 +366,7 @@ export default async function DashboardPage() {
                 <p className="min-w-0 text-sm font-bold text-gray-700">
                   설치 일정
                   <span className="ml-1 font-normal text-gray-400">
-                    (예정일 기준 계획 대비 실적)
+                    {sch?.planDays ? "(올린 엑셀 계획 대비 실제 설치)" : "(예정일 기준 계획 대비 실적)"}
                   </span>
                 </p>
                 <ScheduleMoveModal />
