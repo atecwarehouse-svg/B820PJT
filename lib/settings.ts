@@ -73,11 +73,15 @@ export async function getStartReportForUpdate(date: string, slug?: string): Prom
   return getAssignMapForUpdate(startReportKey(date), slug);
 }
 
-async function getAssignMapForUpdate(key: string, slug?: string): Promise<Record<string, string[]>> {
+// 수정 전 읽기 — getSetting과 달리 조회 실패 시 던진다(오류를 '값 없음'으로 오해해 덮어쓰지 않게)
+async function getSettingForUpdate(key: string, slug?: string): Promise<string | null> {
   const supabase = createServiceClient(slug);
   const { data, error } = await supabase.from("app_settings").select("value").eq("key", key).maybeSingle();
   if (error) throw new Error(`보고 기록을 읽지 못했습니다: ${error.message}`);
-  return parseStartReport(typeof data?.value === "string" ? data.value : null);
+  return typeof data?.value === "string" ? data.value : null;
+}
+async function getAssignMapForUpdate(key: string, slug?: string): Promise<Record<string, string[]>> {
+  return parseStartReport(await getSettingForUpdate(key, slug));
 }
 
 // 업무일별 설치시작 보고 내용 — {운수사: {note, startTime}} 마지막으로 보낸 특이사항·시작시간.
@@ -99,6 +103,10 @@ export function parseStartReportMeta(raw: string | null): StartReportMeta {
     // 깨진 값 — 빈 값으로(재보고 칸만 비어 보인다)
   }
   return out;
+}
+/** 수정 전 읽기 — 조회 실패 시 던진다(다른 운수사 기록을 빈 값으로 덮어쓰지 않게). */
+export async function getStartReportMetaForUpdate(date: string, slug?: string): Promise<StartReportMeta> {
+  return parseStartReportMeta(await getSettingForUpdate(startReportMetaKey(date), slug));
 }
 
 // 업무일별 설치팀 → 담당 검수자 — JSON {"1팀 홍길동": ["김준영"], …}. 설치시작 보고 화면에서 팀별로 지정(즉시 저장).

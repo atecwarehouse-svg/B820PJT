@@ -1,7 +1,7 @@
 "use client";
 
 import Icon from "@/components/Icon";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { workDateString } from "@/lib/work-day";
 import { DEFAULT_REPORT_LABEL, planSheet, startSheet, type Sheet } from "@/lib/report-sheet";
 import { saveSheetImage, sheetFileName } from "@/lib/report-image";
@@ -480,20 +480,39 @@ function ShareStatPanel({
   }, []);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
-  // 수정·재보고 시작 — 그 운수사만 고르고, 그때 보낸 특이사항·시작시간을 칸에 다시 채운다
-  function startEdit(op: string) {
+  // 수정·재보고 들어가기 전 입력하던 특이사항·시작시간 — 취소·재보고 후 되돌린다(미보고 운수사용 입력 보존)
+  const draftRef = useRef<{ note: string; startTime: string } | null>(null);
+  // 수정·재보고 시작 — 그 운수사만 고르고, 그때 보낸 특이사항·시작시간을 칸에 다시 채운다.
+  // 다른 기기에서 먼저 고쳤을 수 있으니 저장된 내용을 새로 불러와 쓴다(실패하면 가진 값으로).
+  async function startEdit(op: string) {
+    if (!editMode) draftRef.current = { note, startTime };
     setEditMode(true);
     setSelected(new Set([op]));
-    setNote(meta[op]?.note ?? "");
-    if (meta[op]?.startTime) setStartTime(meta[op].startTime);
     setMsg(null);
+    let m = meta;
+    try {
+      const j = await (await fetch(`/api/teams/share?date=${today}`)).json();
+      if (j.meta && typeof j.meta === "object") {
+        m = j.meta as typeof meta;
+        setMeta(m);
+      }
+    } catch {}
+    setNote(m[op]?.note ?? "");
+    if (m[op]?.startTime) setStartTime(m[op].startTime);
+  }
+  function endEdit() {
+    setEditMode(false);
+    setNote(draftRef.current?.note ?? "");
+    if (draftRef.current?.startTime) setStartTime(draftRef.current.startTime);
+    draftRef.current = null;
   }
   function cancelEdit() {
-    setEditMode(false);
+    endEdit();
     setSelected(new Set(operators.filter((op) => !sentOps.includes(op))));
-    setNote("");
     setMsg(null);
   }
+  // 저장된 보고 내용이 없는 운수사(이 기능 배포 전 보고 등) — 빈 칸·현재 시각으로 덮어쓰지 않게 경고
+  const metaMissing = editMode ? [...selected].filter((op) => !meta[op]) : [];
 
   // 설치팀 담당 검수자 변경 — 즉시 저장. 팀즈 보고 카드와는 무관(다시 나가지 않는다).
   async function saveTeam(team: string, names: string[]) {
@@ -573,10 +592,7 @@ function ShareStatPanel({
         setMeta((m) => ({ ...m, ...Object.fromEntries([...selected].map((op) => [op, { note: note.trim(), startTime }])) }));
         setSentOps((prev) => [...new Set([...prev, ...selected])]);
         setSelected(new Set());
-        if (editMode) {
-          setEditMode(false);
-          setNote(""); // 고친 특이사항이 다음 신규 보고 칸에 남지 않게
-        }
+        if (editMode) endEdit(); // 고친 특이사항 대신 수정 전 입력하던 값으로 되돌린다
       } else {
         setSent(true);
       }
@@ -755,6 +771,12 @@ function ShareStatPanel({
                 특이사항(·시작시간)을 고친 뒤 아래 &lsquo;수정 내용으로 재보고&rsquo;를 누르세요. 카드 제목에
                 (수정)이 붙어 다시 나갑니다. 보고 완료된 다른 운수사도 함께 고를 수 있습니다.
               </p>
+              {metaMissing.length > 0 && (
+                <p className="mt-1 text-[11px] font-bold text-red-600">
+                  {metaMissing.join(", ")}: 처음 보낸 특이사항·시작시간이 저장돼 있지 않습니다. 비어 있는 칸을 그대로
+                  보내면 카드에서 지워지니, 시작시간과 특이사항을 다시 확인해 입력하세요.
+                </p>
+              )}
             </div>
           ) : (
             <p className="text-[11px] font-medium text-gray-500">

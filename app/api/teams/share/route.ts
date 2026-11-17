@@ -9,6 +9,7 @@ import {
   getTeamInspectors,
   getTeamInspectorsForUpdate,
   getSetting,
+  getStartReportMetaForUpdate,
   parseStartReportMeta,
   setSetting,
   startReportKey,
@@ -37,10 +38,11 @@ interface ShareBody {
 }
 
 // 보낸 특이사항·시작시간 저장 — 수정·재보고 때 입력칸을 다시 채우는 용도라 실패해도 보고는 성공 처리.
-// ponytail: getSetting은 읽기 오류를 null로 삼켜 드물게 다른 운수사 기록을 덮을 수 있다 — 프리필 용도라 감수.
+// 읽기 실패는 던져서(저장 생략) 다른 운수사 기록을 빈 값으로 덮지 않는다.
+// ponytail: read-modify-write(수십ms 창) — 동시 보고가 겹치면 한쪽 프리필만 빠질 수 있다, 프리필 용도라 감수.
 async function saveStartMeta(date: string, ops: string[], note: string, startTime: string) {
   try {
-    const meta = parseStartReportMeta(await getSetting(startReportMetaKey(date)));
+    const meta = await getStartReportMetaForUpdate(date);
     for (const op of ops) meta[op] = { note, startTime };
     await setSetting(startReportMetaKey(date), JSON.stringify(meta));
   } catch (e) {
@@ -168,9 +170,10 @@ export async function POST(req: NextRequest) {
         startTime,
       };
       const ops = [...new Set(groups.map((g) => g.operator))];
+      if (!ops.length) return NextResponse.json({ error: "보고할 운수사를 선택하세요." }, { status: 400 });
 
       // 수정·재보고 — 이미 보고한 운수사만. 보고 잠금·담당 배정은 그대로 두고 (수정) 카드만 다시 보낸다.
-      // 실수로 같은 카드가 두 번 나가는 것은 아래 잠금이 막고, 재보고는 화면에서 일부러 고른 경우만 온다.
+      // 일반 보고와 달리 중복 잠금이 없다 — 재보고는 화면에서 일부러 고른 경우만 오고, 보내는 동안 버튼이 잠긴다.
       if (b.resend === true) {
         if (!date) return NextResponse.json({ error: "날짜를 확인하세요." }, { status: 400 });
         const map = await getStartReportForUpdate(date);
@@ -188,9 +191,7 @@ export async function POST(req: NextRequest) {
 
       if (date) {
         const map = await getStartReportForUpdate(date);
-        const dup = [
-          ...new Set(groups.map((g) => g.operator).filter((op) => Object.hasOwn(map, op))),
-        ];
+        const dup = ops.filter((op) => Object.hasOwn(map, op));
         if (dup.length) {
           return NextResponse.json(
             { error: `이미 보고가 완료된 운수사입니다: ${dup.join(", ")}` },
