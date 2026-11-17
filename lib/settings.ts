@@ -80,6 +80,27 @@ async function getAssignMapForUpdate(key: string, slug?: string): Promise<Record
   return parseStartReport(typeof data?.value === "string" ? data.value : null);
 }
 
+// 업무일별 설치시작 보고 내용 — {운수사: {note, startTime}} 마지막으로 보낸 특이사항·시작시간.
+// '수정·재보고' 때 입력칸을 다시 채우는 용도(보고 잠금은 start_report_sent가 따로 관리).
+export const startReportMetaKey = (date: string) => `start_report_meta:${date}`;
+export type StartReportMeta = Record<string, { note: string; startTime: string }>;
+export function parseStartReportMeta(raw: string | null): StartReportMeta {
+  const out: StartReportMeta = Object.create(null); // 운수사명이 키 — parseStartReport와 같은 이유로 프로토타입 없음
+  try {
+    const v: unknown = JSON.parse(raw ?? "{}");
+    if (v && typeof v === "object" && !Array.isArray(v)) {
+      for (const [op, x] of Object.entries(v)) {
+        if (!x || typeof x !== "object") continue;
+        const o = x as { note?: unknown; startTime?: unknown };
+        out[op] = { note: String(o.note ?? ""), startTime: String(o.startTime ?? "") };
+      }
+    }
+  } catch {
+    // 깨진 값 — 빈 값으로(재보고 칸만 비어 보인다)
+  }
+  return out;
+}
+
 // 업무일별 설치팀 → 담당 검수자 — JSON {"1팀 홍길동": ["김준영"], …}. 설치시작 보고 화면에서 팀별로 지정(즉시 저장).
 // 설치시작·완료 카드는 그 차량 기록의 설치팀(records.team, 정규화 라벨)으로 이 표를 찾아 검수자 개인방에 보낸다.
 // 카드에는 표시하지 않는다(라우팅 전용). 운수사별 배정(start_report_sent)은 팀 배정이 없을 때의 폴백.

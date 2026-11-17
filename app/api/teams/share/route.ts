@@ -8,8 +8,11 @@ import {
   getStartReportForUpdate,
   getTeamInspectors,
   getTeamInspectorsForUpdate,
+  getSetting,
+  parseStartReportMeta,
   setSetting,
   startReportKey,
+  startReportMetaKey,
   teamInspectorsKey,
   teamLabel,
 } from "@/lib/settings";
@@ -30,6 +33,19 @@ interface ShareBody {
   note?: string; // 설치 시작 보고용 특이사항
   startTime?: string; // 설치 시작 보고용 시작시간 (HH:MM)
   date?: string; // 설치 시작 보고용 업무일(YYYY-MM-DD) — 운수사별 보고 완료 기록 키
+  resend?: boolean; // 설치 시작 보고 '수정·재보고' — 이미 보고한 운수사만, 카드 제목에 (수정)
+}
+
+// 보낸 특이사항·시작시간 저장 — 수정·재보고 때 입력칸을 다시 채우는 용도라 실패해도 보고는 성공 처리.
+// ponytail: getSetting은 읽기 오류를 null로 삼켜 드물게 다른 운수사 기록을 덮을 수 있다 — 프리필 용도라 감수.
+async function saveStartMeta(date: string, ops: string[], note: string, startTime: string) {
+  try {
+    const meta = parseStartReportMeta(await getSetting(startReportMetaKey(date)));
+    for (const op of ops) meta[op] = { note, startTime };
+    await setSetting(startReportMetaKey(date), JSON.stringify(meta));
+  } catch (e) {
+    console.warn("[teams/share] 시작보고 내용 저장 실패(재보고 프리필만 비게 됨):", e instanceof Error ? e.message : e);
+  }
 }
 
 // 설치 시작 보고 완료 운수사·담당 검수자 (app_settings) — 여러 기기·여러 사람이 공유
@@ -48,8 +64,11 @@ function cleanInspectors(v: unknown, known: Set<string>): string[] {
 export async function GET(req: NextRequest) {
   const date = req.nextUrl.searchParams.get("date");
   await carryOverIfQuota(currentSlug()); // 수량 차감 방식 — 설치시작 보고 화면을 열 때 지난 미완료 차량 이월(멱등)
-  const [map, teams] = isDate(date) ? await Promise.all([getStartReport(date), getTeamInspectors(date)]) : [{}, {}];
-  return NextResponse.json({ sentOps: Object.keys(map), assignments: map, teamAssignments: teams });
+  const [map, teams, meta] = isDate(date)
+    ? await Promise.all([getStartReport(date), getTeamInspectors(date), getSetting(startReportMetaKey(date)).then(parseStartReportMeta)])
+    : [{}, {}, {}];
+  // meta = 운수사별 마지막으로 보낸 특이사항·시작시간 (수정·재보고 프리필)
+  return NextResponse.json({ sentOps: Object.keys(map), assignments: map, teamAssignments: teams, meta: { ...meta } });
 }
 
 // PATCH /api/teams/share — 이미 보고한 운수사의 담당 검수자만 수정.
@@ -136,6 +155,37 @@ export async function POST(req: NextRequest) {
       // ponytail: read-modify-write. app_settings.value가 text라 원자적 merge 불가 —
       //           선점 덕에 창이 수초→수십ms로 줄었다. 더 줄이려면 jsonb + || 로.
       const date = isDate(b.date) ? b.date : null;
+      const note = (b.note ?? "").toString().slice(0, 500).trim();
+      const startTime = (b.startTime ?? "").toString().slice(0, 5);
+      const card = {
+        projectLabel: reportLabel(project), // 머리띠 "[…]" — 보고용 이미지와 같은 문구
+        label: (b.label ?? "").toString().slice(0, 40),
+        todayPlanned: n(b.todayPlanned),
+        complete: n(b.complete),
+        remain: n(b.remain),
+        groups,
+        note,
+        startTime,
+      };
+      const ops = [...new Set(groups.map((g) => g.operator))];
+
+      // 수정·재보고 — 이미 보고한 운수사만. 보고 잠금·담당 배정은 그대로 두고 (수정) 카드만 다시 보낸다.
+      // 실수로 같은 카드가 두 번 나가는 것은 아래 잠금이 막고, 재보고는 화면에서 일부러 고른 경우만 온다.
+      if (b.resend === true) {
+        if (!date) return NextResponse.json({ error: "날짜를 확인하세요." }, { status: 400 });
+        const map = await getStartReportForUpdate(date);
+        const notYet = ops.filter((op) => !Object.hasOwn(map, op));
+        if (notYet.length) {
+          return NextResponse.json(
+            { error: `아직 보고하지 않은 운수사는 재보고할 수 없습니다: ${notYet.join(", ")}` },
+            { status: 400 },
+          );
+        }
+        await sendStartReportCard({ ...card, revised: true });
+        await saveStartMeta(date, ops, note, startTime);
+        return NextResponse.json({ ok: true });
+      }
+
       if (date) {
         const map = await getStartReportForUpdate(date);
         const dup = [
@@ -151,16 +201,7 @@ export async function POST(req: NextRequest) {
         await setSetting(startReportKey(date), JSON.stringify(map));
       }
       try {
-        await sendStartReportCard({
-          projectLabel: reportLabel(project), // 머리띠 "[…]" — 보고용 이미지와 같은 문구
-          label: (b.label ?? "").toString().slice(0, 40),
-          todayPlanned: n(b.todayPlanned),
-          complete: n(b.complete),
-          remain: n(b.remain),
-          groups,
-          note: (b.note ?? "").toString().slice(0, 500).trim(),
-          startTime: (b.startTime ?? "").toString().slice(0, 5),
-        });
+        await sendStartReportCard(card);
       } catch (e) {
         // 카드가 안 나갔으므로 선점을 풀어 다시 보고할 수 있게 한다
         if (date) {
@@ -172,6 +213,7 @@ export async function POST(req: NextRequest) {
         }
         throw e;
       }
+      if (date) await saveStartMeta(date, ops, note, startTime);
     } else {
       await sendProgressCard({
         projectName,

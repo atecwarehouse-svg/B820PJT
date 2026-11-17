@@ -431,7 +431,10 @@ function ShareStatPanel({
   const label = fmtLabel(today);
   const isStart = kind === "start";
   // 마지막으로 보고한 내용 — 보고하면 선택이 비워지므로, 보고 직후 이미지는 이 값으로 만든다
-  const [lastSent, setLastSent] = useState<{ groups: PlanGroup[]; startTime: string; note: string } | null>(null);
+  const [lastSent, setLastSent] = useState<{ groups: PlanGroup[]; startTime: string; note: string; revised: boolean } | null>(null);
+  // 수정·재보고 모드 — 이미 보고한 운수사를 골라 특이사항(·시작시간)을 고쳐 (수정) 카드로 다시 보낸다
+  const [editMode, setEditMode] = useState(false);
+  const [meta, setMeta] = useState<Record<string, { note: string; startTime: string }>>({}); // 운수사별 마지막 보고 내용
   const [startDone, setStartDone] = useState(false); // 설치시작 보고 직후 완료 화면(이미지 저장 여부 묻기)
   const [sharing, setSharing] = useState(false);
   const [sent, setSent] = useState(false); // 전송 성공 — 버튼을 잠가 중복 카드 방지
@@ -458,9 +461,11 @@ function ShareStatPanel({
       if (j.teamAssignments && typeof j.teamAssignments === "object") {
         setTeamMgr(j.teamAssignments as Record<string, string[]>);
       }
+      if (j.meta && typeof j.meta === "object") setMeta(j.meta as Record<string, { note: string; startTime: string }>);
       if (init) {
         setSelected(new Set(operators.filter((op) => !ops.includes(op))));
-      } else {
+      } else if (!editMode) {
+        // 수정·재보고 중에는 고른 운수사가 원래 '보고 완료'라 걸러내면 안 된다
         setSelected((s) => new Set([...s].filter((op) => !ops.includes(op))));
       }
     } catch {
@@ -474,6 +479,21 @@ function ShareStatPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  // 수정·재보고 시작 — 그 운수사만 고르고, 그때 보낸 특이사항·시작시간을 칸에 다시 채운다
+  function startEdit(op: string) {
+    setEditMode(true);
+    setSelected(new Set([op]));
+    setNote(meta[op]?.note ?? "");
+    if (meta[op]?.startTime) setStartTime(meta[op].startTime);
+    setMsg(null);
+  }
+  function cancelEdit() {
+    setEditMode(false);
+    setSelected(new Set(operators.filter((op) => !sentOps.includes(op))));
+    setNote("");
+    setMsg(null);
+  }
 
   // 설치팀 담당 검수자 변경 — 즉시 저장. 팀즈 보고 카드와는 무관(다시 나가지 않는다).
   async function saveTeam(team: string, names: string[]) {
@@ -539,6 +559,7 @@ function ShareStatPanel({
                 note: note.trim(),
                 startTime,
                 date: today,
+                resend: editMode, // 수정·재보고 — 서버가 '이미 보고한 운수사'인지 확인 후 (수정) 카드 발송
               }
             : {}),
         }),
@@ -546,10 +567,16 @@ function ShareStatPanel({
       const j = await res.json();
       if (!res.ok) throw new Error(j.error ?? "전송 실패");
       if (isStart) {
-        setLastSent({ groups: selGroups, startTime, note: note.trim() });
+        setLastSent({ groups: selGroups, startTime, note: note.trim(), revised: editMode });
         setStartDone(true);
+        // 보낸 내용 기억 — 이어서 수정·재보고를 누르면 이 값이 칸에 채워진다
+        setMeta((m) => ({ ...m, ...Object.fromEntries([...selected].map((op) => [op, { note: note.trim(), startTime }])) }));
         setSentOps((prev) => [...new Set([...prev, ...selected])]);
         setSelected(new Set());
+        if (editMode) {
+          setEditMode(false);
+          setNote(""); // 고친 특이사항이 다음 신규 보고 칸에 남지 않게
+        }
       } else {
         setSent(true);
       }
@@ -586,8 +613,13 @@ function ShareStatPanel({
   // 보고용 이미지 — 선택한 운수사가 있으면 그 내용(보고 전 미리 받기), 없으면 방금 보고한 내용,
   // 그것도 없으면(다른 기기에서 보고) 보고 완료 운수사 전체로 만든다.
   const imgSrc = selGroups.length
-    ? { groups: selGroups, startTime, note: note.trim() }
-    : (lastSent ?? { groups: planGroups.filter((g) => sentOps.includes(g.operator)), startTime, note: note.trim() });
+    ? { groups: selGroups, startTime, note: note.trim(), revised: editMode }
+    : (lastSent ?? {
+        groups: planGroups.filter((g) => sentOps.includes(g.operator)),
+        startTime,
+        note: note.trim(),
+        revised: false,
+      });
   const image = {
     make: () =>
       startSheet(
@@ -599,6 +631,7 @@ function ShareStatPanel({
           remain,
           groups: imgSrc.groups,
           note: imgSrc.note,
+          revised: imgSrc.revised,
         },
         projectLabel,
       ),
@@ -610,7 +643,7 @@ function ShareStatPanel({
   if (isStart && startDone && lastSent) {
     return (
       <DonePanel
-        title="팀즈로 설치시작 보고를 보냈습니다"
+        title={lastSent.revised ? "수정한 내용으로 다시 보고했습니다" : "팀즈로 설치시작 보고를 보냈습니다"}
         sub={`${[...new Set(lastSent.groups.map((g) => g.operator))].join(", ")} · ${lastSent.groups
           .reduce((s, g) => s + g.planned, 0)
           .toLocaleString()}대`}
@@ -633,7 +666,9 @@ function ShareStatPanel({
       <p className="mb-2 text-[11px] text-gray-400">아래 내용으로 설치 진행중 공유방에 전송됩니다.</p>
       <div className={`rounded-xl px-4 py-3 text-white ${headBg}`}>
         <p className="text-sm font-bold">
-          {isStart ? `${brand} 단말기 설치 시작 보고` : `${brand} 단말기 설치 진행 현황`}
+          {isStart
+            ? `${brand} 단말기 설치 시작 보고${editMode ? " (수정)" : ""}`
+            : `${brand} 단말기 설치 진행 현황`}
         </p>
         <p className={`text-xs ${headSub}`}>
           {isStart ? `${label} ${startTime} 설치 시작` : `${label} 기준`}
@@ -704,25 +739,46 @@ function ShareStatPanel({
               )}
             </div>
           )}
-          <p className="text-[11px] font-medium text-gray-500">
-            보고할 운수사 선택{" "}
-            <span className="font-normal text-gray-400">(보고 완료된 곳은 다시 보고 불가)</span>
-          </p>
+          {editMode ? (
+            <div className="rounded-lg border border-orange-300 bg-orange-50 px-2.5 py-2">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs font-bold text-orange-700">수정·재보고 중</p>
+                <button
+                  type="button"
+                  onClick={cancelEdit}
+                  className="shrink-0 rounded-md border border-gray-300 bg-white px-2.5 py-1 text-[11px] font-medium text-gray-600"
+                >
+                  취소
+                </button>
+              </div>
+              <p className="mt-0.5 text-[11px] text-orange-700">
+                특이사항(·시작시간)을 고친 뒤 아래 &lsquo;수정 내용으로 재보고&rsquo;를 누르세요. 카드 제목에
+                (수정)이 붙어 다시 나갑니다. 보고 완료된 다른 운수사도 함께 고를 수 있습니다.
+              </p>
+            </div>
+          ) : (
+            <p className="text-[11px] font-medium text-gray-500">
+              보고할 운수사 선택{" "}
+              <span className="font-normal text-gray-400">(보고 완료된 곳은 &lsquo;수정·재보고&rsquo;로 다시 보낼 수 있음)</span>
+            </p>
+          )}
           {operators.map((op) => {
             const done = sentOps.includes(op);
             const on = selected.has(op);
+            // 평소엔 미보고 운수사만, 수정·재보고 중엔 보고 완료 운수사만 고를 수 있다
+            const locked = editMode ? !done : done;
             return (
               <div
                 key={op}
                 className={`rounded-lg border px-2.5 py-1.5 ${
-                  done ? "border-gray-100 bg-gray-50" : "border-gray-200"
+                  locked ? "border-gray-100 bg-gray-50" : "border-gray-200"
                 }`}
               >
                 <div className="flex items-center gap-2">
                   <input
                     type="checkbox"
                     checked={on}
-                    disabled={done}
+                    disabled={locked}
                     onChange={(e) =>
                       setSelected((s) => {
                         const n = new Set(s);
@@ -735,13 +791,23 @@ function ShareStatPanel({
                   />
                   <span
                     className={`min-w-0 flex-1 truncate text-xs font-medium ${
-                      done ? "text-gray-400" : "text-gray-700"
+                      locked ? "text-gray-400" : "text-gray-700"
                     }`}
                   >
                     {op}
                   </span>
                   {done && (
                     <span className="shrink-0 text-[11px] font-medium text-green-600">보고 완료 ✓</span>
+                  )}
+                  {done && !editMode && (
+                    <button
+                      type="button"
+                      onClick={() => startEdit(op)}
+                      // 새벽 현장에서 누르는 화면 — 터치 영역 넉넉히
+                      className="min-h-[32px] shrink-0 rounded-md border border-orange-300 bg-white px-2.5 text-[11px] font-semibold text-orange-700 active:bg-orange-50"
+                    >
+                      수정·재보고
+                    </button>
                   )}
                 </div>
               </div>
@@ -782,9 +848,11 @@ function ShareStatPanel({
             : isStart
               ? loadingSent
                 ? "보고 현황 확인 중…"
-                : allSent
-                  ? "보고 완료 ✓"
-                  : "선택 운수사 팀즈로 보고"
+                : editMode
+                  ? "수정 내용으로 재보고"
+                  : allSent
+                    ? "보고 완료 ✓"
+                    : "선택 운수사 팀즈로 보고"
               : sent
                 ? "전송 완료 ✓"
                 : "팀즈로 공유"}

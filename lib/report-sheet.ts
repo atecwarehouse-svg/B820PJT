@@ -117,6 +117,7 @@ export interface StartSheetInput {
   remain: number;
   groups: { operator: string; route: string; planned: number; manager?: string }[];
   note?: string;
+  revised?: boolean; // 수정·재보고 — 제목에 (수정)
 }
 export function startSheet(d: StartSheetInput, projectLabel = DEFAULT_REPORT_LABEL): Sheet {
   const byOp = new Map<string, { manager: string; total: number; routes: { route: string; count: number }[] }>();
@@ -139,7 +140,7 @@ export function startSheet(d: StartSheetInput, projectLabel = DEFAULT_REPORT_LAB
   if (d.note?.trim()) sections.push({ title: "특이사항", blocks: noteBlocks(d.note) });
   return {
     tag: `[${projectLabel}]`,
-    title: `설치 시작 보고 ${titleDate(d.label)}`,
+    title: `설치 시작 보고${d.revised ? " (수정)" : ""} ${titleDate(d.label)}`,
     kpis: [
       [
         { label: "시작시간", value: d.startTime || "-", accent: true },
