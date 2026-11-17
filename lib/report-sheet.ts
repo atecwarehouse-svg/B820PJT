@@ -244,6 +244,8 @@ export function planSheet(d: PlanSheetInput, variant: "start" | "consult", proje
 // 무시하므로, 폰에서도 회색 칸으로 오와 열이 그대로 맞는다.
 const GRID_COLS = 3; // 노선 칸 열 수(이미지는 4열 — 카드는 폰 폭을 고려해 3열)
 const boxed = { showBorder: true, roundedCorners: true };
+// 숫자와 단위 사이에 줄바꿈 금지 문자(U+2060 WORD JOINER) — 좁은 화면에서 "5대"가 "5 / 대"로 갈라지지 않게
+const keep = (s: string) => s.replace(/(\d)(대|곳|%)/g, "$1⁠$2");
 const TONE_CARD: Record<Tone, Record<string, unknown>> = {
   ok: { color: "Good" },
   bad: { color: "Attention" },
@@ -268,7 +270,7 @@ function blockToCard(b: SheetBlock, first: boolean): unknown[] {
               ],
             },
             ...(b.total
-              ? [{ type: "Column", width: "auto", items: [{ type: "TextBlock", text: b.total, weight: "Bolder", color: "Attention" }] }]
+              ? [{ type: "Column", width: "auto", items: [{ type: "TextBlock", text: keep(b.total), weight: "Bolder", color: "Attention" }] }]
               : []),
           ],
         },
@@ -285,9 +287,14 @@ function blockToCard(b: SheetBlock, first: boolean): unknown[] {
               type: "Column",
               width: "stretch",
               ...(c ? { style: "emphasis", ...boxed } : {}),
-              // 노선·대수를 칸 안에서 다시 둘로 나누면 폰 폭에서 대수가 "5…"로 잘린다 — 한 줄 글자로 두고
-              // 대수만 굵게(팀즈 카드 글자는 **굵게** 표기를 지원), 좁으면 잘리지 않고 줄바꿈된다.
-              items: [{ type: "TextBlock", text: c ? `${c.label}  **${c.count}**` : " ", wrap: true }],
+              // 칸 안은 항상 두 줄(윗줄 노선, 아랫줄 굵은 대수). 한 줄로 두면 좁은 화면에서 칸마다 접히는
+              // 자리가 달라 오와 열이 틀어지고, 칸 안을 좌우로 다시 나누면 대수가 "5…"로 잘린다.
+              items: c
+                ? [
+                    { type: "TextBlock", text: c.label, wrap: true },
+                    { type: "TextBlock", text: keep(c.count), weight: "Bolder", spacing: "None", wrap: true },
+                  ]
+                : [{ type: "TextBlock", text: " " }],
             };
           }),
         });
@@ -345,7 +352,7 @@ export function sheetToCard(s: Sheet): unknown {
           { type: "TextBlock", text: k.label, isSubtle: true, size: "Small", wrap: true },
           {
             type: "TextBlock",
-            text: k.value,
+            text: keep(k.value),
             weight: "Bolder",
             size: "Medium",
             spacing: "None",
