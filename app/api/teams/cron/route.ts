@@ -57,7 +57,7 @@ async function runFor(p: Project, workDay: string): Promise<Record<string, unkno
     return { error: e instanceof Error ? e.message : "집계 실패" };
   }
 
-  const planned = sch.days.find((d) => d.date === workDay)?.planned ?? 0;
+  const planned = (sch.planDays ?? sch.days).find((d) => d.date === workDay)?.planned ?? 0; // 수량 차감 방식은 엑셀 계획
   if (planned === 0) {
     return { skipped: true, reason: "설치일 아님(예정 수량 0)" };
   }

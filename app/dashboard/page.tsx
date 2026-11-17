@@ -185,7 +185,8 @@ export default async function DashboardPage() {
   const today = todayKey;
   const scheduleDays = sch?.days.map((d) => ({ date: d.date, planned: d.planned })) ?? [];
   // 금일 설치현황 — 설치대상(예정일=금일 − 배차표 설치제외)·설치완료(금일 저장 완료)
-  const todayPlanned = sch?.days.find((d) => d.date === today)?.planned ?? 0;
+  // 수량 차감 방식은 올린 엑셀 계획(plan_days) — 예정일 대수는 앞당겨 설치한 만큼 줄어 있다(11/16 7대 선행 → 11/17 28→25)
+  const todayPlanned = (sch?.planDays ?? sch?.days)?.find((d) => d.date === today)?.planned ?? 0;
   const todayDone = ip?.todayComplete ?? 0;
   // 설치제외인데 실제로 금일 완료된 차량은 차감하지 않는다 — 완료 수에는 잡히므로
   // 그대로 빼면 달성률이 100%를 넘거나 '대상 < 완료' 모순이 생긴다.
