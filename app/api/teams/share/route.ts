@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { brandName, currentProject, currentSlug } from "@/lib/project";
+import { brandName, currentProject, currentSlug, reportLabel } from "@/lib/project";
 import { sendProgressCard, sendStartReportCard, inspectorNames } from "@/lib/teams";
 import { carryOverIfQuota } from "@/lib/quota";
 import {
@@ -115,7 +115,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "잘못된 요청입니다." }, { status: 400 });
   }
   const n = (v: unknown) => (typeof v === "number" && isFinite(v) ? v : 0);
-  const projectName = brandName(await currentProject()); // 카드 제목 (B820은 "B820")
+  const project = await currentProject();
+  const projectName = brandName(project); // 진행 현황 카드 제목 (B820은 "B820")
   try {
     if (b.kind === "start") {
       const known = new Set(await inspectorNames());
@@ -151,7 +152,7 @@ export async function POST(req: NextRequest) {
       }
       try {
         await sendStartReportCard({
-          projectName,
+          projectLabel: reportLabel(project), // 머리띠 "[…]" — 보고용 이미지와 같은 문구
           label: (b.label ?? "").toString().slice(0, 40),
           todayPlanned: n(b.todayPlanned),
           complete: n(b.complete),

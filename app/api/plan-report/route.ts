@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { brandName, currentProject } from "@/lib/project";
+import { currentProject, reportLabel } from "@/lib/project";
 import { createServiceClient } from "@/lib/supabase/server";
 import { getConsultConfig } from "@/lib/settings";
 import { consultTitle } from "@/lib/consultation-form";
@@ -117,7 +117,7 @@ export async function POST(req: NextRequest) {
   // 협의사항방 카드의 항목 표기는 협의사항 양식(관리자 탭)에서 바꾼 이름을 따른다
   const titles: Record<string, string> = {};
   for (const f of await getConsultConfig()) if (f.type !== "heading") titles[f.key] = consultTitle(f);
-  const result = await sendPlanReportCard({ label, total, groups, projectName: brandName(await currentProject()), titles }, rooms);
+  const result = await sendPlanReportCard({ label, total, groups, projectLabel: reportLabel(await currentProject()), titles }, rooms);
   if (result.errors.length > 0) {
     // 성공한 방 목록을 함께 돌려줘 클라이언트가 실패한 방에만 재시도하게 한다
     return NextResponse.json(

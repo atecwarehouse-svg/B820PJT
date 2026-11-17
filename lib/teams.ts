@@ -1,7 +1,16 @@
 // 팀즈 설치 진행 현황 카드 전송 — 공유 버튼/크론이 공유하는 로직.
 
 import type { DailyReport, ServiceCheck } from "./report";
-import { checkTone, groupByOperator, noteBullet, noteRows, serviceCheckRows } from "./report";
+import { noteBullet, serviceCheckRows } from "./report";
+import {
+  completionSheet,
+  planSheet,
+  sheetToCard,
+  startSheet,
+  type PlanSheetInput,
+  type StartSheetInput,
+} from "./report-sheet";
+export type { PlanReportGroup } from "./report-sheet";
 import type { VocOperatorSummary } from "./voc";
 import { VOC_RATINGS, starBar } from "./voc";
 import { isNewModem } from "./modem";
@@ -233,322 +242,28 @@ export async function sendProgressCard(d: ProgressCardData): Promise<void> {
 
 // 설치 시작 보고 카드 — 진행현황 카드와 같은 채팅방(설치 진행중 공유방, TEAMS_WEBHOOK_URL).
 // 대시보드 '설치시작 보고' 버튼에서 금일 작업 시작을 알릴 때 사용.
-// groups: 금일 설치계획을 운수사·노선별로 나눈 목록 (예: "삼환교통 42노선 : 5대").
-export async function sendStartReportCard(d: {
-  label: string; // 날짜 라벨 (예: "9/17 (수)")
-  todayPlanned: number;
-  complete: number;
-  remain: number;
-  projectName?: string;
-  groups: {
-    operator: string;
-    route: string;
-    planned: number;
-    manager?: string;
-  }[];
-  note?: string; // 특이사항 — 있을 때만 카드 하단에 표시
-  startTime?: string; // 시작시간 (HH:MM) — 있을 때만 표시
-}): Promise<void> {
+// 모양은 보고용 이미지와 같은 Sheet(lib/report-sheet.ts startSheet) — 카드와 이미지가 늘 같게 나온다.
+export async function sendStartReportCard(d: StartSheetInput & { projectLabel?: string }): Promise<void> {
   const url = process.env.TEAMS_WEBHOOK_URL;
   if (!url)
     throw new Error("팀즈 웹후크가 설정되지 않았습니다. (TEAMS_WEBHOOK_URL)");
-
-  const card = {
-    type: "message",
-    attachments: [
-      {
-        contentType: "application/vnd.microsoft.card.adaptive",
-        content: {
-          $schema: "http://adaptivecards.io/schemas/adaptive-card.json",
-          type: "AdaptiveCard",
-          version: "1.4",
-          body: [
-            {
-              type: "TextBlock",
-              size: "Large",
-              weight: "Bolder",
-              text: `${d.projectName ?? "B820"} 단말기 설치 시작 보고`,
-              wrap: true,
-            },
-            {
-              type: "TextBlock",
-              text: d.label ? `${d.label} 설치 시작` : "금일 설치 시작",
-              isSubtle: true,
-              spacing: "None",
-              wrap: true,
-            },
-            ...(d.startTime
-              ? [
-                  {
-                    type: "TextBlock",
-                    weight: "Bolder",
-                    text: `시작시간 ${d.startTime}`,
-                    wrap: true,
-                  },
-                ]
-              : []),
-            {
-              type: "TextBlock",
-              weight: "Bolder",
-              text: `금일 설치계획 ${d.todayPlanned.toLocaleString()}대`,
-              wrap: true,
-            },
-            // 운수사별 묶음: "운수사 · 담당자" 헤더 아래 노선별 대수를 FactSet(2열 정렬)으로.
-            // 노선을 한 줄에 길게 붙이면 줄바꿈이 흐트러져 보기 불편하다는 피드백 반영.
-            ...[
-              ...d.groups.reduce((m, g) => {
-                const cur = m.get(g.operator) ?? { manager: "", routes: [] };
-                if (g.manager) cur.manager = g.manager;
-                cur.routes.push(g);
-                return m.set(g.operator, cur);
-              }, new Map<string, { manager: string; routes: typeof d.groups }>()),
-            ].flatMap(([op, info]) => [
-              {
-                type: "TextBlock",
-                weight: "Bolder",
-                text: `${op}${info.manager ? ` · 담당 ${info.manager}` : ""} — ${info.routes
-                  .reduce((s, r) => s + r.planned, 0)
-                  .toLocaleString()}대`,
-                wrap: true,
-              },
-              {
-                type: "FactSet",
-                spacing: "Small",
-                facts: info.routes.map((r) => ({
-                  title: r.route ? `${r.route}노선` : "노선 미지정",
-                  value: `${r.planned.toLocaleString()}대`,
-                })),
-              },
-            ]),
-            {
-              type: "FactSet",
-              facts: [
-                {
-                  title: "누적 완료",
-                  value: `${d.complete.toLocaleString()}대`,
-                },
-                {
-                  title: "잔여(설치대상)",
-                  value: `${d.remain.toLocaleString()}대`,
-                },
-              ],
-            },
-            ...(d.note
-              ? [
-                  {
-                    type: "TextBlock",
-                    weight: "Bolder",
-                    text: "특이사항",
-                    wrap: true,
-                  },
-                  {
-                    type: "TextBlock",
-                    spacing: "Small",
-                    text: d.note,
-                    wrap: true,
-                  },
-                ]
-              : []),
-          ],
-        },
-      },
-    ],
-  };
-
-  await post(url, card, "시작보고");
-}
-
-// ── 금일 설치 완료 보고 카드 ──────────────────────────────
-// 보고용 이미지(lib/report-image.ts)와 같은 모양: 머리띠 → 수치 상자 3칸×2줄 → 운수사 띠 + 노선 칸
-// → 운행시작 점검 → (VOC) → 특이사항. 칸은 ColumnSet/Column 배경(style)으로 만든다 — 팀즈 폰 앱은
-// 카드 1.2까지만 확실히 그리므로 Table(1.5)은 쓰지 않는다. 테두리(showBorder/roundedCorners)는 PC에서만
-// 보이고, 모르는 기기는 무시하므로 폰에서도 배경색 칸으로 오와 열이 그대로 맞는다.
-const REPORT_COLS = 3; // 노선 칸 열 수(이미지는 4열 — 팀즈 카드는 폰 폭을 고려해 3열)
-const boxed = { showBorder: true, roundedCorners: true };
-
-// 수치 상자 한 줄 — 작은 라벨 + 굵은 값, 회색 상자 3칸
-function kpiRow(items: [label: string, value: string, color?: string][], spacing: string): unknown {
-  return {
-    type: "ColumnSet",
-    spacing,
-    columns: items.map(([label, value, color]) => ({
-      type: "Column",
-      width: "stretch",
-      style: "emphasis",
-      ...boxed,
-      items: [
-        { type: "TextBlock", text: label, isSubtle: true, size: "Small", wrap: true },
-        {
-          type: "TextBlock",
-          text: value,
-          weight: "Bolder",
-          size: "Medium",
-          spacing: "None",
-          wrap: true,
-          ...(color ? { color } : {}),
-        },
-      ],
-    })),
-  };
-}
-
-// 운수사 줄(이름 ··· 합계, 아래 구분선) + 노선 칸 격자. 노선 칸은 회색 바탕 상자 — 테두리를 못 그리는
-// 기기에서도 칸끼리 구분된다. 마지막 줄의 빈 칸도 채워 열 너비를 유지한다.
-function operatorBlocks(o: { operator: string; total: number; routes: { route: string; count: number }[] }): unknown[] {
-  const out: unknown[] = [
-    {
-      type: "Container",
-      spacing: "Medium",
-      items: [
-        {
-          type: "ColumnSet",
-          columns: [
-            { type: "Column", width: "stretch", items: [{ type: "TextBlock", text: o.operator, weight: "Bolder", wrap: true }] },
-            {
-              type: "Column",
-              width: "auto",
-              verticalContentAlignment: "Center",
-              items: [{ type: "TextBlock", text: `${o.total.toLocaleString()}대`, weight: "Bolder", color: "Attention" }],
-            },
-          ],
-        },
-      ],
-    },
-  ];
-  for (let i = 0; i < o.routes.length; i += REPORT_COLS) {
-    out.push({
-      type: "ColumnSet",
-      spacing: "Small",
-      columns: Array.from({ length: REPORT_COLS }, (_, k) => {
-        const c = o.routes[i + k];
-        return {
-          type: "Column",
-          width: "stretch",
-          ...(c ? { style: "emphasis", ...boxed } : {}),
-          // 노선·대수를 칸 안에서 다시 둘로 나누면 폰 폭에서 대수가 "5…"로 잘린다 — 한 줄 글자로 두고
-          // 대수만 굵게(팀즈 카드 글자는 **굵게** 표기를 지원), 좁으면 잘리지 않고 줄바꿈된다.
-          items: [{ type: "TextBlock", text: c ? `${c.route}  **${c.count.toLocaleString()}대**` : " ", wrap: true }],
-        };
-      }),
-    });
-  }
-  return out;
-}
-
-// 섹션 제목(구분선 + 굵은 글씨)
-function sectionTitle(text: string): unknown {
-  return { type: "TextBlock", text, weight: "Bolder", spacing: "Large", separator: true, wrap: true };
+  await post(url, sheetToCard(startSheet(d, d.projectLabel)), "시작보고");
 }
 
 // 금일 설치 완료 보고 카드 — 진행현황·설치시작 보고 카드와 같은 채팅방(설치 진행중 공유방, TEAMS_WEBHOOK_URL).
 // 금일 완료 리포트 1차(팀즈만)·2차(메일과 함께) 발송 시 전송.
+// 모양은 보고용 이미지와 같은 Sheet(lib/report-sheet.ts completionSheet).
 export async function sendCompletionReportCard(
   r: DailyReport,
   notes: string,
   check?: ServiceCheck,
   vocs?: VocOperatorSummary[], // 2차 발송에서만 전달 — 운수사 VOC 섹션
-  projectLabel = "인천버스 B820 단말기 설치 프로젝트", // 머리띠 "[…]" — 메일·보고용 이미지와 같은 문구
+  projectLabel?: string, // 머리띠 "[…]" — 메일·보고용 이미지와 같은 문구(없으면 B820 문구)
 ): Promise<void> {
   const url = process.env.TEAMS_WEBHOOK_URL;
   if (!url)
     throw new Error("팀즈 웹후크가 설정되지 않았습니다. (TEAMS_WEBHOOK_URL)");
-
-  const ops = groupByOperator(r.groups);
-  const checkRows = serviceCheckRows(check);
-  const TONE = { ok: { color: "Good" }, bad: { color: "Attention" }, none: { isSubtle: true }, info: {} } as const;
-
-  const body: unknown[] = [
-    // 머리띠
-    {
-      type: "Container",
-      style: "accent",
-      bleed: true,
-      items: [
-        { type: "TextBlock", text: `[${projectLabel}]`, size: "Small", isSubtle: true, wrap: true },
-        {
-          type: "TextBlock",
-          text: `설치 완료 보고 (${r.label}, ${r.dow})`,
-          size: "Large",
-          weight: "Bolder",
-          spacing: "None",
-          wrap: true,
-        },
-      ],
-    },
-    // 수치 상자 3칸 × 2줄
-    kpiRow(
-      [
-        ["금일 실적", `${r.dailyDone.toLocaleString()}대`],
-        ["금일 계획", `${r.dailyPlanned.toLocaleString()}대`],
-        ["달성률", `${r.dailyPct.toFixed(1)}%`, "Attention"],
-      ],
-      "Medium",
-    ),
-    kpiRow(
-      [
-        ["누적 계획", `${r.cumPlanned.toLocaleString()}대`],
-        ["누적 완료", `${r.cumDone.toLocaleString()}대 (${r.cumPct.toFixed(1)}%)`],
-        ["잔여", `${r.remaining.toLocaleString()}대`],
-      ],
-      "Small",
-    ),
-    // 금일 설치 내역
-    { type: "TextBlock", text: "금일 설치 내역", weight: "Bolder", spacing: "Large", wrap: true },
-    ...(ops.length
-      ? ops.flatMap(operatorBlocks)
-      : [{ type: "TextBlock", text: "(완료 없음)", isSubtle: true, spacing: "Small", wrap: true }]),
-  ];
-
-  // 운행시작 점검 — 라벨 칸 너비를 고정해 값이 한 열로 맞게, 그림문자 대신 글자색으로 상태 표시
-  if (checkRows.length) {
-    body.push(sectionTitle("운행시작 점검"));
-    for (const row of checkRows) {
-      const v = checkTone(row.value);
-      body.push({
-        type: "ColumnSet",
-        spacing: "Small",
-        columns: [
-          { type: "Column", width: "110px", items: [{ type: "TextBlock", text: row.title, isSubtle: true, wrap: true }] },
-          { type: "Column", width: "stretch", items: [{ type: "TextBlock", text: v.text, wrap: true, ...TONE[v.tone] }] },
-        ],
-      });
-    }
-  }
-
-  // 운수사 VOC (2차 발송에서만) — VOC 등록 카드와 같은 블록
-  if (vocs?.length) {
-    body.push(sectionTitle("운수사 VOC"), ...vocs.flatMap((v) => vocSummaryBlocks(v, "Small")));
-  }
-
-  // 특이사항 — 자동 목록 머리줄([설치제외 N대] 등)은 굵게
-  body.push(
-    sectionTitle("특이사항"),
-    ...noteRows(notes).map((n, i) => ({
-      type: "TextBlock",
-      text: n.text,
-      spacing: i === 0 ? "Small" : "None",
-      wrap: true,
-      ...(n.head ? { weight: "Bolder" } : {}),
-    })),
-  );
-
-  const card = {
-    type: "message",
-    attachments: [
-      {
-        contentType: "application/vnd.microsoft.card.adaptive",
-        content: {
-          $schema: "http://adaptivecards.io/schemas/adaptive-card.json",
-          type: "AdaptiveCard",
-          version: "1.4",
-          msteams: { width: "Full" }, // 팀즈 PC에서 카드 폭을 넓게 — 칸이 좁아 노선명이 접히지 않게
-          body,
-        },
-      },
-    ],
-  };
-
-  await post(url, card, "완료보고");
+  await post(url, sheetToCard(completionSheet(r, notes, check, vocs, projectLabel)), "완료보고");
 }
 
 // 특이사항 텍스트 → 카드 표기용 불릿 목록 (빈 값이면 "- 없음")
@@ -1172,159 +887,21 @@ export async function sendConsultationCard(
   await postToRooms(url, card, "협의사항카드", await inspectorNames());
 }
 
-
-export interface PlanReportGroup {
-  operator: string;
-  routes: { route: string; count: number }[]; // 노선별 대수
-  count: number; // 운수사 합계
-  time?: string; // 집합시간 "HH:MM" (24시간)
-  place?: string; // 설치 장소
-  dayOff?: string; // 당일 휴차 (협의사항방 카드에만 표시)
-  nextDayOff?: string; // 익일 휴차 (협의사항방 카드에만 표시)
-  // 아래는 협의사항방 카드 전용 — consultations 저장 데이터에서 서버가 채움
-  arrival?: string; // 첫차 종료 후 도착 예정
-  keyMethod?: string; // 차키 협조
-  engineOn?: string; // 작업 중 시동
-  fuel?: string; // 충전 여부
-  mountDisplay?: string; // 표출기
-  mountMain?: string; // 통합단말기
-  mountBoard?: string; // 승차
-  mountAlight?: string; // 하차 방향
-  handleRemoval?: string; // 격벽 손잡이 탈거
-  notes?: string; // 특이사항
-}
-
 // 설치계획 보고 카드 — 대시보드 '설치계획 보고' 버튼. 채팅방별로 내용이 다르다:
-//   시작보고 채팅방(TEAMS_WEBHOOK_URL): 노선·집합시간·설치 장소만 (휴차 없음)
-//   협의사항 채팅방(TEAMS_COMPLETE_WEBHOOK_URL): + 휴차·도착시간·협조확인·설치위치·특이사항
+//   시작보고 채팅방(TEAMS_WEBHOOK_URL): 설치계획 보고 — 노선·집합시간·설치 장소 (휴차 없음)
+//   협의사항 채팅방(TEAMS_COMPLETE_WEBHOOK_URL): 집합시간 및 특이사항 공지 — + 휴차·도착시간·협조확인·설치위치·특이사항
+// 모양은 보고용 이미지와 같은 Sheet(lib/report-sheet.ts planSheet).
 // 방별 성공/실패를 돌려준다 — 한 방만 실패했을 때 재시도가 성공한 방에
 // 같은 카드를 또 보내지 않도록, 호출부가 실패한 방에만 다시 보낼 수 있게 한다.
 export type PlanReportRoom = "start" | "consult";
 export async function sendPlanReportCard(
-  d: {
-    label: string; // 날짜 라벨 (예: "7/10 (금)")
-    total: number; // 금일 설치계획 합계
-    groups: PlanReportGroup[];
-    projectName?: string;
-    titles?: Record<string, string>; // 협의사항 양식의 항목 표기(컬럼명 → 카드 표기). 없으면 B820 기본 표기
-  },
+  d: PlanSheetInput & { projectLabel?: string },
   rooms: PlanReportRoom[] = ["start", "consult"],
 ): Promise<{ sent: PlanReportRoom[]; errors: string[] }> {
   const startUrl = process.env.TEAMS_WEBHOOK_URL;
   const consultUrl = process.env.TEAMS_COMPLETE_WEBHOOK_URL;
-
-  const v = (s?: string) => s?.trim() || "-";
-  const t = (key: string, fallback: string) => d.titles?.[key] ?? fallback;
-  // 제목은 채팅방별로 다름 — 시작보고방은 '설치계획 보고', 협의사항방은 '집합시간 및 특이사항 공지'
-  const header = (title: string) => [
-    {
-      type: "TextBlock",
-      size: "Large",
-      weight: "Bolder",
-      text: title,
-      wrap: true,
-    },
-    {
-      type: "TextBlock",
-      text: `${d.label} 설치 계획`,
-      isSubtle: true,
-      spacing: "None",
-      wrap: true,
-    },
-    {
-      type: "TextBlock",
-      weight: "Bolder",
-      text: `금일 설치계획 ${d.total.toLocaleString()}대`,
-      wrap: true,
-    },
-  ];
-  const groupHead = (g: PlanReportGroup) => ({
-    type: "TextBlock",
-    weight: "Bolder",
-    color: "Accent",
-    text: `○ ${g.operator} · ${g.count.toLocaleString()}대`,
-    spacing: "Medium",
-    wrap: true,
-  });
-  const baseFacts = (g: PlanReportGroup) => [
-    // 노선별 대수가 없으면(수량 차감 방식 — 운수사 대수만) 노선 줄 생략
-    ...(g.routes.length
-      ? [{ title: "노선", value: g.routes.map((r) => `${r.route} ${r.count}대`).join(" · ") }]
-      : []),
-    { title: "집합시간", value: v(g.time) },
-    { title: "설치 장소", value: v(g.place) },
-    // 특이사항은 입력된 운수사만 (시작보고방 카드는 간결 유지)
-    ...(g.notes?.trim() ? [{ title: "특이사항", value: g.notes.trim() }] : []),
-  ];
-  const mkCard = (body: unknown[]) => ({
-    type: "message",
-    attachments: [
-      {
-        contentType: "application/vnd.microsoft.card.adaptive",
-        content: {
-          $schema: "http://adaptivecards.io/schemas/adaptive-card.json",
-          type: "AdaptiveCard",
-          version: "1.4",
-          body,
-        },
-      },
-    ],
-  });
-
-  // 시작보고방: 휴차 없이 간단히
-  const startCard = mkCard([
-    ...header(`${d.projectName ?? "B820"} 단말기 설치계획 보고`),
-    ...d.groups.flatMap((g) => [
-      groupHead(g),
-      { type: "FactSet", spacing: "Small", facts: baseFacts(g) },
-    ]),
-  ]);
-
-  // 협의사항방: 휴차 + 도착시간 + 협조·확인사항 + 단말기 설치위치 + 특이사항.
-  // 집합시간·설치 장소는 노선 위에 굵고 큰 글자(Medium)로 강조(사용자 요청).
-  const consultCard = mkCard([
-    ...header("집합시간 및 특이사항 공지"),
-    ...d.groups.flatMap((g) => [
-      groupHead(g),
-      {
-        type: "TextBlock",
-        size: "Medium",
-        weight: "Bolder",
-        text: `집합시간 : ${v(g.time)}`,
-        spacing: "Small",
-        wrap: true,
-      },
-      {
-        type: "TextBlock",
-        size: "Medium",
-        weight: "Bolder",
-        text: `설치 장소 : ${v(g.place)}`,
-        spacing: "None",
-        wrap: true,
-      },
-      {
-        type: "FactSet",
-        spacing: "Small",
-        facts: [
-          ...(g.routes.length
-            ? [{ title: "노선", value: g.routes.map((r) => `${r.route} ${r.count}대`).join(" · ") }]
-            : []),
-          { title: t("day_off", "당일 휴차"), value: v(g.dayOff) },
-          { title: t("next_day_off", "익일 휴차"), value: v(g.nextDayOff) },
-          { title: t("arrival", "첫차 종료 후 도착"), value: v(g.arrival) },
-          { title: t("key_method", "차키 협조"), value: v(g.keyMethod) },
-          { title: t("engine_on", "작업 중 시동"), value: v(g.engineOn) },
-          { title: t("fuel", "충전 여부"), value: v(g.fuel) },
-          { title: t("mount_display", "표출기"), value: v(g.mountDisplay) },
-          { title: t("mount_main", "통합단말기"), value: v(g.mountMain) },
-          { title: t("mount_board", "승차"), value: v(g.mountBoard) },
-          { title: t("mount_alight", "하차(방향)"), value: v(g.mountAlight) },
-          { title: t("handle_removal", "격벽 손잡이 탈거"), value: v(g.handleRemoval) },
-          { title: t("notes", "특이사항"), value: v(g.notes) },
-        ],
-      },
-    ]),
-  ]);
+  const startCard = sheetToCard(planSheet(d, "start", d.projectLabel));
+  const consultCard = sheetToCard(planSheet(d, "consult", d.projectLabel));
 
   const allTargets: {
     room: PlanReportRoom;

@@ -248,6 +248,7 @@ export default async function DashboardPage() {
             teamList={teamList}
             hideBisKakao={!custom.flags.bisKakao}
             brand={brand}
+            projectLabel={projectLabel}
           />
           {ip && (
             <DailyReportModal

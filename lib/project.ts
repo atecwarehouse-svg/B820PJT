@@ -9,6 +9,7 @@ import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import { createServiceClient } from "@/lib/supabase/server";
 import { colorKey, iconKey, type ColorKey, type IconKey } from "@/components/ProjectIcon";
+import { DEFAULT_REPORT_LABEL } from "@/lib/report-sheet";
 
 export const DEFAULT_SLUG = "b820";
 export const SLUG_RE = /^[a-z][a-z0-9_]{1,19}$/;
@@ -200,6 +201,11 @@ async function legacyProjects(sb: ReturnType<typeof createServiceClient>): Promi
 /** 카드 제목·파일명·메일에 쓰는 짧은 이름 — B820 출력은 기존과 바이트 동일하게 "B820". */
 export function brandName(p: Project): string {
   return isDefault(p.slug) ? "B820" : p.name;
+}
+
+/** 보고서 머리말 "[…]" — 설치계획·시작·완료 보고 카드와 보고용 이미지, 완료 메일이 함께 쓴다 */
+export function reportLabel(p: Project): string {
+  return isDefault(p.slug) ? DEFAULT_REPORT_LABEL : `${p.name} 프로젝트`;
 }
 
 /** 프로젝트 홈 경로 */

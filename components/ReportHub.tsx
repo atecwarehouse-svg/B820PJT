@@ -3,6 +3,8 @@
 import Icon from "@/components/Icon";
 import { useEffect, useState } from "react";
 import { workDateString } from "@/lib/work-day";
+import { DEFAULT_REPORT_LABEL, planSheet, startSheet, type Sheet } from "@/lib/report-sheet";
+import { saveSheetImage, sheetFileName } from "@/lib/report-image";
 
 // ── 공통 유틸 ───────────────────────────────────────────────
 const DOW = ["일", "월", "화", "수", "목", "금", "토"];
@@ -22,23 +24,64 @@ interface PlanGroup {
   planned: number;
 }
 
-// 완료 안내 화면 (전송 성공 후) — btnClass는 Tailwind가 스캔할 수 있게 전체 클래스로 전달
+// '보고용 이미지' 버튼 — 팀즈 카드와 같은 모양(Sheet)을 PNG로 저장(팀즈에서 다시 캡쳐하지 않게).
+// 발송 전·후 언제든 받을 수 있다. make()는 누른 순간의 입력값으로 보고서를 만든다.
+function SheetImageButton({
+  make,
+  fileName,
+  className = "",
+}: {
+  make: () => Sheet;
+  fileName: string;
+  className?: string;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [failed, setFailed] = useState(false);
+  async function save() {
+    if (busy) return;
+    setBusy(true);
+    setFailed(false);
+    try {
+      if (!(await saveSheetImage(make(), fileName))) setFailed(true);
+    } catch {
+      setFailed(true);
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <button
+      type="button"
+      onClick={save}
+      disabled={busy}
+      className={`rounded-lg bg-gray-100 px-3 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-200 disabled:opacity-50 ${className}`}
+    >
+      {busy ? "만드는 중…" : failed ? "이미지 실패 — 다시" : "보고용 이미지"}
+    </button>
+  );
+}
+
+// 완료 안내 화면 (전송 성공 후) — btnClass는 Tailwind가 스캔할 수 있게 전체 클래스로 전달.
+// image가 있으면 방금 보낸 내용의 보고용 이미지 저장 버튼을 함께 보여준다.
 function DonePanel({
   title,
   sub,
   onClose,
   btnClass,
+  image,
 }: {
   title: string;
   sub?: string;
   onClose: () => void;
   btnClass: string;
+  image?: { make: () => Sheet; fileName: string };
 }) {
   return (
     <div className="py-6 text-center">
       <p className="text-3xl"><Icon name="done" /></p>
       <p className="mt-2 text-sm font-semibold text-gray-700">{title}</p>
       {sub && <p className="mt-1 text-xs text-gray-400">{sub}</p>}
+      {image && <SheetImageButton {...image} className="mt-4 w-full font-semibold" />}
       <button
         type="button"
         onClick={onClose}
@@ -63,10 +106,12 @@ interface EntryState {
 function PlanReportPanel({
   today,
   planGroups,
+  projectLabel,
   onClose,
 }: {
   today: string;
   planGroups: PlanGroup[];
+  projectLabel: string; // 보고용 이미지 머리말
   onClose: () => void;
 }) {
   const INPUT =
@@ -152,23 +197,33 @@ function PlanReportPanel({
     setEntries((e) => ({ ...e, [operator]: { ...e[operator], ...patch } }));
   }
 
+  // 입력값 → 운수사별 계획 — 팀즈 전송과 보고용 이미지가 같은 값을 쓴다
+  function buildGroups() {
+    return operators.map((o) => {
+      const e = entries[o.operator];
+      return {
+        operator: o.operator,
+        routes: o.routes,
+        count: o.count,
+        time: e?.hour ? `${e.hour}:${e.minute || "00"}` : "",
+        place: e?.place ?? "",
+        dayOff: e?.dayOff ?? "",
+        nextDayOff: e?.nextDayOff ?? "",
+        notes: e?.notes ?? "",
+      };
+    });
+  }
+  // 보고용 이미지 = 시작보고방 카드(설치계획 보고)와 같은 내용
+  const image = {
+    make: () => planSheet({ label, total, groups: buildGroups() }, "start", projectLabel),
+    fileName: sheetFileName(projectLabel, "설치계획보고", today),
+  };
+
   async function handleSend() {
     setBusy(true);
     setError(null);
     try {
-      const groups = operators.map((o) => {
-        const e = entries[o.operator];
-        return {
-          operator: o.operator,
-          routes: o.routes,
-          count: o.count,
-          time: e?.hour ? `${e.hour}:${e.minute || "00"}` : "",
-          place: e?.place ?? "",
-          dayOff: e?.dayOff ?? "",
-          nextDayOff: e?.nextDayOff ?? "",
-          notes: e?.notes ?? "",
-        };
-      });
+      const groups = buildGroups();
       const res = await fetch("/api/plan-report", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -197,6 +252,7 @@ function PlanReportPanel({
         sub={`${label} 설치계획 ${total.toLocaleString()}대`}
         onClose={onClose}
         btnClass="bg-teal-600 active:bg-teal-700"
+        image={image}
       />
     );
   }
@@ -322,14 +378,17 @@ function PlanReportPanel({
 
       {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600">{error}</p>}
 
-      <button
-        type="button"
-        onClick={handleSend}
-        disabled={busy}
-        className="w-full rounded-xl bg-teal-600 py-3 text-sm font-bold text-white active:bg-teal-700 disabled:opacity-50"
-      >
-        {busy ? "전송 중..." : "두 채팅방으로 보내기"}
-      </button>
+      <div className="flex gap-2">
+        <SheetImageButton {...image} className="shrink-0 rounded-xl py-3" />
+        <button
+          type="button"
+          onClick={handleSend}
+          disabled={busy}
+          className="flex-1 rounded-xl bg-teal-600 py-3 text-sm font-bold text-white active:bg-teal-700 disabled:opacity-50"
+        >
+          {busy ? "전송 중..." : "두 채팅방으로 보내기"}
+        </button>
+      </div>
     </div>
   );
 }
@@ -347,6 +406,7 @@ function ShareStatPanel({
   inspectorList,
   teamList = [],
   brand = "B820",
+  projectLabel = DEFAULT_REPORT_LABEL,
   onClose,
 }: {
   kind: "start" | "progress";
@@ -360,10 +420,13 @@ function ShareStatPanel({
   inspectorList: string[]; // 등록된 검수자 이름 — 설치팀별 담당 선택지
   teamList?: string[]; // 등록된 설치팀 라벨("팀명 이름") — 팀별 담당 검수자 지정 대상
   brand?: string;
+  projectLabel?: string; // 보고용 이미지 머리말
   onClose: () => void;
 }) {
   const label = fmtLabel(today);
   const isStart = kind === "start";
+  // 마지막으로 보고한 내용 — 보고하면 선택이 비워지므로, 보고 직후 이미지는 이 값으로 만든다
+  const [lastSent, setLastSent] = useState<{ groups: PlanGroup[]; startTime: string; note: string } | null>(null);
   const [sharing, setSharing] = useState(false);
   const [sent, setSent] = useState(false); // 전송 성공 — 버튼을 잠가 중복 카드 방지
   const [note, setNote] = useState(""); // 설치시작 보고 특이사항 — 카드에 함께 표시
@@ -477,6 +540,7 @@ function ShareStatPanel({
       const j = await res.json();
       if (!res.ok) throw new Error(j.error ?? "전송 실패");
       if (isStart) {
+        setLastSent({ groups: selGroups, startTime, note: note.trim() });
         setSentOps((prev) => [...new Set([...prev, ...selected])]);
         setSelected(new Set());
       } else {
@@ -511,6 +575,28 @@ function ShareStatPanel({
         ["누적완료", complete, "text-green-700"],
         ["잔여(설치대상)", remain, "text-gray-600"],
       ];
+
+  // 보고용 이미지 — 선택한 운수사가 있으면 그 내용(보고 전 미리 받기), 없으면 방금 보고한 내용,
+  // 그것도 없으면(다른 기기에서 보고) 보고 완료 운수사 전체로 만든다.
+  const imgSrc = selGroups.length
+    ? { groups: selGroups, startTime, note: note.trim() }
+    : (lastSent ?? { groups: planGroups.filter((g) => sentOps.includes(g.operator)), startTime, note: note.trim() });
+  const image = {
+    make: () =>
+      startSheet(
+        {
+          label,
+          startTime: imgSrc.startTime,
+          todayPlanned: imgSrc.groups.reduce((s, g) => s + g.planned, 0),
+          complete,
+          remain,
+          groups: imgSrc.groups,
+          note: imgSrc.note,
+        },
+        projectLabel,
+      ),
+    fileName: sheetFileName(projectLabel, "설치시작보고", today),
+  };
 
   // Tailwind가 스캔할 수 있게 정적 클래스로 분기
   const headBg = isStart ? "bg-orange-600" : "bg-indigo-600";
@@ -662,6 +748,7 @@ function ShareStatPanel({
         >
           닫기
         </button>
+        {isStart && imgSrc.groups.length > 0 && <SheetImageButton {...image} className="shrink-0" />}
         <button
           onClick={share}
           disabled={sharing || (isStart ? loadingSent || selected.size === 0 : sent)}
@@ -949,7 +1036,9 @@ export default function ReportHub(props: {
   teamList?: string[]; // 등록된 설치팀 라벨 — 설치시작 보고에서 팀별 담당 검수자 지정
   hideBisKakao?: boolean; // 운행시작 보고 점검란에서 BIS(인천)·카카오(초정밀) 제외 (공항 B800)
   brand?: string; // 카드 제목의 프로젝트명 (기본 B820)
+  projectLabel?: string; // 보고용 이미지 머리말 "[…]" (없으면 B820 문구)
 }) {
+  const projectLabel = props.projectLabel ?? DEFAULT_REPORT_LABEL;
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<TabKey>("plan");
 
@@ -1013,6 +1102,7 @@ export default function ReportHub(props: {
                 <PlanReportPanel
                   today={props.planToday}
                   planGroups={props.planGroups}
+                  projectLabel={projectLabel}
                   onClose={close}
                 />
               )}
@@ -1029,6 +1119,7 @@ export default function ReportHub(props: {
                   inspectorList={props.inspectorList}
                   teamList={props.teamList}
                   brand={props.brand}
+                  projectLabel={projectLabel}
                   onClose={close}
                 />
               )}

@@ -7,7 +7,8 @@ import { buildReport, formatReportText } from "@/lib/report";
 import type { ServiceCheck } from "@/lib/report";
 import type { VocOperatorSummary } from "@/lib/voc";
 import { MODEM_FAULT_LABEL } from "@/lib/modem";
-import { saveReportImage } from "@/lib/report-image";
+import { saveSheetImage, sheetFileName } from "@/lib/report-image";
+import { completionSheet, DEFAULT_REPORT_LABEL } from "@/lib/report-sheet";
 
 type Status = "" | "ok" | "issue";
 
@@ -500,10 +501,10 @@ export default function DailyReportCard({
     if (imgBusy) return;
     setImgBusy(true);
     try {
-      const label = projectLabel ?? "인천버스 B820 단말기 설치 프로젝트";
-      const ok = await saveReportImage(
-        { projectLabel: label, report, notes: mergedNotes, check, vocs: stage === 2 ? vocs : undefined },
-        `${label.replace(/\s*프로젝트$/, "")}_설치완료보고_${date}.png`,
+      const label = projectLabel ?? DEFAULT_REPORT_LABEL;
+      const ok = await saveSheetImage(
+        completionSheet(report, mergedNotes, check, stage === 2 ? vocs : undefined, label),
+        sheetFileName(label, "설치완료보고", date),
       );
       if (!ok) setMsg({ ok: false, text: "이미지를 만들지 못했습니다." });
     } catch {

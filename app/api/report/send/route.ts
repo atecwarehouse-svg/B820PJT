@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import nodemailer from "nodemailer";
 import { loadInstallProgress, loadScheduleStats } from "@/lib/stats";
 import { buildReport, formatReportText, formatReportHtml } from "@/lib/report";
-import { brandName, currentProject, currentSlug, isDefault } from "@/lib/project";
+import { brandName, currentProject, currentSlug, isDefault, reportLabel } from "@/lib/project";
 import type { ServiceCheck } from "@/lib/report";
 import { buildProgressXlsx } from "@/lib/export/build-progress-xlsx";
 import { getSetting, setSetting, REPORT_MAIL_KEY } from "@/lib/settings";
@@ -121,7 +121,7 @@ export async function POST(req: NextRequest) {
   const project = await currentProject();
   const brand = brandName(project);
   const mailTag = isDefault(project.slug) ? "인천버스 B820" : project.name;
-  const projectLabel = isDefault(project.slug) ? "인천버스 B820 단말기 설치 프로젝트" : `${project.name} 프로젝트`;
+  const projectLabel = reportLabel(project);
   const text = formatReportText(report, notes, check, vocs, projectLabel);
   const html = formatReportHtml(report, notes, check, vocs, projectLabel);
   const subject = `[${mailTag}] 설치 완료 보고 (${report.label}, ${report.dow}) — ${report.dailyDone}대`;
