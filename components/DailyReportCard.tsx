@@ -7,6 +7,7 @@ import { buildReport, formatReportText } from "@/lib/report";
 import type { ServiceCheck } from "@/lib/report";
 import type { VocOperatorSummary } from "@/lib/voc";
 import { MODEM_FAULT_LABEL } from "@/lib/modem";
+import { saveReportImage } from "@/lib/report-image";
 
 type Status = "" | "ok" | "issue";
 
@@ -151,7 +152,8 @@ export default function DailyReportCard({
   today: string;
   inProgress?: number; // 진행중(미완료) 차량 수 — 발송 전 경고용
   stage?: 1 | 2; // 1차=팀즈 알림만, 2차=VOC 포함 + 메일 발송
-  onSent?: (recipients: string[], teamsSent?: boolean) => void; // 발송 성공 시 부모가 완료 팝업 표시 (팀즈 카드 전송 여부 포함)
+  // 발송 성공 시 부모가 완료 팝업 표시 (팀즈 카드 전송 여부 + 보낸 내용 그대로의 보고용 이미지 저장 함수)
+  onSent?: (recipients: string[], teamsSent?: boolean, saveImage?: () => void) => void;
   projectLabel?: string; // 미리보기 머리말 "[…]" — 프로젝트명(기본 B820 문구)
   hideBisKakao?: boolean; // 점검란에서 BIS(인천)·카카오(초정밀) 항목 제외 (공항 B800)
   driverEduNote?: string; // 승무사원 교육 고정 문구 — 있으면 체크박스 대신 이 문구가 리포트에 항상 들어간다 (공항 B800)
@@ -483,11 +485,31 @@ export default function DailyReportCard({
       const j = await res.json();
       if (!res.ok) throw new Error(j.error ?? "발송 실패");
       setSent(true);
-      onSent?.(j.to ?? [], j.teams === true);
+      onSent?.(j.to ?? [], j.teams === true, saveImage);
     } catch (e) {
       setMsg({ ok: false, text: e instanceof Error ? e.message : "발송 실패" });
     } finally {
       setSending(false);
+    }
+  }
+
+  // 보고용 이미지(PNG) 저장 — 팀즈 카드를 다시 캡쳐하지 않아도 되게 같은 내용을 표로 그린 파일.
+  // 발송 전에도 받을 수 있다(비밀번호 불필요 — 화면에 이미 보이는 내용).
+  const [imgBusy, setImgBusy] = useState(false);
+  async function saveImage() {
+    if (imgBusy) return;
+    setImgBusy(true);
+    try {
+      const label = projectLabel ?? "인천버스 B820 단말기 설치 프로젝트";
+      const ok = await saveReportImage(
+        { projectLabel: label, report, notes: mergedNotes, check, vocs: stage === 2 ? vocs : undefined },
+        `${label.replace(/\s*프로젝트$/, "")}_설치완료보고_${date}.png`,
+      );
+      if (!ok) setMsg({ ok: false, text: "이미지를 만들지 못했습니다." });
+    } catch {
+      setMsg({ ok: false, text: "이미지를 만들지 못했습니다." });
+    } finally {
+      setImgBusy(false);
     }
   }
 
@@ -751,6 +773,13 @@ export default function DailyReportCard({
           className="rounded-lg bg-gray-100 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200"
         >
           복사
+        </button>
+        <button
+          onClick={saveImage}
+          disabled={imgBusy}
+          className="rounded-lg bg-gray-100 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200 disabled:opacity-50"
+        >
+          {imgBusy ? "만드는 중…" : "보고용 이미지"}
         </button>
         <button
           onClick={send}

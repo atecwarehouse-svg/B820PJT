@@ -165,8 +165,26 @@ export function noteBullet(line: string): string {
   return s.startsWith("-") ? s : `- ${s}`;
 }
 
+// 완료 내역을 운수사별로 묶는다 — 팀즈 카드·보고용 이미지가 '운수사 한 줄 + 노선 격자'로 짧게 표기.
+// (노선마다 운수사명을 되풀이하면 카드가 길어지고 줄이 접혀 오와 열이 틀어진다)
+export interface OperatorGroup {
+  operator: string;
+  total: number;
+  routes: { route: string; count: number }[]; // 대수 많은 순(groups 정렬 그대로)
+}
+export function groupByOperator(groups: ReportGroup[]): OperatorGroup[] {
+  const m = new Map<string, OperatorGroup>();
+  for (const g of groups) {
+    const o = m.get(g.operator) ?? { operator: g.operator, total: 0, routes: [] };
+    o.total += g.count;
+    o.routes.push({ route: g.route || "노선없음", count: g.count });
+    m.set(g.operator, o);
+  }
+  return [...m.values()].sort((a, b) => b.total - a.total);
+}
+
 // 특이사항 정규화 — 줄 단위로 noteBullet 적용, 비면 '- 없음'
-function noteLines(notes: string): string[] {
+export function noteLines(notes: string): string[] {
   const t = notes.trim();
   if (!t) return ["- 없음"];
   return t.split(/\r?\n/).map(noteBullet).filter(Boolean);

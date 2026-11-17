@@ -1,7 +1,7 @@
 "use client";
 
 import Icon from "@/components/Icon";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type { CompletedVehicle, ScheduleDay } from "@/lib/stats";
 import DailyReportCard from "@/components/DailyReportCard";
 
@@ -24,6 +24,7 @@ export default function DailyReportModal(props: {
   const [sentTo, setSentTo] = useState<string[] | null>(null); // 발송 완료 팝업
   const [sentStage, setSentStage] = useState<1 | 2>(1);
   const [teamsSent, setTeamsSent] = useState(false); // 팀즈 완료보고 카드 전송 여부
+  const saveImageRef = useRef<(() => void) | undefined>(undefined); // 방금 보낸 내용의 보고용 이미지 저장
 
   return (
     <>
@@ -79,7 +80,8 @@ export default function DailyReportModal(props: {
               <DailyReportCard
                 {...props}
                 stage={stage}
-                onSent={(to, teams) => {
+                onSent={(to, teams, saveImage) => {
+                  saveImageRef.current = saveImage;
                   setSentTo(to);
                   setSentStage(stage);
                   setTeamsSent(teams === true);
@@ -110,6 +112,13 @@ export default function DailyReportModal(props: {
                   ? "메일과 함께 팀즈 공유방에도 VOC 포함 완료보고 카드를 보냈습니다."
                   : <><Icon name="warn" /> 팀즈 완료보고 카드 전송에 실패했습니다. (메일은 발송됨)</>}
             </p>
+            {/* 팀즈 카드를 다시 캡쳐하지 않게 — 방금 보낸 내용 그대로의 이미지 파일 */}
+            <button
+              onClick={() => saveImageRef.current?.()}
+              className="mt-4 w-full rounded-lg bg-gray-100 px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-200"
+            >
+              보고용 이미지 저장
+            </button>
             <button
               onClick={() => {
                 setSentTo(null);

@@ -1,7 +1,7 @@
 // 팀즈 설치 진행 현황 카드 전송 — 공유 버튼/크론이 공유하는 로직.
 
 import type { DailyReport, ServiceCheck } from "./report";
-import { noteBullet, serviceCheckRows } from "./report";
+import { groupByOperator, noteBullet, serviceCheckRows } from "./report";
 import type { VocOperatorSummary } from "./voc";
 import { VOC_RATINGS, starBar } from "./voc";
 import { isNewModem } from "./modem";
@@ -358,8 +358,43 @@ export async function sendStartReportCard(d: {
   await post(url, card, "시작보고");
 }
 
+// 완료보고 카드용 3열 격자 — 칸 너비가 같은 ColumnSet이라 줄마다 열이 세로로 맞는다.
+const REPORT_COLS = 3;
+// 수치 타일 한 줄(작은 라벨 + 굵은 값) — 금일/누적 수치를 3칸씩 두 줄로.
+function kpiRow(items: [label: string, value: string][], spacing = "Small"): unknown {
+  return {
+    type: "ColumnSet",
+    spacing,
+    columns: items.map(([label, value]) => ({
+      type: "Column",
+      width: "stretch",
+      items: [
+        { type: "TextBlock", text: label, isSubtle: true, size: "Small", wrap: true },
+        { type: "TextBlock", text: value, weight: "Bolder", spacing: "None", wrap: true },
+      ],
+    })),
+  };
+}
+// 글자 목록을 3열 격자 줄들로 — 마지막 줄의 빈 칸도 채워 열 너비를 유지한다.
+function textGrid(texts: string[]): unknown[] {
+  const out: unknown[] = [];
+  for (let i = 0; i < texts.length; i += REPORT_COLS) {
+    out.push({
+      type: "ColumnSet",
+      spacing: "None",
+      columns: Array.from({ length: REPORT_COLS }, (_, k) => ({
+        type: "Column",
+        width: "stretch",
+        items: [{ type: "TextBlock", text: texts[i + k] ?? " ", spacing: "None", wrap: true }],
+      })),
+    });
+  }
+  return out;
+}
+
 // 금일 설치 완료 보고 카드 — 진행현황·설치시작 보고 카드와 같은 채팅방(설치 진행중 공유방, TEAMS_WEBHOOK_URL).
-// 금일 완료 리포트 메일 발송 시 함께 전송. 내용은 메일 카드(formatReportText)와 동일 구성.
+// 금일 완료 리포트 메일 발송 시 함께 전송. 수치는 3칸 타일 두 줄, 설치 내역은 운수사별로 묶어
+// 노선을 3열 격자로 — 노선마다 한 줄씩 쓰면 카드가 길어지고 운수사명이 접혀 줄이 틀어진다.
 export async function sendCompletionReportCard(
   r: DailyReport,
   notes: string,
@@ -383,7 +418,8 @@ export async function sendCompletionReportCard(
           type: "TextBlock",
           weight: "Bolder",
           text: "○ 운행시작 점검",
-          spacing: "Small",
+          spacing: "Medium",
+          separator: true,
           wrap: true,
         },
         {
@@ -435,45 +471,38 @@ export async function sendCompletionReportCard(
               spacing: "None",
               wrap: true,
             },
-            {
-              type: "TextBlock",
-              weight: "Bolder",
-              text: `금일 설치 수량 (실적/계획): ${r.dailyDone.toLocaleString()}대 / ${r.dailyPlanned.toLocaleString()}대 (${r.dailyPct.toFixed(1)}%)`,
-              wrap: true,
-            },
-            ...(r.groups.length
-              ? [
-                  {
-                    type: "FactSet",
-                    spacing: "Small",
-                    facts: r.groups.map((g) => ({
-                      title: `· ${g.operator}${g.route ? ` ${g.route}노선` : ""}`,
-                      value: `${g.count.toLocaleString()}대`,
-                    })),
-                  },
-                ]
-              : []),
-            {
-              type: "FactSet",
-              facts: [
-                {
-                  title: "누적 계획",
-                  value: `${r.cumPlanned.toLocaleString()}대`,
-                },
-                {
-                  title: "누적 완료",
-                  value: `${r.cumDone.toLocaleString()}대 (${r.cumPct.toFixed(1)}%)`,
-                },
-                { title: "잔여", value: `${r.remaining.toLocaleString()}대` },
+            kpiRow(
+              [
+                ["금일 실적", `${r.dailyDone.toLocaleString()}대`],
+                ["금일 계획", `${r.dailyPlanned.toLocaleString()}대`],
+                ["달성률", `${r.dailyPct.toFixed(1)}%`],
               ],
-            },
+              "Medium",
+            ),
+            kpiRow([
+              ["누적 계획", `${r.cumPlanned.toLocaleString()}대`],
+              ["누적 완료", `${r.cumDone.toLocaleString()}대 (${r.cumPct.toFixed(1)}%)`],
+              ["잔여", `${r.remaining.toLocaleString()}대`],
+            ]),
+            ...groupByOperator(r.groups).flatMap((o, i) => [
+              {
+                type: "TextBlock",
+                weight: "Bolder",
+                text: `○ ${o.operator} — ${o.total.toLocaleString()}대`,
+                spacing: "Medium",
+                separator: i === 0,
+                wrap: true,
+              },
+              ...textGrid(o.routes.map((x) => `${x.route} · ${x.count.toLocaleString()}대`)),
+            ]),
             ...checkBlocks,
             ...vocBlocks,
             {
               type: "TextBlock",
               weight: "Bolder",
               text: "○ 특이사항",
-              spacing: "Small",
+              spacing: "Medium",
+              separator: true,
               wrap: true,
             },
             {
