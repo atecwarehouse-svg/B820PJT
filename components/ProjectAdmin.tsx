@@ -869,7 +869,7 @@ export default function ProjectAdmin({
               )}
               {kind === "album" && (
                 <div className="mt-2">
-                  <p className="px-1 text-[11px] font-semibold text-gray-600">리포트 승무사원 교육 고정 문구</p>
+                  <p className="px-1 text-[11px] font-semibold text-gray-600">리포트 승무사원 교육 &lsquo;교육예정&rsquo; 문구 <span className="font-normal text-gray-400">(넣으면 교육예정·교육중·교육완료 선택)</span></p>
                   <input
                     value={custom.driverEduNote}
                     onChange={(e) => {

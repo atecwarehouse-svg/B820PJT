@@ -54,13 +54,17 @@ export interface ServiceCheck {
   kakaoSymptom?: string; // 카카오 이상 증상
   hideBisKakao?: boolean; // BIS·카카오 항목 자체를 빼는 프로젝트(공항버스 — 인천 BIS·초정밀 대상 아님)
   driverEduNote?: string; // 승무사원 교육을 체크 대신 고정 문구로 표기(공항 B800 — 교육자 출근 시각 기준 예정 안내)
+  driverEduStatus?: EduStatus; // 고정 문구 프로젝트의 교육 단계 — 예정(문구)·진행중·완료
 }
+export type EduStatus = "planned" | "ongoing" | "done";
+export const EDU_STATUS_LABEL: Record<EduStatus, string> = { planned: "교육예정", ongoing: "교육중", done: "교육완료" };
 
 // 점검 입력이 하나라도 있는지 (없으면 리포트에서 섹션 생략)
 export function hasServiceCheck(c?: ServiceCheck): boolean {
   if (!c) return false;
   return Boolean(
     c.driverEdu ||
+      c.driverEduStatus ||
       (c.driverEduNote ?? "").trim() ||
       c.fareSetting ||
       (c.baseFare ?? "").trim() ||
@@ -72,6 +76,14 @@ export function hasServiceCheck(c?: ServiceCheck): boolean {
 function fareFmt(raw?: string): string {
   const s = (raw ?? "").trim();
   return /^\d+$/.test(s) ? `${Number(s).toLocaleString()}원` : s;
+}
+
+// 승무사원 교육 표기 — 진행중·완료는 단계 이름, 예정은 고정 문구(교육 시각 안내), 체크 프로젝트는 완료/미확인
+function eduValue(c: ServiceCheck, mark: (b?: boolean, done?: string) => string): string {
+  if (c.driverEduStatus === "ongoing") return `🔄 ${EDU_STATUS_LABEL.ongoing}`;
+  if (c.driverEduStatus === "done" || c.driverEdu) return `✅ ${EDU_STATUS_LABEL.done}`;
+  const note = c.driverEduNote?.trim();
+  return note ? `🕒 ${note}` : mark(false);
 }
 
 // 점검 항목 → 표기용 {제목, 값} 목록 (메일 텍스트·HTML·팀즈 카드 공유)
@@ -89,7 +101,7 @@ export function serviceCheckRows(c?: ServiceCheck): { title: string; value: stri
           : "⚠️ 이상"
         : "⬜ 미확인";
   return [
-    { title: "승무사원 교육", value: c!.driverEduNote?.trim() ? `🕒 ${c!.driverEduNote.trim()}` : mark(c!.driverEdu, "교육완료") },
+    { title: "승무사원 교육", value: eduValue(c!, mark) },
     { title: "요금세팅", value: fareVal },
     ...(c!.hideBisKakao
       ? []
@@ -202,7 +214,7 @@ export function noteRows(notes: string): { text: string; head: boolean }[] {
 // 점검값('✅ 확인', '⚠️ 이상 - …' 등) → 그림문자를 뗀 글자 + 상태. 그림문자는 기기마다 모양이
 // 달라 표·카드에서는 떼고 글자색으로 상태를 나타낸다(ok=초록, bad=빨강, none=흐리게).
 export function checkTone(v: string): { text: string; tone: "ok" | "bad" | "none" | "info" } {
-  const m = /^(✅|⬜|🕒|⚠️)\s*/u.exec(v);
+  const m = /^(✅|⬜|🕒|🔄|⚠️)\s*/u.exec(v);
   if (!m) return { text: v, tone: "info" };
   const tone = m[1] === "✅" ? "ok" : m[1] === "⚠️" ? "bad" : m[1] === "⬜" ? "none" : "info";
   return { text: v.slice(m[0].length), tone };

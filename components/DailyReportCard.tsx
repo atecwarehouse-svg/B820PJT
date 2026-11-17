@@ -3,8 +3,7 @@
 import Icon from "@/components/Icon";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { CompletedVehicle, ScheduleDay } from "@/lib/stats";
-import { buildReport, formatReportText } from "@/lib/report";
-import type { ServiceCheck } from "@/lib/report";
+import { buildReport, EDU_STATUS_LABEL, formatReportText, type EduStatus, type ServiceCheck } from "@/lib/report";
 import type { VocOperatorSummary } from "@/lib/voc";
 import { MODEM_FAULT_LABEL } from "@/lib/modem";
 import { saveSheetImage, sheetFileName } from "@/lib/report-image";
@@ -165,7 +164,8 @@ export default function DailyReportCard({
   const [planned, setPlanned] = useState(""); // 금일 계획 수량 직접 입력
   const [notes, setNotes] = useState("");
   // 운행시작 점검 (특이사항 위에 표기)
-  const [driverEdu, setDriverEdu] = useState(false);
+  const [driverEdu, setDriverEdu] = useState(false); // 체크박스 프로젝트(B820)
+  const [eduStatus, setEduStatus] = useState<EduStatus>("planned"); // 고정 문구 프로젝트 — 예정·중·완료 중 하나
   const [fareSetting, setFareSetting] = useState(false);
   const [baseFare, setBaseFare] = useState("");
   const [bisStatus, setBisStatus] = useState<Status>("");
@@ -282,6 +282,9 @@ export default function DailyReportCard({
         }
         const c = (d.check ?? {}) as Partial<ServiceCheck>;
         if (c.driverEdu) setDriverEdu(true);
+        // 저장된 교육 단계(옛 기록은 driverEdu=완료만 있음)
+        if (c.driverEduStatus && Object.hasOwn(EDU_STATUS_LABEL, c.driverEduStatus)) setEduStatus(c.driverEduStatus);
+        else if (c.driverEdu) setEduStatus("done");
         if (c.fareSetting) setFareSetting(true);
         if (typeof c.baseFare === "string" && c.baseFare) {
           setBaseFare((cur) => (cur === "" ? (c.baseFare as string) : cur));
@@ -433,7 +436,7 @@ export default function DailyReportCard({
 
   const check: ServiceCheck = useMemo(
     () => ({
-      driverEdu,
+      driverEdu: driverEduNote ? eduStatus === "done" : driverEdu,
       fareSetting,
       baseFare,
       bisStatus,
@@ -441,10 +444,12 @@ export default function DailyReportCard({
       kakaoStatus,
       kakaoSymptom,
       ...(hideBisKakao ? { hideBisKakao: true } : {}),
-      // 고정 문구 프로젝트: '교육 예정'이면 문구, '교육 완료'를 고르면 문구 없이 완료 표기(✅ 교육완료)
-      ...(driverEduNote && !driverEdu ? { driverEduNote } : {}),
+      // 고정 문구 프로젝트: 예정이면 고정 문구(교육 시각 안내), 교육중·교육완료는 단계 이름으로 표기
+      ...(driverEduNote
+        ? { driverEduStatus: eduStatus, ...(eduStatus === "planned" ? { driverEduNote } : {}) }
+        : {}),
     }),
-    [driverEdu, fareSetting, baseFare, bisStatus, bisSymptom, kakaoStatus, kakaoSymptom, hideBisKakao, driverEduNote],
+    [driverEdu, eduStatus, fareSetting, baseFare, bisStatus, bisSymptom, kakaoStatus, kakaoSymptom, hideBisKakao, driverEduNote],
   );
 
   // 내용을 바꾸면 다시 발송 가능
@@ -572,26 +577,29 @@ export default function DailyReportCard({
           <div className="rounded-lg border border-gray-200 bg-white px-2.5 py-2">
             <span className="block text-xs font-medium text-gray-800">승무사원 교육</span>
             <div className="mt-1.5 flex gap-2">
-              {([false, true] as const).map((done) => (
+              {(Object.keys(EDU_STATUS_LABEL) as EduStatus[]).map((st) => (
                 <button
-                  key={String(done)}
+                  key={st}
                   type="button"
-                  onClick={() => setDriverEdu(done)}
-                  aria-pressed={driverEdu === done}
-                  className={`flex-1 rounded-lg border px-2 py-1 text-xs font-semibold ${
-                    driverEdu === done
-                      ? done
+                  onClick={() => setEduStatus(st)}
+                  aria-pressed={eduStatus === st}
+                  className={`min-h-[36px] flex-1 rounded-lg border px-2 py-1 text-xs font-semibold ${
+                    eduStatus === st
+                      ? st === "done"
                         ? "border-emerald-600 bg-emerald-600 text-white"
-                        : "border-brand-600 bg-brand-600 text-white"
+                        : st === "ongoing"
+                          ? "border-blue-600 bg-blue-600 text-white"
+                          : "border-brand-600 bg-brand-600 text-white"
                       : "border-gray-300 bg-white text-gray-600"
                   }`}
                 >
-                  {done ? "교육 완료" : "교육 예정"}
+                  {EDU_STATUS_LABEL[st]}
                 </button>
               ))}
             </div>
             <span className="mt-1.5 block text-[11px] text-gray-500">
-              {driverEdu ? "리포트에 '교육완료'로 표기됩니다" : <><Icon name="clock" /> {driverEduNote}</>}
+              리포트 표기:{" "}
+              {eduStatus === "planned" ? <><Icon name="clock" /> {driverEduNote}</> : EDU_STATUS_LABEL[eduStatus]}
             </span>
           </div>
         ) : (

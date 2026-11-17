@@ -91,5 +91,9 @@ assert.deepEqual(
 // 승무사원 교육: 예정(고정 문구) / 완료 선택
 assert.equal(serviceCheckRows({ driverEduNote: "3:30 교육 예정" })[0].value, "🕒 3:30 교육 예정");
 assert.equal(serviceCheckRows({ driverEdu: true })[0].value, "✅ 교육완료");
+// 교육 단계 3가지 — 예정은 고정 문구, 교육중·교육완료는 단계 이름
+assert.equal(serviceCheckRows({ driverEduStatus: "planned", driverEduNote: "3:30 교육 예정" })[0].value, "🕒 3:30 교육 예정");
+assert.equal(serviceCheckRows({ driverEduStatus: "ongoing" })[0].value, "🔄 교육중");
+assert.equal(serviceCheckRows({ driverEduStatus: "done", driverEdu: true })[0].value, "✅ 교육완료");
 
 console.log("OK — check-quota");
