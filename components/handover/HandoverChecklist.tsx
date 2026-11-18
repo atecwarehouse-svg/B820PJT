@@ -25,14 +25,14 @@ interface Vehicle {
   center?: string | null; // OS업데이트: 차량별 센터
 }
 
-const POLL_MS = 5000;
+const POLL_MS = 30000; // 5초→30초(2026-11-18 Vercel CPU 한도 초과) — 내가 누른 체크는 즉시 반영, 동료 체크만 최대 30초 늦게
 const BUS_TYPES = ["시내버스", "마을버스"] as const;
 export const typeEmoji = (t: string | null | undefined) => <Icon name={t === "마을버스" ? "minibus" : "bus"} />;
 // OS업데이트: 완료 체크 전 재확인 문구(통합+승하차 단말기 모두 적용했는지)
 const OSUPDATE_CONFIRM = "통합+승하차 전체 적용하셨나요?";
 // 묶음(그룹) 진행 목록을 접어 두는 기준 — 이보다 많으면 details 로 접는다(운수사 50개가 펼쳐지면 차량 리스트까지 한참 내려가야 함)
 export const FOLD_OVER = 8;
-// ponytail: 5초 폴링 — 동시 사용자가 수십 명을 넘으면 Supabase Realtime(anon select 정책+publication)으로 교체
+// ponytail: 30초 폴링 — 동시 사용자가 수십 명을 넘으면 Supabase Realtime(anon select 정책+publication)으로 교체
 export const shortRoute = (route: string) =>
   route
     .split(" / ")
@@ -48,7 +48,7 @@ export function fmtDone(iso: string): string {
   return `${day.slice(5).replace("-", "/")} ${hm}`;
 }
 
-// 내 센터 차량 체크리스트(모바일) — 차량번호 검색이 메인, 큰 완료 토글, 묶음별 리스트, 요약 %, 5초 폴링으로 동료 체크 반영.
+// 내 센터 차량 체크리스트(모바일) — 차량번호 검색이 메인, 큰 완료 토글, 묶음별 리스트, 요약 %, 30초 폴링으로 동료 체크 반영.
 //   묶음 = 양도양수: 노선(공동배차는 각 노선에) / OS업데이트: 운수사(영업소) — 운수사 50개·노선 140개라 노선 묶음은 너무 길다.
 //   osupdate 면 완료 체크 전 "통합+승하차 전체 적용하셨나요?" 확인, 시내/마을버스 구분 탭.
 export default function HandoverChecklist({
