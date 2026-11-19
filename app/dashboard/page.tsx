@@ -183,7 +183,8 @@ export default async function DashboardPage() {
   // 진행현황 다운로드 기준일 기본값 = 현재 업무일. 팝업에서 날짜를 바꾸면
   // 그 날짜까지의 스냅샷(계획·기준일·완료)으로 받는다. 계획수량은 예정일(planned_date)에서 파생.
   const today = todayKey;
-  const scheduleDays = sch?.days.map((d) => ({ date: d.date, planned: d.planned })) ?? [];
+  // 수량 차감 방식은 올린 엑셀 계획(plan_days = 「설치 일자별 현황」 F열) — 예정일 대수는 앞당겨 설치한 만큼 어긋난다
+  const scheduleDays = (sch?.planDays ?? sch?.days)?.map((d) => ({ date: d.date, planned: d.planned })) ?? [];
   // 금일 설치현황 — 설치대상(예정일=금일 − 배차표 설치제외)·설치완료(금일 저장 완료)
   // 수량 차감 방식은 올린 엑셀 계획(plan_days) — 예정일 대수는 앞당겨 설치한 만큼 줄어 있다(11/16 7대 선행 → 11/17 28→25)
   const todayPlanned = (sch?.planDays ?? sch?.days)?.find((d) => d.date === today)?.planned ?? 0;
