@@ -18,12 +18,14 @@ export default function DailyReportModal(props: {
   projectLabel?: string; // 리포트 미리보기 머리말(프로젝트명)
   hideBisKakao?: boolean; // 점검란 BIS·카카오 항목 제외 (공항 B800)
   driverEduNote?: string; // 승무사원 교육 고정 문구 (공항 B800)
+  mailToo?: boolean; // 1차 전송 뒤 메일도 (공항 B830)
 }) {
   const [open, setOpen] = useState(false);
   const [stage, setStage] = useState<1 | 2>(1);
   const [sentTo, setSentTo] = useState<string[] | null>(null); // 발송 완료 팝업
   const [sentStage, setSentStage] = useState<1 | 2>(1);
   const [teamsSent, setTeamsSent] = useState(false); // 팀즈 완료보고 카드 전송 여부
+  const [mailError, setMailError] = useState<string | undefined>(); // 1차 메일만 실패(팀즈는 나감)
   const saveImageRef = useRef<(() => void) | undefined>(undefined); // 방금 보낸 내용의 보고용 이미지 저장
 
   return (
@@ -80,7 +82,8 @@ export default function DailyReportModal(props: {
               <DailyReportCard
                 {...props}
                 stage={stage}
-                onSent={(to, teams, saveImage) => {
+                onSent={(to, teams, saveImage, mailErr) => {
+                  setMailError(mailErr);
                   saveImageRef.current = saveImage;
                   setSentTo(to);
                   setSentStage(stage);
@@ -100,18 +103,25 @@ export default function DailyReportModal(props: {
             <p className="mt-2 text-base font-bold text-gray-800">
               {sentStage === 1 ? "1차 전송 완료" : "2차 발송 완료"}
             </p>
-            {sentStage === 2 && (
+            {(sentStage === 2 || sentTo.length > 0) && (
               <p className="mt-1 break-words text-xs text-gray-500">
                 {sentTo.length > 0 ? sentTo.join(", ") : "기본 수신자"}
               </p>
             )}
             <p className={`mt-2 text-xs font-medium ${teamsSent ? "text-green-600" : "text-amber-600"}`}>
               {sentStage === 1
-                ? "팀즈 '설치 진행중' 공유방으로 완료보고 카드를 보냈습니다. (메일 미발송)"
+                ? sentTo.length > 0
+                  ? "팀즈 '설치 진행중' 공유방으로 완료보고 카드를 보냈고, 위 수신자에게 메일(진행현황 엑셀 첨부)도 발송했습니다."
+                  : "팀즈 '설치 진행중' 공유방으로 완료보고 카드를 보냈습니다. (메일 미발송)"
                 : teamsSent
                   ? "메일과 함께 팀즈 공유방에도 VOC 포함 완료보고 카드를 보냈습니다."
                   : <><Icon name="warn" /> 팀즈 완료보고 카드 전송에 실패했습니다. (메일은 발송됨)</>}
             </p>
+            {mailError && (
+              <p className="mt-2 break-words text-xs font-medium text-amber-600">
+                <Icon name="warn" /> 메일 발송 실패: {mailError}
+              </p>
+            )}
             {/* 팀즈 카드를 다시 캡쳐하지 않게 — 방금 보낸 내용 그대로의 이미지 파일 */}
             <p className="mt-4 text-xs font-medium text-gray-600">보고용 이미지도 저장할까요?</p>
             <button

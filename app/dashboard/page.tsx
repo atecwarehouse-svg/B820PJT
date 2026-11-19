@@ -267,6 +267,7 @@ export default async function DashboardPage() {
               hideBisKakao={!custom.flags.bisKakao}
               // 승무사원 교육은 체크 대신 고정 문구 — 프로젝트 기능 설정(lib/features driverEduNote), 비어 있으면 체크박스
               driverEduNote={custom.driverEduNote || undefined}
+              mailToo={custom.flags.reportMail}
             />
           )}
           <ProgressDownloadButton today={today} scheduleDays={scheduleDays} />

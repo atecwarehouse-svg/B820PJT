@@ -142,6 +142,7 @@ export default function DailyReportCard({
   projectLabel,
   hideBisKakao = false,
   driverEduNote,
+  mailToo = false,
 }: {
   completedList: CompletedVehicle[];
   scheduleDays: ScheduleDay[];
@@ -153,10 +154,11 @@ export default function DailyReportCard({
   inProgress?: number; // 진행중(미완료) 차량 수 — 발송 전 경고용
   stage?: 1 | 2; // 1차=팀즈 알림만, 2차=VOC 포함 + 메일 발송
   // 발송 성공 시 부모가 완료 팝업 표시 (팀즈 카드 전송 여부 + 보낸 내용 그대로의 보고용 이미지 저장 함수)
-  onSent?: (recipients: string[], teamsSent?: boolean, saveImage?: () => void) => void;
+  onSent?: (recipients: string[], teamsSent?: boolean, saveImage?: () => void, mailError?: string) => void;
   projectLabel?: string; // 미리보기 머리말 "[…]" — 프로젝트명(기본 B820 문구)
   hideBisKakao?: boolean; // 점검란에서 BIS(인천)·카카오(초정밀) 항목 제외 (공항 B800)
   driverEduNote?: string; // 승무사원 교육 고정 문구 — 있으면 체크박스 대신 이 문구가 리포트에 항상 들어간다 (공항 B800)
+  mailToo?: boolean; // 1차(팀즈) 전송 뒤 메일도 발송 — 프로젝트 기능 reportMail (공항 B830)
 }) {
   const [date, setDate] = useState(today);
   // 계획 수량의 기준 — 수량 차감 방식은 원본 계획(예정일은 실제 설치일로 옮겨져 지난 날짜가 실적과 같아진다)
@@ -478,7 +480,7 @@ export default function DailyReportCard({
       return;
     }
     const warn = inProgress > 0 ? `미완료(진행중) 차량이 ${inProgress}대 있습니다.\n\n` : "";
-    const what = stage === 1 ? "팀즈 카드만 전송" : "메일 발송 + 팀즈 카드 전송";
+    const what = stage === 1 ? (mailToo ? "팀즈 카드 전송 + 메일 발송" : "팀즈 카드만 전송") : "메일 발송 + 팀즈 카드 전송";
     if (!window.confirm(`${warn}[${stage}차] 이 내용으로 ${what}할까요?`)) return;
     setSending(true);
     setMsg(null);
@@ -491,7 +493,7 @@ export default function DailyReportCard({
       const j = await res.json();
       if (!res.ok) throw new Error(j.error ?? "발송 실패");
       setSent(true);
-      onSent?.(j.to ?? [], j.teams === true, saveImage);
+      onSent?.(j.to ?? [], j.teams === true, saveImage, j.mailError);
     } catch (e) {
       setMsg({ ok: false, text: e instanceof Error ? e.message : "발송 실패" });
     } finally {
@@ -743,8 +745,8 @@ export default function DailyReportCard({
         className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none"
       />
 
-      {/* 받는사람 — 메일을 보내는 2차에서만 */}
-      {stage === 2 && (
+      {/* 받는사람 — 메일을 보낼 때만(2차, 또는 1차도 메일 보내는 프로젝트) */}
+      {(stage === 2 || mailToo) && (
         <>
           <label className="mt-2 block text-xs font-medium text-gray-600">
             받는사람 (쉼표로 여러 명 · 비우면 관리자 페이지의 기본 수신자)
@@ -800,7 +802,7 @@ export default function DailyReportCard({
             : sent
               ? "발송됨 ✓"
               : stage === 1
-                ? "팀즈 전송 (1차)"
+                ? mailToo ? "팀즈 전송 + 메일 (1차)" : "팀즈 전송 (1차)"
                 : "메일 발송 + 팀즈 전송 (2차)"}
         </button>
       </div>

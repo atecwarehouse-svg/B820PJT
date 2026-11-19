@@ -5,7 +5,7 @@ import { buildReport, formatReportText, formatReportHtml } from "@/lib/report";
 import { brandName, currentProject, currentSlug, isDefault, reportLabel } from "@/lib/project";
 import type { ServiceCheck } from "@/lib/report";
 import { buildProgressXlsx } from "@/lib/export/build-progress-xlsx";
-import { getSetting, setSetting, REPORT_MAIL_KEY } from "@/lib/settings";
+import { getCustom, getSetting, setSetting, REPORT_MAIL_KEY } from "@/lib/settings";
 import { sendCompletionReportCard } from "@/lib/teams";
 import { checkAdminPassword, isAdmin } from "@/lib/admin-auth";
 import { createServiceClient } from "@/lib/supabase/server";
@@ -126,8 +126,49 @@ export async function POST(req: NextRequest) {
   const html = formatReportHtml(report, notes, check, vocs, projectLabel);
   const subject = `[${mailTag}] 설치 완료 보고 (${report.label}, ${report.dow}) — ${report.dailyDone}대`;
 
-  // 1차 — 메일 없이 팀즈 완료보고 카드만 전송.
+  // 받는사람: 요청값 > 관리자 페이지 저장값(DB) > (B820만) env REPORT_MAIL_TO > 발신자 본인.
+  // 단, 관리자 페이지에서 '저장은 했는데 비어 있는' 경우는 일부러 지운 것이므로
+  // env·발신자로 폴백하지 않는다 — 지웠는데도 옛 주소로 나가는 사고를 막는다.
+  // 다른 프로젝트는 그 프로젝트에 지정된 수신자만 — B820 env 주소로 새어 나가지 않게 한다.
+  const NO_RECIPIENTS = "받는사람이 비어 있습니다. 관리자 페이지 '메일 수신자'에서 이 프로젝트의 수신자를 등록해주세요.";
+  async function resolveRecipients(): Promise<string[]> {
+    let r = parseRecipients(body.to);
+    const savedTo = await getSetting(REPORT_MAIL_KEY);
+    if (r.length === 0) r = parseRecipients(savedTo ?? undefined);
+    if (r.length === 0 && (savedTo !== null || !isDefault(project.slug))) return [];
+    if (r.length === 0) r = parseRecipients(process.env.REPORT_MAIL_TO);
+    return r.length ? r : [user!];
+  }
+
+  // 메일 발송(진행현황 엑셀 첨부 — 실패해도 메일은 발송). 실패는 throw.
+  // 기준일은 리포트 날짜 — 안 넘기면 항상 '현재 업무일' 스냅샷이 붙어,
+  // 지난 날짜로 보고할 때 본문 수치와 첨부 파일이 어긋난다(파일명 날짜까지).
+  async function sendMail(recipients: string[]): Promise<boolean> {
+    const attachments: { filename: string; content: Buffer }[] = [];
+    try {
+      const xlsx = await buildProgressXlsx({ asOfDate: date });
+      attachments.push({ filename: xlsx.filename, content: xlsx.buffer });
+    } catch (e) {
+      console.warn("[report/send] 엑셀 첨부 생성 실패(첨부 없이 발송):", e instanceof Error ? e.message : e);
+    }
+    const transporter = nodemailer.createTransport({ host: "smtp.gmail.com", port: 465, secure: true, auth: { user, pass } });
+    await transporter.sendMail({
+      from: `${brand} 설치현황 <${user}>`,
+      to: recipients.join(", "),
+      subject,
+      text,
+      html,
+      attachments,
+    });
+    return attachments.length > 0;
+  }
+
+  // 1차 — 팀즈 완료보고 카드 전송. 프로젝트 기능 reportMail(공항 B830)이면 팀즈 뒤 메일도.
   if (stage === 1) {
+    const mailToo = (await getCustom(project.slug)).flags.reportMail;
+    const recipients = mailToo ? await resolveRecipients() : [];
+    // 팀즈를 보내기 전에 막는다 — 팀즈만 나가고 메일이 빠지는 것보다 아무것도 안 나가는 게 다시 보내기 쉽다
+    if (mailToo && recipients.length === 0) return NextResponse.json({ error: NO_RECIPIENTS }, { status: 400 });
     try {
       await sendCompletionReportCard(report, notes, check, undefined, projectLabel);
     } catch (e) {
@@ -149,52 +190,22 @@ export async function POST(req: NextRequest) {
     } catch (e) {
       console.warn("[report/send] 1차 내용 저장 실패(2차 프리필 생략):", e instanceof Error ? e.message : e);
     }
-    return NextResponse.json({ ok: true, stage, to: [], teams: true, attached: false });
+    if (!mailToo) return NextResponse.json({ ok: true, stage, to: [], teams: true, attached: false });
+    // 팀즈는 이미 나갔으므로 메일 실패는 200 + mailError — 다시 누르면 팀즈 카드가 중복된다
+    try {
+      const attached = await sendMail(recipients); // 1차는 vocs가 비어 있어 본문 = 팀즈 카드 내용
+      return NextResponse.json({ ok: true, stage, to: recipients, subject, teams: true, mailed: true, attached });
+    } catch (e) {
+      return NextResponse.json({ ok: true, stage, to: [], teams: true, mailed: false, mailError: e instanceof Error ? e.message : "알 수 없는 오류" });
+    }
   }
 
-  // 받는사람(2차 메일 발송에서만 필요): 요청값 > 관리자 페이지 저장값(DB) >
-  // (B820만) env REPORT_MAIL_TO > 발신자 본인.
-  // 단, 관리자 페이지에서 '저장은 했는데 비어 있는' 경우는 일부러 지운 것이므로
-  // env·발신자로 폴백하지 않는다 — 지웠는데도 옛 주소로 나가는 사고를 막는다.
-  // 다른 프로젝트는 그 프로젝트에 지정된 수신자만 — B820 env 주소로 새어 나가지 않게 한다.
-  let recipients = parseRecipients(body.to);
-  const savedTo = await getSetting(REPORT_MAIL_KEY);
-  if (recipients.length === 0) recipients = parseRecipients(savedTo ?? undefined);
-  if (recipients.length === 0 && (savedTo !== null || !isDefault(project.slug))) {
-    return NextResponse.json(
-      { error: "받는사람이 비어 있습니다. 관리자 페이지 '메일 수신자'에서 이 프로젝트의 수신자를 등록해주세요." },
-      { status: 400 },
-    );
-  }
-  if (recipients.length === 0) recipients = parseRecipients(process.env.REPORT_MAIL_TO);
-  if (recipients.length === 0) recipients = [user];
-
-  // 진행현황 엑셀 첨부 (실패해도 메일은 발송)
-  // 기준일은 리포트 날짜 — 안 넘기면 항상 '현재 업무일' 스냅샷이 붙어,
-  // 지난 날짜로 보고할 때 본문 수치와 첨부 파일이 어긋난다(파일명 날짜까지).
-  const attachments: { filename: string; content: Buffer }[] = [];
+  // 2차 — 메일(VOC 포함) 먼저, 그다음 팀즈 카드
+  const recipients = await resolveRecipients();
+  if (recipients.length === 0) return NextResponse.json({ error: NO_RECIPIENTS }, { status: 400 });
+  let attached = false;
   try {
-    const xlsx = await buildProgressXlsx({ asOfDate: date });
-    attachments.push({ filename: xlsx.filename, content: xlsx.buffer });
-  } catch (e) {
-    console.warn("[report/send] 엑셀 첨부 생성 실패(첨부 없이 발송):", e instanceof Error ? e.message : e);
-  }
-
-  try {
-    const transporter = nodemailer.createTransport({
-      host: "smtp.gmail.com",
-      port: 465,
-      secure: true,
-      auth: { user, pass },
-    });
-    await transporter.sendMail({
-      from: `${brand} 설치현황 <${user}>`,
-      to: recipients.join(", "),
-      subject,
-      text,
-      html,
-      attachments,
-    });
+    attached = await sendMail(recipients);
   } catch (e) {
     return NextResponse.json(
       { error: "메일 발송 실패: " + (e instanceof Error ? e.message : "알 수 없는 오류") },
@@ -216,7 +227,7 @@ export async function POST(req: NextRequest) {
     stage,
     to: recipients,
     subject,
-    attached: attachments.length > 0,
+    attached,
     teams,
     vocOperators: vocs.length,
   });
