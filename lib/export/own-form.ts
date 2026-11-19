@@ -3,6 +3,7 @@
 //   · 차량리스트 설치 완료여부(L)·완료일(M) = 앱 완료 기록(기준일까지)
 //   · 「설치 진행현황」 K1 기준일 = 다운로드 기준일
 //   · 「설치 진행현황」 운수사별 비고(M) 뒤에 배차표 설치제외 차량
+//   · 「설치 진행현황」 비고(A6) = 리포트 메일 첨부일 때 그 리포트 특이사항
 // 계획(전개일정 계획 칸)·예정일·시트 구성·열 순서는 사용자가 엑셀에 적은 그대로 — 바뀌면 엑셀을 다시 올린다.
 // 시트 XML만 고쳐서 서식·조건부서식·숨김 시트를 바이트 그대로 보존한다(lib/xlsx/sheet-xml.ts).
 import JSZip from "jszip";
@@ -20,6 +21,7 @@ export async function fillOwnForm(
   completed: Map<string, CompletedInfo>,
   asOfSerial: number,
   exclusions: ExclusionInfo[],
+  notes?: string, // 리포트 특이사항 → 「설치 진행현황」 비고(A6:C7 병합, 양식 안내 '보고용 특이사항 자유 입력')
 ): Promise<{ buffer: Buffer; filled: number; missing: string[] }> {
   const zip = await JSZip.loadAsync(template);
   const wbXml = await zip.file("xl/workbook.xml")!.async("string");
@@ -69,6 +71,7 @@ export async function fillOwnForm(
   if (pPath) {
     const ps = parseSheet(await zip.file(pPath)!.async("string"), PROGRESS);
     setValue(ps, 11, 1, asOfSerial); // K1
+    if (notes?.trim()) setValue(ps, 1, 6, notes.trim()); // A6
     const excl = new Map<string, string[]>();
     for (const e of exclusions) excl.set(e.operator, [...(excl.get(e.operator) ?? []), e.plate + (e.reason ? `(${e.reason})` : "")]);
     for (const row of ps.rows) {

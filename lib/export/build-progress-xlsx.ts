@@ -26,7 +26,8 @@ import { fillOwnForm } from "@/lib/export/own-form";
 // asOfDate: 기준일(업무일 "YYYY-MM-DD"). 지정 없으면 현재 업무일.
 //  - 완료(차량리스트 G/H)는 기준일까지 완료된 것만 채움 → 그 날짜 시점 스냅샷.
 //  - 계획수량은 차량 설치예정일(planned_date) 기준: 금일(A6)=당일, 누적(F6)=기준일까지.
-export async function buildProgressXlsx(opts?: { asOfDate?: string; slug?: string }): Promise<{
+// notes: 금일완료 리포트 특이사항 — 올린 양식 그대로(ownForm)일 때 「설치 진행현황」 비고(A6)에 넣는다(리포트 메일 첨부)
+export async function buildProgressXlsx(opts?: { asOfDate?: string; slug?: string; notes?: string }): Promise<{
   buffer: Buffer;
   filename: string;
   filled: number;
@@ -137,7 +138,7 @@ export async function buildProgressXlsx(opts?: { asOfDate?: string; slug?: strin
   const { buffer, filled, added, removed } = isDefault(slug)
     ? await fillProgressXlsx(template, completed, asOfSerial, dailyPlan, cumPlan, dbInfo, exclusions)
     : (await getCustom(slug)).flags.ownForm
-      ? await fillOwnForm(template, completed, asOfSerial, exclusions).then((r) => {
+      ? await fillOwnForm(template, completed, asOfSerial, exclusions, opts?.notes).then((r) => {
           if (r.missing.length) console.warn(`[export/progress] 올린 양식에 없는 완료 차량 ${r.missing.length}대(다시 올리면 반영): ${r.missing.join(", ")}`);
           return { buffer: r.buffer, filled: r.filled, added: 0, removed: 0 };
         })

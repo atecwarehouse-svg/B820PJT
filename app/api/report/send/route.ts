@@ -146,7 +146,7 @@ export async function POST(req: NextRequest) {
   async function sendMail(recipients: string[]): Promise<boolean> {
     const attachments: { filename: string; content: Buffer }[] = [];
     try {
-      const xlsx = await buildProgressXlsx({ asOfDate: date });
+      const xlsx = await buildProgressXlsx({ asOfDate: date, notes });
       attachments.push({ filename: xlsx.filename, content: xlsx.buffer });
     } catch (e) {
       console.warn("[report/send] 엑셀 첨부 생성 실패(첨부 없이 발송):", e instanceof Error ? e.message : e);
