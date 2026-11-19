@@ -107,7 +107,23 @@ export async function fillOwnForm(
     stripFormulaValues(s);
     zip.file(path, serializeSheet(s));
   }
-  zip.file("xl/workbook.xml", setFullCalcOnLoad(wbXml));
+  // 열면 「설치 진행현황」이 맨 위부터 먼저 보이게 — 올린 파일엔 마지막에 보던 시트·스크롤 위치가 저장돼 있다
+  for (const [name, path] of paths) {
+    const xml = await zip.file(path)?.async("string");
+    if (!xml) continue;
+    const next = xml.replace(/<sheetView\b[^>]*>/, (tag) => {
+      const t = tag.replace(/ tabSelected="[^"]*"/, "");
+      return name === PROGRESS ? t.replace(/ topLeftCell="[^"]*"/, "").replace("<sheetView", '<sheetView tabSelected="1"') : t;
+    });
+    if (next !== xml) zip.file(path, next);
+  }
+  const progressIdx = [...wbXml.matchAll(/<sheet\b[^>]*\bname="([^"]*)"/g)].findIndex((m) => m[1] === PROGRESS);
+  const wbOut = setFullCalcOnLoad(wbXml).replace(/<workbookView\b[^>]*>/, (tag) =>
+    progressIdx < 0
+      ? tag
+      : tag.replace(/ (activeTab|firstSheet)="\d+"/g, "").replace("<workbookView", `<workbookView activeTab="${progressIdx}"`),
+  );
+  zip.file("xl/workbook.xml", wbOut);
   if (zip.file("xl/calcChain.xml")) {
     zip.remove("xl/calcChain.xml");
     const ct = await zip.file("[Content_Types].xml")!.async("string");
