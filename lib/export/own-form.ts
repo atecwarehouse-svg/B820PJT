@@ -38,7 +38,7 @@ export async function fillOwnForm(
   };
   const lastCol = Math.max(...getRow(vs, 1).cells.map((c) => c.col));
   const map = mapHeaders(Array.from({ length: lastCol }, (_, i) => text(1, i + 1)));
-  const [plateC, targetC, doneC, dateC] = [VCOL.plate, VCOL.target, VCOL.done, VCOL.doneDate].map((k) => map.get(k));
+  const [plateC, targetC, doneC, dateC, plannedC] = [VCOL.plate, VCOL.target, VCOL.done, VCOL.doneDate, VCOL.planned].map((k) => map.get(k));
   if (!plateC || !doneC || !dateC) throw new Error("차량리스트에서 차량번호·설치 완료여부·설치 완료일 열을 찾지 못했습니다.");
 
   // 완료일 칸 서식 — 빈 칸에 서식이 없으면 날짜 대신 숫자로 보이므로 값 있는 칸의 서식을 빌린다
@@ -48,11 +48,16 @@ export async function fillOwnForm(
     .find(Boolean);
   const inFile = new Set<string>();
   let filled = 0;
+  // 기준일까지 누적 계획 — 「설치 일자별 현황」 J(예정일 K ≤ 기준일 대수)와 같은 셈.
+  // 엑셀 수식 범위는 대상 행뿐이라(아래쪽 말소 행 제외) 대상 행만 센다 = plan_days 누적
+  let cumPlan = 0;
   for (const row of [...vs.rows]) {
     if (row.r < 2) continue;
     const plate = text(row.r, plateC);
     const target = text(row.r, targetC);
     if (!plate || (target !== "" && target !== "대상")) continue; // 말소·제외 행은 손대지 않는다
+    const planned = Number(text(row.r, plannedC));
+    if (planned > 0 && planned <= asOfSerial) cumPlan++;
     inFile.add(plate);
     const done = completed.get(plate);
     setValue(vs, doneC, row.r, done ? "완료" : null);
@@ -71,7 +76,10 @@ export async function fillOwnForm(
   if (pPath) {
     const ps = parseSheet(await zip.file(pPath)!.async("string"), PROGRESS);
     setValue(ps, 11, 1, asOfSerial); // K1
-    if (notes?.trim()) setValue(ps, 1, 6, notes.trim()); // A6
+    // A6 비고: 첫 줄 = 누적 선행(「설치 일자별 현황」 N = 누적 설치 − 누적 계획, 0이면 생략), 다음 줄 = 리포트 특이사항
+    const lead = filled - cumPlan;
+    const memo = [lead > 0 ? `누적 선행 +${lead}대` : "", notes?.trim() ?? ""].filter(Boolean).join("\n");
+    if (memo) setValue(ps, 1, 6, memo); // A6
     const excl = new Map<string, string[]>();
     for (const e of exclusions) excl.set(e.operator, [...(excl.get(e.operator) ?? []), e.plate + (e.reason ? `(${e.reason})` : "")]);
     for (const row of ps.rows) {
