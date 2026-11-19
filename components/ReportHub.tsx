@@ -504,6 +504,7 @@ function ShareStatPanel({
 
   // 수정·재보고 들어가기 전 입력하던 특이사항·시작시간 — 취소·재보고 후 되돌린다(미보고 운수사용 입력 보존)
   const draftRef = useRef<{ note: string; startTime: string } | null>(null);
+  const editSeq = useRef(0); // 불러오는 사이 취소·다른 운수사 수정으로 바뀌면 늦게 온 응답은 버린다
   // 수정·재보고 시작 — 그 운수사만 고르고, 그때 보낸 특이사항·시작시간을 칸에 다시 채운다.
   // 다른 기기에서 먼저 고쳤을 수 있으니 저장된 내용을 새로 불러와 쓴다(실패하면 가진 값으로).
   async function startEdit(op: string) {
@@ -511,6 +512,7 @@ function ShareStatPanel({
     setEditMode(true);
     setSelected(new Set([op]));
     setMsg(null);
+    const seq = ++editSeq.current;
     let m = meta;
     try {
       const j = await (await fetch(`/api/teams/share?date=${today}`)).json();
@@ -519,10 +521,12 @@ function ShareStatPanel({
         setMeta(m);
       }
     } catch {}
+    if (seq !== editSeq.current) return;
     setNote(m[op]?.note ?? "");
     if (m[op]?.startTime) setStartTime(m[op].startTime);
   }
   function endEdit() {
+    editSeq.current++;
     setEditMode(false);
     setNote(draftRef.current?.note ?? "");
     if (draftRef.current?.startTime) setStartTime(draftRef.current.startTime);

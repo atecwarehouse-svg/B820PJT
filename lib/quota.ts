@@ -79,7 +79,9 @@ export function shiftPlan(plan: PlanDays, from: Iterable<string | null | undefin
   for (const f of from) {
     const d = f?.slice(0, 10);
     if (d === to) continue;
-    if (d && out[d]) out[d] > 1 ? out[d]-- : delete out[d];
+    // 원래 날짜의 계획이 이미 0이면(이월로 계획보다 많이 몰린 날) 옮겨도 계획은 늘리지 않는다 — 총 계획 보존
+    if (d && !out[d]) continue;
+    if (d) out[d] > 1 ? out[d]-- : delete out[d];
     out[to] = (out[to] ?? 0) + 1;
   }
   return out;
@@ -125,7 +127,8 @@ export function shiftPlanOps(
     const d = f.date?.slice(0, 10);
     if (d === to) continue;
     const op = opName(f.operator);
-    if (d && out[d]?.[op]) {
+    if (d && !out[d]?.[op]) continue; // shiftPlan과 같은 규칙 — 그 운수사 계획이 0이면 늘리지 않음
+    if (d) {
       if (out[d][op] > 1) out[d][op]--;
       else delete out[d][op];
       if (!Object.keys(out[d]).length) delete out[d];

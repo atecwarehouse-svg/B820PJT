@@ -177,10 +177,11 @@ export async function saveSheetImage(s: Sheet, filename: string): Promise<boolea
   ) {
     try {
       await navigator.share({ files: [file] });
-    } catch {
-      // 공유시트를 닫은 경우 — 아무것도 안 함
+      return true;
+    } catch (e) {
+      // 공유시트를 닫은 경우 — 아무것도 안 함. 그 밖(이미지 만드는 사이 터치 권한 만료 NotAllowedError 등)은 내려받기로
+      if ((e as Error)?.name === "AbortError") return true;
     }
-    return true;
   }
   const url = URL.createObjectURL(file);
   const a = document.createElement("a");
