@@ -2051,7 +2051,7 @@ export default function DispatchButton({ routeView = false }: { routeView?: bool
               나가는 시간이 일괄 계산된다. 적용 후 저장을 눌러야 DB 반영. */}
           {autoView && (
             <div
-              className="fixed inset-0 z-[60] overflow-y-auto bg-white pb-24"
+              className="fixed inset-0 z-[60] overflow-y-auto bg-white pb-[calc(6rem+env(safe-area-inset-bottom))]"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="sticky top-0 z-10 flex items-center justify-between border-b border-gray-200 bg-white px-4 py-2.5">
@@ -2246,7 +2246,7 @@ export default function DispatchButton({ routeView = false }: { routeView?: bool
               )}
 
               {/* 적용 버튼 — 하단 고정 */}
-              <div className="fixed inset-x-0 bottom-0 z-10 border-t border-gray-200 bg-white/95 p-3 backdrop-blur">
+              <div className="fixed inset-x-0 bottom-0 z-10 border-t border-gray-200 bg-white/95 p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] backdrop-blur">
                 <button
                   type="button"
                   onClick={applyAuto}

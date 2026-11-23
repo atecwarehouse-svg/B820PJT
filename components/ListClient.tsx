@@ -371,7 +371,7 @@ export default function ListClient({
 
       {/* 하단 고정: 선택 차량 저장 */}
       {items.length > 0 && (
-        <div className="fixed inset-x-0 bottom-0 rounded-t-3xl bg-white/95 p-3 shadow-[0_-6px_24px_rgba(0,0,0,.08)] backdrop-blur">
+        <div className="fixed inset-x-0 bottom-0 rounded-t-3xl bg-white/95 p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] shadow-[0_-6px_24px_rgba(0,0,0,.08)] backdrop-blur">
           <div className="mx-auto grid max-w-3xl grid-cols-2 gap-2">
             <button
               onClick={() => downloadSelected("pdf")}

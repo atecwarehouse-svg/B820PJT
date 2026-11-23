@@ -625,7 +625,7 @@ export default function RecordEditor({ plate, initial, teamOptions = [], brand =
   );
 
   return (
-    <main className="mx-auto max-w-3xl px-3 pb-24 pt-4">
+    <main className="mx-auto max-w-3xl px-3 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-4">
       {/* 완료/실패 토스트 팝업 */}
       {toast && (
         <div className="pointer-events-none fixed inset-x-0 bottom-24 z-50 flex justify-center px-4 no-print">
@@ -1119,7 +1119,7 @@ export default function RecordEditor({ plate, initial, teamOptions = [], brand =
       )}
 
       {/* 하단 이동/저장 바 */}
-      <div className="fixed inset-x-0 bottom-0 border-t border-gray-200 bg-white/95 p-3 backdrop-blur no-print">
+      <div className="fixed inset-x-0 bottom-0 border-t border-gray-200 bg-white/95 p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] backdrop-blur no-print">
         <div className="mx-auto flex max-w-3xl items-center gap-2">
           {step === 0 ? (
             <Link

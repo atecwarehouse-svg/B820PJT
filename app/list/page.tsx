@@ -89,7 +89,7 @@ export default async function ListPage() {
     .sort((a, b) => a.localeCompare(b, "ko"));
 
   return (
-    <main className="mx-auto max-w-3xl px-3 pb-28 pt-4">
+    <main className="mx-auto max-w-3xl px-3 pb-[calc(7rem+env(safe-area-inset-bottom))] pt-4">
       <div className="page-head">
         <Link href="/b820" className="pill">
           ← 차량 입력
