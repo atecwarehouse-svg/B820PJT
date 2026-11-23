@@ -107,15 +107,20 @@ export default function OsVerifySheet({ myCenter, onClose, inline = false }: { m
 
   async function upload(file: File) {
     const type = typeRef.current;
-    setBusy(type);
     setError("");
+    // Vercel 요청 본문 한도 4.5MB — 넘으면 서버가 오류 내용 없이 거절해 '검증 실패'만 떴다
+    if (file.size > 4.4 * 1024 * 1024) {
+      setError(`파일이 너무 큽니다(${(file.size / 1024 / 1024).toFixed(1)}MB, 한도 4.4MB). ${type === "fault" ? "장애목록은 누적되니 지난번 이후 기간만 받아서 올려 주세요." : "기간·조건을 줄여서 받아 주세요."}`);
+      return;
+    }
+    setBusy(type);
     try {
       const form = new FormData();
       form.append("file", file);
       form.append("type", type);
       const r = await fetch("/api/handover/osverify", { method: "POST", body: form });
       const j = (await r.json().catch(() => ({}))) as Result & { error?: string };
-      if (!r.ok) throw new Error(j.error ?? "검증 실패");
+      if (!r.ok) throw new Error(j.error ?? (r.status === 413 ? "파일이 너무 큽니다(서버 한도 4.5MB). 기간을 나눠 올려 주세요." : `검증 실패 (서버 응답 ${r.status})`));
       setRes(j);
       // 오늘 올린 파일이면 검증 기간 끝도 오늘(지난 발송 때 날짜가 남아 엑셀·카드에 옛 날짜가 찍히던 문제)
       const today = new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Seoul" });
@@ -218,7 +223,7 @@ export default function OsVerifySheet({ myCenter, onClose, inline = false }: { m
           <input ref={fileRef} type="file" accept=".xls,.xlsx" className="hidden" onChange={(e) => e.target.files?.[0] && upload(e.target.files[0])} />
           {inline && <div className="mb-3">{actions}</div>}
           <p className="text-xs leading-relaxed text-gray-500">
-            차량마다 <b>웹 체크 완료 · 자산등록(장애목록) · 기종별 OS버전</b> 셋을 차량번호로 대조합니다. 파일은 올리면 서버에 저장만 되고(다시 열 때 재업로드 불필요), 4종을 다 올린 뒤{" "}
+            차량마다 <b>웹 체크 완료 · 자산등록(장애목록) · 기종별 OS버전</b> 셋을 차량번호로 대조합니다. 파일은 올리면 서버에 저장만 되고(다시 열 때 재업로드 불필요), <b>장애목록은 누적</b>이라 지난번 이후 기간만 받아 추가로 올리면 됩니다. 4종을 다 올린 뒤{" "}
             <b>검증 발송</b>을 누르면 최종 취합해 팀즈 카드(센터 방 + 관리자 호출방 취합)가 갑니다.
           </p>
 
@@ -241,8 +246,19 @@ export default function OsVerifySheet({ myCenter, onClose, inline = false }: { m
                     {busy === t ? "검증 중…" : `${OS_FILE_LABEL[t]}`}
                   </span>
                   <span className={`mt-0.5 block truncate text-[11px] ${f?.saved ? "text-emerald-800" : "text-blue-100"}`}>
-                    {f?.saved ? `✓ ${fmtAt(f.at!)} · ${f.vehicles}대 중 충족 ${f.ok}대` : loading ? "…" : "파일 없음 — 눌러서 올리기"}
+                    {f?.saved
+                      ? t === "fault"
+                        ? `✓ 누적 ${f.vehicles}대 중 충족 ${f.ok}대`
+                        : `✓ ${fmtAt(f.at!)} · ${f.vehicles}대 중 충족 ${f.ok}대`
+                      : loading
+                        ? "…"
+                        : "파일 없음 — 눌러서 올리기"}
                   </span>
+                  {t === "fault" && f?.saved && (
+                    <span className="block truncate text-[11px] text-emerald-700">
+                      마지막 업로드 {fmtAt(f.at!)} · 눌러서 추가 등록
+                    </span>
+                  )}
                 </button>
               );
             })}

@@ -44,8 +44,11 @@ const KEY = (t: OsFileType) => `osverify_${t}`;
 const bad = (error: string, status = 400) => NextResponse.json({ error }, { status });
 
 async function loadSaved(t: OsFileType): Promise<SavedFile | null> {
+  return parseSaved(await getSetting(KEY(t)));
+}
+function parseSaved(raw: string | null): SavedFile | null {
   try {
-    const v = JSON.parse((await getSetting(KEY(t))) ?? "null") as SavedFile | null;
+    const v = JSON.parse(raw ?? "null") as SavedFile | null;
     if (!v || !Array.isArray(v.rows)) return null;
     v.rows = v.rows.filter((r) => r && typeof r.plate === "string" && r.plate).map((r) => ({ plate: r.plate, ok: !!r.ok, info: String(r.info ?? "") }));
     return v.rows.length ? v : null;
@@ -96,6 +99,18 @@ export async function POST(req: NextRequest) {
     rows = parseOsFile(Buffer.from(await file.arrayBuffer()), type);
   } catch (e) {
     return bad("파일을 읽을 수 없습니다: " + (e instanceof Error ? e.message : String(e)));
+  }
+  // 장애목록은 누적 — 기간별로 나눠 올리면 기존 차량에 추가(같은 차량은 한 번이라도 충족이면 충족). OS버전 파일은 현재 상태 조회라 교체.
+  // 기존 값 읽기 실패를 '없음'으로 보면 누적분이 통째로 덮이므로, 오류면 저장하지 않는다.
+  if (type === "fault") {
+    const { data, error } = await createServiceClient().from("app_settings").select("value").eq("key", KEY(type)).maybeSingle();
+    if (error) return bad("기존 장애목록을 읽지 못했습니다. 잠시 후 다시 올려 주세요: " + error.message, 500);
+    const m = new Map((parseSaved(typeof data?.value === "string" ? data.value : null)?.rows ?? []).map((r) => [r.plate, r]));
+    for (const r of rows) {
+      const c = m.get(r.plate);
+      if (!c || (!c.ok && r.ok)) m.set(r.plate, r);
+    }
+    rows = [...m.values()];
   }
   const saved: SavedFile = { fileName: file.name, at: new Date().toISOString(), by: who, rows };
   try {
