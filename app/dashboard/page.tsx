@@ -251,6 +251,7 @@ export default async function DashboardPage() {
             inspectorList={inspectorList}
             teamList={teamList}
             hideBisKakao={!custom.flags.bisKakao}
+            planDatePick={custom.flags.planDatePick}
             brand={brand}
             projectLabel={projectLabel}
           />

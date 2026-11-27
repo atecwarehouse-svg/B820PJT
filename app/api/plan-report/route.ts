@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { currentProject, reportLabel } from "@/lib/project";
+import { currentProject, currentSlug, reportLabel } from "@/lib/project";
 import { createServiceClient } from "@/lib/supabase/server";
-import { getConsultConfig, getSetting, setSetting } from "@/lib/settings";
+import { getConsultConfig, getSetting, isQuotaMode, setSetting } from "@/lib/settings";
+import { loadTodayPlanGroups } from "@/lib/stats";
 import { consultTitle } from "@/lib/consultation-form";
 import {
   sendPlanReportCard,
@@ -19,10 +20,19 @@ const isDate = (d: string) => /^\d{4}-\d{2}-\d{2}$/.test(d);
 export async function GET(req: NextRequest) {
   const date = req.nextUrl.searchParams.get("date") ?? "";
   if (!isDate(date)) return NextResponse.json({ input: {} });
+  let input = {};
   try {
-    return NextResponse.json({ input: JSON.parse((await getSetting(draftKey(date))) ?? "{}") });
+    input = JSON.parse((await getSetting(draftKey(date))) ?? "{}");
   } catch {
-    return NextResponse.json({ input: {} });
+    // 저장값 없음/깨짐 → 빈 칸
+  }
+  // ?groups=1 — 날짜 선택(미리 보고)용 그날 계획(운수사·노선·대수). 대시보드의 금일 계획과 같은 함수.
+  if (req.nextUrl.searchParams.get("groups") !== "1") return NextResponse.json({ input });
+  const slug = currentSlug();
+  try {
+    return NextResponse.json({ input, groups: await loadTodayPlanGroups(slug, date, await isQuotaMode(slug)) });
+  } catch {
+    return NextResponse.json({ error: "계획을 불러오지 못했습니다." }, { status: 500 });
   }
 }
 

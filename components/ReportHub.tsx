@@ -109,24 +109,57 @@ interface EntryState {
 }
 
 function PlanReportPanel({
-  today,
-  planGroups,
+  today: workToday,
+  planGroups: todayGroups,
   projectLabel,
+  datePick,
   onClose,
 }: {
   today: string;
   planGroups: PlanGroup[];
   projectLabel: string; // 보고용 이미지 머리말
+  datePick?: boolean; // 날짜 선택(미리 보고) — 인천 B820
   onClose: () => void;
 }) {
   const INPUT =
     "mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500";
   const LABEL = "text-[11px] font-medium text-gray-500";
+  // 보고 날짜 — 기본은 업무일(오늘). 다른 날을 고르면 그날 계획을 서버에서 받아온다.
+  const [today, setToday] = useState(workToday);
+  const [otherGroups, setOtherGroups] = useState<{ date: string; groups: PlanGroup[] } | null>(null);
+  const [loadError, setLoadError] = useState(false);
+  const isWorkDay = today === workToday;
+  const planGroups = isWorkDay ? todayGroups : otherGroups?.date === today ? otherGroups.groups : null;
   const label = fmtLabel(today);
+
+  useEffect(() => {
+    if (isWorkDay) return;
+    let alive = true;
+    setLoadError(false);
+    fetch(`/api/plan-report?date=${today}&groups=1`, { cache: "no-store" })
+      .then(async (res) => {
+        const json = await res.json();
+        if (!res.ok || !Array.isArray(json.groups)) throw new Error();
+        if (alive) setOtherGroups({ date: today, groups: json.groups });
+      })
+      .catch(() => alive && setLoadError(true));
+    return () => {
+      alive = false;
+    };
+  }, [today, isWorkDay]);
+
+  function pickDate(d: string) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(d) || d === today) return;
+    // 날짜가 바뀌면 입력·재시도 상태는 새로 — 다른 날 입력값이 섞이거나 남은 방만 보내지 않게
+    setEntries({});
+    setPendingRooms(["start", "consult"]);
+    setError(null);
+    setToday(d);
+  }
 
   const operators = (() => {
     const m = new Map<string, { routes: { route: string; count: number }[]; count: number }>();
-    for (const g of planGroups) {
+    for (const g of planGroups ?? []) {
       const o = m.get(g.operator) ?? { routes: [], count: 0 };
       if (g.route) o.routes.push({ route: g.route, count: g.planned }); // 수량 차감 방식은 노선 없이 운수사 대수만
       o.count += g.planned;
@@ -217,8 +250,9 @@ function PlanReportPanel({
     return () => {
       alive = false;
     };
+    // 다른 날을 고르면 계획이 늦게 도착하므로 운수사 목록이 바뀔 때도 다시 채운다
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [today]);
+  }, [today, operators.map((o) => o.operator).join("|")]);
 
   function update(operator: string, patch: Partial<EntryState>) {
     setEntries((e) => ({ ...e, [operator]: { ...e[operator], ...patch } }));
@@ -284,16 +318,42 @@ function PlanReportPanel({
     );
   }
 
+  // 날짜 선택 — 계획이 없는 날에도 다른 날로 바꿀 수 있게 빈 화면에도 보인다
+  const picker = datePick && (
+    <label className="flex items-center gap-2">
+      <span className={LABEL}>보고 날짜</span>
+      <input
+        type="date"
+        value={today}
+        onChange={(ev) => pickDate(ev.target.value)}
+        className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none"
+      />
+      {!isWorkDay && (
+        <button type="button" onClick={() => pickDate(workToday)} className="shrink-0 text-xs text-teal-700 underline">
+          오늘로
+        </button>
+      )}
+    </label>
+  );
+
   if (operators.length === 0) {
     return (
-      <p className="py-8 text-center text-sm text-gray-400">
-        오늘({label}) 설치 계획이 없습니다.
-      </p>
+      <div className="space-y-2">
+        {picker}
+        <p className="py-8 text-center text-sm text-gray-400">
+          {loadError
+            ? `${label} 계획을 불러오지 못했습니다.`
+            : planGroups === null
+              ? "불러오는 중…"
+              : `${isWorkDay ? "오늘" : ""}(${label}) 설치 계획이 없습니다.`}
+        </p>
+      </div>
     );
   }
 
   return (
     <div className="space-y-4">
+      {picker}
       <p className="rounded-lg bg-teal-50 px-3 py-2 text-center text-sm font-bold text-teal-700">
         {label} 설치계획 {total.toLocaleString()}대
       </p>
@@ -1174,6 +1234,7 @@ export default function ReportHub(props: {
   inspectorList: string[]; // 등록된 검수자 이름 (관리자 검수자 탭 / TEAMS_INSPECTOR_WEBHOOKS 키) — 설치시작 보고 담당 선택지
   teamList?: string[]; // 등록된 설치팀 라벨 — 설치시작 보고에서 팀별 담당 검수자 지정
   hideBisKakao?: boolean; // 운행시작 보고 점검란에서 BIS(인천)·카카오(초정밀) 제외 (공항 B800)
+  planDatePick?: boolean; // 설치계획 보고 날짜 선택(미리 보고) — 인천 B820
   brand?: string; // 카드 제목의 프로젝트명 (기본 B820)
   projectLabel?: string; // 보고용 이미지 머리말 "[…]" (없으면 B820 문구)
 }) {
@@ -1242,6 +1303,7 @@ export default function ReportHub(props: {
                   today={props.planToday}
                   planGroups={props.planGroups}
                   projectLabel={projectLabel}
+                  datePick={props.planDatePick}
                   onClose={close}
                 />
               )}
