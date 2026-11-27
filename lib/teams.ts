@@ -888,7 +888,7 @@ export async function sendConsultationCard(
 }
 
 // 설치계획 보고 카드 — 대시보드 '설치계획 보고' 버튼. 채팅방별로 내용이 다르다:
-//   시작보고 채팅방(TEAMS_WEBHOOK_URL): 설치계획 보고 — 노선·집합시간·설치 장소 (휴차 없음)
+//   시작보고 채팅방(TEAMS_WEBHOOK_URL): 설치계획 보고 — 운수사 대수·집합시간·설치 장소 (휴차·노선 없음)
 //   협의사항 채팅방(TEAMS_COMPLETE_WEBHOOK_URL): 집합시간 및 특이사항 공지 — + 휴차·도착시간·협조확인·설치위치·특이사항
 // 모양은 보고용 이미지와 같은 Sheet(lib/report-sheet.ts planSheet).
 // 방별 성공/실패를 돌려준다 — 한 방만 실패했을 때 재시도가 성공한 방에

@@ -182,13 +182,14 @@ export interface PlanSheetInput {
   groups: PlanReportGroup[];
   titles?: Record<string, string>; // 협의사항 양식의 항목 표기(컬럼명 → 표기). 없으면 B820 기본 표기
 }
-// variant: "start" = 시작보고방(설치계획 보고 — 노선·집합시간·설치 장소, 휴차 없음)
+// variant: "start" = 시작보고방(설치계획 보고 — 운수사 대수·집합시간·설치 장소, 휴차 없음)
 //          "consult" = 협의사항방(집합시간 및 특이사항 공지 — 휴차·도착·협조확인·설치위치까지)
 export function planSheet(d: PlanSheetInput, variant: "start" | "consult", projectLabel = DEFAULT_REPORT_LABEL): Sheet {
   const v = (s?: string) => s?.trim() || "-";
   const t = (key: string, fallback: string) => d.titles?.[key] ?? fallback;
   const blocks = d.groups.flatMap((g): SheetBlock[] => {
-    const head: SheetBlock[] = [{ t: "band", name: g.operator, total: dae(g.count) }, ...routeGrid(g.routes)];
+    // 노선 칸 없이 운수사 대수만 — 공항 B830 형식으로 통일(11/27, B820은 노선이 40칸씩 붙어 카드가 너무 길었다)
+    const head: SheetBlock[] = [{ t: "band", name: g.operator, total: dae(g.count) }];
     if (variant === "start") {
       return [
         ...head,
