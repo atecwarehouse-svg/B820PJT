@@ -691,16 +691,15 @@ function ShareStatPanel({
     }
   }
 
+  // 노선별 줄 — 노선이 많으면(B820 군내버스 40줄) 모달이 너무 길어 접었다 폈다. 3줄 이하면 기본 펼침.
+  const routeRows: [string, number, string][] = isStart
+    ? selGroups.map((g) => [`· ${g.operator}${g.route ? ` ${g.route}노선` : ""}`, g.planned, "text-gray-500"])
+    : [];
+  const [routesOpenPick, setRoutesOpen] = useState<boolean | null>(null);
+  const routesOpen = routesOpenPick ?? routeRows.length <= 3;
   const rows: [string, number, string][] = isStart
     ? [
         ["금일 설치계획", selPlanned, "text-gray-700"],
-        ...selGroups.map(
-          (g): [string, number, string] => [
-            `· ${g.operator}${g.route ? ` ${g.route}노선` : ""}`,
-            g.planned,
-            "text-gray-500",
-          ],
-        ),
         ["누적 완료", complete, "text-green-700"],
         ["잔여(설치대상)", remain, "text-gray-600"],
       ]
@@ -777,12 +776,25 @@ function ShareStatPanel({
         </p>
       </div>
       <ul className="mt-2 divide-y divide-gray-100 rounded-xl border border-gray-100">
-        {rows.map(([k, v, color]) => (
-          <li key={k} className="flex items-center justify-between px-3 py-2 text-sm">
-            <span className="text-gray-500">{k}</span>
-            <span className={`tabular-nums font-bold ${color}`}>{v.toLocaleString()}대</span>
-          </li>
-        ))}
+        {[rows[0], ...(routeRows.length ? ["toggle" as const] : []), ...(routesOpen ? routeRows : []), ...rows.slice(1)].map((r) =>
+          r === "toggle" ? (
+            <li key="toggle">
+              <button
+                type="button"
+                onClick={() => setRoutesOpen(!routesOpen)}
+                className="flex w-full items-center justify-between px-3 py-2 text-xs font-medium text-orange-700 active:bg-orange-50"
+              >
+                <span>노선별 {routeRows.length}줄</span>
+                <span>{routesOpen ? "접기 ▲" : "펼치기 ▼"}</span>
+              </button>
+            </li>
+          ) : (
+            <li key={r[0]} className="flex items-center justify-between px-3 py-2 text-sm">
+              <span className="text-gray-500">{r[0]}</span>
+              <span className={`tabular-nums font-bold ${r[2]}`}>{r[1].toLocaleString()}대</span>
+            </li>
+          ),
+        )}
       </ul>
       {isStart && (
         <div className="mt-2 flex items-center gap-2">
